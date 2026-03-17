@@ -15,6 +15,49 @@
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
+      devUser = "dev";
+      devHome = "/var/lib/${devUser}";
+      workspaceMount = "/workspace";
+      hostMetaMount = "/run/microvm-host-meta";
+      startDirFile = "/run/microvm-start-dir";
+      qemu9pOptions = [
+        "nofail"
+        "trans=virtio"
+        "version=9p2000.L"
+        "msize=65536"
+        "x-systemd.after=systemd-modules-load.service"
+      ];
+      runtimeExtraArgsScript = pkgs.writeShellScript "microvm-runtime-extra-args" ''
+        set -eu
+
+        if [ -z "''${MICROVM_HOST_CWD:-}" ]; then
+          exit 0
+        fi
+
+        printf '%s\n' \
+          -fsdev "local,id=fs-hostcwd,path=$MICROVM_HOST_CWD,security_model=none,readonly=false" \
+          -device "virtio-9p-pci,fsdev=fs-hostcwd,mount_tag=hostcwd"
+
+        if [ -n "''${MICROVM_HOST_META_DIR:-}" ]; then
+          printf '%s\n' \
+            -fsdev "local,id=fs-hostmeta,path=$MICROVM_HOST_META_DIR,security_model=none,readonly=true" \
+            -device "virtio-9p-pci,fsdev=fs-hostmeta,mount_tag=hostmeta"
+        fi
+      '';
+      devConsoleStartScript = pkgs.writeShellScript "dev-console-start" ''
+        set -eu
+
+        target=${workspaceMount}
+        if [ -r ${startDirFile} ]; then
+          target=$(cat ${startDirFile})
+        fi
+        if [ ! -d "$target" ]; then
+          target=${workspaceMount}
+        fi
+
+        cd "$target"
+        exec ${pkgs.bashInteractive}/bin/bash -i
+      '';
     in {
       packages.${system} = {
         default = self.packages.${system}.my-microvm;
@@ -55,34 +98,34 @@
               networking.hostName = "my-microvm";
               networking.useDHCP = true;
               users.users.root.password = "";
-              users.users.dev = {
+              users.users.${devUser} = {
                 isNormalUser = true;
                 password = "";
                 extraGroups = [ "wheel" ];
-                home = "/var/lib/dev";
+                home = devHome;
                 createHome = true;
-                shell = nixpkgs.legacyPackages.${system}.bashInteractive;
+                shell = pkgs.bashInteractive;
               };
 
               security.sudo.wheelNeedsPassword = false;
 
-              environment.systemPackages = with nixpkgs.legacyPackages.${system}; [
+              environment.systemPackages = with pkgs; [
                 bun
                 git
                 nodejs
               ];
 
               programs.bash.interactiveShellInit = ''
-                if [ "$USER" = "dev" ]; then
-                  export BUN_INSTALL=/var/lib/dev/.bun
-                  export XDG_CONFIG_HOME=/var/lib/dev/.config
-                  export XDG_CACHE_HOME=/var/lib/dev/.cache
-                  export XDG_STATE_HOME=/var/lib/dev/.local/state
+                if [ "$USER" = "${devUser}" ]; then
+                  export BUN_INSTALL=${devHome}/.bun
+                  export XDG_CONFIG_HOME=${devHome}/.config
+                  export XDG_CACHE_HOME=${devHome}/.cache
+                  export XDG_STATE_HOME=${devHome}/.local/state
                   export PATH="$BUN_INSTALL/bin:$PATH"
                   cdw() {
-                    target=/workspace
-                    if [ -r /run/microvm-start-dir ]; then
-                      target=$(cat /run/microvm-start-dir)
+                    target=${workspaceMount}
+                    if [ -r ${startDirFile} ]; then
+                      target=$(cat ${startDirFile})
                     fi
                     cd "$target"
                   }
@@ -103,7 +146,7 @@
                   StandardError = "journal+console";
                 };
 
-                path = with nixpkgs.legacyPackages.${system}; [
+                path = with pkgs; [
                   bun
                   coreutils
                 ];
@@ -111,7 +154,7 @@
                 script = ''
                   set -eu
 
-                  export DEV_HOME=/var/lib/dev
+                  export DEV_HOME=${devHome}
                   export HOME="$DEV_HOME"
                   export BUN_INSTALL="$DEV_HOME/.bun"
                   export XDG_CONFIG_HOME="$DEV_HOME/.config"
@@ -126,41 +169,28 @@
                     "$XDG_CONFIG_HOME" \
                     "$XDG_CACHE_HOME" \
                     "$XDG_STATE_HOME"
-                  chown -R dev:users "$DEV_HOME"
+                  chown -R ${devUser}:users "$DEV_HOME"
 
                   if ! [ -x "$BUN_INSTALL/bin/codex" ]; then
                     echo "Installing Codex CLI into persistent storage..."
                     bun install --global @openai/codex
-                    chown -R dev:users "$DEV_HOME"
+                    chown -R ${devUser}:users "$DEV_HOME"
                   else
                     echo "Codex CLI already present."
                   fi
                 '';
               };
 
-              fileSystems."/workspace" = {
+              fileSystems.${workspaceMount} = {
                 device = "hostcwd";
                 fsType = "9p";
-                options = [
-                  "nofail"
-                  "trans=virtio"
-                  "version=9p2000.L"
-                  "msize=65536"
-                  "x-systemd.after=systemd-modules-load.service"
-                ];
+                options = qemu9pOptions;
               };
 
-              fileSystems."/run/microvm-host-meta" = {
+              fileSystems.${hostMetaMount} = {
                 device = "hostmeta";
                 fsType = "9p";
-                options = [
-                  "nofail"
-                  "ro"
-                  "trans=virtio"
-                  "version=9p2000.L"
-                  "msize=65536"
-                  "x-systemd.after=systemd-modules-load.service"
-                ];
+                options = qemu9pOptions ++ [ "ro" ];
               };
 
               systemd.services.link-host-cwd = {
@@ -184,15 +214,15 @@
                 script = ''
                   set -eu
 
-                  metadata=/run/microvm-host-meta/mount-path
+                  metadata=${hostMetaMount}/mount-path
                   for _ in $(seq 1 50); do
-                    if [ -d /workspace ] && [ -r "$metadata" ]; then
+                    if [ -d ${workspaceMount} ] && [ -r "$metadata" ]; then
                       break
                     fi
                     sleep 0.1
                   done
 
-                  if ! [ -d /workspace ] || ! [ -r "$metadata" ]; then
+                  if ! [ -d ${workspaceMount} ] || ! [ -r "$metadata" ]; then
                     echo "workspace or host cwd metadata not ready; continuing without dynamic bind mount"
                     exit 0
                   fi
@@ -202,10 +232,10 @@
                     exit 0
                   fi
 
-                  printf '%s\n' "$target" > /run/microvm-start-dir
-                  chmod 0644 /run/microvm-start-dir
+                  printf '%s\n' "$target" > ${startDirFile}
+                  chmod 0644 ${startDirFile}
 
-                  if [ "$target" = "/workspace" ]; then
+                  if [ "$target" = "${workspaceMount}" ]; then
                     exit 0
                   fi
 
@@ -225,7 +255,7 @@
                     exit 0
                   fi
 
-                  mount --bind /workspace "$target"
+                  mount --bind ${workspaceMount} "$target"
                 '';
               };
 
@@ -239,8 +269,8 @@
                 conflicts = [ "serial-getty@ttyS0.service" ];
 
                 serviceConfig = {
-                  User = "dev";
-                  WorkingDirectory = "/var/lib/dev";
+                  User = devUser;
+                  WorkingDirectory = devHome;
                   StandardInput = "tty-force";
                   StandardOutput = "tty";
                   StandardError = "tty";
@@ -251,28 +281,12 @@
                   Restart = "always";
                   RestartSec = 0;
                   Type = "idle";
-                  ExecStart = "${pkgs.bashInteractive}/bin/bash -lc 'target=/workspace; if [ -r /run/microvm-start-dir ]; then target=$(cat /run/microvm-start-dir); fi; if [ ! -d \"$target\" ]; then target=/workspace; fi; cd \"$target\"; exec ${pkgs.bashInteractive}/bin/bash -i'";
+                  ExecStart = devConsoleStartScript;
                 };
               };
 
               microvm = {
-                extraArgsScript = "${pkgs.writeShellScript "microvm-runtime-extra-args" ''
-                  set -eu
-
-                  if [ -z "''${MICROVM_HOST_CWD:-}" ]; then
-                    exit 0
-                  fi
-
-                  printf '%s\n' \
-                    -fsdev "local,id=fs-hostcwd,path=$MICROVM_HOST_CWD,security_model=none,readonly=false" \
-                    -device "virtio-9p-pci,fsdev=fs-hostcwd,mount_tag=hostcwd"
-
-                  if [ -n "''${MICROVM_HOST_META_DIR:-}" ]; then
-                    printf '%s\n' \
-                      -fsdev "local,id=fs-hostmeta,path=$MICROVM_HOST_META_DIR,security_model=none,readonly=true" \
-                      -device "virtio-9p-pci,fsdev=fs-hostmeta,mount_tag=hostmeta"
-                  fi
-                ''}";
+                extraArgsScript = "${runtimeExtraArgsScript}";
                 interfaces = [ {
                   type = "user";
                   id = "vm-user";

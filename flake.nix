@@ -14,10 +14,30 @@
   outputs = { self, nixpkgs, microvm }:
     let
       system = "x86_64-linux";
+      pkgs = nixpkgs.legacyPackages.${system};
     in {
       packages.${system} = {
         default = self.packages.${system}.my-microvm;
-        my-microvm = self.nixosConfigurations.my-microvm.config.microvm.declaredRunner;
+        my-microvm-runner = self.nixosConfigurations.my-microvm.config.microvm.declaredRunner;
+        my-microvm = pkgs.writeShellApplication {
+          name = "my-microvm";
+          runtimeInputs = with pkgs; [ coreutils ];
+          text = ''
+            set -eu
+
+            host_cwd=$PWD
+            case "$host_cwd" in
+              *[[:space:]]*)
+                echo "current working directory contains whitespace, which microvm runtime share injection does not support: $host_cwd" >&2
+                exit 1
+                ;;
+            esac
+
+            exec env \
+              MICROVM_HOST_CWD="$host_cwd" \
+              ${self.packages.${system}.my-microvm-runner}/bin/microvm-run "$@"
+          '';
+        };
       };
 
       nixosConfigurations = {
@@ -53,6 +73,11 @@
                   export XDG_CACHE_HOME=/var/lib/dev/.cache
                   export XDG_STATE_HOME=/var/lib/dev/.local/state
                   export PATH="$BUN_INSTALL/bin:$PATH"
+                  alias cdw='cd /workspace'
+
+                  if [ "$PWD" = "/var/lib/dev" ] && [ -d /workspace ]; then
+                    cd /workspace
+                  fi
                 fi
               '';
 
@@ -105,6 +130,17 @@
                 '';
               };
 
+              fileSystems."/workspace" = {
+                device = "hostcwd";
+                fsType = "9p";
+                options = [
+                  "trans=virtio"
+                  "version=9p2000.L"
+                  "msize=65536"
+                  "x-systemd.after=systemd-modules-load.service"
+                ];
+              };
+
               systemd.services."serial-getty@ttyS0".enable = false;
 
               systemd.services.dev-console = {
@@ -127,11 +163,22 @@
                   Restart = "always";
                   RestartSec = 0;
                   Type = "idle";
-                  ExecStart = "${nixpkgs.legacyPackages.${system}.bashInteractive}/bin/bash --login";
+                  ExecStart = "${pkgs.bashInteractive}/bin/bash --login";
                 };
               };
 
               microvm = {
+                extraArgsScript = "${pkgs.writeShellScript "microvm-runtime-extra-args" ''
+                  set -eu
+
+                  if [ -z "''${MICROVM_HOST_CWD:-}" ]; then
+                    exit 0
+                  fi
+
+                  printf '%s\n' \
+                    -fsdev "local,id=fs-hostcwd,path=$MICROVM_HOST_CWD,security_model=none,readonly=false" \
+                    -device "virtio-9p-pci,fsdev=fs-hostcwd,mount_tag=hostcwd"
+                ''}";
                 interfaces = [ {
                   type = "user";
                   id = "vm-user";

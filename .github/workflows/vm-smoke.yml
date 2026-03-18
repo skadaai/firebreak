@@ -1,0 +1,41 @@
+name: VM Smoke
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vm-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codex-vm-smoke:
+    name: codex-vm smoke
+    if: github.event_name == 'workflow_dispatch' || vars.ENABLE_SELF_HOSTED_VM_SMOKE == '1'
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - kvm
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          enable_kvm: true
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            system-features = nixos-test benchmark big-parallel kvm
+
+      - name: Run codex-vm smoke test
+        run: nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#codex-vm-smoke

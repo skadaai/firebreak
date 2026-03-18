@@ -9,6 +9,8 @@ This repository is centered on a Nix flake plus reusable VM modules:
 - [`nix/modules/agents/`](/home/zvictor/development/microVMs/nix/modules/agents): agent-specific overlays such as Codex.
 - [`scripts/`](/home/zvictor/development/microVMs/scripts): runtime wrapper, mount helpers, console startup, and agent bootstrap scripts.
 - [`tests/`](/home/zvictor/development/microVMs/tests): smoke and regression scripts for validating the VM workflow.
+- [`guides/`](/home/zvictor/development/microVMs/guides): step-by-step instructions for tasks that require manual setup or human intervention.
+- [`.github/workflows/`](/home/zvictor/development/microVMs/.github/workflows): hosted CI checks and the self-hosted KVM smoke workflow.
 - [`flake.lock`](/home/zvictor/development/microVMs/flake.lock): pinned inputs.
 - [`var.img`](/home/zvictor/development/microVMs/var.img): persistent guest `/var` volume created by the runner.
 
@@ -24,6 +26,9 @@ There is no separate application `src/` tree yet. Keep shared behavior in the ba
   Runs the lightweight host-side smoke test against the interactive VM.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' flake check`
   Runs flake evaluation checks. Use this before submitting changes.
+- GitHub Actions
+  - `.github/workflows/ci.yml` runs hosted `flake check` on pushes and pull requests.
+  - `.github/workflows/vm-smoke.yml` runs `codex-vm-smoke` on a self-hosted runner labeled `self-hosted`, `linux`, `x64`, and `kvm`.
 
 ## Coding Style & Naming Conventions
 
@@ -46,6 +51,7 @@ Examples:
 - tool bootstrap: `codex --version`
 - dynamic path mount: run from a chosen host directory and confirm the same path exists in the guest
 - boot flow: confirm the console reaches the `dev` shell without manual login
+- CI runner note: the VM smoke workflow is gated by the repository variable `ENABLE_SELF_HOSTED_VM_SMOKE=1` so repositories without a KVM runner do not queue indefinitely.
 
 ## Commit & Pull Request Guidelines
 
@@ -60,3 +66,5 @@ Pull requests should include:
 ## Agent-Specific Instructions
 
 Prefer `mcp__deepwiki__ask_question` early when repo behavior is unclear, especially for `microvm.nix` option semantics, runner behavior, or systemd interactions. Use it as a default aid before guessing from memory.
+
+When a change requires manual setup outside the repository, such as configuring GitHub, registering self-hosted runners, adding secrets or variables, or any other human intervention, add or update a detailed step-by-step guide under [`guides/`](/home/zvictor/development/microVMs/guides) in the same change.

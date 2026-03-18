@@ -3,12 +3,12 @@ set -eu
 host_cwd=$PWD
 host_uid=$(id -u)
 host_gid=$(id -g)
-codex_config_mode=${CODEX_CONFIG:-vm}
-codex_config_host_dir=""
+agent_config_mode=${AGENT_CONFIG:-${CODEX_CONFIG:-vm}}
+agent_config_host_dir=""
 host_runtime_dir=$(mktemp -d)
 host_meta_dir=$host_runtime_dir/meta
 hostcwd_socket=$host_runtime_dir/hostcwd.sock
-codex_config_socket=$host_runtime_dir/codex-config.sock
+agent_config_socket=$host_runtime_dir/agent-config.sock
 
 reject_whitespace_path() {
   path=$1
@@ -34,29 +34,29 @@ resolve_host_dir() {
 
 reject_whitespace_path "$host_cwd" "current working directory"
 
-case "$codex_config_mode" in
+case "$agent_config_mode" in
   host)
-    codex_config_host_dir=$(resolve_host_dir "${CODEX_CONFIG_HOST_PATH:-$HOME/.codex}")
+    agent_config_host_dir=$(resolve_host_dir "${AGENT_CONFIG_HOST_PATH:-${CODEX_CONFIG_HOST_PATH:-@DEFAULT_AGENT_CONFIG_HOST_DIR@}}")
 
-    case "$codex_config_host_dir" in
+    case "$agent_config_host_dir" in
       /*) ;;
       *)
-        echo "CODEX_CONFIG_HOST_PATH must resolve to an absolute host path: $codex_config_host_dir" >&2
+        echo "AGENT_CONFIG_HOST_PATH must resolve to an absolute host path: $agent_config_host_dir" >&2
         exit 1
         ;;
     esac
 
-    reject_whitespace_path "$codex_config_host_dir" "Codex host config path"
+    reject_whitespace_path "$agent_config_host_dir" "agent host config path"
 
-    mkdir -p "$codex_config_host_dir"
+    mkdir -p "$agent_config_host_dir"
     ;;
   workspace|vm|fresh)
     ;;
   project|local)
-    codex_config_mode=workspace
+    agent_config_mode=workspace
     ;;
   *)
-    echo "unsupported CODEX_CONFIG mode: $codex_config_mode" >&2
+    echo "unsupported AGENT_CONFIG mode: $agent_config_mode" >&2
     echo "supported modes: host, workspace, vm, fresh" >&2
     exit 1
     ;;
@@ -68,9 +68,9 @@ cleanup() {
     kill "$hostcwd_virtiofsd_pid" 2>/dev/null || true
     wait "$hostcwd_virtiofsd_pid" 2>/dev/null || true
   fi
-  if [ -n "${codex_config_virtiofsd_pid:-}" ]; then
-    kill "$codex_config_virtiofsd_pid" 2>/dev/null || true
-    wait "$codex_config_virtiofsd_pid" 2>/dev/null || true
+  if [ -n "${agent_config_virtiofsd_pid:-}" ]; then
+    kill "$agent_config_virtiofsd_pid" 2>/dev/null || true
+    wait "$agent_config_virtiofsd_pid" 2>/dev/null || true
   fi
   rm -rf "$host_runtime_dir"
   exit "$status"
@@ -106,19 +106,19 @@ start_virtiofsd() {
 printf '%s\n' "$host_cwd" > "$host_meta_dir/mount-path"
 printf '%s\n' "$host_uid" > "$host_meta_dir/host-uid"
 printf '%s\n' "$host_gid" > "$host_meta_dir/host-gid"
-printf '%s\n' "$codex_config_mode" > "$host_meta_dir/codex-config-mode"
+printf '%s\n' "$agent_config_mode" > "$host_meta_dir/agent-config-mode"
 
 start_virtiofsd "$host_cwd" "$hostcwd_socket"
 hostcwd_virtiofsd_pid=$started_virtiofsd_pid
 
-if [ -n "$codex_config_host_dir" ]; then
-  start_virtiofsd "$codex_config_host_dir" "$codex_config_socket"
-  codex_config_virtiofsd_pid=$started_virtiofsd_pid
+if [ -n "$agent_config_host_dir" ]; then
+  start_virtiofsd "$agent_config_host_dir" "$agent_config_socket"
+  agent_config_virtiofsd_pid=$started_virtiofsd_pid
 fi
 
 env \
   MICROVM_HOST_META_DIR="$host_meta_dir" \
   MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
-  MICROVM_CODEX_CONFIG_HOST_DIR="$codex_config_host_dir" \
-  MICROVM_CODEX_CONFIG_HOST_SOCKET="$codex_config_socket" \
+  MICROVM_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
+  MICROVM_AGENT_CONFIG_HOST_SOCKET="$agent_config_socket" \
   @RUNNER@ "$@"

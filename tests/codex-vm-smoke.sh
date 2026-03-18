@@ -56,7 +56,7 @@ set host_gid [lindex $argv 2]
 set timeout 60
 match_max 100000
 
-spawn env CODEX_CONFIG=workspace nix --accept-flake-config --extra-experimental-features {nix-command flakes} run .#codex-vm
+spawn env AGENT_CONFIG=workspace nix --accept-flake-config --extra-experimental-features {nix-command flakes} run .#codex-vm
 
 expect_prompt
 
@@ -75,7 +75,7 @@ if {$workspace_owner ne "$host_uid:$host_gid"} {
   fail "unexpected workspace ownership: $workspace_owner"
 }
 
-set codex_config_dir [run_and_capture {printf '__SMOKE_CONFIG_DIR__%s\n' "$CODEX_CONFIG_DIR"} {__SMOKE_CONFIG_DIR__(.+)\r\n} "Codex config directory"]
+set codex_config_dir [run_and_capture {printf '__SMOKE_CONFIG_DIR__%s\n' "$AGENT_CONFIG_DIR"} {__SMOKE_CONFIG_DIR__(.+)\r\n} "agent config directory"]
 if {$codex_config_dir ne "$repo_root/.codex"} {
   fail "unexpected Codex config directory: $codex_config_dir"
 }

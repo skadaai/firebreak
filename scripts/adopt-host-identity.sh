@@ -38,14 +38,14 @@ target_gid=$(@CAT@ "$gid_file")
 
 case "$target_uid" in
   ''|*[!0-9]*)
-    echo "ignoring invalid host uid: $target_uid" >&2
+    warn "ignoring invalid host uid: $target_uid"
     exit 0
     ;;
 esac
 
 case "$target_gid" in
   ''|*[!0-9]*)
-    echo "ignoring invalid host gid: $target_gid" >&2
+    warn "ignoring invalid host gid: $target_gid"
     exit 0
     ;;
 esac
@@ -58,10 +58,8 @@ if [ "$current_gid" != "$target_gid" ]; then
   existing_group_name=$(lookup_group_by_gid "$target_gid" || true)
   if [ -n "$existing_group_name" ] && [ "$existing_group_name" != "@DEV_USER@" ]; then
     target_group_name=$existing_group_name
-  else
-    if ! @GROUPMOD@ -g "$target_gid" @DEV_USER@; then
-      warn "could not change @DEV_USER@ group to gid $target_gid; keeping guest gid $current_gid"
-    fi
+  elif ! @GROUPMOD@ -g "$target_gid" @DEV_USER@; then
+    warn "could not change @DEV_USER@ group to gid $target_gid; keeping guest gid $current_gid"
   fi
 fi
 
@@ -69,10 +67,8 @@ if [ "$current_uid" != "$target_uid" ]; then
   existing_user_name=$(lookup_user_by_uid "$target_uid" || true)
   if [ -n "$existing_user_name" ] && [ "$existing_user_name" != "@DEV_USER@" ]; then
     warn "host uid $target_uid is already used by $existing_user_name in the guest; keeping guest uid $current_uid"
-  else
-    if ! @USERMOD@ -u "$target_uid" @DEV_USER@; then
-      warn "could not change @DEV_USER@ uid to $target_uid; keeping guest uid $current_uid"
-    fi
+  elif ! @USERMOD@ -u "$target_uid" @DEV_USER@; then
+    warn "could not change @DEV_USER@ uid to $target_uid; keeping guest uid $current_uid"
   fi
 fi
 

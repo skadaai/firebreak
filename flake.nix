@@ -41,12 +41,16 @@
           ] ++ extraModules;
         };
 
-      mkAgentPackage = name:
+      mkAgentPackage = {
+        name,
+        defaultAgentConfigHostDir,
+      }:
         pkgs.writeShellApplication {
           inherit name;
           runtimeInputs = with pkgs; [ coreutils virtiofsd ];
           text = renderTemplate {
             "@RUNNER@" = "${self.packages.${system}."${name}-runner"}/bin/microvm-run";
+            "@DEFAULT_AGENT_CONFIG_HOST_DIR@" = defaultAgentConfigHostDir;
           } ./scripts/run-wrapper.sh;
         };
 
@@ -77,13 +81,17 @@
       packages.${system} = {
         default = self.packages.${system}.codex-vm;
         codex-vm-runner = self.nixosConfigurations.codex-vm.config.microvm.declaredRunner;
-        codex-vm = mkAgentPackage "codex-vm";
+        codex-vm = mkAgentPackage {
+          name = "codex-vm";
+          defaultAgentConfigHostDir = "$HOME/.codex";
+        };
         codex-vm-smoke = mkSmokePackage "codex-vm-smoke";
       };
 
       checks.${system} = {
         codex-vm-runner = self.packages.${system}.codex-vm-runner;
         codex-vm-system = self.nixosConfigurations.codex-vm.config.system.build.toplevel;
+        codex-vm-smoke = self.packages.${system}.codex-vm-smoke;
       };
     };
 }

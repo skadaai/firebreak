@@ -2,6 +2,7 @@
 let
   cfg = config.agentVm;
   devHome = "/var/lib/${cfg.devUser}";
+  agentConfigVmDir = "${devHome}/${cfg.agentConfigDirName}";
 
   qemu9pOptions = [
     "nofail"
@@ -17,6 +18,12 @@ let
     "@CHOWN@" = "${pkgs.coreutils}/bin/chown";
     "@DEV_HOME@" = devHome;
     "@DEV_USER@" = cfg.devUser;
+    "@AGENT_CONFIG_DIR_FILE@" = cfg.agentConfigDirFile;
+    "@AGENT_CONFIG_DIR_NAME@" = cfg.agentConfigDirName;
+    "@AGENT_CONFIG_ENABLED@" = if cfg.agentConfigEnabled then "1" else "0";
+    "@AGENT_CONFIG_FRESH_DIR@" = cfg.agentConfigFreshDir;
+    "@AGENT_CONFIG_HOST_MOUNT@" = cfg.agentConfigHostMount;
+    "@AGENT_CONFIG_VM_DIR@" = agentConfigVmDir;
     "@HOST_META_MOUNT@" = cfg.hostMetaMount;
     "@ID@" = "${pkgs.coreutils}/bin/id";
     "@GROUPMOD@" = "${pkgs.shadow}/bin/groupmod";
@@ -26,13 +33,15 @@ let
   };
 
   baseShellInit = renderTemplate scriptVars ../../scripts/agent-vm-shell-init.sh;
-  syncHostIdentityScript = pkgs.writeShellScript "sync-host-identity"
-    (renderTemplate scriptVars ../../scripts/sync-host-identity.sh);
+  adoptHostIdentityScript = pkgs.writeShellScript "adopt-host-identity"
+    (renderTemplate scriptVars ../../scripts/adopt-host-identity.sh);
   runtimeExtraArgsScript = pkgs.writeShellScript "microvm-runtime-extra-args"
     ''
       ${renderTemplate scriptVars ../../scripts/runtime-extra-args.sh}
       ${cfg.runtimeExtraArgs}
     '';
+  prepareAgentSessionScript = pkgs.writeShellScript "prepare-agent-session"
+    (renderTemplate scriptVars ../../scripts/prepare-agent-session.sh);
   devConsoleStartScript = pkgs.writeShellScript "dev-console-start"
     (renderTemplate scriptVars ../../scripts/dev-console-start.sh);
   bootstrapEnabled = cfg.bootstrapScript != null;
@@ -66,6 +75,36 @@ in {
       type = types.str;
       default = "/run/microvm-start-dir";
       description = "World-readable file containing the resolved guest start directory.";
+    };
+
+    agentConfigEnabled = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Whether the VM resolves a shared per-agent config directory for the current session.";
+    };
+
+    agentConfigDirName = mkOption {
+      type = types.str;
+      default = ".agent";
+      description = "Directory name used for workspace/vm agent config resolution.";
+    };
+
+    agentConfigHostMount = mkOption {
+      type = types.str;
+      default = "/run/agent-config-host";
+      description = "Guest path used for an optional host-provided agent config share.";
+    };
+
+    agentConfigDirFile = mkOption {
+      type = types.str;
+      default = "/run/agent-config-dir";
+      description = "World-readable file containing the resolved agent config directory for the current session.";
+    };
+
+    agentConfigFreshDir = mkOption {
+      type = types.str;
+      default = "/run/agent-config-fresh";
+      description = "Guest path used for fresh ephemeral agent config sessions.";
     };
 
     varVolumeSizeMiB = mkOption {
@@ -153,10 +192,10 @@ in {
       ${cfg.shellInit}
     '';
 
-    systemd.services.sync-host-identity = {
+    systemd.services.adopt-host-identity = {
       description = "Align guest development user with the host user identity";
       wantedBy = [ "multi-user.target" ];
-      before = [ "link-host-cwd.service" "serial-getty@ttyS0.service" ]
+      before = [ "prepare-agent-session.service" "serial-getty@ttyS0.service" ]
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
       after = [ "local-fs.target" ];
 
@@ -166,7 +205,7 @@ in {
       ];
 
       serviceConfig = {
-        ExecStart = syncHostIdentityScript;
+        ExecStart = adoptHostIdentityScript;
         Type = "oneshot";
         RemainAfterExit = true;
         StandardOutput = "journal+console";
@@ -178,7 +217,7 @@ in {
       description = "Install persistent developer tools before login";
       wantedBy = [ "multi-user.target" ];
       before = [ "getty.target" "serial-getty@ttyS0.service" ];
-      after = [ "local-fs.target" "network-online.target" "sync-host-identity.service" ];
+      after = [ "local-fs.target" "network-online.target" "adopt-host-identity.service" ];
       wants = [ "network-online.target" ];
 
       serviceConfig = {
@@ -207,11 +246,11 @@ in {
       options = qemu9pOptions ++ [ "ro" ];
     };
 
-    systemd.services.link-host-cwd = {
-      description = "Bind mount /workspace at the launch-time host cwd";
+    systemd.services.prepare-agent-session = {
+      description = "Prepare the workspace and agent session paths";
       wantedBy = [ "multi-user.target" ];
       before = [ "dev-console.service" ];
-      after = [ "local-fs.target" "sync-host-identity.service" ];
+      after = [ "local-fs.target" "adopt-host-identity.service" ];
 
       path = with pkgs; [
         coreutils
@@ -219,13 +258,12 @@ in {
       ];
 
       serviceConfig = {
+        ExecStart = prepareAgentSessionScript;
         Type = "oneshot";
         RemainAfterExit = true;
         StandardOutput = "journal+console";
         StandardError = "journal+console";
       };
-
-      script = renderTemplate scriptVars ../../scripts/link-host-cwd.sh;
     };
 
     systemd.services."serial-getty@ttyS0".enable = false;
@@ -233,9 +271,9 @@ in {
     systemd.services.dev-console = {
       description = "Interactive dev shell on ttyS0";
       wantedBy = [ "multi-user.target" ];
-      after = [ "sync-host-identity.service" "link-host-cwd.service" ]
+      after = [ "adopt-host-identity.service" "prepare-agent-session.service" ]
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
-      requires = [ "sync-host-identity.service" "link-host-cwd.service" ]
+      requires = [ "adopt-host-identity.service" "prepare-agent-session.service" ]
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
       conflicts = [ "serial-getty@ttyS0.service" ];
 

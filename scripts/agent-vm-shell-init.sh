@@ -6,4 +6,8 @@ if [ "$USER" = "@DEV_USER@" ]; then
     fi
     cd "$target"
   }
+
+  if [ -r @AGENT_CONFIG_DIR_FILE@ ]; then
+    export AGENT_CONFIG_DIR=$(cat @AGENT_CONFIG_DIR_FILE@)
+  fi
 fi

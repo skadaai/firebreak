@@ -6,8 +6,10 @@ if [ "$USER" = "@DEV_USER@" ]; then
   export PATH="$BUN_INSTALL/bin:$PATH"
 
   codex_config_dir=@DEV_HOME@/.codex
-  if [ -r @CODEX_CONFIG_DIR_FILE@ ]; then
-    codex_config_dir=$(cat @CODEX_CONFIG_DIR_FILE@)
+  if [ -n "${AGENT_CONFIG_DIR:-}" ]; then
+    codex_config_dir=$AGENT_CONFIG_DIR
+  elif [ -r @AGENT_CONFIG_DIR_FILE@ ]; then
+    codex_config_dir=$(cat @AGENT_CONFIG_DIR_FILE@)
   fi
   export CODEX_HOME="$codex_config_dir"
   export CODEX_CONFIG_DIR="$codex_config_dir"

@@ -13,3 +13,9 @@ if [ -n "${MICROVM_HOST_META_DIR:-}" ]; then
     -fsdev local,id=fs-hostmeta,path="$MICROVM_HOST_META_DIR",security_model=none,readonly=true \
     -device virtio-9p-pci,fsdev=fs-hostmeta,mount_tag=hostmeta
 fi
+
+if [ -n "${MICROVM_AGENT_CONFIG_HOST_DIR:-}" ]; then
+  printf '%s\n' \
+    -chardev socket,id=fs-hostagentconfig,path="$MICROVM_AGENT_CONFIG_HOST_SOCKET" \
+    -device vhost-user-fs-pci,chardev=fs-hostagentconfig,tag=hostagentconfig
+fi

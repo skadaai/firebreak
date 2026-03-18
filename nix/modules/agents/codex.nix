@@ -16,6 +16,7 @@ in {
       name = lib.mkDefault "codex-vm";
       agentConfigEnabled = true;
       agentConfigDirName = ".codex";
+      agentCommand = "codex";
       extraSystemPackages = with pkgs; [
         bun
         git

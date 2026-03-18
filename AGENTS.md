@@ -19,7 +19,9 @@ There is no separate application `src/` tree yet. Keep shared behavior in the ba
 ## Build, Test, and Development Commands
 
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#codex-vm`
-  Runs the interactive MicroVM wrapper with dynamic host `PWD` mounting.
+  Runs the MicroVM wrapper with dynamic host `PWD` mounting and launches `codex` by default.
+- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#codex-vm-shell`
+  Runs the same MicroVM, but enters a maintenance shell instead of starting `codex`.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' build .#codex-vm-runner`
   Builds the underlying declared runner without launching the VM.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#codex-vm-smoke`
@@ -48,9 +50,10 @@ Use the smoke test for the core runtime path, then boot the VM manually for beha
 Examples:
 
 - smoke path: `nix run .#codex-vm-smoke`
+- shell entry path: `nix run .#codex-vm-shell`
 - tool bootstrap: `codex --version`
 - dynamic path mount: run from a chosen host directory and confirm the same path exists in the guest
-- boot flow: confirm the console reaches the `dev` shell without manual login
+- boot flow: confirm `nix run .#codex-vm` enters `codex`, and `nix run .#codex-vm-shell` reaches the `dev` shell
 - CI runner note: the VM smoke workflow is gated by the repository variable `ENABLE_SELF_HOSTED_VM_SMOKE=1` so repositories without a KVM runner do not queue indefinitely.
 
 ## Commit & Pull Request Guidelines

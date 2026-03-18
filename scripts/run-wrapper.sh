@@ -4,6 +4,7 @@ host_cwd=$PWD
 host_uid=$(id -u)
 host_gid=$(id -g)
 agent_config_mode=${AGENT_CONFIG:-${CODEX_CONFIG:-vm}}
+agent_session_mode=${AGENT_VM_ENTRYPOINT:-@DEFAULT_AGENT_SESSION_MODE@}
 agent_config_host_dir=""
 host_runtime_dir=$(mktemp -d)
 host_meta_dir=$host_runtime_dir/meta
@@ -33,6 +34,16 @@ resolve_host_dir() {
 }
 
 reject_whitespace_path "$host_cwd" "current working directory"
+
+case "$agent_session_mode" in
+  agent|shell)
+    ;;
+  *)
+    echo "unsupported AGENT_VM_ENTRYPOINT: $agent_session_mode" >&2
+    echo "supported values: agent, shell" >&2
+    exit 1
+    ;;
+esac
 
 case "$agent_config_mode" in
   host)
@@ -107,6 +118,7 @@ printf '%s\n' "$host_cwd" > "$host_meta_dir/mount-path"
 printf '%s\n' "$host_uid" > "$host_meta_dir/host-uid"
 printf '%s\n' "$host_gid" > "$host_meta_dir/host-gid"
 printf '%s\n' "$agent_config_mode" > "$host_meta_dir/agent-config-mode"
+printf '%s\n' "$agent_session_mode" > "$host_meta_dir/agent-session-mode"
 
 start_virtiofsd "$host_cwd" "$hostcwd_socket"
 hostcwd_virtiofsd_pid=$started_virtiofsd_pid

@@ -24,6 +24,8 @@ let
     "@AGENT_CONFIG_FRESH_DIR@" = cfg.agentConfigFreshDir;
     "@AGENT_CONFIG_HOST_MOUNT@" = cfg.agentConfigHostMount;
     "@AGENT_CONFIG_VM_DIR@" = agentConfigVmDir;
+    "@AGENT_COMMAND@" = if cfg.agentCommand == null then "" else cfg.agentCommand;
+    "@AGENT_SESSION_MODE_FILE@" = cfg.agentSessionModeFile;
     "@HOST_META_MOUNT@" = cfg.hostMetaMount;
     "@ID@" = "${pkgs.coreutils}/bin/id";
     "@GROUPMOD@" = "${pkgs.shadow}/bin/groupmod";
@@ -105,6 +107,18 @@ in {
       type = types.str;
       default = "/run/agent-config-fresh";
       description = "Guest path used for fresh ephemeral agent config sessions.";
+    };
+
+    agentSessionModeFile = mkOption {
+      type = types.str;
+      default = "/run/agent-session-mode";
+      description = "World-readable file containing the requested interactive session mode.";
+    };
+
+    agentCommand = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = "Default agent command to launch in the interactive session.";
     };
 
     varVolumeSizeMiB = mkOption {

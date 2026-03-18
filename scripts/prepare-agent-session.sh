@@ -1,6 +1,8 @@
 set -eu
 
 metadata=@HOST_META_MOUNT@/mount-path
+session_mode=agent
+session_mode_file=@HOST_META_MOUNT@/agent-session-mode
 start_dir=@WORKSPACE_MOUNT@
 
 for _ in $(seq 1 50); do
@@ -21,6 +23,13 @@ fi
 
 printf '%s\n' "$start_dir" > @START_DIR_FILE@
 chmod 0644 @START_DIR_FILE@
+
+if [ -r "$session_mode_file" ]; then
+  session_mode=$(cat "$session_mode_file")
+fi
+
+printf '%s\n' "$session_mode" > @AGENT_SESSION_MODE_FILE@
+chmod 0644 @AGENT_SESSION_MODE_FILE@
 
 if [ "$start_dir" != "@WORKSPACE_MOUNT@" ]; then
   if [ -L "$start_dir" ]; then

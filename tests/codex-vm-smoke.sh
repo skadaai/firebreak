@@ -18,17 +18,21 @@ printf '%s\n' "host-smoke-marker" > "$host_config_dir/marker.txt"
 cd "$repo_root"
 
 run_scenario() {
-  mode=$1
-  expected_config_dir=$2
-  host_config_path=${3-}
-  host_marker_name=${4-}
+  package_name=$1
+  mode=$2
+  expected_config_dir=$3
+  expect_agent_entry=${4-0}
+  host_config_path=${5-}
+  host_marker_name=${6-}
 
   timeout --foreground "$timeout_seconds" expect - \
     "$repo_root" \
     "$host_uid" \
     "$host_gid" \
+    "$package_name" \
     "$mode" \
     "$expected_config_dir" \
+    "$expect_agent_entry" \
     "$host_config_path" \
     "$host_marker_name" <<'EOF'
 proc fail {message} {
@@ -71,10 +75,12 @@ proc run_and_assert {command pattern description} {
 set repo_root [lindex $argv 0]
 set host_uid [lindex $argv 1]
 set host_gid [lindex $argv 2]
-set mode [lindex $argv 3]
-set expected_config_dir [lindex $argv 4]
-set host_config_dir [lindex $argv 5]
-set host_marker_name [lindex $argv 6]
+set package_name [lindex $argv 3]
+set mode [lindex $argv 4]
+set expected_config_dir [lindex $argv 5]
+set expect_agent_entry [lindex $argv 6]
+set host_config_dir [lindex $argv 7]
+set host_marker_name [lindex $argv 8]
 set timeout 60
 match_max 100000
 
@@ -82,8 +88,17 @@ set spawn_cmd [list env AGENT_CONFIG=$mode]
 if {$host_config_dir ne ""} {
   lappend spawn_cmd AGENT_CONFIG_HOST_PATH=$host_config_dir
 }
-lappend spawn_cmd nix --accept-flake-config --extra-experimental-features {nix-command flakes} run .#codex-vm
+lappend spawn_cmd nix --accept-flake-config --extra-experimental-features {nix-command flakes} run .#$package_name
 spawn -noecho {*}$spawn_cmd
+
+if {$expect_agent_entry eq "1"} {
+  expect {
+    -re {__AGENT_ENTRY__codex\r\n} { }
+    timeout { fail "timed out waiting for the default agent entry marker" }
+    eof { fail "codex-vm exited before the default agent entry marker appeared" }
+  }
+  send -- "\003"
+}
 
 expect_prompt
 
@@ -124,8 +139,9 @@ expect {
 EOF
 }
 
-run_scenario workspace "$repo_root/.codex"
-run_scenario vm "/var/lib/dev/.codex"
-run_scenario host "/run/agent-config-host" "$host_config_dir" "marker.txt"
+run_scenario codex-vm workspace "$repo_root/.codex" 1
+run_scenario codex-vm-shell workspace "$repo_root/.codex"
+run_scenario codex-vm-shell vm "/var/lib/dev/.codex"
+run_scenario codex-vm-shell host "/run/agent-config-host" 0 "$host_config_dir" "marker.txt"
 
 printf '%s\n' "codex-vm smoke test passed"

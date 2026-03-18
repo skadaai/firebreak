@@ -1,6 +1,6 @@
 { config, lib, pkgs, renderTemplate, ... }:
 let
-  cfg = config.myMicrovm;
+  cfg = config.codexVm;
   devHome = "/var/lib/${cfg.devUser}";
 
   qemu9pOptions = [
@@ -26,7 +26,7 @@ let
   devConsoleStartScript = pkgs.writeShellScript "dev-console-start"
     (renderTemplate scriptVars ../scripts/dev-console-start.sh);
 in {
-  options.myMicrovm = with lib; {
+  options.codexVm = with lib; {
     devUser = mkOption {
       type = types.str;
       default = "dev";
@@ -59,7 +59,7 @@ in {
   };
 
   config = {
-    networking.hostName = "my-microvm";
+    networking.hostName = "codex-vm";
     networking.useDHCP = true;
     system.stateVersion = "26.05";
 

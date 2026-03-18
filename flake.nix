@@ -23,21 +23,21 @@
           (builtins.attrValues vars)
           (builtins.readFile path);
     in {
-      nixosModules.default = import ./nix/my-microvm.nix;
+      nixosModules.default = import ./nix/codex-vm.nix;
 
       packages.${system} = {
-        default = self.packages.${system}.my-microvm;
-        my-microvm-runner = self.nixosConfigurations.my-microvm.config.microvm.declaredRunner;
-        my-microvm = pkgs.writeShellApplication {
-          name = "my-microvm";
+        default = self.packages.${system}.codex-vm;
+        codex-vm-runner = self.nixosConfigurations.codex-vm.config.microvm.declaredRunner;
+        codex-vm = pkgs.writeShellApplication {
+          name = "codex-vm";
           runtimeInputs = with pkgs; [ coreutils ];
           text = renderTemplate {
-            "@RUNNER@" = "${self.packages.${system}.my-microvm-runner}/bin/microvm-run";
-          } ./scripts/my-microvm-wrapper.sh;
+            "@RUNNER@" = "${self.packages.${system}.codex-vm-runner}/bin/microvm-run";
+          } ./scripts/run-wrapper.sh;
         };
       };
 
-      nixosConfigurations.my-microvm = nixpkgs.lib.nixosSystem {
+      nixosConfigurations.codex-vm = nixpkgs.lib.nixosSystem {
         inherit system;
         specialArgs = {
           inherit renderTemplate;
@@ -49,8 +49,8 @@
       };
 
       checks.${system} = {
-        my-microvm-runner = self.packages.${system}.my-microvm-runner;
-        my-microvm-system = self.nixosConfigurations.my-microvm.config.system.build.toplevel;
+        codex-vm-runner = self.packages.${system}.codex-vm-runner;
+        codex-vm-system = self.nixosConfigurations.codex-vm.config.system.build.toplevel;
       };
     };
 }

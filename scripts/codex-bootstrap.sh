@@ -15,12 +15,11 @@ mkdir -p \
   "$XDG_CONFIG_HOME" \
   "$XDG_CACHE_HOME" \
   "$XDG_STATE_HOME"
-chown -R @DEV_USER@:users "$DEV_HOME"
-
+chown -R @DEV_USER@:@DEV_USER@ "$DEV_HOME"
 if ! [ -x "$BUN_INSTALL/bin/codex" ]; then
   echo "Installing Codex CLI into persistent storage..."
   bun install --global @openai/codex
-  chown -R @DEV_USER@:users "$DEV_HOME"
+  chown -R @DEV_USER@:@DEV_USER@ "$DEV_HOME"
 else
   echo "Codex CLI already present."
 fi

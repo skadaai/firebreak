@@ -13,16 +13,26 @@ let
 
   scriptVars = {
     "@BASH@" = "${pkgs.bashInteractive}/bin/bash";
+    "@CAT@" = "${pkgs.coreutils}/bin/cat";
+    "@CHOWN@" = "${pkgs.coreutils}/bin/chown";
     "@DEV_HOME@" = devHome;
     "@DEV_USER@" = cfg.devUser;
     "@HOST_META_MOUNT@" = cfg.hostMetaMount;
+    "@ID@" = "${pkgs.coreutils}/bin/id";
+    "@GROUPMOD@" = "${pkgs.shadow}/bin/groupmod";
     "@START_DIR_FILE@" = cfg.startDirFile;
+    "@USERMOD@" = "${pkgs.shadow}/bin/usermod";
     "@WORKSPACE_MOUNT@" = cfg.workspaceMount;
   };
 
   baseShellInit = renderTemplate scriptVars ../../scripts/agent-vm-shell-init.sh;
+  syncHostIdentityScript = pkgs.writeShellScript "sync-host-identity"
+    (renderTemplate scriptVars ../../scripts/sync-host-identity.sh);
   runtimeExtraArgsScript = pkgs.writeShellScript "microvm-runtime-extra-args"
-    (renderTemplate scriptVars ../../scripts/runtime-extra-args.sh);
+    ''
+      ${renderTemplate scriptVars ../../scripts/runtime-extra-args.sh}
+      ${cfg.runtimeExtraArgs}
+    '';
   devConsoleStartScript = pkgs.writeShellScript "dev-console-start"
     (renderTemplate scriptVars ../../scripts/dev-console-start.sh);
   bootstrapEnabled = cfg.bootstrapScript != null;
@@ -92,6 +102,12 @@ in {
       description = "Additional system packages installed inside the VM.";
     };
 
+    runtimeExtraArgs = mkOption {
+      type = types.lines;
+      default = "";
+      description = "Extra runtime QEMU arguments emitted by the declared runner.";
+    };
+
     shellInit = mkOption {
       type = types.lines;
       default = "";
@@ -117,9 +133,11 @@ in {
     system.stateVersion = "26.05";
 
     users.users.root.password = "";
+    users.groups.${cfg.devUser} = { };
     users.users.${cfg.devUser} = {
       isNormalUser = true;
       password = "";
+      group = cfg.devUser;
       extraGroups = [ "wheel" ];
       home = devHome;
       createHome = true;
@@ -135,11 +153,32 @@ in {
       ${cfg.shellInit}
     '';
 
+    systemd.services.sync-host-identity = {
+      description = "Align guest development user with the host user identity";
+      wantedBy = [ "multi-user.target" ];
+      before = [ "link-host-cwd.service" "serial-getty@ttyS0.service" ]
+        ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
+      after = [ "local-fs.target" ];
+
+      path = with pkgs; [
+        coreutils
+        shadow
+      ];
+
+      serviceConfig = {
+        ExecStart = syncHostIdentityScript;
+        Type = "oneshot";
+        RemainAfterExit = true;
+        StandardOutput = "journal+console";
+        StandardError = "journal+console";
+      };
+    };
+
     systemd.services.dev-bootstrap = lib.mkIf bootstrapEnabled {
       description = "Install persistent developer tools before login";
       wantedBy = [ "multi-user.target" ];
       before = [ "getty.target" "serial-getty@ttyS0.service" ];
-      after = [ "local-fs.target" "network-online.target" ];
+      after = [ "local-fs.target" "network-online.target" "sync-host-identity.service" ];
       wants = [ "network-online.target" ];
 
       serviceConfig = {
@@ -155,8 +194,11 @@ in {
 
     fileSystems.${cfg.workspaceMount} = {
       device = "hostcwd";
-      fsType = "9p";
-      options = qemu9pOptions;
+      fsType = "virtiofs";
+      options = [
+        "defaults"
+        "x-systemd.after=systemd-modules-load.service"
+      ];
     };
 
     fileSystems.${cfg.hostMetaMount} = {
@@ -169,7 +211,7 @@ in {
       description = "Bind mount /workspace at the launch-time host cwd";
       wantedBy = [ "multi-user.target" ];
       before = [ "dev-console.service" ];
-      after = [ "local-fs.target" ];
+      after = [ "local-fs.target" "sync-host-identity.service" ];
 
       path = with pkgs; [
         coreutils
@@ -191,8 +233,10 @@ in {
     systemd.services.dev-console = {
       description = "Interactive dev shell on ttyS0";
       wantedBy = [ "multi-user.target" ];
-      after = lib.optional bootstrapEnabled "dev-bootstrap.service" ++ [ "link-host-cwd.service" ];
-      requires = lib.optional bootstrapEnabled "dev-bootstrap.service" ++ [ "link-host-cwd.service" ];
+      after = [ "sync-host-identity.service" "link-host-cwd.service" ]
+        ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
+      requires = [ "sync-host-identity.service" "link-host-cwd.service" ]
+        ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
       conflicts = [ "serial-getty@ttyS0.service" ];
 
       serviceConfig = {

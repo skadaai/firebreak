@@ -44,7 +44,7 @@
       mkAgentPackage = name:
         pkgs.writeShellApplication {
           inherit name;
-          runtimeInputs = with pkgs; [ coreutils ];
+          runtimeInputs = with pkgs; [ coreutils virtiofsd ];
           text = renderTemplate {
             "@RUNNER@" = "${self.packages.${system}."${name}-runner"}/bin/microvm-run";
           } ./scripts/run-wrapper.sh;

@@ -9,28 +9,31 @@ This repository is centered on a Nix flake plus reusable VM modules:
 - [`nix/modules/agents/`](./nix/modules/agents): agent-specific overlays such as Codex.
 - [`scripts/`](./scripts): runtime wrapper, mount helpers, console startup, and agent bootstrap scripts.
 - [`tests/`](./tests): smoke and regression scripts for validating the VM workflow.
+- [`BRANDING.md`](./BRANDING.md): product naming, tagline, and public naming conventions.
 - [`guides/`](./guides): step-by-step instructions for tasks that require manual setup or human intervention.
 - [`.github/workflows/`](./.github/workflows): hosted CI checks and the self-hosted KVM smoke workflow.
 - [`flake.lock`](./flake.lock): pinned inputs.
-- [`var.img`](./var.img): persistent guest `/var` volume created by the runner.
+- VM volume images such as `firebreak-codex-var.img`: persistent guest `/var` volumes created by the runner.
 
 There is no separate application `src/` tree yet. Keep shared behavior in the base module and put tool-specific behavior in focused overlay modules.
 
 ## Build, Test, and Development Commands
 
-- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#codex-vm`
-  Runs the MicroVM wrapper with dynamic host `PWD` mounting and launches `codex` by default.
-- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#codex-vm-shell`
+- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-codex`
+  Runs the Codex MicroVM wrapper with dynamic host `PWD` mounting and launches `codex` by default.
+- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-codex-shell`
   Runs the same MicroVM, but enters a maintenance shell instead of starting `codex`.
-- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' build .#codex-vm-runner`
+- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' build .#firebreak-codex-runner`
   Builds the underlying declared runner without launching the VM.
-- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#codex-vm-smoke`
-  Runs the lightweight host-side smoke test against the interactive VM.
+- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-codex-smoke`
+  Runs the lightweight host-side smoke test against the interactive Codex VM.
+- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak`
+  Prints the reserved top-level Firebreak CLI stub. Future `doctor`, `init`, and `run` commands should live here.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' flake check`
   Runs flake evaluation checks. Use this before submitting changes.
 - GitHub Actions
   - `.github/workflows/ci.yml` runs hosted `flake check` on pushes and pull requests.
-  - `.github/workflows/vm-smoke.yml` runs `codex-vm-smoke` on a self-hosted runner labeled `self-hosted`, `linux`, `x64`, and `kvm`.
+  - `.github/workflows/vm-smoke.yml` runs `firebreak-codex-smoke` on a self-hosted runner labeled `self-hosted`, `linux`, `x64`, and `kvm`.
 
 ## Coding Style & Naming Conventions
 
@@ -49,11 +52,11 @@ Use the smoke test for the core runtime path, then boot the VM manually for beha
 
 Examples:
 
-- smoke path: `nix run .#codex-vm-smoke`
-- shell entry path: `nix run .#codex-vm-shell`
+- smoke path: `nix run .#firebreak-codex-smoke`
+- shell entry path: `nix run .#firebreak-codex-shell`
 - tool bootstrap: `codex --version`
 - dynamic path mount: run from a chosen host directory and confirm the same path exists in the guest
-- boot flow: confirm `nix run .#codex-vm` enters `codex`, and `nix run .#codex-vm-shell` reaches the `dev` shell
+- boot flow: confirm `nix run .#firebreak-codex` enters `codex`, and `nix run .#firebreak-codex-shell` reaches the `dev` shell
 - CI runner note: the VM smoke workflow is gated by the repository variable `ENABLE_SELF_HOSTED_VM_SMOKE=1` so repositories without a KVM runner do not queue indefinitely.
 
 ## Commit & Pull Request Guidelines

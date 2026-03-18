@@ -1,4 +1,4 @@
-name: VM Smoke
+name: Firebreak Smoke
 
 on:
   pull_request:
@@ -15,8 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  codex-vm-smoke:
-    name: codex-vm smoke
+  firebreak-codex-smoke:
+    name: firebreak-codex smoke
     if: github.event_name == 'workflow_dispatch' || vars.ENABLE_SELF_HOSTED_VM_SMOKE == '1'
     runs-on:
       - self-hosted
@@ -37,5 +37,5 @@ jobs:
           extra_nix_config: |
             system-features = nixos-test benchmark big-parallel kvm
 
-      - name: Run codex-vm smoke test
-        run: nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#codex-vm-smoke
+      - name: Run Firebreak Codex smoke test
+        run: nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-codex-smoke

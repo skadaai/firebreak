@@ -7,7 +7,7 @@ This guide covers the manual steps required to make the workflows in [`.github/w
 This repository has two workflows:
 
 - [`ci.yml`](../.github/workflows/ci.yml): runs hosted `nix flake check`
-- [`vm-smoke.yml`](../.github/workflows/vm-smoke.yml): runs `nix run .#codex-vm-smoke` on a self-hosted KVM runner
+- [`vm-smoke.yml`](../.github/workflows/vm-smoke.yml): runs `nix run .#firebreak-codex-smoke` on a self-hosted KVM runner
 
 The hosted workflow works immediately. The VM smoke workflow requires a self-hosted runner and one repository variable.
 
@@ -47,7 +47,7 @@ This enables automatic execution of [`vm-smoke.yml`](../.github/workflows/vm-smo
 
 1. Push a branch or open a pull request.
 2. Confirm `CI / Nix Checks` starts on a GitHub-hosted runner.
-3. Confirm `VM Smoke / codex-vm smoke` starts on the self-hosted runner.
+3. Confirm `Firebreak Smoke / firebreak-codex smoke` starts on the self-hosted runner.
 4. If needed, trigger `VM Smoke` manually from the `Actions` tab with `Run workflow`.
 
 ## 4. Common Failure Checks
@@ -59,4 +59,4 @@ This enables automatic execution of [`vm-smoke.yml`](../.github/workflows/vm-smo
   - verify `ENABLE_SELF_HOSTED_VM_SMOKE=1`
 - VM boot fails immediately:
   - verify the runner machine has working KVM access
-  - verify the runner user can execute `nix run .#codex-vm-smoke`
+  - verify the runner user can execute `nix run .#firebreak-codex-smoke`

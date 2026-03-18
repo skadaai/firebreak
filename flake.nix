@@ -1,5 +1,5 @@
 {
-  description = "MicroVM sandboxes for coding agents";
+  description = "Skada Firebreak: reliable isolation for high-trust automation";
 
   nixConfig = {
     extra-substituters = [ "https://microvm.cachix.org" ];
@@ -67,46 +67,63 @@
             expect
             git
           ];
-          text = builtins.readFile ./tests/codex-vm-smoke.sh;
+          text = builtins.readFile ./tests/firebreak-codex-smoke.sh;
         };
     in {
       nixosModules = {
         agent-vm-base = import ./nix/modules/agent-vm-base.nix;
-        codex-vm = import ./nix/modules/agents/codex.nix;
-        default = self.nixosModules.codex-vm;
+        firebreak-codex = import ./nix/modules/agents/codex.nix;
+        default = self.nixosModules.firebreak-codex;
       };
 
       nixosConfigurations = {
-        codex-vm = mkAgentVm {
-          name = "codex-vm";
-          extraModules = [ self.nixosModules.codex-vm ];
+        firebreak-codex = mkAgentVm {
+          name = "firebreak-codex";
+          extraModules = [ self.nixosModules.firebreak-codex ];
         };
       };
 
       packages.${system} = {
-        default = self.packages.${system}.codex-vm;
-        codex-vm-runner = self.nixosConfigurations.codex-vm.config.microvm.declaredRunner;
-        codex-vm = mkAgentPackage {
-          name = "codex-vm";
-          runnerName = "codex-vm";
+        default = self.packages.${system}.firebreak;
+        firebreak-codex-runner = self.nixosConfigurations.firebreak-codex.config.microvm.declaredRunner;
+        firebreak-codex = mkAgentPackage {
+          name = "firebreak-codex";
+          runnerName = "firebreak-codex";
           defaultAgentCommand = "codex";
           defaultAgentConfigHostDir = "$HOME/.codex";
           defaultAgentSessionMode = "agent";
         };
-        codex-vm-shell = mkAgentPackage {
-          name = "codex-vm-shell";
-          runnerName = "codex-vm";
+        firebreak-codex-shell = mkAgentPackage {
+          name = "firebreak-codex-shell";
+          runnerName = "firebreak-codex";
           defaultAgentCommand = "codex";
           defaultAgentConfigHostDir = "$HOME/.codex";
           defaultAgentSessionMode = "shell";
         };
-        codex-vm-smoke = mkSmokePackage "codex-vm-smoke";
+        firebreak-codex-smoke = mkSmokePackage "firebreak-codex-smoke";
+        firebreak = pkgs.writeShellApplication {
+          name = "firebreak";
+          runtimeInputs = with pkgs; [ coreutils ];
+          text = ''
+            cat <<'EOF'
+
+[Skada Firebreak -reliable isolation for high-trust automation]
+
+
+This top-level CLI is reserved for a future control plane.
+Use an explicit agent VM for now:
+  nix run github:skadaai/firebreak#firebreak-codex
+  nix run github:skadaai/firebreak#firebreak-codex-shell
+  nix run github:skadaai/firebreak#firebreak-codex-smoke
+EOF
+          '';
+        };
       };
 
       checks.${system} = {
-        codex-vm-runner = self.packages.${system}.codex-vm-runner;
-        codex-vm-system = self.nixosConfigurations.codex-vm.config.system.build.toplevel;
-        codex-vm-smoke = self.packages.${system}.codex-vm-smoke;
+        firebreak-codex-runner = self.packages.${system}.firebreak-codex-runner;
+        firebreak-codex-system = self.nixosConfigurations.firebreak-codex.config.system.build.toplevel;
+        firebreak-codex-smoke = self.packages.${system}.firebreak-codex-smoke;
       };
     };
 }

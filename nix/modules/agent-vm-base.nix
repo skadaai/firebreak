@@ -13,7 +13,10 @@ let
   ];
 
   scriptVars = {
+    "@AGENT_VM_NAME@" = cfg.name;
     "@BASH@" = "${pkgs.bashInteractive}/bin/bash";
+    "@BRANDING_NAME@" = cfg.brandingName;
+    "@BRANDING_TAGLINE@" = cfg.brandingTagline;
     "@CAT@" = "${pkgs.coreutils}/bin/cat";
     "@CHOWN@" = "${pkgs.coreutils}/bin/chown";
     "@DEV_HOME@" = devHome;
@@ -54,6 +57,18 @@ in {
       type = types.str;
       default = "agent-vm";
       description = "MicroVM hostname and primary identity.";
+    };
+
+    brandingName = mkOption {
+      type = types.str;
+      default = "Skada Firebreak";
+      description = "Human-facing product name printed in the interactive guest session.";
+    };
+
+    brandingTagline = mkOption {
+      type = types.str;
+      default = "reliable isolation for high-trust automation";
+      description = "Short startup tagline printed in the interactive guest session.";
     };
 
     devUser = mkOption {

@@ -21,6 +21,9 @@ fi
 
 cd "$target"
 
+printf '\nWelcome to %s - %s\n\n' "@BRANDING_NAME@" "@BRANDING_TAGLINE@"
+printf 'vm: %s | mode: %s | workspace: %s\n\n' "@AGENT_VM_NAME@" "$session_mode" "$target"
+
 case "$session_mode" in
   shell)
     exec @BASH@ -i

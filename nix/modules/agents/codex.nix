@@ -13,7 +13,7 @@ let
 in {
   config = {
     agentVm = {
-      name = lib.mkDefault "codex-vm";
+      name = lib.mkDefault "firebreak-codex";
       agentConfigEnabled = true;
       agentConfigDirName = ".codex";
       agentCommand = "codex";

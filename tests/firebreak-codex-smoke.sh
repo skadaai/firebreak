@@ -2,13 +2,13 @@ set -eu
 
 repo_root=$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null || true)
 if [ -z "$repo_root" ] || [ ! -f "$repo_root/flake.nix" ]; then
-  echo "run this smoke test from inside the codex-vm repository" >&2
+  echo "run this smoke test from inside the Firebreak repository" >&2
   exit 1
 fi
 
 host_uid=$(id -u)
 host_gid=$(id -g)
-timeout_seconds=${CODEX_VM_SMOKE_TIMEOUT:-180}
+timeout_seconds=${FIREBREAK_SMOKE_TIMEOUT:-${CODEX_VM_SMOKE_TIMEOUT:-180}}
 host_config_dir=$(mktemp -d)
 
 trap 'rm -rf "$host_config_dir"' EXIT INT TERM
@@ -47,9 +47,9 @@ proc fail {message} {
 
 proc expect_prompt {} {
   expect {
-    -re {\[dev@codex-vm:[^]]+\]\$ $} { return }
-    timeout { fail "timed out waiting for the codex-vm shell prompt" }
-    eof { fail "codex-vm exited before the smoke test completed" }
+    -re {\[dev@[a-z0-9-]+:[^]]+\]\$ $} { return }
+    timeout { fail "timed out waiting for the Firebreak shell prompt" }
+    eof { fail "Firebreak exited before the smoke test completed" }
   }
 }
 
@@ -60,7 +60,7 @@ proc run_and_capture {command pattern description} {
       set value $expect_out(1,string)
     }
     timeout { fail "timed out while checking $description" }
-    eof { fail "codex-vm exited while checking $description" }
+    eof { fail "Firebreak exited while checking $description" }
   }
   expect_prompt
   return $value
@@ -71,7 +71,7 @@ proc run_and_assert {command pattern description} {
   expect {
     -re $pattern { }
     timeout { fail "timed out while checking $description" }
-    eof { fail "codex-vm exited while checking $description" }
+    eof { fail "Firebreak exited while checking $description" }
   }
   expect_prompt
 }
@@ -117,9 +117,9 @@ if {$workspace_owner ne "$host_uid:$host_gid"} {
   fail "unexpected workspace ownership: $workspace_owner"
 }
 
-set codex_config_dir [run_and_capture {printf '__SMOKE_CONFIG_DIR__%s\n' "$AGENT_CONFIG_DIR"} {__SMOKE_CONFIG_DIR__(.+)\r\n} "agent config directory"]
-if {$codex_config_dir ne $expected_config_dir} {
-  fail "unexpected Codex config directory: $codex_config_dir"
+set agent_config_dir [run_and_capture {printf '__SMOKE_CONFIG_DIR__%s\n' "$AGENT_CONFIG_DIR"} {__SMOKE_CONFIG_DIR__(.+)\r\n} "agent config directory"]
+if {$agent_config_dir ne $expected_config_dir} {
+  fail "unexpected agent config directory: $agent_config_dir"
 }
 
 run_and_assert {test -f flake.nix && echo __SMOKE_FLAKE__ok} {__SMOKE_FLAKE__ok\r\n} "workspace contents"
@@ -134,16 +134,16 @@ run_and_assert {codex --version | sed -n '1s/^/__SMOKE_CODEX__/p'} {__SMOKE_CODE
 send -- "sudo poweroff\r"
 expect {
   eof { exit 0 }
-  timeout { fail "timed out waiting for codex-vm to power off" }
+  timeout { fail "timed out waiting for Firebreak to power off" }
 }
 EOF
 
   printf '%s\n' "ok: $scenario_label"
 }
 
-run_scenario codex-vm workspace "$repo_root/.codex" "default agent entry uses workspace config" "--version"
-run_scenario codex-vm-shell workspace "$repo_root/.codex" "shell entry uses workspace config"
-run_scenario codex-vm-shell vm "/var/lib/dev/.codex" "shell entry uses vm config"
-run_scenario codex-vm-shell host "/run/agent-config-host" "shell entry uses host config" "" "$host_config_dir" "marker.txt"
+run_scenario firebreak-codex workspace "$repo_root/.codex" "default agent entry uses workspace config" "--version"
+run_scenario firebreak-codex-shell workspace "$repo_root/.codex" "shell entry uses workspace config"
+run_scenario firebreak-codex-shell vm "/var/lib/dev/.codex" "shell entry uses vm config"
+run_scenario firebreak-codex-shell host "/run/agent-config-host" "shell entry uses host config" "" "$host_config_dir" "marker.txt"
 
-printf '%s\n' "codex-vm smoke test passed"
+printf '%s\n' "Firebreak smoke test passed"

@@ -23,6 +23,8 @@
           (builtins.attrValues vars)
           (builtins.readFile path);
     in {
+      nixosModules.default = import ./nix/my-microvm.nix;
+
       packages.${system} = {
         default = self.packages.${system}.my-microvm;
         my-microvm-runner = self.nixosConfigurations.my-microvm.config.microvm.declaredRunner;
@@ -37,11 +39,12 @@
 
       nixosConfigurations.my-microvm = nixpkgs.lib.nixosSystem {
         inherit system;
+        specialArgs = {
+          inherit renderTemplate;
+        };
         modules = [
           microvm.nixosModules.microvm
-          (import ./nix/my-microvm.nix {
-            inherit lib pkgs renderTemplate;
-          })
+          self.nixosModules.default
         ];
       };
 

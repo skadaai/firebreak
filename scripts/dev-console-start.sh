@@ -2,12 +2,17 @@ set -eu
 
 target=@WORKSPACE_MOUNT@
 session_mode=shell
+agent_command=@AGENT_COMMAND@
 if [ -r @START_DIR_FILE@ ]; then
   target=$(cat @START_DIR_FILE@)
 fi
 
 if [ -r @AGENT_SESSION_MODE_FILE@ ]; then
   session_mode=$(cat @AGENT_SESSION_MODE_FILE@)
+fi
+
+if [ -r @AGENT_COMMAND_FILE@ ]; then
+  agent_command=$(cat @AGENT_COMMAND_FILE@)
 fi
 
 if [ ! -d "$target" ]; then
@@ -21,9 +26,8 @@ case "$session_mode" in
     exec @BASH@ -i
     ;;
   agent)
-    if [ -n "@AGENT_COMMAND@" ]; then
-      printf '%s\n' "__AGENT_ENTRY__@AGENT_COMMAND@"
-      exec @BASH@ -ic '@AGENT_COMMAND@; exec @BASH@ -i'
+    if [ -n "$agent_command" ]; then
+      exec @BASH@ -ic "$agent_command; exec @BASH@ -i"
     fi
     exec @BASH@ -i
     ;;

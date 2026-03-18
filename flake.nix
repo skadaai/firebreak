@@ -44,6 +44,7 @@
       mkAgentPackage = {
         name,
         runnerName,
+        defaultAgentCommand,
         defaultAgentConfigHostDir,
         defaultAgentSessionMode,
       }:
@@ -51,6 +52,7 @@
           inherit name;
           runtimeInputs = with pkgs; [ coreutils virtiofsd ];
           text = renderTemplate {
+            "@DEFAULT_AGENT_COMMAND@" = defaultAgentCommand;
             "@DEFAULT_AGENT_SESSION_MODE@" = defaultAgentSessionMode;
             "@RUNNER@" = "${self.packages.${system}."${runnerName}-runner"}/bin/microvm-run";
             "@DEFAULT_AGENT_CONFIG_HOST_DIR@" = defaultAgentConfigHostDir;
@@ -87,12 +89,14 @@
         codex-vm = mkAgentPackage {
           name = "codex-vm";
           runnerName = "codex-vm";
+          defaultAgentCommand = "codex";
           defaultAgentConfigHostDir = "$HOME/.codex";
           defaultAgentSessionMode = "agent";
         };
         codex-vm-shell = mkAgentPackage {
           name = "codex-vm-shell";
           runnerName = "codex-vm";
+          defaultAgentCommand = "codex";
           defaultAgentConfigHostDir = "$HOME/.codex";
           defaultAgentSessionMode = "shell";
         };

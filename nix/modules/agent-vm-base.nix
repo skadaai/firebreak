@@ -25,6 +25,7 @@ let
     "@AGENT_CONFIG_HOST_MOUNT@" = cfg.agentConfigHostMount;
     "@AGENT_CONFIG_VM_DIR@" = agentConfigVmDir;
     "@AGENT_COMMAND@" = if cfg.agentCommand == null then "" else cfg.agentCommand;
+    "@AGENT_COMMAND_FILE@" = cfg.agentCommandFile;
     "@AGENT_SESSION_MODE_FILE@" = cfg.agentSessionModeFile;
     "@HOST_META_MOUNT@" = cfg.hostMetaMount;
     "@ID@" = "${pkgs.coreutils}/bin/id";
@@ -113,6 +114,12 @@ in {
       type = types.str;
       default = "/run/agent-session-mode";
       description = "World-readable file containing the requested interactive session mode.";
+    };
+
+    agentCommandFile = mkOption {
+      type = types.str;
+      default = "/run/agent-command";
+      description = "World-readable file containing the agent command selected for the current session.";
     };
 
     agentCommand = mkOption {

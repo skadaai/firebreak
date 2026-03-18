@@ -2,6 +2,7 @@ set -eu
 
 metadata=@HOST_META_MOUNT@/mount-path
 session_mode=agent
+session_command_file=@HOST_META_MOUNT@/agent-command
 session_mode_file=@HOST_META_MOUNT@/agent-session-mode
 start_dir=@WORKSPACE_MOUNT@
 
@@ -30,6 +31,11 @@ fi
 
 printf '%s\n' "$session_mode" > @AGENT_SESSION_MODE_FILE@
 chmod 0644 @AGENT_SESSION_MODE_FILE@
+
+if [ -r "$session_command_file" ]; then
+  cat "$session_command_file" > @AGENT_COMMAND_FILE@
+  chmod 0644 @AGENT_COMMAND_FILE@
+fi
 
 if [ "$start_dir" != "@WORKSPACE_MOUNT@" ]; then
   if [ -L "$start_dir" ]; then

@@ -5,6 +5,8 @@ host_uid=$(id -u)
 host_gid=$(id -g)
 agent_config_mode=${AGENT_CONFIG:-${CODEX_CONFIG:-vm}}
 agent_session_mode=${AGENT_VM_ENTRYPOINT:-@DEFAULT_AGENT_SESSION_MODE@}
+default_agent_command=@DEFAULT_AGENT_COMMAND@
+agent_command_override=""
 agent_config_host_dir=""
 host_runtime_dir=$(mktemp -d)
 host_meta_dir=$host_runtime_dir/meta
@@ -44,6 +46,20 @@ case "$agent_session_mode" in
     exit 1
     ;;
 esac
+
+if [ "$agent_session_mode" = "agent" ] && [ "$#" -gt 0 ]; then
+  if [ -z "$default_agent_command" ]; then
+    echo "this VM entrypoint does not support forwarding CLI arguments to an agent command" >&2
+    exit 1
+  fi
+
+  agent_command_override=$default_agent_command
+  for arg in "$@"; do
+    printf -v quoted_arg '%q' "$arg"
+    agent_command_override="$agent_command_override $quoted_arg"
+  done
+  set --
+fi
 
 case "$agent_config_mode" in
   host)
@@ -119,6 +135,9 @@ printf '%s\n' "$host_uid" > "$host_meta_dir/host-uid"
 printf '%s\n' "$host_gid" > "$host_meta_dir/host-gid"
 printf '%s\n' "$agent_config_mode" > "$host_meta_dir/agent-config-mode"
 printf '%s\n' "$agent_session_mode" > "$host_meta_dir/agent-session-mode"
+if [ -n "$agent_command_override" ]; then
+  printf '%s\n' "$agent_command_override" > "$host_meta_dir/agent-command"
+fi
 
 start_virtiofsd "$host_cwd" "$hostcwd_socket"
 hostcwd_virtiofsd_pid=$started_virtiofsd_pid

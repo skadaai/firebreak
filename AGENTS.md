@@ -4,15 +4,15 @@
 
 This repository is centered on a Nix flake plus reusable VM modules:
 
-- [`flake.nix`](/home/zvictor/development/microVMs/flake.nix): flake wiring, VM constructors, packages, and checks.
-- [`nix/modules/agent-vm-base.nix`](/home/zvictor/development/microVMs/nix/modules/agent-vm-base.nix): shared MicroVM base system.
-- [`nix/modules/agents/`](/home/zvictor/development/microVMs/nix/modules/agents): agent-specific overlays such as Codex.
-- [`scripts/`](/home/zvictor/development/microVMs/scripts): runtime wrapper, mount helpers, console startup, and agent bootstrap scripts.
-- [`tests/`](/home/zvictor/development/microVMs/tests): smoke and regression scripts for validating the VM workflow.
-- [`guides/`](/home/zvictor/development/microVMs/guides): step-by-step instructions for tasks that require manual setup or human intervention.
-- [`.github/workflows/`](/home/zvictor/development/microVMs/.github/workflows): hosted CI checks and the self-hosted KVM smoke workflow.
-- [`flake.lock`](/home/zvictor/development/microVMs/flake.lock): pinned inputs.
-- [`var.img`](/home/zvictor/development/microVMs/var.img): persistent guest `/var` volume created by the runner.
+- [`flake.nix`](./flake.nix): flake wiring, VM constructors, packages, and checks.
+- [`nix/modules/agent-vm-base.nix`](./nix/modules/agent-vm-base.nix): shared MicroVM base system.
+- [`nix/modules/agents/`](./nix/modules/agents): agent-specific overlays such as Codex.
+- [`scripts/`](./scripts): runtime wrapper, mount helpers, console startup, and agent bootstrap scripts.
+- [`tests/`](./tests): smoke and regression scripts for validating the VM workflow.
+- [`guides/`](./guides): step-by-step instructions for tasks that require manual setup or human intervention.
+- [`.github/workflows/`](./.github/workflows): hosted CI checks and the self-hosted KVM smoke workflow.
+- [`flake.lock`](./flake.lock): pinned inputs.
+- [`var.img`](./var.img): persistent guest `/var` volume created by the runner.
 
 There is no separate application `src/` tree yet. Keep shared behavior in the base module and put tool-specific behavior in focused overlay modules.
 
@@ -67,4 +67,4 @@ Pull requests should include:
 
 Prefer `mcp__deepwiki__ask_question` early when repo behavior is unclear, especially for `microvm.nix` option semantics, runner behavior, or systemd interactions. Use it as a default aid before guessing from memory.
 
-When a change requires manual setup outside the repository, such as configuring GitHub, registering self-hosted runners, adding secrets or variables, or any other human intervention, add or update a detailed step-by-step guide under [`guides/`](/home/zvictor/development/microVMs/guides) in the same change.
+When a change requires manual setup outside the repository, such as configuring GitHub, registering self-hosted runners, adding secrets or variables, or any other human intervention, add or update a detailed step-by-step guide under [`guides/`](./guides) in the same change.

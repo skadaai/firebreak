@@ -9,10 +9,28 @@ fi
 host_uid=$(id -u)
 host_gid=$(id -g)
 timeout_seconds=${CODEX_VM_SMOKE_TIMEOUT:-180}
+host_config_dir=$(mktemp -d)
+
+trap 'rm -rf "$host_config_dir"' EXIT INT TERM
+
+printf '%s\n' "host-smoke-marker" > "$host_config_dir/marker.txt"
 
 cd "$repo_root"
 
-timeout --foreground "$timeout_seconds" expect - "$repo_root" "$host_uid" "$host_gid" <<'EOF'
+run_scenario() {
+  mode=$1
+  expected_config_dir=$2
+  host_config_path=${3-}
+  host_marker_name=${4-}
+
+  timeout --foreground "$timeout_seconds" expect - \
+    "$repo_root" \
+    "$host_uid" \
+    "$host_gid" \
+    "$mode" \
+    "$expected_config_dir" \
+    "$host_config_path" \
+    "$host_marker_name" <<'EOF'
 proc fail {message} {
   puts stderr $message
   catch {send -- "sudo poweroff\r"}
@@ -53,10 +71,19 @@ proc run_and_assert {command pattern description} {
 set repo_root [lindex $argv 0]
 set host_uid [lindex $argv 1]
 set host_gid [lindex $argv 2]
+set mode [lindex $argv 3]
+set expected_config_dir [lindex $argv 4]
+set host_config_dir [lindex $argv 5]
+set host_marker_name [lindex $argv 6]
 set timeout 60
 match_max 100000
 
-spawn env AGENT_CONFIG=workspace nix --accept-flake-config --extra-experimental-features {nix-command flakes} run .#codex-vm
+set spawn_cmd [list env AGENT_CONFIG=$mode]
+if {$host_config_dir ne ""} {
+  lappend spawn_cmd AGENT_CONFIG_HOST_PATH=$host_config_dir
+}
+lappend spawn_cmd nix --accept-flake-config --extra-experimental-features {nix-command flakes} run .#codex-vm
+spawn -noecho {*}$spawn_cmd
 
 expect_prompt
 
@@ -76,11 +103,17 @@ if {$workspace_owner ne "$host_uid:$host_gid"} {
 }
 
 set codex_config_dir [run_and_capture {printf '__SMOKE_CONFIG_DIR__%s\n' "$AGENT_CONFIG_DIR"} {__SMOKE_CONFIG_DIR__(.+)\r\n} "agent config directory"]
-if {$codex_config_dir ne "$repo_root/.codex"} {
+if {$codex_config_dir ne $expected_config_dir} {
   fail "unexpected Codex config directory: $codex_config_dir"
 }
 
 run_and_assert {test -f flake.nix && echo __SMOKE_FLAKE__ok} {__SMOKE_FLAKE__ok\r\n} "workspace contents"
+if {$mode ne "workspace"} {
+  run_and_assert {test -d "$AGENT_CONFIG_DIR" && test -w "$AGENT_CONFIG_DIR" && echo __SMOKE_CONFIG_DIR__ok} {__SMOKE_CONFIG_DIR__ok\r\n} "agent config directory usability"
+}
+if {$mode eq "host"} {
+  run_and_assert "test -f \"$AGENT_CONFIG_DIR/$host_marker_name\" && echo __SMOKE_HOST_CONFIG__ok" {__SMOKE_HOST_CONFIG__ok\r\n} "host agent config mount"
+}
 run_and_assert {codex --version | sed -n '1s/^/__SMOKE_CODEX__/p'} {__SMOKE_CODEX__.+\r\n} "Codex CLI"
 
 send -- "sudo poweroff\r"
@@ -89,5 +122,10 @@ expect {
   timeout { fail "timed out waiting for codex-vm to power off" }
 }
 EOF
+}
+
+run_scenario workspace "$repo_root/.codex"
+run_scenario vm "/var/lib/dev/.codex"
+run_scenario host "/run/agent-config-host" "$host_config_dir" "marker.txt"
 
 printf '%s\n' "codex-vm smoke test passed"

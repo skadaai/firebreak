@@ -1,5 +1,5 @@
 .agent-sandbox.env
 .codex
 
-control.socket
-var.img
+*.socket
+*.img

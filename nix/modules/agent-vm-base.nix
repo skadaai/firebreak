@@ -1,6 +1,6 @@
 { config, lib, pkgs, renderTemplate, ... }:
 let
-  cfg = config.codexVm;
+  cfg = config.agentVm;
   devHome = "/var/lib/${cfg.devUser}";
 
   qemu9pOptions = [
@@ -20,13 +20,20 @@ let
     "@WORKSPACE_MOUNT@" = cfg.workspaceMount;
   };
 
+  baseShellInit = renderTemplate scriptVars ../../scripts/agent-vm-shell-init.sh;
   runtimeExtraArgsScript = pkgs.writeShellScript "microvm-runtime-extra-args"
-    (renderTemplate scriptVars ../scripts/runtime-extra-args.sh);
-
+    (renderTemplate scriptVars ../../scripts/runtime-extra-args.sh);
   devConsoleStartScript = pkgs.writeShellScript "dev-console-start"
-    (renderTemplate scriptVars ../scripts/dev-console-start.sh);
+    (renderTemplate scriptVars ../../scripts/dev-console-start.sh);
+  bootstrapEnabled = cfg.bootstrapScript != null;
 in {
-  options.codexVm = with lib; {
+  options.agentVm = with lib; {
+    name = mkOption {
+      type = types.str;
+      default = "agent-vm";
+      description = "MicroVM hostname and primary identity.";
+    };
+
     devUser = mkOption {
       type = types.str;
       default = "dev";
@@ -56,10 +63,56 @@ in {
       default = 2048;
       description = "Size of the persistent /var volume in MiB.";
     };
+
+    varVolumeImage = mkOption {
+      type = types.str;
+      default = "${cfg.name}-var.img";
+      description = "Disk image backing the persistent /var volume.";
+    };
+
+    controlSocket = mkOption {
+      type = types.str;
+      default = "${cfg.name}.socket";
+      description = "Control socket path for the MicroVM runner.";
+    };
+
+    macAddress = mkOption {
+      type = types.str;
+      default =
+        let
+          hash = builtins.hashString "sha256" cfg.name;
+        in
+        "02:${builtins.substring 0 2 hash}:${builtins.substring 2 2 hash}:${builtins.substring 4 2 hash}:${builtins.substring 6 2 hash}:${builtins.substring 8 2 hash}";
+      description = "Stable MAC address for the MicroVM network interface.";
+    };
+
+    extraSystemPackages = mkOption {
+      type = types.listOf types.package;
+      default = [ ];
+      description = "Additional system packages installed inside the VM.";
+    };
+
+    shellInit = mkOption {
+      type = types.lines;
+      default = "";
+      description = "Extra interactive Bash initialization appended after the base shell helper.";
+    };
+
+    bootstrapPackages = mkOption {
+      type = types.listOf types.package;
+      default = [ ];
+      description = "Packages added to PATH for the optional bootstrap service.";
+    };
+
+    bootstrapScript = mkOption {
+      type = types.nullOr types.lines;
+      default = null;
+      description = "Optional oneshot bootstrap script that runs before the console starts.";
+    };
   };
 
   config = {
-    networking.hostName = "codex-vm";
+    networking.hostName = cfg.name;
     networking.useDHCP = true;
     system.stateVersion = "26.05";
 
@@ -75,16 +128,14 @@ in {
 
     security.sudo.wheelNeedsPassword = false;
 
-    environment.systemPackages = with pkgs; [
-      bun
-      git
-      nodejs
-    ];
+    environment.systemPackages = cfg.extraSystemPackages;
 
-    programs.bash.interactiveShellInit =
-      renderTemplate scriptVars ../scripts/dev-shell-init.sh;
+    programs.bash.interactiveShellInit = ''
+      ${baseShellInit}
+      ${cfg.shellInit}
+    '';
 
-    systemd.services.dev-bootstrap = {
+    systemd.services.dev-bootstrap = lib.mkIf bootstrapEnabled {
       description = "Install persistent developer tools before login";
       wantedBy = [ "multi-user.target" ];
       before = [ "getty.target" "serial-getty@ttyS0.service" ];
@@ -98,12 +149,8 @@ in {
         StandardError = "journal+console";
       };
 
-      path = with pkgs; [
-        bun
-        coreutils
-      ];
-
-      script = renderTemplate scriptVars ../scripts/dev-bootstrap.sh;
+      path = cfg.bootstrapPackages;
+      script = cfg.bootstrapScript;
     };
 
     fileSystems.${cfg.workspaceMount} = {
@@ -136,7 +183,7 @@ in {
         StandardError = "journal+console";
       };
 
-      script = renderTemplate scriptVars ../scripts/link-host-cwd.sh;
+      script = renderTemplate scriptVars ../../scripts/link-host-cwd.sh;
     };
 
     systemd.services."serial-getty@ttyS0".enable = false;
@@ -144,8 +191,8 @@ in {
     systemd.services.dev-console = {
       description = "Interactive dev shell on ttyS0";
       wantedBy = [ "multi-user.target" ];
-      after = [ "dev-bootstrap.service" "link-host-cwd.service" ];
-      requires = [ "dev-bootstrap.service" "link-host-cwd.service" ];
+      after = lib.optional bootstrapEnabled "dev-bootstrap.service" ++ [ "link-host-cwd.service" ];
+      requires = lib.optional bootstrapEnabled "dev-bootstrap.service" ++ [ "link-host-cwd.service" ];
       conflicts = [ "serial-getty@ttyS0.service" ];
 
       serviceConfig = {
@@ -170,11 +217,11 @@ in {
       interfaces = [ {
         type = "user";
         id = "vm-user";
-        mac = "02:00:00:00:00:01";
+        mac = cfg.macAddress;
       } ];
       volumes = [ {
         mountPoint = "/var";
-        image = "var.img";
+        image = cfg.varVolumeImage;
         size = cfg.varVolumeSizeMiB;
       } ];
       shares = [ {
@@ -189,7 +236,7 @@ in {
 
       # "qemu" has 9p built-in!
       hypervisor = "qemu";
-      socket = "control.socket";
+      socket = cfg.controlSocket;
     };
   };
 }

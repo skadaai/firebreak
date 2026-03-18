@@ -1,5 +1,5 @@
 {
-  description = "NixOS in MicroVMs";
+  description = "MicroVM sandboxes for coding agents";
 
   nixConfig = {
     extra-substituters = [ "https://microvm.cachix.org" ];
@@ -22,30 +22,51 @@
           (builtins.attrNames vars)
           (builtins.attrValues vars)
           (builtins.readFile path);
+
+      mkAgentVm = {
+        name,
+        extraModules ? [ ],
+      }:
+        nixpkgs.lib.nixosSystem {
+          inherit system;
+          specialArgs = {
+            inherit renderTemplate;
+          };
+          modules = [
+            microvm.nixosModules.microvm
+            self.nixosModules.agent-vm-base
+            {
+              agentVm.name = name;
+            }
+          ] ++ extraModules;
+        };
+
+      mkAgentPackage = name:
+        pkgs.writeShellApplication {
+          inherit name;
+          runtimeInputs = with pkgs; [ coreutils ];
+          text = renderTemplate {
+            "@RUNNER@" = "${self.packages.${system}."${name}-runner"}/bin/microvm-run";
+          } ./scripts/run-wrapper.sh;
+        };
     in {
-      nixosModules.default = import ./nix/codex-vm.nix;
+      nixosModules = {
+        agent-vm-base = import ./nix/modules/agent-vm-base.nix;
+        codex-vm = import ./nix/modules/agents/codex.nix;
+        default = self.nixosModules.codex-vm;
+      };
+
+      nixosConfigurations = {
+        codex-vm = mkAgentVm {
+          name = "codex-vm";
+          extraModules = [ self.nixosModules.codex-vm ];
+        };
+      };
 
       packages.${system} = {
         default = self.packages.${system}.codex-vm;
         codex-vm-runner = self.nixosConfigurations.codex-vm.config.microvm.declaredRunner;
-        codex-vm = pkgs.writeShellApplication {
-          name = "codex-vm";
-          runtimeInputs = with pkgs; [ coreutils ];
-          text = renderTemplate {
-            "@RUNNER@" = "${self.packages.${system}.codex-vm-runner}/bin/microvm-run";
-          } ./scripts/run-wrapper.sh;
-        };
-      };
-
-      nixosConfigurations.codex-vm = nixpkgs.lib.nixosSystem {
-        inherit system;
-        specialArgs = {
-          inherit renderTemplate;
-        };
-        modules = [
-          microvm.nixosModules.microvm
-          self.nixosModules.default
-        ];
+        codex-vm = mkAgentPackage "codex-vm";
       };
 
       checks.${system} = {

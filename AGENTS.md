@@ -2,13 +2,16 @@
 
 ## Project Structure & Module Organization
 
-This repository is currently centered on a single Nix flake:
+This repository is centered on a Nix flake plus reusable VM modules:
 
-- [`flake.nix`](/home/zvictor/development/microVMs/flake.nix): MicroVM definition, runner packaging, boot-time services, and runtime mount logic.
+- [`flake.nix`](/home/zvictor/development/microVMs/flake.nix): flake wiring, VM constructors, packages, and checks.
+- [`nix/modules/agent-vm-base.nix`](/home/zvictor/development/microVMs/nix/modules/agent-vm-base.nix): shared MicroVM base system.
+- [`nix/modules/agents/`](/home/zvictor/development/microVMs/nix/modules/agents): agent-specific overlays such as Codex.
+- [`scripts/`](/home/zvictor/development/microVMs/scripts): runtime wrapper, mount helpers, console startup, and agent bootstrap scripts.
 - [`flake.lock`](/home/zvictor/development/microVMs/flake.lock): pinned inputs.
 - [`var.img`](/home/zvictor/development/microVMs/var.img): persistent guest `/var` volume created by the runner.
 
-There is no separate `src/`, `tests/`, or assets tree yet. Keep new logic close to the relevant Nix module unless the file becomes too large, then split into focused `.nix` modules.
+There is no separate application `src/` tree yet. Keep shared behavior in the base module and put tool-specific behavior in focused overlay modules.
 
 ## Build, Test, and Development Commands
 

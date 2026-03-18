@@ -8,6 +8,7 @@ This repository is centered on a Nix flake plus reusable VM modules:
 - [`nix/modules/agent-vm-base.nix`](/home/zvictor/development/microVMs/nix/modules/agent-vm-base.nix): shared MicroVM base system.
 - [`nix/modules/agents/`](/home/zvictor/development/microVMs/nix/modules/agents): agent-specific overlays such as Codex.
 - [`scripts/`](/home/zvictor/development/microVMs/scripts): runtime wrapper, mount helpers, console startup, and agent bootstrap scripts.
+- [`tests/`](/home/zvictor/development/microVMs/tests): smoke and regression scripts for validating the VM workflow.
 - [`flake.lock`](/home/zvictor/development/microVMs/flake.lock): pinned inputs.
 - [`var.img`](/home/zvictor/development/microVMs/var.img): persistent guest `/var` volume created by the runner.
 
@@ -19,6 +20,8 @@ There is no separate application `src/` tree yet. Keep shared behavior in the ba
   Runs the interactive MicroVM wrapper with dynamic host `PWD` mounting.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' build .#codex-vm-runner`
   Builds the underlying declared runner without launching the VM.
+- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#codex-vm-smoke`
+  Runs the lightweight host-side smoke test against the interactive VM.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' flake check`
   Runs flake evaluation checks. Use this before submitting changes.
 
@@ -35,10 +38,11 @@ No formatter is configured in-repo. Keep formatting consistent with existing `fl
 
 ## Testing Guidelines
 
-There is no automated test suite yet. Validate changes by booting the VM and checking the affected behavior directly.
+Use the smoke test for the core runtime path, then boot the VM manually for behavior the smoke test does not cover.
 
 Examples:
 
+- smoke path: `nix run .#codex-vm-smoke`
 - tool bootstrap: `codex --version`
 - dynamic path mount: run from a chosen host directory and confirm the same path exists in the guest
 - boot flow: confirm the console reaches the `dev` shell without manual login

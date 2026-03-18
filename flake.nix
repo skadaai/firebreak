@@ -49,6 +49,17 @@
             "@RUNNER@" = "${self.packages.${system}."${name}-runner"}/bin/microvm-run";
           } ./scripts/run-wrapper.sh;
         };
+
+      mkSmokePackage = name:
+        pkgs.writeShellApplication {
+          inherit name;
+          runtimeInputs = with pkgs; [
+            coreutils
+            expect
+            git
+          ];
+          text = builtins.readFile ./tests/codex-vm-smoke.sh;
+        };
     in {
       nixosModules = {
         agent-vm-base = import ./nix/modules/agent-vm-base.nix;
@@ -67,6 +78,7 @@
         default = self.packages.${system}.codex-vm;
         codex-vm-runner = self.nixosConfigurations.codex-vm.config.microvm.declaredRunner;
         codex-vm = mkAgentPackage "codex-vm";
+        codex-vm-smoke = mkSmokePackage "codex-vm-smoke";
       };
 
       checks.${system} = {

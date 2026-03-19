@@ -4,11 +4,14 @@ Firebreak uses a module-oriented layout instead of flat `scripts/` and `tests/` 
 
 ## Structure
 
-- [`modules/base/`](./modules/base): shared VM runtime.
-  - [`module.nix`](./modules/base/module.nix): common NixOS MicroVM behavior.
-  - [`host/`](./modules/base/host): host-side wrapper and runtime argument helpers.
-  - [`guest/`](./modules/base/guest): guest-side boot, session, and shell helpers.
-  - [`tests/`](./modules/base/tests): generic smoke templates owned by the base runtime.
+- [`modules/base/`](./modules/base): shared Firebreak VM runtime.
+  - [`module.nix`](./modules/base/module.nix): common guest and VM behavior shared by local and future cloud profiles.
+  - [`guest/`](./modules/base/guest): guest-side shell helpers shared across profiles.
+  - [`tests/`](./modules/base/tests): generic smoke templates owned by the shared runtime.
+- [`modules/profiles/local/`](./modules/profiles/local): local-launch profile.
+  - [`module.nix`](./modules/profiles/local/module.nix): local-only guest and launch behavior layered over the shared runtime.
+  - [`host/`](./modules/profiles/local/host): local host-side wrapper and runtime argument helpers.
+  - [`guest/`](./modules/profiles/local/guest): local guest-side boot, session, and console helpers.
 - [`modules/bun-agent/`](./modules/bun-agent): shared implementation for Bun-managed agent CLIs.
   - [`module.nix`](./modules/bun-agent/module.nix): common Bun-agent overlay logic.
   - [`guest/`](./modules/bun-agent/guest): guest bootstrap and shell-init templates for Bun-backed agents.
@@ -17,7 +20,8 @@ Firebreak uses a module-oriented layout instead of flat `scripts/` and `tests/` 
 
 ## Separation Of Concerns
 
-- `modules/base` owns VM lifecycle, workspace mounting, host/guest identity mapping, session preparation, and console behavior.
+- `modules/base` owns the shared guest runtime, common VM settings, reusable shell behavior, and generic smoke validation.
+- `modules/profiles/local` owns local-only launch behavior such as dynamic host cwd sharing, host identity adoption, session preparation, and the interactive console.
 - `modules/bun-agent` owns the shared contract for agents launched through Bun, including bootstrap and agent-specific environment exports.
 - Agent modules such as `codex` and `claude-code` should stay thin. They should mostly declare package name, binary name, config directory, and any agent-specific packages or environment exports.
 

@@ -67,8 +67,8 @@ It will define a cloud execution profile over the shared guest runtime. The clou
 ### Dependencies
 
 - [spec 001](./specs/001-runtime-modularization/SPEC.md)
-- [dev-console-start.sh](./modules/base/guest/dev-console-start.sh)
-- [prepare-agent-session.sh](./modules/base/guest/prepare-agent-session.sh)
+- [dev-console-start.sh](./modules/profiles/local/guest/dev-console-start.sh)
+- [prepare-agent-session.sh](./modules/profiles/local/guest/prepare-agent-session.sh)
 
 ### Risks
 

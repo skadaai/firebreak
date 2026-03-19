@@ -70,7 +70,7 @@ The intent is to prove the remote execution model on one host before adding broa
 
 - [spec 001](./specs/001-runtime-modularization/SPEC.md)
 - [spec 002](./specs/002-cloud-execution-profile/SPEC.md)
-- [run-wrapper.sh](./modules/base/host/run-wrapper.sh)
+- [run-wrapper.sh](./modules/profiles/local/host/run-wrapper.sh)
 
 ### Risks
 

@@ -21,7 +21,7 @@ last_updated: 2026-03-19
 ## Dependencies
 
 - [spec 001](./specs/001-runtime-modularization/SPEC.md)
-- existing one-shot execution semantics in [dev-console-start.sh](./modules/base/guest/dev-console-start.sh)
+- existing one-shot execution semantics in [dev-console-start.sh](./modules/profiles/local/guest/dev-console-start.sh)
 
 ## Current status
 

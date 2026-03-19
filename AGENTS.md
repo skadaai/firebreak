@@ -5,7 +5,8 @@
 This repository is centered on a Nix flake plus reusable VM modules:
 
 - [`flake.nix`](./flake.nix): flake wiring, VM constructors, packages, and checks.
-- [`modules/base/`](./modules/base): shared Firebreak VM runtime, with `module.nix`, host-side helpers, guest-side helpers, and the generic smoke template.
+- [`modules/base/`](./modules/base): shared Firebreak VM runtime, with `module.nix`, shared guest-side helpers, and the generic smoke template.
+- [`modules/profiles/local/`](./modules/profiles/local): local-launch profile, including local host-side helpers and local guest session helpers.
 - [`modules/bun-agent/`](./modules/bun-agent): shared helper layer for Bun-managed agent CLIs.
 - [`modules/codex/`](./modules/codex): Codex-specific overlay module.
 - [`modules/claude-code/`](./modules/claude-code): Claude Code-specific overlay module.
@@ -52,6 +53,7 @@ Use standard Nix style:
 - Group related options together (`networking`, `users`, `systemd`, `microvm`).
 - Prefer descriptive names such as `dev-bootstrap`, `mount-host-cwd`, and `dev-console`.
 - Keep host-side executables under the owning module’s `host/` directory, guest-side executables under `guest/`, and reusable smoke templates under `tests/` inside that module.
+- Keep shared guest behavior in `modules/base`, and put launch-environment-specific behavior under `modules/profiles/<profile>/`.
 
 No formatter is configured in-repo. Keep formatting consistent with existing `flake.nix` structure.
 

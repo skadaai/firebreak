@@ -4,6 +4,7 @@ moduleArgs@{ pkgs, ... }:
   displayName = "Codex";
   binName = "codex";
   packageSpec = "@openai/codex@latest";
+  promptCommand = ''codex exec "$FIREBREAK_AGENT_PROMPT"'';
   configDirName = ".codex";
   configExports = ''
     export CODEX_HOME="$agent_config_dir"

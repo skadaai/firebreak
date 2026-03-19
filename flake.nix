@@ -26,6 +26,7 @@
       mkAgentVm = {
         name,
         extraModules ? [ ],
+        profileModules ? [ self.nixosModules.firebreak-local-profile ],
       }:
         nixpkgs.lib.nixosSystem {
           inherit system;
@@ -35,11 +36,10 @@
           modules = [
             microvm.nixosModules.microvm
             self.nixosModules.firebreak-vm-base
-            self.nixosModules.firebreak-local-profile
             {
               agentVm.name = name;
             }
-          ] ++ extraModules;
+          ] ++ profileModules ++ extraModules;
         };
 
       mkAgentPackage = {
@@ -88,6 +88,7 @@
       nixosModules = {
         firebreak-vm-base = import ./modules/base/module.nix;
         firebreak-local-profile = import ./modules/profiles/local/module.nix;
+        firebreak-cloud-profile = import ./modules/profiles/cloud/module.nix;
         agent-vm-base = {
           imports = [
             self.nixosModules.firebreak-vm-base
@@ -108,12 +109,24 @@
           name = "firebreak-claude-code";
           extraModules = [ self.nixosModules.firebreak-claude-code ];
         };
+        firebreak-codex-cloud = mkAgentVm {
+          name = "firebreak-codex-cloud";
+          profileModules = [ self.nixosModules.firebreak-cloud-profile ];
+          extraModules = [ self.nixosModules.firebreak-codex ];
+        };
+        firebreak-claude-code-cloud = mkAgentVm {
+          name = "firebreak-claude-code-cloud";
+          profileModules = [ self.nixosModules.firebreak-cloud-profile ];
+          extraModules = [ self.nixosModules.firebreak-claude-code ];
+        };
       };
 
       packages.${system} = {
         default = self.packages.${system}.firebreak;
         firebreak-codex-runner = self.nixosConfigurations.firebreak-codex.config.microvm.declaredRunner;
         firebreak-claude-code-runner = self.nixosConfigurations.firebreak-claude-code.config.microvm.declaredRunner;
+        firebreak-codex-cloud-runner = self.nixosConfigurations.firebreak-codex-cloud.config.microvm.declaredRunner;
+        firebreak-claude-code-cloud-runner = self.nixosConfigurations.firebreak-claude-code-cloud.config.microvm.declaredRunner;
         firebreak-codex = mkAgentPackage {
           name = "firebreak-codex";
           runnerName = "firebreak-codex";
@@ -184,9 +197,13 @@ EOF
         firebreak-codex-runner = self.packages.${system}.firebreak-codex-runner;
         firebreak-codex-system = self.nixosConfigurations.firebreak-codex.config.system.build.toplevel;
         firebreak-codex-smoke = self.packages.${system}.firebreak-codex-smoke;
+        firebreak-codex-cloud-runner = self.packages.${system}.firebreak-codex-cloud-runner;
+        firebreak-codex-cloud-system = self.nixosConfigurations.firebreak-codex-cloud.config.system.build.toplevel;
         firebreak-claude-code-runner = self.packages.${system}.firebreak-claude-code-runner;
         firebreak-claude-code-system = self.nixosConfigurations.firebreak-claude-code.config.system.build.toplevel;
         firebreak-claude-code-smoke = self.packages.${system}.firebreak-claude-code-smoke;
+        firebreak-claude-code-cloud-runner = self.packages.${system}.firebreak-claude-code-cloud-runner;
+        firebreak-claude-code-cloud-system = self.nixosConfigurations.firebreak-claude-code-cloud.config.system.build.toplevel;
       };
     };
 }

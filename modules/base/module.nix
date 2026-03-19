@@ -113,6 +113,18 @@ in {
       description = "Default agent command to launch in the interactive session.";
     };
 
+    agentPromptCommand = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = "Shell command used to start a non-interactive agent session from FIREBREAK_AGENT_PROMPT.";
+    };
+
+    agentPromptFile = mkOption {
+      type = types.str;
+      default = "/run/agent-prompt";
+      description = "World-readable file containing the initial prompt for non-interactive agent execution.";
+    };
+
     varVolumeSizeMiB = mkOption {
       type = types.ints.positive;
       default = 2048;

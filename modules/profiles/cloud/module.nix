@@ -1,0 +1,95 @@
+{ config, lib, pkgs, renderTemplate, ... }:
+let
+  cfg = config.agentVm;
+  devHome = "/var/lib/${cfg.devUser}";
+
+  qemu9pOptions = [
+    "nofail"
+    "trans=virtio"
+    "version=9p2000.L"
+    "msize=65536"
+    "x-systemd.after=systemd-modules-load.service"
+  ];
+
+  scriptVars = {
+    "@AGENT_CONFIG_DIR_FILE@" = cfg.agentConfigDirFile;
+    "@AGENT_CONFIG_DIR_NAME@" = cfg.agentConfigDirName;
+    "@AGENT_CONFIG_ENABLED@" = if cfg.agentConfigEnabled then "1" else "0";
+    "@AGENT_CONFIG_FRESH_DIR@" = cfg.agentConfigFreshDir;
+    "@AGENT_CONFIG_HOST_MOUNT@" = cfg.agentConfigHostMount;
+    "@AGENT_CONFIG_VM_DIR@" = "${devHome}/${cfg.agentConfigDirName}";
+    "@AGENT_EXEC_OUTPUT_MOUNT@" = cfg.agentExecOutputMount;
+    "@AGENT_PROMPT_COMMAND@" = if cfg.agentPromptCommand == null then "" else cfg.agentPromptCommand;
+    "@AGENT_PROMPT_FILE@" = cfg.agentPromptFile;
+    "@AGENT_SESSION_MODE_FILE@" = cfg.agentSessionModeFile;
+    "@BASH@" = "${pkgs.bashInteractive}/bin/bash";
+    "@CAT@" = "${pkgs.coreutils}/bin/cat";
+    "@CHOWN@" = "${pkgs.coreutils}/bin/chown";
+    "@DEV_HOME@" = devHome;
+    "@DEV_USER@" = cfg.devUser;
+    "@HOST_META_MOUNT@" = cfg.hostMetaMount;
+    "@START_DIR_FILE@" = cfg.startDirFile;
+    "@WORKSPACE_MOUNT@" = cfg.workspaceMount;
+  };
+
+  runtimeExtraArgsScript = pkgs.writeShellScript "microvm-cloud-runtime-extra-args"
+    ''
+      ${renderTemplate scriptVars ./host/runtime-extra-args.sh}
+      ${cfg.runtimeExtraArgs}
+    '';
+  prepareCloudSessionScript = pkgs.writeShellScript "prepare-cloud-session"
+    (renderTemplate scriptVars ./guest/prepare-agent-session.sh);
+  runAgentJobScript = pkgs.writeShellScript "run-agent-job"
+    (renderTemplate scriptVars ./guest/run-agent-job.sh);
+  bootstrapEnabled = cfg.bootstrapScript != null;
+in {
+  config = {
+    fileSystems.${cfg.hostMetaMount} = {
+      device = "hostmeta";
+      fsType = "9p";
+      options = qemu9pOptions ++ [ "ro" ];
+    };
+
+    systemd.services.prepare-cloud-session = {
+      description = "Prepare the cloud workspace and agent session paths";
+      wantedBy = [ "multi-user.target" ];
+      before = [ "firebreak-agent-job.service" ];
+      after = [ "local-fs.target" ];
+
+      path = with pkgs; [
+        coreutils
+        util-linux
+      ];
+
+      serviceConfig = {
+        ExecStart = prepareCloudSessionScript;
+        Type = "oneshot";
+        RemainAfterExit = true;
+        StandardOutput = "journal+console";
+        StandardError = "journal+console";
+      };
+    };
+
+    systemd.services."serial-getty@ttyS0".enable = false;
+
+    systemd.services.firebreak-agent-job = {
+      description = "Run a non-interactive cloud agent job";
+      wantedBy = [ "multi-user.target" ];
+      after = [ "prepare-cloud-session.service" ]
+        ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
+      requires = [ "prepare-cloud-session.service" ]
+        ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
+
+      serviceConfig = {
+        User = cfg.devUser;
+        WorkingDirectory = cfg.workspaceMount;
+        Type = "simple";
+        ExecStart = runAgentJobScript;
+        StandardOutput = "journal+console";
+        StandardError = "journal+console";
+      };
+    };
+
+    microvm.extraArgsScript = "${runtimeExtraArgsScript}";
+  };
+}

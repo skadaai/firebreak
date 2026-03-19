@@ -4,6 +4,7 @@ moduleArgs:
   displayName,
   binName,
   packageSpec,
+  promptCommand,
   configDirName,
   configExports,
   extraSystemPackages ? [ ],
@@ -30,6 +31,7 @@ in {
       agentConfigEnabled = true;
       agentConfigDirName = configDirName;
       agentCommand = binName;
+      agentPromptCommand = promptCommand;
       extraSystemPackages = with pkgs; [
         bun
         git

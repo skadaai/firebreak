@@ -323,7 +323,7 @@ in {
         TTYReset = true;
         TTYVHangup = true;
         TTYVTDisallocate = true;
-        Restart = "always";
+        Restart = "on-failure";
         RestartSec = 0;
         Type = "idle";
         ExecStart = devConsoleStartScript;

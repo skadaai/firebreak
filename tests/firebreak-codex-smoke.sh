@@ -41,6 +41,10 @@ run_scenario() {
     "$host_marker_name" <<'EOF'
 proc fail {message} {
   puts stderr $message
+  if {[info exists expect_out(buffer)] && $expect_out(buffer) ne ""} {
+    puts stderr "last output:"
+    puts stderr $expect_out(buffer)
+  }
   catch {send -- "sudo poweroff\r"}
   exit 1
 }
@@ -141,7 +145,32 @@ EOF
   printf '%s\n' "ok: $scenario_label"
 }
 
-run_scenario firebreak-codex workspace "$repo_root/.codex" "default agent entry uses workspace config" "--version"
+run_agent_exec_scenario() {
+  mode=$1
+  scenario_label=$2
+  agent_cli_arg=$3
+
+  printf '%s\n' "running: $scenario_label"
+  set +e
+  output=$(
+    AGENT_CONFIG=$mode \
+      timeout --foreground "$timeout_seconds" \
+      nix --accept-flake-config --extra-experimental-features 'nix-command flakes' \
+      run .#firebreak-codex -- "$agent_cli_arg" 2>&1
+  )
+  status=$?
+  set -e
+
+  if [ "$status" -ne 0 ]; then
+    printf '%s\n' "$output" >&2
+    echo "one-shot agent command failed for: $scenario_label" >&2
+    exit 1
+  fi
+
+  printf '%s\n' "ok: $scenario_label"
+}
+
+run_agent_exec_scenario workspace "default agent entry runs codex --version as a one-shot command" "--version"
 run_scenario firebreak-codex-shell workspace "$repo_root/.codex" "shell entry uses workspace config"
 run_scenario firebreak-codex-shell vm "/var/lib/dev/.codex" "shell entry uses vm config"
 run_scenario firebreak-codex-shell host "/run/agent-config-host" "shell entry uses host config" "" "$host_config_dir" "marker.txt"

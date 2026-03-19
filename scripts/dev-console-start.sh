@@ -34,6 +34,17 @@ case "$session_mode" in
     fi
     exec @BASH@ -i
     ;;
+  agent-exec)
+    if [ -n "$agent_command" ]; then
+      exec env FIREBREAK_AGENT_COMMAND="$agent_command" @BASH@ -ic '
+        status=0
+        eval "$FIREBREAK_AGENT_COMMAND" || status=$?
+        sudo poweroff >/dev/null 2>&1 || true
+        exit "$status"
+      '
+    fi
+    exec @BASH@ -i
+    ;;
   *)
     printf 'unknown agent session mode: %s\n' "$session_mode" >&2
     exec @BASH@ -i

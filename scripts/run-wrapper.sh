@@ -53,6 +53,7 @@ if [ "$agent_session_mode" = "agent" ] && [ "$#" -gt 0 ]; then
     exit 1
   fi
 
+  agent_session_mode=agent-exec
   agent_command_override=$default_agent_command
   for arg in "$@"; do
     printf -v quoted_arg '%q' "$arg"

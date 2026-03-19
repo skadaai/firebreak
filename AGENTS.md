@@ -5,11 +5,11 @@
 This repository is centered on a Nix flake plus reusable VM modules:
 
 - [`flake.nix`](./flake.nix): flake wiring, VM constructors, packages, and checks.
-- [`nix/modules/agent-vm-base.nix`](./nix/modules/agent-vm-base.nix): shared MicroVM base system.
-- [`nix/modules/agents/`](./nix/modules/agents): agent-specific overlays such as Codex.
-- [`nix/modules/agents/mk-bun-agent.nix`](./nix/modules/agents/mk-bun-agent.nix): shared helper for Bun-managed agent CLIs.
-- [`scripts/`](./scripts): runtime wrapper, mount helpers, console startup, and agent bootstrap scripts.
-- [`tests/`](./tests): smoke and regression scripts for validating the VM workflow.
+- [`modules/base/`](./modules/base): shared Firebreak VM runtime, with `module.nix`, host-side helpers, guest-side helpers, and the generic smoke template.
+- [`modules/bun-agent/`](./modules/bun-agent): shared helper layer for Bun-managed agent CLIs.
+- [`modules/codex/`](./modules/codex): Codex-specific overlay module.
+- [`modules/claude-code/`](./modules/claude-code): Claude Code-specific overlay module.
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md): module-oriented structure and guidance for adding new agents.
 - [`BRANDING.md`](./BRANDING.md): product naming, tagline, and public naming conventions.
 - [`UPSTREAM_REPOS.md`](./UPSTREAM_REPOS.md): preferred `ask_question` targets for the technologies used in this repository.
 - [`guides/`](./guides): step-by-step instructions for tasks that require manual setup or human intervention.
@@ -51,6 +51,7 @@ Use standard Nix style:
 - Trailing semicolons for attribute assignments.
 - Group related options together (`networking`, `users`, `systemd`, `microvm`).
 - Prefer descriptive names such as `dev-bootstrap`, `mount-host-cwd`, and `dev-console`.
+- Keep host-side executables under the owning module’s `host/` directory, guest-side executables under `guest/`, and reusable smoke templates under `tests/` inside that module.
 
 No formatter is configured in-repo. Keep formatting consistent with existing `flake.nix` structure.
 

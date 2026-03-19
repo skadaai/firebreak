@@ -1,5 +1,5 @@
 moduleArgs@{ pkgs, ... }:
-(import ./mk-bun-agent.nix moduleArgs) {
+(import ../bun-agent/module.nix moduleArgs) {
   vmName = "firebreak-codex";
   displayName = "Codex";
   binName = "codex";

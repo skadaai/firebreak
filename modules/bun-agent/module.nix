@@ -40,8 +40,8 @@ in {
         coreutils
         nodejs
       ] ++ bootstrapPackages;
-      bootstrapScript = renderTemplate scriptVars ../../../scripts/bun-agent-bootstrap.sh;
-      shellInit = renderTemplate scriptVars ../../../scripts/bun-agent-shell-init.sh;
+      bootstrapScript = renderTemplate scriptVars ./guest/bootstrap.sh;
+      shellInit = renderTemplate scriptVars ./guest/shell-init.sh;
     };
   };
 }

@@ -39,18 +39,18 @@ let
     "@WORKSPACE_MOUNT@" = cfg.workspaceMount;
   };
 
-  baseShellInit = renderTemplate scriptVars ../../scripts/agent-vm-shell-init.sh;
+  baseShellInit = renderTemplate scriptVars ./guest/shell-init.sh;
   adoptHostIdentityScript = pkgs.writeShellScript "adopt-host-identity"
-    (renderTemplate scriptVars ../../scripts/adopt-host-identity.sh);
+    (renderTemplate scriptVars ./guest/adopt-host-identity.sh);
   runtimeExtraArgsScript = pkgs.writeShellScript "microvm-runtime-extra-args"
     ''
-      ${renderTemplate scriptVars ../../scripts/runtime-extra-args.sh}
+      ${renderTemplate scriptVars ./host/runtime-extra-args.sh}
       ${cfg.runtimeExtraArgs}
     '';
   prepareAgentSessionScript = pkgs.writeShellScript "prepare-agent-session"
-    (renderTemplate scriptVars ../../scripts/prepare-agent-session.sh);
+    (renderTemplate scriptVars ./guest/prepare-agent-session.sh);
   devConsoleStartScript = pkgs.writeShellScript "dev-console-start"
-    (renderTemplate scriptVars ../../scripts/dev-console-start.sh);
+    (renderTemplate scriptVars ./guest/dev-console-start.sh);
   bootstrapEnabled = cfg.bootstrapScript != null;
 in {
   options.agentVm = with lib; {

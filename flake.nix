@@ -57,7 +57,7 @@
             "@DEFAULT_AGENT_SESSION_MODE@" = defaultAgentSessionMode;
             "@RUNNER@" = "${self.packages.${system}."${runnerName}-runner"}/bin/microvm-run";
             "@DEFAULT_AGENT_CONFIG_HOST_DIR@" = defaultAgentConfigHostDir;
-          } ./scripts/run-wrapper.sh;
+          } ./modules/base/host/run-wrapper.sh;
         };
 
       mkSmokePackage = {
@@ -81,13 +81,13 @@
             "@AGENT_DISPLAY_NAME@" = agentDisplayName;
             "@AGENT_PACKAGE@" = agentPackage;
             "@AGENT_SHELL_PACKAGE@" = shellPackage;
-          } ./tests/firebreak-agent-smoke.sh;
+          } ./modules/base/tests/agent-smoke.sh;
         };
     in {
       nixosModules = {
-        agent-vm-base = import ./nix/modules/agent-vm-base.nix;
-        firebreak-codex = import ./nix/modules/agents/codex.nix;
-        firebreak-claude-code = import ./nix/modules/agents/claude-code.nix;
+        agent-vm-base = import ./modules/base/module.nix;
+        firebreak-codex = import ./modules/codex/module.nix;
+        firebreak-claude-code = import ./modules/claude-code/module.nix;
         default = self.nixosModules.firebreak-codex;
       };
 

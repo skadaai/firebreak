@@ -167,6 +167,16 @@ run_agent_exec_scenario() {
     exit 1
   fi
 
+  case "$output" in
+    *[0-9].[0-9]* | *[0-9].[0-9].[0-9]*)
+      ;;
+    *)
+      printf '%s\n' "$output" >&2
+      echo "one-shot agent command did not print a recognizable version string for: $scenario_label" >&2
+      exit 1
+      ;;
+  esac
+
   printf '%s\n' "ok: $scenario_label"
 }
 

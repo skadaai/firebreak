@@ -19,3 +19,9 @@ if [ -n "${MICROVM_AGENT_CONFIG_HOST_DIR:-}" ]; then
     -chardev socket,id=fs-hostagentconfig,path="$MICROVM_AGENT_CONFIG_HOST_SOCKET" \
     -device vhost-user-fs-pci,chardev=fs-hostagentconfig,tag=hostagentconfig
 fi
+
+if [ -n "${MICROVM_AGENT_EXEC_OUTPUT_SOCKET:-}" ]; then
+  printf '%s\n' \
+    -chardev socket,id=fs-agentexecoutput,path="$MICROVM_AGENT_EXEC_OUTPUT_SOCKET" \
+    -device vhost-user-fs-pci,chardev=fs-agentexecoutput,tag=hostexecoutput
+fi

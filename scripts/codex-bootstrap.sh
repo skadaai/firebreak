@@ -29,7 +29,7 @@ chown -R @DEV_USER@:@DEV_USER@ "$DEV_HOME"
 cat > "$LOCAL_BIN/codex" <<'EOF'
 #!/bin/sh
 set -eu
-exec bunx --package @openai/codex@latest codex "$@"
+exec bunx --silent --package @openai/codex@latest codex "$@"
 EOF
 chmod 0755 "$LOCAL_BIN/codex"
 

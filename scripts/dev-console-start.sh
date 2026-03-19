@@ -38,7 +38,12 @@ case "$session_mode" in
     if [ -n "$agent_command" ]; then
       exec env FIREBREAK_AGENT_COMMAND="$agent_command" @BASH@ -ic '
         status=0
-        eval "$FIREBREAK_AGENT_COMMAND" || status=$?
+        stdout_path=@AGENT_EXEC_OUTPUT_MOUNT@/stdout
+        stderr_path=@AGENT_EXEC_OUTPUT_MOUNT@/stderr
+        exit_code_path=@AGENT_EXEC_OUTPUT_MOUNT@/exit_code
+        rm -f "$stdout_path" "$stderr_path" "$exit_code_path"
+        eval "$FIREBREAK_AGENT_COMMAND" >"$stdout_path" 2>"$stderr_path" || status=$?
+        printf "%s\n" "$status" >"$exit_code_path"
         sudo poweroff >/dev/null 2>&1 || true
         exit "$status"
       '

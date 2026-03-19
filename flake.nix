@@ -52,6 +52,7 @@
           inherit name;
           runtimeInputs = with pkgs; [ coreutils virtiofsd ];
           text = renderTemplate {
+            "@CONTROL_SOCKET@" = "${runnerName}.socket";
             "@DEFAULT_AGENT_COMMAND@" = defaultAgentCommand;
             "@DEFAULT_AGENT_SESSION_MODE@" = defaultAgentSessionMode;
             "@RUNNER@" = "${self.packages.${system}."${runnerName}-runner"}/bin/microvm-run";

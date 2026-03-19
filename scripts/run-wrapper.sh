@@ -10,8 +10,16 @@ agent_command_override=""
 agent_config_host_dir=""
 host_runtime_dir=$(mktemp -d)
 host_meta_dir=$host_runtime_dir/meta
+host_exec_output_dir=$host_runtime_dir/exec-output
+runner_stdout_log=$host_runtime_dir/runner.stdout
+runner_stderr_log=$host_runtime_dir/runner.stderr
+virtiofsd_hostcwd_log=$host_runtime_dir/virtiofsd-hostcwd.log
+virtiofsd_agent_config_log=$host_runtime_dir/virtiofsd-agent-config.log
+virtiofsd_agent_exec_log=$host_runtime_dir/virtiofsd-agent-exec.log
 hostcwd_socket=$host_runtime_dir/hostcwd.sock
 agent_config_socket=$host_runtime_dir/agent-config.sock
+agent_exec_output_socket=$host_runtime_dir/agent-exec-output.sock
+control_socket=@CONTROL_SOCKET@
 
 reject_whitespace_path() {
   path=$1
@@ -90,8 +98,8 @@ case "$agent_config_mode" in
     ;;
 esac
 
+# shellcheck disable=SC2329
 cleanup() {
-  status=$?
   if [ -n "${hostcwd_virtiofsd_pid:-}" ]; then
     kill "$hostcwd_virtiofsd_pid" 2>/dev/null || true
     wait "$hostcwd_virtiofsd_pid" 2>/dev/null || true
@@ -100,22 +108,29 @@ cleanup() {
     kill "$agent_config_virtiofsd_pid" 2>/dev/null || true
     wait "$agent_config_virtiofsd_pid" 2>/dev/null || true
   fi
+  if [ -n "${agent_exec_output_virtiofsd_pid:-}" ]; then
+    kill "$agent_exec_output_virtiofsd_pid" 2>/dev/null || true
+    wait "$agent_exec_output_virtiofsd_pid" 2>/dev/null || true
+  fi
+  rm -f "$control_socket"
   rm -rf "$host_runtime_dir"
-  exit "$status"
 }
 trap cleanup EXIT INT TERM
 
 mkdir -p "$host_meta_dir"
+mkdir -p "$host_exec_output_dir"
+rm -f "$control_socket"
 
 start_virtiofsd() {
   shared_dir=$1
   socket_path=$2
+  log_path=$3
   virtiofsd \
     --socket-path="$socket_path" \
     --shared-dir="$shared_dir" \
     --sandbox=none \
     --posix-acl \
-    --xattr &
+    --xattr >"$log_path" 2>&1 &
   started_virtiofsd_pid=$!
 
   for _ in $(seq 1 50); do
@@ -140,17 +155,75 @@ if [ -n "$agent_command_override" ]; then
   printf '%s\n' "$agent_command_override" > "$host_meta_dir/agent-command"
 fi
 
-start_virtiofsd "$host_cwd" "$hostcwd_socket"
+start_virtiofsd "$host_cwd" "$hostcwd_socket" "$virtiofsd_hostcwd_log"
 hostcwd_virtiofsd_pid=$started_virtiofsd_pid
 
 if [ -n "$agent_config_host_dir" ]; then
-  start_virtiofsd "$agent_config_host_dir" "$agent_config_socket"
+  start_virtiofsd "$agent_config_host_dir" "$agent_config_socket" "$virtiofsd_agent_config_log"
   agent_config_virtiofsd_pid=$started_virtiofsd_pid
 fi
+if [ "$agent_session_mode" = "agent-exec" ]; then
+  start_virtiofsd "$host_exec_output_dir" "$agent_exec_output_socket" "$virtiofsd_agent_exec_log"
+  agent_exec_output_virtiofsd_pid=$started_virtiofsd_pid
+fi
 
-env \
-  MICROVM_HOST_META_DIR="$host_meta_dir" \
-  MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
-  MICROVM_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
-  MICROVM_AGENT_CONFIG_HOST_SOCKET="$agent_config_socket" \
-  @RUNNER@ "$@"
+runner_status=0
+if [ "$agent_session_mode" = "agent-exec" ]; then
+  env \
+    MICROVM_HOST_META_DIR="$host_meta_dir" \
+    MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
+    MICROVM_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
+    MICROVM_AGENT_CONFIG_HOST_SOCKET="$agent_config_socket" \
+    MICROVM_AGENT_EXEC_OUTPUT_SOCKET="$agent_exec_output_socket" \
+    @RUNNER@ "$@" >"$runner_stdout_log" 2>"$runner_stderr_log" || runner_status=$?
+else
+  env \
+    MICROVM_HOST_META_DIR="$host_meta_dir" \
+    MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
+    MICROVM_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
+    MICROVM_AGENT_CONFIG_HOST_SOCKET="$agent_config_socket" \
+    @RUNNER@ "$@" || runner_status=$?
+fi
+
+if [ "$agent_session_mode" = "agent-exec" ]; then
+  if [ -f "$host_exec_output_dir/stdout" ]; then
+    cat "$host_exec_output_dir/stdout"
+  fi
+  if [ -f "$host_exec_output_dir/stderr" ]; then
+    cat "$host_exec_output_dir/stderr" >&2
+  fi
+
+  if [ -f "$host_exec_output_dir/exit_code" ]; then
+    IFS= read -r command_status < "$host_exec_output_dir/exit_code" || command_status=$runner_status
+    if [ "$command_status" -ne 0 ] && [ -s "$runner_stderr_log" ]; then
+      cat "$runner_stderr_log" >&2
+    fi
+    if [ "$command_status" -ne 0 ]; then
+      if [ -s "$virtiofsd_hostcwd_log" ]; then
+        cat "$virtiofsd_hostcwd_log" >&2
+      fi
+      if [ -s "$virtiofsd_agent_config_log" ]; then
+        cat "$virtiofsd_agent_config_log" >&2
+      fi
+      if [ -s "$virtiofsd_agent_exec_log" ]; then
+        cat "$virtiofsd_agent_exec_log" >&2
+      fi
+    fi
+    exit "$command_status"
+  fi
+
+  if [ -s "$runner_stderr_log" ]; then
+    cat "$runner_stderr_log" >&2
+  fi
+  if [ -s "$virtiofsd_hostcwd_log" ]; then
+    cat "$virtiofsd_hostcwd_log" >&2
+  fi
+  if [ -s "$virtiofsd_agent_config_log" ]; then
+    cat "$virtiofsd_agent_config_log" >&2
+  fi
+  if [ -s "$virtiofsd_agent_exec_log" ]; then
+    cat "$virtiofsd_agent_exec_log" >&2
+  fi
+fi
+
+exit "$runner_status"

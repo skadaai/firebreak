@@ -32,6 +32,16 @@ fi
 printf '%s\n' "$session_mode" > @AGENT_SESSION_MODE_FILE@
 chmod 0644 @AGENT_SESSION_MODE_FILE@
 
+if [ "$session_mode" = "agent-exec" ]; then
+  mkdir -p @AGENT_EXEC_OUTPUT_MOUNT@
+  if ! mountpoint -q @AGENT_EXEC_OUTPUT_MOUNT@; then
+    if ! mount -t virtiofs hostexecoutput @AGENT_EXEC_OUTPUT_MOUNT@; then
+      echo "failed to mount agent exec output share" >&2
+      exit 1
+    fi
+  fi
+fi
+
 if [ -r "$session_command_file" ]; then
   cat "$session_command_file" > @AGENT_COMMAND_FILE@
   chmod 0644 @AGENT_COMMAND_FILE@

@@ -10,12 +10,12 @@ if [ "$USER" = "@DEV_USER@" ]; then
   export BUN_RUNTIME_TRANSPILER_CACHE_PATH="$XDG_CACHE_HOME/bun/transpiler"
   export PATH="$LOCAL_BIN:$BUN_INSTALL/bin:$PATH"
 
-  codex_config_dir=@DEV_HOME@/.codex
+  agent_config_dir=@DEV_HOME@/@AGENT_CONFIG_DIR_NAME@
   if [ -n "${AGENT_CONFIG_DIR:-}" ]; then
-    codex_config_dir=$AGENT_CONFIG_DIR
+    agent_config_dir=$AGENT_CONFIG_DIR
   elif [ -r @AGENT_CONFIG_DIR_FILE@ ]; then
-    codex_config_dir=$(cat @AGENT_CONFIG_DIR_FILE@)
+    agent_config_dir=$(cat @AGENT_CONFIG_DIR_FILE@)
   fi
-  export CODEX_HOME="$codex_config_dir"
-  export CODEX_CONFIG_DIR="$codex_config_dir"
+
+  @AGENT_CONFIG_EXPORTS@
 fi

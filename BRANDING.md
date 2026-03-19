@@ -7,7 +7,10 @@ Public naming:
 - Codex VM entry: firebreak-codex
 - Codex maintenance shell entry: firebreak-codex-shell
 - Codex smoke test entry: firebreak-codex-smoke
-- Current agent VM identity: firebreak-codex
+- Claude Code VM entry: firebreak-claude-code
+- Claude Code maintenance shell entry: firebreak-claude-code-shell
+- Claude Code smoke test entry: firebreak-claude-code-smoke
+- Current shipped agent VMs: firebreak-codex, firebreak-claude-code
 
 Branding rules:
 - Prefer "Skada Firebreak" in human-facing copy.

@@ -60,7 +60,14 @@
           } ./scripts/run-wrapper.sh;
         };
 
-      mkSmokePackage = name:
+      mkSmokePackage = {
+        name,
+        agentPackage,
+        shellPackage,
+        agentBin,
+        agentDisplayName,
+        agentConfigDirName,
+      }:
         pkgs.writeShellApplication {
           inherit name;
           runtimeInputs = with pkgs; [
@@ -68,12 +75,19 @@
             expect
             git
           ];
-          text = builtins.readFile ./tests/firebreak-codex-smoke.sh;
+          text = renderTemplate {
+            "@AGENT_BIN@" = agentBin;
+            "@AGENT_CONFIG_DIR_NAME@" = agentConfigDirName;
+            "@AGENT_DISPLAY_NAME@" = agentDisplayName;
+            "@AGENT_PACKAGE@" = agentPackage;
+            "@AGENT_SHELL_PACKAGE@" = shellPackage;
+          } ./tests/firebreak-agent-smoke.sh;
         };
     in {
       nixosModules = {
         agent-vm-base = import ./nix/modules/agent-vm-base.nix;
         firebreak-codex = import ./nix/modules/agents/codex.nix;
+        firebreak-claude-code = import ./nix/modules/agents/claude-code.nix;
         default = self.nixosModules.firebreak-codex;
       };
 
@@ -82,11 +96,16 @@
           name = "firebreak-codex";
           extraModules = [ self.nixosModules.firebreak-codex ];
         };
+        firebreak-claude-code = mkAgentVm {
+          name = "firebreak-claude-code";
+          extraModules = [ self.nixosModules.firebreak-claude-code ];
+        };
       };
 
       packages.${system} = {
         default = self.packages.${system}.firebreak;
         firebreak-codex-runner = self.nixosConfigurations.firebreak-codex.config.microvm.declaredRunner;
+        firebreak-claude-code-runner = self.nixosConfigurations.firebreak-claude-code.config.microvm.declaredRunner;
         firebreak-codex = mkAgentPackage {
           name = "firebreak-codex";
           runnerName = "firebreak-codex";
@@ -101,7 +120,36 @@
           defaultAgentConfigHostDir = "$HOME/.codex";
           defaultAgentSessionMode = "shell";
         };
-        firebreak-codex-smoke = mkSmokePackage "firebreak-codex-smoke";
+        firebreak-codex-smoke = mkSmokePackage {
+          name = "firebreak-codex-smoke";
+          agentPackage = "firebreak-codex";
+          shellPackage = "firebreak-codex-shell";
+          agentBin = "codex";
+          agentDisplayName = "Codex";
+          agentConfigDirName = ".codex";
+        };
+        firebreak-claude-code = mkAgentPackage {
+          name = "firebreak-claude-code";
+          runnerName = "firebreak-claude-code";
+          defaultAgentCommand = "claude";
+          defaultAgentConfigHostDir = "$HOME/.claude";
+          defaultAgentSessionMode = "agent";
+        };
+        firebreak-claude-code-shell = mkAgentPackage {
+          name = "firebreak-claude-code-shell";
+          runnerName = "firebreak-claude-code";
+          defaultAgentCommand = "claude";
+          defaultAgentConfigHostDir = "$HOME/.claude";
+          defaultAgentSessionMode = "shell";
+        };
+        firebreak-claude-code-smoke = mkSmokePackage {
+          name = "firebreak-claude-code-smoke";
+          agentPackage = "firebreak-claude-code";
+          shellPackage = "firebreak-claude-code-shell";
+          agentBin = "claude";
+          agentDisplayName = "Claude Code";
+          agentConfigDirName = ".claude";
+        };
         firebreak = pkgs.writeShellApplication {
           name = "firebreak";
           runtimeInputs = with pkgs; [ coreutils ];
@@ -116,6 +164,9 @@ Use an explicit agent VM for now:
   nix run github:skadaai/firebreak#firebreak-codex
   nix run github:skadaai/firebreak#firebreak-codex-shell
   nix run github:skadaai/firebreak#firebreak-codex-smoke
+  nix run github:skadaai/firebreak#firebreak-claude-code
+  nix run github:skadaai/firebreak#firebreak-claude-code-shell
+  nix run github:skadaai/firebreak#firebreak-claude-code-smoke
 EOF
           '';
         };
@@ -125,6 +176,9 @@ EOF
         firebreak-codex-runner = self.packages.${system}.firebreak-codex-runner;
         firebreak-codex-system = self.nixosConfigurations.firebreak-codex.config.system.build.toplevel;
         firebreak-codex-smoke = self.packages.${system}.firebreak-codex-smoke;
+        firebreak-claude-code-runner = self.packages.${system}.firebreak-claude-code-runner;
+        firebreak-claude-code-system = self.nixosConfigurations.firebreak-claude-code.config.system.build.toplevel;
+        firebreak-claude-code-smoke = self.packages.${system}.firebreak-claude-code-smoke;
       };
     };
 }

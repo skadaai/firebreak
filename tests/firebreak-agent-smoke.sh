@@ -133,7 +133,7 @@ if {$mode ne "workspace"} {
 if {$mode eq "host"} {
   run_and_assert "test -f \"$AGENT_CONFIG_DIR/$host_marker_name\" && echo __SMOKE_HOST_CONFIG__ok" {__SMOKE_HOST_CONFIG__ok\r\n} "host agent config mount"
 }
-run_and_assert {codex --version | sed -n '1s/^/__SMOKE_CODEX__/p'} {__SMOKE_CODEX__.+\r\n} "Codex CLI"
+run_and_assert {@AGENT_BIN@ --version | sed -n '1s/^/__SMOKE_AGENT__/p'} {__SMOKE_AGENT__.+\r\n} "@AGENT_DISPLAY_NAME@ CLI"
 
 send -- "sudo poweroff\r"
 expect {
@@ -156,7 +156,7 @@ run_agent_exec_scenario() {
     AGENT_CONFIG=$mode \
       timeout --foreground "$timeout_seconds" \
       nix --accept-flake-config --extra-experimental-features 'nix-command flakes' \
-      run .#firebreak-codex -- "$agent_cli_arg" 2>&1
+      run .#@AGENT_PACKAGE@ -- "$agent_cli_arg" 2>&1
   )
   status=$?
   set -e
@@ -180,9 +180,9 @@ run_agent_exec_scenario() {
   printf '%s\n' "ok: $scenario_label"
 }
 
-run_agent_exec_scenario workspace "default agent entry runs codex --version as a one-shot command" "--version"
-run_scenario firebreak-codex-shell workspace "$repo_root/.codex" "shell entry uses workspace config"
-run_scenario firebreak-codex-shell vm "/var/lib/dev/.codex" "shell entry uses vm config"
-run_scenario firebreak-codex-shell host "/run/agent-config-host" "shell entry uses host config" "" "$host_config_dir" "marker.txt"
+run_agent_exec_scenario workspace "default agent entry runs @AGENT_BIN@ --version as a one-shot command" "--version"
+run_scenario @AGENT_SHELL_PACKAGE@ workspace "$repo_root/@AGENT_CONFIG_DIR_NAME@" "shell entry uses workspace config"
+run_scenario @AGENT_SHELL_PACKAGE@ vm "/var/lib/dev/@AGENT_CONFIG_DIR_NAME@" "shell entry uses vm config"
+run_scenario @AGENT_SHELL_PACKAGE@ host "/run/agent-config-host" "shell entry uses host config" "" "$host_config_dir" "marker.txt"
 
 printf '%s\n' "Firebreak smoke test passed"

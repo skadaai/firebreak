@@ -1,33 +1,12 @@
-{ config, lib, pkgs, renderTemplate, ... }:
-let
-  cfg = config.agentVm;
-  devHome = "/var/lib/${cfg.devUser}";
-  scriptVars = {
-    "@DEV_HOME@" = devHome;
-    "@DEV_USER@" = cfg.devUser;
-    "@AGENT_CONFIG_DIR_FILE@" = cfg.agentConfigDirFile;
-    "@HOST_META_MOUNT@" = cfg.hostMetaMount;
-    "@START_DIR_FILE@" = cfg.startDirFile;
-    "@WORKSPACE_MOUNT@" = cfg.workspaceMount;
-  };
-in {
-  config = {
-    agentVm = {
-      name = lib.mkDefault "firebreak-codex";
-      agentConfigEnabled = true;
-      agentConfigDirName = ".codex";
-      agentCommand = "codex";
-      extraSystemPackages = with pkgs; [
-        bun
-        git
-        nodejs
-      ];
-      bootstrapPackages = with pkgs; [
-        bun
-        coreutils
-      ];
-      bootstrapScript = renderTemplate scriptVars ../../../scripts/codex-bootstrap.sh;
-      shellInit = renderTemplate scriptVars ../../../scripts/codex-shell-init.sh;
-    };
-  };
+moduleArgs@{ pkgs, ... }:
+(import ./mk-bun-agent.nix moduleArgs) {
+  vmName = "firebreak-codex";
+  displayName = "Codex";
+  binName = "codex";
+  packageSpec = "@openai/codex@latest";
+  configDirName = ".codex";
+  configExports = ''
+    export CODEX_HOME="$agent_config_dir"
+    export CODEX_CONFIG_DIR="$agent_config_dir"
+  '';
 }

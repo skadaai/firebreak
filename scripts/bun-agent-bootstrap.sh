@@ -13,7 +13,7 @@ export BUN_INSTALL_CACHE_DIR="$XDG_CACHE_HOME/bun/install/cache"
 export BUN_RUNTIME_TRANSPILER_CACHE_PATH="$XDG_CACHE_HOME/bun/transpiler"
 export PATH="$LOCAL_BIN:$BUN_INSTALL/bin:$PATH"
 
-echo "Preparing persistent Codex tools..."
+echo "Preparing persistent @AGENT_DISPLAY_NAME@ tools..."
 
 mkdir -p \
   "$BUN_INSTALL/bin" \
@@ -26,19 +26,18 @@ mkdir -p \
   "$XDG_STATE_HOME"
 chown -R @DEV_USER@:@DEV_USER@ "$DEV_HOME"
 
-cat > "$LOCAL_BIN/codex" <<'EOF'
+cat > "$LOCAL_BIN/@AGENT_BIN@" <<'EOF'
 #!/bin/sh
 set -eu
-exec bunx --silent --package @openai/codex@latest codex "$@"
+exec bunx --silent --package @AGENT_PACKAGE_SPEC@ @AGENT_BIN@ "$@"
 EOF
-chmod 0755 "$LOCAL_BIN/codex"
+chmod 0755 "$LOCAL_BIN/@AGENT_BIN@"
 
-# Remove stale global installs so the wrapper is the only Codex entrypoint.
-rm -f "$BUN_INSTALL/bin/codex"
+rm -f "$BUN_INSTALL/bin/@AGENT_BIN@"
 
-echo "Validating Bun-managed Codex CLI..."
-if ! codex --version >/dev/null 2>&1; then
-  echo "Codex CLI validation failed." >&2
+echo "Validating Bun-managed @AGENT_DISPLAY_NAME@ CLI..."
+if ! @AGENT_BIN@ --version >/dev/null 2>&1; then
+  echo "@AGENT_DISPLAY_NAME@ CLI validation failed." >&2
   exit 1
 fi
 

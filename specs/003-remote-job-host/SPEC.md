@@ -50,7 +50,7 @@ The intent is to prove the remote execution model on one host before adding broa
 
 - The system shall provide a remote host job runner that launches a Firebreak VM against host-prepared job inputs.
 - When a job is started, the system shall create or resolve isolated host paths for workspace, outputs, and transient runtime state.
-- When a job is started with an initial agent prompt, the system shall pass that prompt into a new non-interactive agent session for the selected guest runtime.
+- When a job is started with an initial agent prompt, the system shall pass that prompt into a new non-interactive session for the selected agent runtime.
 - When a job completes, the system shall persist stdout, stderr, and exit code under the job output path and return the job result to the caller.
 - When a job completes or fails, the system shall tear down transient runtime state associated with that job.
 - If required job inputs are missing or invalid, then the system shall reject the job before launching the VM.

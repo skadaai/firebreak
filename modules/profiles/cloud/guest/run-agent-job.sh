@@ -1,12 +1,17 @@
 set -eu
 
 prompt_file=@AGENT_PROMPT_FILE@
-agent_prompt_command=@AGENT_PROMPT_COMMAND@
 stdout_path=@AGENT_EXEC_OUTPUT_MOUNT@/stdout
 stderr_path=@AGENT_EXEC_OUTPUT_MOUNT@/stderr
 exit_code_path=@AGENT_EXEC_OUTPUT_MOUNT@/exit_code
+command_file=$(mktemp)
+trap 'rm -f "$command_file"' EXIT INT TERM
 
-if [ -z "$agent_prompt_command" ]; then
+cat >"$command_file" <<'EOF'
+@AGENT_PROMPT_COMMAND@
+EOF
+
+if ! [ -s "$command_file" ]; then
   echo "agent prompt execution is not configured for this VM" >&2
   exit 1
 fi
@@ -25,7 +30,7 @@ fi
 rm -f "$stdout_path" "$stderr_path" "$exit_code_path"
 
 status=0
-@BASH@ -ic "$agent_prompt_command" >"$stdout_path" 2>"$stderr_path" || status=$?
+@BASH@ -ic "$(@CAT@ "$command_file")" >"$stdout_path" 2>"$stderr_path" || status=$?
 printf '%s\n' "$status" >"$exit_code_path"
 
 sudo poweroff >/dev/null 2>&1 || true

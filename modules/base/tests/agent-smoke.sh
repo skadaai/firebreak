@@ -10,23 +10,18 @@ host_uid=$(id -u)
 host_gid=$(id -g)
 timeout_seconds=${FIREBREAK_SMOKE_TIMEOUT:-${CODEX_VM_SMOKE_TIMEOUT:-180}}
 host_config_dir=$(mktemp -d)
-smoke_probe_script=$(mktemp "$repo_root/.firebreak-smoke.XXXXXX.sh")
 
 cleanup() {
   rm -rf "$host_config_dir"
-  rm -f "$smoke_probe_script"
 }
 trap cleanup EXIT INT TERM
 
 printf '%s\n' "host-smoke-marker" > "$host_config_dir/marker.txt"
 
-cat >"$smoke_probe_script" <<'EOF'
-#!/bin/sh
-set -eu
-
+smoke_probe_command=$(cat <<'EOF'
 printf '__SMOKE_PWD__%s\n' "$PWD"
 printf '__SMOKE_IDS__%s:%s\n' "$(id -u)" "$(id -g)"
-printf '__SMOKE_OWNER__%s\n' "$(stat -c '%u:%g' .)"
+printf '__SMOKE_OWNER__%s\n' "$(stat -c %u:%g .)"
 printf '__SMOKE_CONFIG_DIR__%s\n' "${AGENT_CONFIG_DIR:-}"
 test -f flake.nix
 printf '__SMOKE_FLAKE__ok\n'
@@ -39,7 +34,7 @@ if [ "$AGENT_CONFIG_DIR" = "/run/agent-config-host" ]; then
 fi
 @AGENT_BIN@ --version | sed -n '1s/^/__SMOKE_AGENT__/p'
 EOF
-chmod 0755 "$smoke_probe_script"
+)
 
 cd "$repo_root"
 
@@ -70,7 +65,7 @@ run_scenario() {
   output=$(
     AGENT_CONFIG=$mode \
       AGENT_CONFIG_HOST_PATH="${host_config_path:-}" \
-      AGENT_VM_COMMAND="sh '$smoke_probe_script'" \
+      AGENT_VM_COMMAND="$smoke_probe_command" \
       timeout --foreground "$timeout_seconds" \
       nix --accept-flake-config --extra-experimental-features 'nix-command flakes' \
       run ".#$package_name" 2>&1

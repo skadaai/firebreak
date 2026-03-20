@@ -1,5 +1,5 @@
 ---
-status: draft
+status: completed
 last_updated: 2026-03-20
 ---
 
@@ -7,18 +7,20 @@ last_updated: 2026-03-20
 
 ## Current phase
 
-Draft.
+Completed.
 
 ## What has landed
 
-- the autonomous VM validation changeset has been scoped
-- behavioral acceptance has been defined at the spec level
+- a host-side `firebreak validate` entrypoint for named VM validation suites
+- capability detection that reports blocked hosts without turning them into false regressions
+- machine-readable summaries with persisted stdout, stderr, and exit-code artifacts
+- a dedicated validation smoke that exercises both runnable and blocked validation flows
+- worktree-safe flake execution for validation and smoke commands
 
 ## What remains open
 
-- implementation of the host-side validation entrypoint
-- capability detection for blocked versus runnable hosts
-- machine-readable summaries and artifact retention
+- retention policy tuning for long-lived autonomous hosts
+- any future expansion of suite metadata beyond the first KVM-oriented capability contract
 
 ## Current sources of truth
 
@@ -29,3 +31,4 @@ Draft.
 ## History
 
 - 2026-03-20: Spec created to define a self-service VM validation harness that autonomous Firebreak operators can invoke without human intervention.
+- 2026-03-20: Implemented `firebreak validate`, persisted validation artifacts, and added validation smoke coverage for runnable and blocked hosts.

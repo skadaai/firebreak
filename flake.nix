@@ -74,6 +74,7 @@
         name,
         runnerName,
         defaultAgentCommand,
+        agentConfigDirName,
         defaultAgentConfigHostDir,
         defaultAgentSessionMode,
       }:
@@ -85,6 +86,7 @@
             "@DEFAULT_AGENT_COMMAND@" = defaultAgentCommand;
             "@DEFAULT_AGENT_SESSION_MODE@" = defaultAgentSessionMode;
             "@RUNNER@" = "${self.packages.${system}."${runnerName}-runner"}/bin/microvm-run";
+            "@AGENT_CONFIG_DIR_NAME@" = agentConfigDirName;
             "@DEFAULT_AGENT_CONFIG_HOST_DIR@" = defaultAgentConfigHostDir;
           } ./modules/profiles/local/host/run-wrapper.sh;
         };
@@ -100,9 +102,11 @@
         pkgs.writeShellApplication {
           inherit name;
           runtimeInputs = with pkgs; [
+            bash
             coreutils
             expect
             git
+            gnutar
           ];
           text = renderTemplate {
             "@AGENT_BIN@" = agentBin;
@@ -144,6 +148,41 @@
           text = renderTemplate {
             "@JOB_PACKAGE_BIN@" = "${self.packages.${system}.${jobPackage}}/bin/${jobPackage}";
           } ./modules/profiles/cloud/tests/cloud-smoke.sh;
+        };
+
+      mkValidationPackage = { name }:
+        pkgs.writeShellApplication {
+          inherit name;
+          runtimeInputs = with pkgs; [
+            coreutils
+            gnused
+          ];
+          text = renderTemplate {
+            "@CODEX_SMOKE_BIN@" = "${self.packages.${system}.firebreak-codex-smoke}/bin/firebreak-codex-smoke";
+            "@CLAUDE_SMOKE_BIN@" = "${self.packages.${system}.firebreak-claude-code-smoke}/bin/firebreak-claude-code-smoke";
+            "@CLOUD_SMOKE_BIN@" = "${self.packages.${system}.firebreak-cloud-job-smoke}/bin/firebreak-cloud-job-smoke";
+          } ./modules/base/host/firebreak-validate.sh;
+        };
+
+      mkValidationSmokePackage = { name, validatePackage }:
+        pkgs.writeShellApplication {
+          inherit name;
+          runtimeInputs = with pkgs; [
+            coreutils
+            gnused
+          ];
+          text = renderTemplate {
+            "@VALIDATE_BIN@" = "${self.packages.${system}.${validatePackage}}/bin/${validatePackage}";
+          } ./modules/base/tests/validation-smoke.sh;
+        };
+
+      mkFirebreakCliPackage = { name, validatePackage }:
+        pkgs.writeShellApplication {
+          inherit name;
+          runtimeInputs = with pkgs; [ coreutils ];
+          text = renderTemplate {
+            "@VALIDATE_BIN@" = "${self.packages.${system}.${validatePackage}}/bin/${validatePackage}";
+          } ./modules/base/host/firebreak.sh;
         };
     in {
       nixosModules = {
@@ -213,6 +252,7 @@
           name = "firebreak-codex";
           runnerName = "firebreak-codex";
           defaultAgentCommand = "codex";
+          agentConfigDirName = ".codex";
           defaultAgentConfigHostDir = "$HOME/.codex";
           defaultAgentSessionMode = "agent";
         };
@@ -220,6 +260,7 @@
           name = "firebreak-codex-shell";
           runnerName = "firebreak-codex";
           defaultAgentCommand = "codex";
+          agentConfigDirName = ".codex";
           defaultAgentConfigHostDir = "$HOME/.codex";
           defaultAgentSessionMode = "shell";
         };
@@ -235,6 +276,7 @@
           name = "firebreak-claude-code";
           runnerName = "firebreak-claude-code";
           defaultAgentCommand = "claude";
+          agentConfigDirName = ".claude";
           defaultAgentConfigHostDir = "$HOME/.claude";
           defaultAgentSessionMode = "agent";
         };
@@ -242,6 +284,7 @@
           name = "firebreak-claude-code-shell";
           runnerName = "firebreak-claude-code";
           defaultAgentCommand = "claude";
+          agentConfigDirName = ".claude";
           defaultAgentConfigHostDir = "$HOME/.claude";
           defaultAgentSessionMode = "shell";
         };
@@ -272,25 +315,16 @@
           name = "firebreak-cloud-job-smoke";
           jobPackage = "firebreak-cloud-smoke-job";
         };
-        firebreak = pkgs.writeShellApplication {
+        firebreak-validate = mkValidationPackage {
+          name = "firebreak-validate";
+        };
+        firebreak-validation-smoke = mkValidationSmokePackage {
+          name = "firebreak-validation-smoke";
+          validatePackage = "firebreak-validate";
+        };
+        firebreak = mkFirebreakCliPackage {
           name = "firebreak";
-          runtimeInputs = with pkgs; [ coreutils ];
-          text = ''
-            cat <<'EOF'
-
-[Skada Firebreak -reliable isolation for high-trust automation]
-
-
-This top-level CLI is reserved for a future control plane.
-Use an explicit agent VM for now:
-  nix run github:skadaai/firebreak#firebreak-codex
-  nix run github:skadaai/firebreak#firebreak-codex-shell
-  nix run github:skadaai/firebreak#firebreak-codex-smoke
-  nix run github:skadaai/firebreak#firebreak-claude-code
-  nix run github:skadaai/firebreak#firebreak-claude-code-shell
-  nix run github:skadaai/firebreak#firebreak-claude-code-smoke
-EOF
-          '';
+          validatePackage = "firebreak-validate";
         };
       };
 
@@ -301,6 +335,7 @@ EOF
         firebreak-codex-cloud-runner = self.packages.${system}.firebreak-codex-cloud-runner;
         firebreak-codex-cloud-system = self.nixosConfigurations.firebreak-codex-cloud.config.system.build.toplevel;
         firebreak-cloud-job-smoke = self.packages.${system}.firebreak-cloud-job-smoke;
+        firebreak-validation-smoke = self.packages.${system}.firebreak-validation-smoke;
         firebreak-claude-code-runner = self.packages.${system}.firebreak-claude-code-runner;
         firebreak-claude-code-system = self.nixosConfigurations.firebreak-claude-code.config.system.build.toplevel;
         firebreak-claude-code-smoke = self.packages.${system}.firebreak-claude-code-smoke;

@@ -9,6 +9,7 @@ prompt_file=""
 timeout_seconds=${FIREBREAK_JOB_TIMEOUT_SECONDS:-300}
 max_jobs=${FIREBREAK_MAX_JOBS:-1}
 state_dir=${FIREBREAK_STATE_DIR:-@DEFAULT_STATE_DIR@}
+firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-/cache}/firebreak/tmp}
 
 usage() {
   cat <<'EOF' >&2
@@ -138,6 +139,7 @@ if [ -n "$prompt_file" ]; then
 fi
 
 mkdir -p "$output_dir" "$config_dir" "$state_dir"
+mkdir -p "$firebreak_tmp_root"
 
 job_state_dir=$state_dir/jobs/$job_id
 running_dir=$state_dir/running
@@ -200,7 +202,7 @@ if ! mkdir "$job_lock_dir" 2>/dev/null; then
 fi
 flock -u 9
 
-runtime_dir=$(mktemp -d "$job_state_dir/runtime.XXXXXX")
+runtime_dir=$(mktemp -d "$firebreak_tmp_root/cloud-job-runtime.XXXXXX")
 input_dir=$runtime_dir/input
 runner_workdir=$runtime_dir/vm
 workspace_socket=$runtime_dir/workspace.sock

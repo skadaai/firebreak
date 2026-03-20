@@ -6,10 +6,12 @@ if [ -z "$repo_root" ] || [ ! -f "$repo_root/flake.nix" ]; then
   exit 1
 fi
 
-workspace_dir=$(mktemp -d)
-output_dir=$(mktemp -d)
-state_dir=$(mktemp -d)
-timeout_output_dir=$(mktemp -d)
+firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-/cache}/firebreak/tmp}
+mkdir -p "$firebreak_tmp_root"
+workspace_dir=$(mktemp -d "$firebreak_tmp_root/cloud-smoke-workspace.XXXXXX")
+output_dir=$(mktemp -d "$firebreak_tmp_root/cloud-smoke-output.XXXXXX")
+state_dir=$(mktemp -d "$firebreak_tmp_root/cloud-smoke-state.XXXXXX")
+timeout_output_dir=$(mktemp -d "$firebreak_tmp_root/cloud-smoke-timeout-output.XXXXXX")
 
 trap 'rm -rf "$workspace_dir" "$output_dir" "$state_dir" "$timeout_output_dir"' EXIT INT TERM
 

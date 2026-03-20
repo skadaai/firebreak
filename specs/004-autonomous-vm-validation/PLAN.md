@@ -1,5 +1,5 @@
 ---
-status: draft
+status: completed
 last_updated: 2026-03-20
 ---
 
@@ -28,11 +28,10 @@ last_updated: 2026-03-20
 
 ## Current status
 
-Drafted.
-Implementation has not started.
+Completed.
+The validation harness, top-level CLI entrypoint, and validation smoke are implemented and validated on both runnable and deliberately blocked paths.
 
 ## Open questions
 
-- whether the first validation entrypoint should live under the top-level `firebreak` CLI, a dedicated package, or both
 - how much artifact retention policy the first version should expose versus hardcode
-- whether blocked-host detection should be purely local or also support a declarative host profile file
+- whether blocked-host detection should later expand beyond local capability checks

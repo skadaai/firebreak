@@ -93,7 +93,23 @@ case "$mode" in
   workspace)
     resolved_dir=$start_dir/@AGENT_CONFIG_DIR_NAME@
     if ! [ -d "$resolved_dir" ]; then
-      @RUNUSER@ -u @DEV_USER@ -- @MKDIR@ -p "$resolved_dir"
+      if [ -L "$resolved_dir" ]; then
+        link_target=$(readlink "$resolved_dir")
+        case "$link_target" in
+          /*)
+            resolved_target=$link_target
+            ;;
+          *)
+            resolved_target=$(dirname "$resolved_dir")/$link_target
+            ;;
+        esac
+        @RUNUSER@ -u @DEV_USER@ -- @MKDIR@ -p "$resolved_target"
+      elif [ -e "$resolved_dir" ]; then
+        echo "workspace agent config path exists but is not a directory: $resolved_dir" >&2
+        exit 1
+      else
+        @RUNUSER@ -u @DEV_USER@ -- @MKDIR@ -p "$resolved_dir"
+      fi
     fi
     ;;
   vm)

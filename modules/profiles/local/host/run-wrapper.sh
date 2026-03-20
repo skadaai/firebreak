@@ -3,13 +3,15 @@ set -eu
 host_cwd=$PWD
 host_uid=$(id -u)
 host_gid=$(id -g)
+firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-/cache}/firebreak/tmp}
 agent_config_mode=${AGENT_CONFIG:-${CODEX_CONFIG:-vm}}
 agent_session_mode=${AGENT_VM_ENTRYPOINT:-@DEFAULT_AGENT_SESSION_MODE@}
 default_agent_command=@DEFAULT_AGENT_COMMAND@
 agent_command_override=""
 shell_command_override=${AGENT_VM_COMMAND:-}
 agent_config_host_dir=""
-host_runtime_dir=$(mktemp -d)
+mkdir -p "$firebreak_tmp_root"
+host_runtime_dir=$(mktemp -d "$firebreak_tmp_root/local-runtime.XXXXXX")
 host_meta_dir=$host_runtime_dir/meta
 host_exec_output_dir=$host_runtime_dir/exec-output
 host_instance_dir=$host_runtime_dir/instance
@@ -24,6 +26,7 @@ agent_exec_output_socket=$host_runtime_dir/agent-exec-output.sock
 default_control_socket=@CONTROL_SOCKET@
 instance_state_dir=${FIREBREAK_INSTANCE_DIR:-}
 instance_ephemeral=${FIREBREAK_INSTANCE_EPHEMERAL:-0}
+debug_keep_runtime=${FIREBREAK_DEBUG_KEEP_RUNTIME:-0}
 runner_workdir=$host_cwd
 control_socket=$default_control_socket
 
@@ -48,6 +51,13 @@ resolve_host_dir() {
     printf '%s\n' "$path"
   fi
 }
+
+resolve_symlink_target() {
+  path=$1
+  realpath -m "$path"
+}
+
+default_agent_config_host_dir=$(resolve_host_dir "${AGENT_CONFIG_HOST_PATH:-${CODEX_CONFIG_HOST_PATH:-@DEFAULT_AGENT_CONFIG_HOST_DIR@}}")
 
 reject_whitespace_path "$host_cwd" "current working directory"
 
@@ -101,7 +111,7 @@ fi
 
 case "$agent_config_mode" in
   host)
-    agent_config_host_dir=$(resolve_host_dir "${AGENT_CONFIG_HOST_PATH:-${CODEX_CONFIG_HOST_PATH:-@DEFAULT_AGENT_CONFIG_HOST_DIR@}}")
+    agent_config_host_dir=$default_agent_config_host_dir
 
     case "$agent_config_host_dir" in
       /*) ;;
@@ -127,6 +137,26 @@ case "$agent_config_mode" in
     ;;
 esac
 
+workspace_agent_config_path=$host_cwd/@AGENT_CONFIG_DIR_NAME@
+if [ "$agent_config_mode" = "workspace" ] && [ -L "$workspace_agent_config_path" ]; then
+  resolved_symlink_target=$(resolve_symlink_target "$workspace_agent_config_path")
+    reject_whitespace_path "$resolved_symlink_target" "workspace agent config symlink target"
+    case "$resolved_symlink_target" in
+      "$host_cwd"|"$host_cwd"/*)
+        ;;
+      *)
+        agent_config_mode=host
+        agent_config_host_dir=$resolved_symlink_target
+        target_parent=$(dirname "$agent_config_host_dir")
+        if ! [ -d "$agent_config_host_dir" ] && ! [ -w "$target_parent" ]; then
+          echo "workspace agent config symlink target is not writable on the host; falling back to $default_agent_config_host_dir" >&2
+          agent_config_host_dir=$default_agent_config_host_dir
+        fi
+        mkdir -p "$agent_config_host_dir"
+        ;;
+  esac
+fi
+
 # shellcheck disable=SC2329
 cleanup() {
   if [ -n "${hostcwd_virtiofsd_pid:-}" ]; then
@@ -142,7 +172,11 @@ cleanup() {
     wait "$agent_exec_output_virtiofsd_pid" 2>/dev/null || true
   fi
   rm -f "$control_socket"
-  rm -rf "$host_runtime_dir"
+  if [ "$debug_keep_runtime" = "1" ]; then
+    echo "keeping Firebreak runtime directory: $host_runtime_dir" >&2
+  else
+    rm -rf "$host_runtime_dir"
+  fi
 }
 trap cleanup EXIT INT TERM
 

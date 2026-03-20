@@ -8,8 +8,12 @@ fi
 
 host_uid=$(id -u)
 host_gid=$(id -g)
-timeout_seconds=${FIREBREAK_SMOKE_TIMEOUT:-${CODEX_VM_SMOKE_TIMEOUT:-180}}
-host_config_dir=$(mktemp -d)
+timeout_seconds=${FIREBREAK_SMOKE_TIMEOUT:-${CODEX_VM_SMOKE_TIMEOUT:-900}}
+firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-/cache}/firebreak/tmp}
+mkdir -p "$firebreak_tmp_root"
+host_config_dir=$(mktemp -d "$firebreak_tmp_root/agent-smoke-config.XXXXXX")
+workspace_config_host_path=""
+expected_workspace_config_dir=""
 
 cleanup() {
   rm -rf "$host_config_dir"
@@ -17,6 +21,19 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 printf '%s\n' "host-smoke-marker" > "$host_config_dir/marker.txt"
+
+workspace_config_host_path=$repo_root/@AGENT_CONFIG_DIR_NAME@
+expected_workspace_config_dir=$repo_root/@AGENT_CONFIG_DIR_NAME@
+if [ -L "$workspace_config_host_path" ]; then
+  workspace_config_target=$(realpath -m "$workspace_config_host_path")
+  case "$workspace_config_target" in
+    "$repo_root"|"$repo_root"/*)
+      ;;
+    *)
+      expected_workspace_config_dir="/run/agent-config-host"
+      ;;
+  esac
+fi
 
 smoke_probe_command=$(cat <<'EOF'
 printf '__SMOKE_PWD__%s\n' "$PWD"
@@ -37,6 +54,12 @@ EOF
 )
 
 cd "$repo_root"
+run_flake=$repo_root/scripts/run-flake.sh
+
+if ! [ -f "$run_flake" ]; then
+  echo "missing flake runner helper: $run_flake" >&2
+  exit 1
+fi
 
 require_line() {
   output=$1
@@ -68,8 +91,7 @@ run_scenario() {
       AGENT_CONFIG_HOST_PATH="${host_config_path:-}" \
       AGENT_VM_COMMAND="$smoke_probe_command" \
       timeout --foreground "$timeout_seconds" \
-      nix --accept-flake-config --extra-experimental-features 'nix-command flakes' \
-      run ".#$package_name" 2>&1
+      bash "$run_flake" run ".#$package_name" 2>&1
   )
   status=$?
   set -e
@@ -129,8 +151,7 @@ run_agent_exec_scenario() {
     AGENT_CONFIG=$mode \
       FIREBREAK_INSTANCE_EPHEMERAL=1 \
       timeout --foreground "$timeout_seconds" \
-      nix --accept-flake-config --extra-experimental-features 'nix-command flakes' \
-      run .#@AGENT_PACKAGE@ -- "$agent_cli_arg" 2>&1
+      bash "$run_flake" run .#@AGENT_PACKAGE@ -- "$agent_cli_arg" 2>&1
   )
   status=$?
   set -e
@@ -155,7 +176,7 @@ run_agent_exec_scenario() {
 }
 
 run_agent_exec_scenario workspace "default agent entry runs @AGENT_BIN@ --version as a one-shot command" "--version"
-run_scenario @AGENT_SHELL_PACKAGE@ workspace "$repo_root/@AGENT_CONFIG_DIR_NAME@" "shell entry uses workspace config"
+run_scenario @AGENT_SHELL_PACKAGE@ workspace "$expected_workspace_config_dir" "shell entry uses workspace config"
 run_scenario @AGENT_SHELL_PACKAGE@ vm "/var/lib/dev/@AGENT_CONFIG_DIR_NAME@" "shell entry uses vm config"
 run_scenario @AGENT_SHELL_PACKAGE@ host "/run/agent-config-host" "shell entry uses host config" "$host_config_dir"
 

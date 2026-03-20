@@ -232,6 +232,8 @@ if [ -n "$prompt" ]; then
 else
   cp "$prompt_file" "$input_dir/prompt"
 fi
+printf '%s\n' "$(id -u)" > "$input_dir/host-uid"
+printf '%s\n' "$(id -g)" > "$input_dir/host-gid"
 
 start_virtiofsd() {
   shared_dir=$1
@@ -266,21 +268,49 @@ start_virtiofsd "$output_dir" "$output_socket" "$virtiofsd_output_log"
 output_virtiofsd_pid=$started_virtiofsd_pid
 
 runner_status=0
+runner_pid=""
+timed_out=0
+
 set +e
 # shellcheck disable=SC2016
-env \
+setsid env \
   MICROVM_WORKSPACE_SOCKET="$workspace_socket" \
   MICROVM_AGENT_JOB_INPUT_DIR="$input_dir" \
   MICROVM_AGENT_CONFIG_HOST_SOCKET="$config_socket" \
   MICROVM_AGENT_EXEC_OUTPUT_SOCKET="$output_socket" \
-  timeout --foreground "$timeout_seconds" sh -c 'cd "$1" && exec "$2"' sh "$runner_workdir" @RUNNER@ >"$job_state_dir/runner.stdout" 2>"$runner_stderr_log"
-runner_status=$?
+  sh -c 'cd "$1" && exec "$2"' sh "$runner_workdir" @RUNNER@ >"$job_state_dir/runner.stdout" 2>"$runner_stderr_log" &
+runner_pid=$!
 set -e
 
-if [ "$runner_status" -eq 124 ]; then
+deadline=$(( $(date +%s) + timeout_seconds ))
+while kill -0 "$runner_pid" 2>/dev/null; do
+  if [ "$(date +%s)" -ge "$deadline" ]; then
+    timed_out=1
+    break
+  fi
+  sleep 1
+done
+
+if [ "$timed_out" -eq 1 ]; then
+  kill -TERM -- "-$runner_pid" 2>/dev/null || true
+  for _ in $(seq 1 50); do
+    if ! kill -0 "$runner_pid" 2>/dev/null; then
+      break
+    fi
+    sleep 0.1
+  done
+  if kill -0 "$runner_pid" 2>/dev/null; then
+    kill -KILL -- "-$runner_pid" 2>/dev/null || true
+  fi
+  wait "$runner_pid" 2>/dev/null || true
   persist_failure "job exceeded runtime limit of ${timeout_seconds}s" 124
   exit 124
 fi
+
+set +e
+wait "$runner_pid"
+runner_status=$?
+set -e
 
 if [ -f "$stdout_path" ]; then
   cat "$stdout_path"

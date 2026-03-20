@@ -27,8 +27,14 @@ let
     "@CHOWN@" = "${pkgs.coreutils}/bin/chown";
     "@DEV_HOME@" = devHome;
     "@DEV_USER@" = cfg.devUser;
+    "@GROUPMOD@" = "${pkgs.shadow}/bin/groupmod";
     "@HOST_META_MOUNT@" = cfg.hostMetaMount;
+    "@ID@" = "${pkgs.coreutils}/bin/id";
+    "@RUNUSER@" = "${pkgs.util-linux}/bin/runuser";
     "@START_DIR_FILE@" = cfg.startDirFile;
+    "@SUDO@" = "${pkgs.sudo}/bin/sudo";
+    "@SYSTEMCTL@" = "${pkgs.systemd}/bin/systemctl";
+    "@USERMOD@" = "${pkgs.shadow}/bin/usermod";
     "@WORKSPACE_MOUNT@" = cfg.workspaceMount;
   };
 
@@ -37,6 +43,8 @@ let
       ${renderTemplate scriptVars ./host/runtime-extra-args.sh}
       ${cfg.runtimeExtraArgs}
     '';
+  adoptHostIdentityScript = pkgs.writeShellScript "adopt-host-identity"
+    (renderTemplate scriptVars ../local/guest/adopt-host-identity.sh);
   prepareCloudSessionScript = pkgs.writeShellScript "prepare-cloud-session"
     (renderTemplate scriptVars ./guest/prepare-agent-session.sh);
   runAgentJobScript = pkgs.writeShellScript "run-agent-job"
@@ -54,7 +62,7 @@ in {
       description = "Prepare the cloud workspace and agent session paths";
       wantedBy = [ "multi-user.target" ];
       before = [ "firebreak-agent-job.service" ];
-      after = [ "local-fs.target" ];
+      after = [ "local-fs.target" "adopt-host-identity.service" ];
 
       path = with pkgs; [
         coreutils
@@ -70,18 +78,38 @@ in {
       };
     };
 
+    systemd.services.adopt-host-identity = {
+      description = "Align guest development user with the host user identity";
+      wantedBy = [ "multi-user.target" ];
+      before = [ "prepare-cloud-session.service" "firebreak-agent-job.service" ]
+        ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
+      after = [ "local-fs.target" ];
+
+      path = with pkgs; [
+        coreutils
+        shadow
+      ];
+
+      serviceConfig = {
+        ExecStart = adoptHostIdentityScript;
+        Type = "oneshot";
+        RemainAfterExit = true;
+        StandardOutput = "journal+console";
+        StandardError = "journal+console";
+      };
+    };
+
     systemd.services."serial-getty@ttyS0".enable = false;
 
     systemd.services.firebreak-agent-job = {
       description = "Run a non-interactive cloud agent job";
       wantedBy = [ "multi-user.target" ];
-      after = [ "prepare-cloud-session.service" ]
+      after = [ "adopt-host-identity.service" "prepare-cloud-session.service" ]
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
-      requires = [ "prepare-cloud-session.service" ]
+      requires = [ "adopt-host-identity.service" "prepare-cloud-session.service" ]
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
 
       serviceConfig = {
-        User = cfg.devUser;
         WorkingDirectory = cfg.workspaceMount;
         Type = "simple";
         ExecStart = runAgentJobScript;

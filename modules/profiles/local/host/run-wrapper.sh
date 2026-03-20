@@ -7,6 +7,7 @@ agent_config_mode=${AGENT_CONFIG:-${CODEX_CONFIG:-vm}}
 agent_session_mode=${AGENT_VM_ENTRYPOINT:-@DEFAULT_AGENT_SESSION_MODE@}
 default_agent_command=@DEFAULT_AGENT_COMMAND@
 agent_command_override=""
+shell_command_override=${AGENT_VM_COMMAND:-}
 agent_config_host_dir=""
 host_runtime_dir=$(mktemp -d)
 host_meta_dir=$host_runtime_dir/meta
@@ -68,6 +69,11 @@ if [ "$agent_session_mode" = "agent" ] && [ "$#" -gt 0 ]; then
     agent_command_override="$agent_command_override $quoted_arg"
   done
   set --
+fi
+
+if [ -n "$shell_command_override" ]; then
+  agent_session_mode=agent-exec
+  agent_command_override=$shell_command_override
 fi
 
 case "$agent_config_mode" in

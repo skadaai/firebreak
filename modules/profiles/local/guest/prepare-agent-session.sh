@@ -92,6 +92,9 @@ case "$mode" in
     ;;
   workspace)
     resolved_dir=$start_dir/@AGENT_CONFIG_DIR_NAME@
+    if ! [ -d "$resolved_dir" ]; then
+      @RUNUSER@ -u @DEV_USER@ -- @MKDIR@ -p "$resolved_dir"
+    fi
     ;;
   vm)
     mkdir -p "$resolved_dir"

@@ -10,137 +10,114 @@ host_uid=$(id -u)
 host_gid=$(id -g)
 timeout_seconds=${FIREBREAK_SMOKE_TIMEOUT:-${CODEX_VM_SMOKE_TIMEOUT:-180}}
 host_config_dir=$(mktemp -d)
+smoke_probe_script=$(mktemp "$repo_root/.firebreak-smoke.XXXXXX.sh")
 
-trap 'rm -rf "$host_config_dir"' EXIT INT TERM
+cleanup() {
+  rm -rf "$host_config_dir"
+  rm -f "$smoke_probe_script"
+}
+trap cleanup EXIT INT TERM
 
 printf '%s\n' "host-smoke-marker" > "$host_config_dir/marker.txt"
 
+cat >"$smoke_probe_script" <<'EOF'
+#!/bin/sh
+set -eu
+
+printf '__SMOKE_PWD__%s\n' "$PWD"
+printf '__SMOKE_IDS__%s:%s\n' "$(id -u)" "$(id -g)"
+printf '__SMOKE_OWNER__%s\n' "$(stat -c '%u:%g' .)"
+printf '__SMOKE_CONFIG_DIR__%s\n' "${AGENT_CONFIG_DIR:-}"
+test -f flake.nix
+printf '__SMOKE_FLAKE__ok\n'
+test -d "$AGENT_CONFIG_DIR"
+test -w "$AGENT_CONFIG_DIR"
+printf '__SMOKE_CONFIG_OK__ok\n'
+if [ "$AGENT_CONFIG_DIR" = "/run/agent-config-host" ]; then
+  test -f "$AGENT_CONFIG_DIR/marker.txt"
+  printf '__SMOKE_HOST_CONFIG__ok\n'
+fi
+@AGENT_BIN@ --version | sed -n '1s/^/__SMOKE_AGENT__/p'
+EOF
+chmod 0755 "$smoke_probe_script"
+
 cd "$repo_root"
+
+require_line() {
+  output=$1
+  prefix=$2
+  description=$3
+
+  value=$(printf '%s\n' "$output" | sed -n "s/^${prefix}//p" | head -n 1)
+  if [ -z "$value" ]; then
+    printf '%s\n' "$output" >&2
+    echo "missing $description in smoke output" >&2
+    exit 1
+  fi
+  printf '%s\n' "$value"
+}
 
 run_scenario() {
   package_name=$1
   mode=$2
   expected_config_dir=$3
   scenario_label=$4
-  agent_cli_arg=${5-}
-  host_config_path=${6-}
-  host_marker_name=${7-}
+  host_config_path=${5-}
 
   printf '%s\n' "running: $scenario_label"
 
-  timeout --foreground "$timeout_seconds" expect - \
-    "$repo_root" \
-    "$host_uid" \
-    "$host_gid" \
-    "$package_name" \
-    "$mode" \
-    "$expected_config_dir" \
-    "$scenario_label" \
-    "$agent_cli_arg" \
-    "$host_config_path" \
-    "$host_marker_name" <<'EOF'
-proc fail {message} {
-  puts stderr $message
-  if {[info exists expect_out(buffer)] && $expect_out(buffer) ne ""} {
-    puts stderr "last output:"
-    puts stderr $expect_out(buffer)
-  }
-  catch {send -- "sudo poweroff\r"}
-  exit 1
-}
+  set +e
+  output=$(
+    AGENT_CONFIG=$mode \
+      AGENT_CONFIG_HOST_PATH="${host_config_path:-}" \
+      AGENT_VM_COMMAND="sh '$smoke_probe_script'" \
+      timeout --foreground "$timeout_seconds" \
+      nix --accept-flake-config --extra-experimental-features 'nix-command flakes' \
+      run ".#$package_name" 2>&1
+  )
+  status=$?
+  set -e
 
-proc expect_prompt {} {
-  expect {
-    -re {\[dev@[a-z0-9-]+:[^]]+\]\$ $} { return }
-    timeout { fail "timed out waiting for the Firebreak shell prompt" }
-    eof { fail "Firebreak exited before the smoke test completed" }
-  }
-}
+  if [ "$status" -ne 0 ]; then
+    printf '%s\n' "$output" >&2
+    echo "shell smoke scenario failed: $scenario_label" >&2
+    exit 1
+  fi
 
-proc run_and_capture {command pattern description} {
-  send -- "$command\r"
-  expect {
-    -re $pattern {
-      set value $expect_out(1,string)
-    }
-    timeout { fail "timed out while checking $description" }
-    eof { fail "Firebreak exited while checking $description" }
-  }
-  expect_prompt
-  return $value
-}
+  guest_pwd=$(require_line "$output" '__SMOKE_PWD__' 'guest working directory')
+  if [ "$guest_pwd" != "$repo_root" ]; then
+    printf '%s\n' "$output" >&2
+    echo "unexpected guest working directory: $guest_pwd" >&2
+    exit 1
+  fi
 
-proc run_and_assert {command pattern description} {
-  send -- "$command\r"
-  expect {
-    -re $pattern { }
-    timeout { fail "timed out while checking $description" }
-    eof { fail "Firebreak exited while checking $description" }
-  }
-  expect_prompt
-}
+  guest_ids=$(require_line "$output" '__SMOKE_IDS__' 'guest uid/gid')
+  if [ "$guest_ids" != "$host_uid:$host_gid" ]; then
+    printf '%s\n' "$output" >&2
+    echo "unexpected guest uid/gid: $guest_ids" >&2
+    exit 1
+  fi
 
-set repo_root [lindex $argv 0]
-set host_uid [lindex $argv 1]
-set host_gid [lindex $argv 2]
-set package_name [lindex $argv 3]
-set mode [lindex $argv 4]
-set expected_config_dir [lindex $argv 5]
-set scenario_label [lindex $argv 6]
-set agent_cli_arg [lindex $argv 7]
-set host_config_dir [lindex $argv 8]
-set host_marker_name [lindex $argv 9]
-set timeout 60
-match_max 100000
-log_user 0
+  workspace_owner=$(require_line "$output" '__SMOKE_OWNER__' 'workspace ownership')
+  if [ "$workspace_owner" != "$host_uid:$host_gid" ]; then
+    printf '%s\n' "$output" >&2
+    echo "unexpected workspace ownership: $workspace_owner" >&2
+    exit 1
+  fi
 
-set spawn_cmd [list env AGENT_CONFIG=$mode]
-if {$host_config_dir ne ""} {
-  lappend spawn_cmd AGENT_CONFIG_HOST_PATH=$host_config_dir
-}
-lappend spawn_cmd nix --accept-flake-config --extra-experimental-features {nix-command flakes} run .#$package_name
-if {$agent_cli_arg ne ""} {
-  lappend spawn_cmd -- $agent_cli_arg
-}
-spawn -noecho {*}$spawn_cmd
+  agent_config_dir=$(require_line "$output" '__SMOKE_CONFIG_DIR__' 'agent config directory')
+  if [ "$agent_config_dir" != "$expected_config_dir" ]; then
+    printf '%s\n' "$output" >&2
+    echo "unexpected agent config directory: $agent_config_dir" >&2
+    exit 1
+  fi
 
-expect_prompt
-
-set guest_pwd [run_and_capture {printf '__SMOKE_PWD__%s\n' "$PWD"} {__SMOKE_PWD__(.+)\r\n} "guest working directory"]
-if {$guest_pwd ne $repo_root} {
-  fail "unexpected guest working directory: $guest_pwd"
-}
-
-set guest_ids [run_and_capture {printf '__SMOKE_IDS__%s:%s\n' "$(id -u)" "$(id -g)"} {__SMOKE_IDS__([0-9]+:[0-9]+)\r\n} "guest uid/gid"]
-if {$guest_ids ne "$host_uid:$host_gid"} {
-  fail "unexpected guest uid/gid: $guest_ids"
-}
-
-set workspace_owner [run_and_capture {printf '__SMOKE_OWNER__%s\n' "$(stat -c '%u:%g' .)"} {__SMOKE_OWNER__([0-9]+:[0-9]+)\r\n} "workspace ownership"]
-if {$workspace_owner ne "$host_uid:$host_gid"} {
-  fail "unexpected workspace ownership: $workspace_owner"
-}
-
-set agent_config_dir [run_and_capture {printf '__SMOKE_CONFIG_DIR__%s\n' "$AGENT_CONFIG_DIR"} {__SMOKE_CONFIG_DIR__(.+)\r\n} "agent config directory"]
-if {$agent_config_dir ne $expected_config_dir} {
-  fail "unexpected agent config directory: $agent_config_dir"
-}
-
-run_and_assert {test -f flake.nix && echo __SMOKE_FLAKE__ok} {__SMOKE_FLAKE__ok\r\n} "workspace contents"
-if {$mode ne "workspace"} {
-  run_and_assert {test -d "$AGENT_CONFIG_DIR" && test -w "$AGENT_CONFIG_DIR" && echo __SMOKE_CONFIG_DIR__ok} {__SMOKE_CONFIG_DIR__ok\r\n} "agent config directory usability"
-}
-if {$mode eq "host"} {
-  run_and_assert "test -f \"$AGENT_CONFIG_DIR/$host_marker_name\" && echo __SMOKE_HOST_CONFIG__ok" {__SMOKE_HOST_CONFIG__ok\r\n} "host agent config mount"
-}
-run_and_assert {@AGENT_BIN@ --version | sed -n '1s/^/__SMOKE_AGENT__/p'} {__SMOKE_AGENT__.+\r\n} "@AGENT_DISPLAY_NAME@ CLI"
-
-send -- "sudo poweroff\r"
-expect {
-  eof { exit 0 }
-  timeout { fail "timed out waiting for Firebreak to power off" }
-}
-EOF
+  require_line "$output" '__SMOKE_FLAKE__' 'workspace contents' >/dev/null
+  require_line "$output" '__SMOKE_CONFIG_OK__' 'agent config usability' >/dev/null
+  if [ "$expected_config_dir" = "/run/agent-config-host" ]; then
+    require_line "$output" '__SMOKE_HOST_CONFIG__' 'host config marker' >/dev/null
+  fi
+  require_line "$output" '__SMOKE_AGENT__' '@AGENT_DISPLAY_NAME@ CLI' >/dev/null
 
   printf '%s\n' "ok: $scenario_label"
 }
@@ -183,6 +160,6 @@ run_agent_exec_scenario() {
 run_agent_exec_scenario workspace "default agent entry runs @AGENT_BIN@ --version as a one-shot command" "--version"
 run_scenario @AGENT_SHELL_PACKAGE@ workspace "$repo_root/@AGENT_CONFIG_DIR_NAME@" "shell entry uses workspace config"
 run_scenario @AGENT_SHELL_PACKAGE@ vm "/var/lib/dev/@AGENT_CONFIG_DIR_NAME@" "shell entry uses vm config"
-run_scenario @AGENT_SHELL_PACKAGE@ host "/run/agent-config-host" "shell entry uses host config" "" "$host_config_dir" "marker.txt"
+run_scenario @AGENT_SHELL_PACKAGE@ host "/run/agent-config-host" "shell entry uses host config" "$host_config_dir"
 
 printf '%s\n' "Firebreak smoke test passed"

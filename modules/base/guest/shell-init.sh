@@ -1,4 +1,6 @@
 if [ "$USER" = "@DEV_USER@" ]; then
+  export PS1='[\u@\h:\w]\$ '
+
   cdw() {
     target=@WORKSPACE_MOUNT@
     if [ -r @START_DIR_FILE@ ]; then

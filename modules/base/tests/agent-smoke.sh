@@ -64,6 +64,7 @@ run_scenario() {
   set +e
   output=$(
     AGENT_CONFIG=$mode \
+      FIREBREAK_INSTANCE_EPHEMERAL=1 \
       AGENT_CONFIG_HOST_PATH="${host_config_path:-}" \
       AGENT_VM_COMMAND="$smoke_probe_command" \
       timeout --foreground "$timeout_seconds" \
@@ -126,6 +127,7 @@ run_agent_exec_scenario() {
   set +e
   output=$(
     AGENT_CONFIG=$mode \
+      FIREBREAK_INSTANCE_EPHEMERAL=1 \
       timeout --foreground "$timeout_seconds" \
       nix --accept-flake-config --extra-experimental-features 'nix-command flakes' \
       run .#@AGENT_PACKAGE@ -- "$agent_cli_arg" 2>&1

@@ -12,6 +12,7 @@ agent_config_host_dir=""
 host_runtime_dir=$(mktemp -d)
 host_meta_dir=$host_runtime_dir/meta
 host_exec_output_dir=$host_runtime_dir/exec-output
+host_instance_dir=$host_runtime_dir/instance
 runner_stdout_log=$host_runtime_dir/runner.stdout
 runner_stderr_log=$host_runtime_dir/runner.stderr
 virtiofsd_hostcwd_log=$host_runtime_dir/virtiofsd-hostcwd.log
@@ -20,7 +21,11 @@ virtiofsd_agent_exec_log=$host_runtime_dir/virtiofsd-agent-exec.log
 hostcwd_socket=$host_runtime_dir/hostcwd.sock
 agent_config_socket=$host_runtime_dir/agent-config.sock
 agent_exec_output_socket=$host_runtime_dir/agent-exec-output.sock
-control_socket=@CONTROL_SOCKET@
+default_control_socket=@CONTROL_SOCKET@
+instance_state_dir=${FIREBREAK_INSTANCE_DIR:-}
+instance_ephemeral=${FIREBREAK_INSTANCE_EPHEMERAL:-0}
+runner_workdir=$host_cwd
+control_socket=$default_control_socket
 
 reject_whitespace_path() {
   path=$1
@@ -45,6 +50,24 @@ resolve_host_dir() {
 }
 
 reject_whitespace_path "$host_cwd" "current working directory"
+
+if [ -n "$instance_state_dir" ]; then
+  case "$instance_state_dir" in
+    /*) ;;
+    *)
+      echo "FIREBREAK_INSTANCE_DIR must be an absolute host path: $instance_state_dir" >&2
+      exit 1
+      ;;
+  esac
+  reject_whitespace_path "$instance_state_dir" "instance state directory"
+  mkdir -p "$instance_state_dir"
+  runner_workdir=$instance_state_dir
+  control_socket=$instance_state_dir/$default_control_socket
+elif [ "$instance_ephemeral" = "1" ]; then
+  mkdir -p "$host_instance_dir"
+  runner_workdir=$host_instance_dir
+  control_socket=$host_instance_dir/$default_control_socket
+fi
 
 case "$agent_session_mode" in
   agent|shell)
@@ -175,20 +198,26 @@ fi
 
 runner_status=0
 if [ "$agent_session_mode" = "agent-exec" ]; then
-  env \
-    MICROVM_HOST_META_DIR="$host_meta_dir" \
-    MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
-    MICROVM_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
-    MICROVM_AGENT_CONFIG_HOST_SOCKET="$agent_config_socket" \
-    MICROVM_AGENT_EXEC_OUTPUT_SOCKET="$agent_exec_output_socket" \
-    @RUNNER@ "$@" >"$runner_stdout_log" 2>"$runner_stderr_log" || runner_status=$?
+  (
+    cd "$runner_workdir"
+    env \
+      MICROVM_HOST_META_DIR="$host_meta_dir" \
+      MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
+      MICROVM_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
+      MICROVM_AGENT_CONFIG_HOST_SOCKET="$agent_config_socket" \
+      MICROVM_AGENT_EXEC_OUTPUT_SOCKET="$agent_exec_output_socket" \
+      @RUNNER@ "$@"
+  ) >"$runner_stdout_log" 2>"$runner_stderr_log" || runner_status=$?
 else
-  env \
-    MICROVM_HOST_META_DIR="$host_meta_dir" \
-    MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
-    MICROVM_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
-    MICROVM_AGENT_CONFIG_HOST_SOCKET="$agent_config_socket" \
-    @RUNNER@ "$@" || runner_status=$?
+  (
+    cd "$runner_workdir"
+    env \
+      MICROVM_HOST_META_DIR="$host_meta_dir" \
+      MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
+      MICROVM_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
+      MICROVM_AGENT_CONFIG_HOST_SOCKET="$agent_config_socket" \
+      @RUNNER@ "$@"
+  ) || runner_status=$?
 fi
 
 if [ "$agent_session_mode" = "agent-exec" ]; then

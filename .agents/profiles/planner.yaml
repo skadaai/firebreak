@@ -1,0 +1,13 @@
+name: "planner"
+kind: "role"
+selection: "exclusive"
+role_scope: "single-slice"
+description: "Plans the next bounded Firebreak slice from specs or maintenance tasks."
+when: "Use as the active role when one next slice can be named, but its validation set or write scope is not yet explicit."
+inherits:
+  - "base"
+requires_runtime_profile: true
+runtime_overlay_group: "runtime"
+skills:
+  - "firebreak-spec-driving"
+  - "firebreak-change-loop"

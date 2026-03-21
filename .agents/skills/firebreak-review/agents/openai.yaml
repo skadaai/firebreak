@@ -1,0 +1,6 @@
+interface:
+  display_name: "Firebreak Review"
+  short_description: "Review Firebreak changes for risk and evidence"
+  default_prompt: "Use $firebreak-review to review a Firebreak change for regressions and missing evidence."
+policy:
+  allow_implicit_invocation: false

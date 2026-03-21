@@ -1,0 +1,6 @@
+interface:
+  display_name: "Firebreak Change Loop"
+  short_description: "Run the bounded Firebreak implementation loop"
+  default_prompt: "Use $firebreak-change-loop to execute a bounded Firebreak change slice."
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,13 @@
+name: "orchestrator"
+kind: "role"
+selection: "exclusive"
+role_scope: "multi-slice"
+description: "Chooses the next Firebreak slice and coordinates its bounded execution."
+when: "Use as the active role only when more than one slice, role, or handoff must be coordinated."
+inherits:
+  - "base"
+requires_runtime_profile: true
+runtime_overlay_group: "runtime"
+skills:
+  - "firebreak-spec-driving"
+  - "firebreak-review"

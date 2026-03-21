@@ -1,0 +1,6 @@
+interface:
+  display_name: "Firebreak Validation"
+  short_description: "Run Firebreak validation and classify outcomes"
+  default_prompt: "Use $firebreak-validation to choose and run the right Firebreak validation suites."
+policy:
+  allow_implicit_invocation: false

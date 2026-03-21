@@ -1,6 +1,6 @@
 ---
 name: firebreak-change-loop
-description: Use when a Firebreak task is larger than a trivial one-line fix. This skill enforces the bounded loop: frame the slice, record the plan, validate, review, then commit or block.
+description: "Use when a Firebreak task is larger than a trivial one-line fix. This skill enforces the bounded loop: frame the slice, record the plan, validate, review, then commit or block."
 ---
 
 # Firebreak Change Loop

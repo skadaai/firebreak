@@ -1,6 +1,6 @@
 ---
 name: firebreak-runtime-profile
-description: Use when Firebreak behavior depends on local interactive VM flows versus cloud non-interactive job flows. Read only the reference for the selected runtime mode.
+description: "Use when Firebreak behavior depends on local interactive VM flows versus cloud non-interactive job flows."
 ---
 
 # Firebreak Runtime Profile

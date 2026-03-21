@@ -1,6 +1,6 @@
 ---
 name: firebreak-review
-description: Use when deciding whether a Firebreak change is safe to land. This skill reviews diffs and audit artifacts for regressions, scope escapes, missing evidence, and misleading success claims.
+description: "Use when deciding whether a Firebreak change is safe to land. This skill reviews diffs and audit artifacts for regressions, scope escapes, missing evidence, and misleading success claims."
 ---
 
 # Firebreak Review

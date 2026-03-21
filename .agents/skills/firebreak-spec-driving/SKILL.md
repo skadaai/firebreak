@@ -1,6 +1,6 @@
 ---
 name: firebreak-spec-driving
-description: Use when work starts from a Firebreak spec or an underspecified request. This skill turns the spec into the next thin execution slice with matching write scope and validation.
+description: "Use when work starts from a Firebreak spec or an underspecified request. This skill turns the spec into the next thin execution slice with matching write scope and validation."
 ---
 
 # Firebreak Spec Driving

@@ -1,6 +1,6 @@
 ---
 name: firebreak-boundaries
-description: Use when a Firebreak task touches files, shared state, or parallel work. This skill enforces write scope, shared-resource boundaries, runtime budgets, and session isolation.
+description: "Use when a Firebreak task touches files, shared state, or parallel work. This skill enforces write scope, shared-resource boundaries, runtime budgets, and session isolation."
 ---
 
 # Firebreak Boundaries

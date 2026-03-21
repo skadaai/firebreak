@@ -1,6 +1,6 @@
 ---
 name: firebreak-work-session
-description: Use when a Firebreak task will edit code, validate a slice, or review autonomous work. This skill keeps work inside an isolated Firebreak session and out of the primary checkout.
+description: "Use when a Firebreak task will edit code, validate a slice, or review autonomous work. This skill keeps work inside an isolated Firebreak session and out of the primary checkout."
 ---
 
 # Firebreak Work Session

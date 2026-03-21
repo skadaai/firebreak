@@ -1,6 +1,6 @@
 ---
 name: firebreak-validation
-description: Use when a Firebreak task needs evidence before completion, handoff, or commit. This skill selects named Firebreak validation suites and classifies outcomes as passed, failed, or blocked.
+description: "Use when a Firebreak task needs evidence before completion, handoff, or commit. This skill selects named Firebreak validation suites and classifies outcomes as passed, failed, or blocked."
 ---
 
 # Firebreak Validation

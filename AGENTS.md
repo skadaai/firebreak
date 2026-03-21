@@ -37,10 +37,14 @@ There is no separate application `src/` tree yet. Keep shared behavior in the ba
   Builds the underlying declared runner without launching the VM.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-codex-smoke`
   Runs the lightweight host-side smoke test against the interactive Codex VM.
+- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-autonomy-smoke`
+  Runs the bounded autonomous-change-loop smoke against isolated Firebreak sessions.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak`
-  Prints the reserved top-level Firebreak CLI stub. Future `doctor`, `init`, and `run` commands should live here.
+  Runs the top-level Firebreak CLI with validation, session, and autonomy subcommands.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' flake check`
   Runs flake evaluation checks. Use this before submitting changes.
+- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak -- autonomy run ...`
+  Runs the bounded autonomous loop against an existing isolated session, recording plan, policy, validation, review, and commit evidence.
 - GitHub Actions
   - `.github/workflows/ci.yml` runs hosted `flake check` on pushes and pull requests.
   - `.github/workflows/vm-smoke.yml` runs `firebreak-codex-smoke` on a self-hosted runner labeled `self-hosted`, `linux`, `x64`, and `kvm`.

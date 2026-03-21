@@ -1,6 +1,6 @@
 ---
-status: draft
-last_updated: 2026-03-20
+status: completed
+last_updated: 2026-03-21
 ---
 
 # 006 Bounded Autonomous Change Loop Plan
@@ -28,11 +28,10 @@ last_updated: 2026-03-20
 
 ## Current status
 
-Drafted.
-Implementation has not started.
+Implemented.
+The first bounded autonomous loop now records plan state, enforces pre-action policy, runs required validation suites, performs a review pass, and creates an auditable commit when requested.
 
 ## Open questions
 
-- whether the first audit record should be plain files, JSON, or both
-- how much retry policy should be centralized versus task-specific
-- whether commit creation should be built into the first loop or land in a second slice after plan/validate/review are stable
+- whether later revisions should capture richer semantic review findings beyond diff hygiene and validation coverage
+- whether multi-slice attempt histories should roll up into a higher-level operator timeline

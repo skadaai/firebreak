@@ -10,6 +10,7 @@ usage: firebreak-validate SUITE [--state-dir PATH]
 Named suites:
   local-smoke
   codex-smoke
+  codex-version
   claude-code-smoke
   cloud-smoke
 EOF
@@ -81,6 +82,9 @@ missing_capability=""
 case "$suite_name" in
   local-smoke|codex-smoke)
     suite_command="@CODEX_SMOKE_BIN@"
+    ;;
+  codex-version)
+    suite_command="@CODEX_VERSION_BIN@"
     ;;
   claude-code-smoke)
     suite_command="@CLAUDE_SMOKE_BIN@"

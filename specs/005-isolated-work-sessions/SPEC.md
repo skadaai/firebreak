@@ -1,6 +1,6 @@
 ---
-status: draft
-last_updated: 2026-03-20
+status: completed
+last_updated: 2026-03-21
 ---
 
 # 005 Isolated Work Sessions

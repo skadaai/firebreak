@@ -159,9 +159,24 @@
           ];
           text = renderTemplate {
             "@CODEX_SMOKE_BIN@" = "${self.packages.${system}.firebreak-codex-smoke}/bin/firebreak-codex-smoke";
+            "@CODEX_VERSION_BIN@" = "${self.packages.${system}.firebreak-codex-version-smoke}/bin/firebreak-codex-version-smoke";
             "@CLAUDE_SMOKE_BIN@" = "${self.packages.${system}.firebreak-claude-code-smoke}/bin/firebreak-claude-code-smoke";
             "@CLOUD_SMOKE_BIN@" = "${self.packages.${system}.firebreak-cloud-job-smoke}/bin/firebreak-cloud-job-smoke";
           } ./modules/base/host/firebreak-validate.sh;
+        };
+
+      mkAgentVersionSmokePackage = {
+        name,
+        agentPackage,
+        agentDisplayName,
+      }:
+        pkgs.writeShellApplication {
+          inherit name;
+          runtimeInputs = with pkgs; [ coreutils ];
+          text = renderTemplate {
+            "@AGENT_PACKAGE_BIN@" = "${self.packages.${system}.${agentPackage}}/bin/${agentPackage}";
+            "@AGENT_DISPLAY_NAME@" = agentDisplayName;
+          } ./modules/base/tests/agent-version-smoke.sh;
         };
 
       mkValidationSmokePackage = { name, validatePackage }:
@@ -176,12 +191,39 @@
           } ./modules/base/tests/validation-smoke.sh;
         };
 
-      mkFirebreakCliPackage = { name, validatePackage }:
+      mkSessionPackage = { name }:
+        pkgs.writeShellApplication {
+          inherit name;
+          runtimeInputs = with pkgs; [
+            bash
+            coreutils
+            git
+            gnused
+          ];
+          text = builtins.readFile ./modules/base/host/firebreak-session.sh;
+        };
+
+      mkSessionSmokePackage = { name }:
+        pkgs.writeShellApplication {
+          inherit name;
+          runtimeInputs = with pkgs; [
+            bash
+            coreutils
+            findutils
+            git
+            gnugrep
+            gnused
+          ];
+          text = builtins.readFile ./modules/base/tests/session-smoke.sh;
+        };
+
+      mkFirebreakCliPackage = { name, validatePackage, sessionPackage }:
         pkgs.writeShellApplication {
           inherit name;
           runtimeInputs = with pkgs; [ coreutils ];
           text = renderTemplate {
             "@VALIDATE_BIN@" = "${self.packages.${system}.${validatePackage}}/bin/${validatePackage}";
+            "@SESSION_BIN@" = "${self.packages.${system}.${sessionPackage}}/bin/${sessionPackage}";
           } ./modules/base/host/firebreak.sh;
         };
     in {
@@ -272,6 +314,11 @@
           agentDisplayName = "Codex";
           agentConfigDirName = ".codex";
         };
+        firebreak-codex-version-smoke = mkAgentVersionSmokePackage {
+          name = "firebreak-codex-version-smoke";
+          agentPackage = "firebreak-codex";
+          agentDisplayName = "Codex";
+        };
         firebreak-claude-code = mkAgentPackage {
           name = "firebreak-claude-code";
           runnerName = "firebreak-claude-code";
@@ -322,9 +369,16 @@
           name = "firebreak-validation-smoke";
           validatePackage = "firebreak-validate";
         };
+        firebreak-session = mkSessionPackage {
+          name = "firebreak-session";
+        };
+        firebreak-session-smoke = mkSessionSmokePackage {
+          name = "firebreak-session-smoke";
+        };
         firebreak = mkFirebreakCliPackage {
           name = "firebreak";
           validatePackage = "firebreak-validate";
+          sessionPackage = "firebreak-session";
         };
       };
 
@@ -335,6 +389,7 @@
         firebreak-codex-cloud-runner = self.packages.${system}.firebreak-codex-cloud-runner;
         firebreak-codex-cloud-system = self.nixosConfigurations.firebreak-codex-cloud.config.system.build.toplevel;
         firebreak-cloud-job-smoke = self.packages.${system}.firebreak-cloud-job-smoke;
+        firebreak-session-smoke = self.packages.${system}.firebreak-session-smoke;
         firebreak-validation-smoke = self.packages.${system}.firebreak-validation-smoke;
         firebreak-claude-code-runner = self.packages.${system}.firebreak-claude-code-runner;
         firebreak-claude-code-system = self.nixosConfigurations.firebreak-claude-code.config.system.build.toplevel;

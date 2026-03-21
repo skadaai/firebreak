@@ -1,6 +1,6 @@
 ---
-status: draft
-last_updated: 2026-03-20
+status: completed
+last_updated: 2026-03-21
 ---
 
 # 005 Isolated Work Sessions Plan
@@ -28,11 +28,10 @@ last_updated: 2026-03-20
 
 ## Current status
 
-Drafted.
-Implementation has not started.
+Implemented.
+The Firebreak session harness, session smoke coverage, and isolated VM-state wiring are in place.
 
 ## Open questions
 
-- whether the first session contract should support explicit parent-child sub-agent relationships
-- how much cleanup policy should be configurable in the first version
-- whether session metadata should be plain files, JSON, or both
+- whether a later revision should add explicit parent-child sub-agent relationships
+- whether cleanup retention windows should become configurable beyond explicit close/disposition handling

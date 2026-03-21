@@ -217,13 +217,41 @@
           text = builtins.readFile ./modules/base/tests/session-smoke.sh;
         };
 
-      mkFirebreakCliPackage = { name, validatePackage, sessionPackage }:
+      mkAutonomyPackage = { name, sessionPackage }:
+        pkgs.writeShellApplication {
+          inherit name;
+          runtimeInputs = with pkgs; [
+            coreutils
+            git
+            gnugrep
+            gnused
+          ];
+          text = renderTemplate {
+            "@SESSION_BIN@" = "${self.packages.${system}.${sessionPackage}}/bin/${sessionPackage}";
+          } ./modules/base/host/firebreak-autonomy.sh;
+        };
+
+      mkAutonomySmokePackage = { name }:
+        pkgs.writeShellApplication {
+          inherit name;
+          runtimeInputs = with pkgs; [
+            bash
+            coreutils
+            git
+            gnugrep
+            gnused
+          ];
+          text = builtins.readFile ./modules/base/tests/autonomy-smoke.sh;
+        };
+
+      mkFirebreakCliPackage = { name, validatePackage, sessionPackage, autonomyPackage }:
         pkgs.writeShellApplication {
           inherit name;
           runtimeInputs = with pkgs; [ coreutils ];
           text = renderTemplate {
             "@VALIDATE_BIN@" = "${self.packages.${system}.${validatePackage}}/bin/${validatePackage}";
             "@SESSION_BIN@" = "${self.packages.${system}.${sessionPackage}}/bin/${sessionPackage}";
+            "@AUTONOMY_BIN@" = "${self.packages.${system}.${autonomyPackage}}/bin/${autonomyPackage}";
           } ./modules/base/host/firebreak.sh;
         };
     in {
@@ -375,10 +403,18 @@
         firebreak-session-smoke = mkSessionSmokePackage {
           name = "firebreak-session-smoke";
         };
+        firebreak-autonomy = mkAutonomyPackage {
+          name = "firebreak-autonomy";
+          sessionPackage = "firebreak-session";
+        };
+        firebreak-autonomy-smoke = mkAutonomySmokePackage {
+          name = "firebreak-autonomy-smoke";
+        };
         firebreak = mkFirebreakCliPackage {
           name = "firebreak";
           validatePackage = "firebreak-validate";
           sessionPackage = "firebreak-session";
+          autonomyPackage = "firebreak-autonomy";
         };
       };
 
@@ -389,6 +425,7 @@
         firebreak-codex-cloud-runner = self.packages.${system}.firebreak-codex-cloud-runner;
         firebreak-codex-cloud-system = self.nixosConfigurations.firebreak-codex-cloud.config.system.build.toplevel;
         firebreak-cloud-job-smoke = self.packages.${system}.firebreak-cloud-job-smoke;
+        firebreak-autonomy-smoke = self.packages.${system}.firebreak-autonomy-smoke;
         firebreak-session-smoke = self.packages.${system}.firebreak-session-smoke;
         firebreak-validation-smoke = self.packages.${system}.firebreak-validation-smoke;
         firebreak-claude-code-runner = self.packages.${system}.firebreak-claude-code-runner;

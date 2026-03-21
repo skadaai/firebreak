@@ -9,6 +9,7 @@ Skada Firebreak
 usage:
   firebreak validate SUITE [--state-dir PATH]
   firebreak session <subcommand> ...
+  firebreak autonomy <subcommand> ...
 
 Named validation suites:
   local-smoke
@@ -22,6 +23,9 @@ Session subcommands:
   show
   validate
   close
+
+Autonomy subcommands:
+  run
 EOF
 }
 
@@ -33,6 +37,10 @@ case "$command" in
   session)
     shift
     exec @SESSION_BIN@ "$@"
+    ;;
+  autonomy)
+    shift
+    exec @AUTONOMY_BIN@ "$@"
     ;;
   ""|--help|-h|help)
     usage

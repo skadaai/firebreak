@@ -1,8 +1,8 @@
 set -eu
 
-repo_root=$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null || true)
-if [ -z "$repo_root" ] || [ ! -f "$repo_root/flake.nix" ]; then
-  echo "run this project-config smoke test from inside the Firebreak repository" >&2
+repo_root=@REPO_ROOT@
+if ! [ -f "$repo_root/flake.nix" ]; then
+  echo "project-config smoke could not resolve the Firebreak source root" >&2
   exit 1
 fi
 
@@ -16,6 +16,7 @@ mkdir -p "$project_dir"
 
 unset AGENT_CONFIG
 unset AGENT_CONFIG_HOST_PATH
+unset FIREBREAK_PROJECT_CONFIG_FILE
 unset FIREBREAK_VM_MODE
 unset CODEX_CONFIG
 unset CODEX_CONFIG_HOST_PATH
@@ -80,6 +81,12 @@ require_pattern "$doctor_output" "workspace ($project_dir/.codex)" "Codex-specif
 require_pattern "$doctor_output" "claude_config" "doctor claude summary"
 require_pattern "$doctor_output" "vm (/var/lib/dev/.claude)" "environment overrides project file for generic agent mode"
 require_pattern "$doctor_output" "Remove unsupported keys from .firebreak.env" "doctor unsupported-key guidance"
+require_pattern "$doctor_output" "cwd_whitespace" "doctor cwd compatibility reporting"
+
+doctor_verbose_output=$(AGENT_CONFIG=vm firebreak_cmd doctor --verbose)
+require_pattern "$doctor_verbose_output" "Details" "doctor verbose details header"
+require_pattern "$doctor_verbose_output" "project_root_source" "doctor verbose project root source"
+require_pattern "$doctor_verbose_output" "git_common_dir" "doctor verbose git common dir"
 
 doctor_json=$(AGENT_CONFIG=vm firebreak_cmd doctor --json)
 require_pattern "$doctor_json" '"project_config_source": "project-default"' "doctor json project config source"
@@ -90,5 +97,10 @@ require_pattern "$doctor_json" "\"path\": \"$project_dir/.codex\"" "doctor json 
 require_pattern "$doctor_json" '"claude-code": {' "doctor json Claude section"
 require_pattern "$doctor_json" '"mode": "vm"' "doctor json Claude mode"
 require_pattern "$doctor_json" '"vm_mode": "run"' "doctor json default public VM mode"
+
+doctor_verbose_json=$(AGENT_CONFIG=vm firebreak_cmd doctor --verbose --json)
+require_pattern "$doctor_verbose_json" '"project_root_source": "cwd"' "doctor verbose json project root source"
+require_pattern "$doctor_verbose_json" '"git_common_dir": "unknown"' "doctor verbose json git common dir"
+require_pattern "$doctor_verbose_json" '"cwd_whitespace": false' "doctor verbose json cwd compatibility"
 
 printf '%s\n' "Firebreak project-config and doctor smoke test passed"

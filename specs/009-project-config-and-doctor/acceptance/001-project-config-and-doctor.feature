@@ -35,8 +35,21 @@ Feature: Firebreak project config and diagnostics
     And Firebreak reports the local mode selector state
     And Firebreak reports the resolved agent config state
     And Firebreak reports whether KVM is readable and writable
+    And Firebreak reports whether current working directory is compatible
 
   Scenario: json doctor output is machine-readable
     Given a project with Firebreak available
     When the operator runs "firebreak doctor --json"
     Then Firebreak emits machine-readable diagnostics
+    And Firebreak includes cwd-compatibility diagnostics in the JSON output
+
+  Scenario: verbose doctor output includes expanded diagnostics
+    Given a project with Firebreak available
+    When the operator runs "firebreak doctor --verbose"
+    Then Firebreak emits the expanded human-readable diagnostics fields
+
+  Scenario: verbose json doctor output keeps machine-readable fields
+    Given a project with Firebreak available
+    When the operator runs "firebreak doctor --verbose --json"
+    Then Firebreak emits machine-readable diagnostics
+    And Firebreak includes the same verbose fields in JSON form

@@ -20,6 +20,12 @@ vms_json=$(@FIREBREAK_CLI_BIN@ vms --json)
 require_pattern "$vms_json" '"name": "codex"' "codex VM JSON listing"
 require_pattern "$vms_json" '"name": "claude-code"' "claude-code VM JSON listing"
 
+vms_help_output=$(@FIREBREAK_CLI_BIN@ vms --help 2>&1)
+require_pattern "$vms_help_output" "usage:" "vms help usage text"
+
+run_help_output=$(@FIREBREAK_CLI_BIN@ run --help 2>&1)
+require_pattern "$run_help_output" "usage:" "run help usage text"
+
 run_codex_output=$(@FIREBREAK_CLI_BIN@ run codex -- --version)
 require_pattern "$run_codex_output" '__VM__codex' "codex run delegation"
 require_pattern "$run_codex_output" '__MODE__unset' "default run mode passthrough"

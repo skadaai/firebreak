@@ -168,6 +168,11 @@ function runFirebreak() {
     fail(`unable to launch Firebreak through Nix: ${result.error.message}`);
   }
 
+  if (result.status === null && result.signal) {
+    process.kill(process.pid, result.signal);
+    return;
+  }
+
   process.exit(result.status === null ? 1 : result.status);
 }
 

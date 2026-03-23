@@ -11,7 +11,7 @@ vms_usage() {
 usage:
   firebreak vms [--json]
 EOF
-  exit 1
+  exit "${1:-0}"
 }
 
 run_usage() {
@@ -19,7 +19,7 @@ run_usage() {
 usage:
   firebreak run <vm> [--shell] [-- <vm args...>]
 EOF
-  exit 1
+  exit "${1:-0}"
 }
 
 firebreak_vms_command() {
@@ -32,10 +32,10 @@ firebreak_vms_command() {
         shift
         ;;
       ""|--help|-h|help)
-        vms_usage
+        vms_usage 0
         ;;
       *)
-        vms_usage
+        vms_usage 1
         ;;
     esac
   done
@@ -71,7 +71,13 @@ EOF
 
 firebreak_run_command() {
   vm_name=${1:-}
-  [ -n "$vm_name" ] || run_usage
+  [ -n "$vm_name" ] || run_usage 1
+
+  case "$vm_name" in
+    --help|-h|help)
+      run_usage 0
+      ;;
+  esac
   shift
 
   requested_vm_mode=${FIREBREAK_VM_MODE:-}
@@ -87,11 +93,11 @@ firebreak_run_command() {
         break
         ;;
       --help|-h|help)
-        run_usage
+        run_usage 0
         ;;
       -*)
         echo "unknown firebreak run option: $1" >&2
-        run_usage
+        run_usage 1
         ;;
       *)
         break

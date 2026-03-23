@@ -42,6 +42,49 @@ $ignored_key
   esac
 }
 
+firebreak_record_original_env_key() {
+  original_key=$1
+  case "
+$FIREBREAK_ORIGINAL_ENV_KEYS
+" in
+    *"
+$original_key
+"*)
+      ;;
+    *)
+      FIREBREAK_ORIGINAL_ENV_KEYS="${FIREBREAK_ORIGINAL_ENV_KEYS}${FIREBREAK_ORIGINAL_ENV_KEYS:+
+}$original_key"
+      ;;
+  esac
+}
+
+firebreak_snapshot_original_env() {
+  FIREBREAK_ORIGINAL_ENV_KEYS=""
+  while IFS= read -r original_entry; do
+    original_key=${original_entry%%=*}
+    [ -n "$original_key" ] || continue
+    firebreak_record_original_env_key "$original_key"
+  done <<EOF
+$(env)
+EOF
+}
+
+firebreak_original_env_has_key() {
+  lookup_key=$1
+  case "
+$FIREBREAK_ORIGINAL_ENV_KEYS
+" in
+    *"
+$lookup_key
+"*)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 firebreak_resolve_project_root() {
   if [ -n "${FIREBREAK_RESOLVED_PROJECT_ROOT:-}" ]; then
     return 0
@@ -85,6 +128,7 @@ firebreak_resolve_project_config_file() {
 firebreak_load_project_config() {
   firebreak_reset_project_config_state
   firebreak_resolve_project_config_file
+  firebreak_snapshot_original_env
 
   if ! [ -f "$FIREBREAK_RESOLVED_PROJECT_CONFIG_FILE" ]; then
     return 0
@@ -126,10 +170,12 @@ firebreak_load_project_config() {
       value=${value%\'}
     fi
 
-    if [ -z "${!key+x}" ]; then
-      printf -v "$key" '%s' "$value"
-      # shellcheck disable=SC2163
-      export "$key"
+    if firebreak_original_env_has_key "$key"; then
+      continue
     fi
+
+    printf -v "$key" '%s' "$value"
+    # shellcheck disable=SC2163
+    export "$key"
   done <"$FIREBREAK_RESOLVED_PROJECT_CONFIG_FILE"
 }

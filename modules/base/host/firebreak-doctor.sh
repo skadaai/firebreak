@@ -18,10 +18,12 @@ firebreak_doctor_resolve_host_dir() {
 }
 
 firebreak_doctor_json_escape() {
-  value=$1
-  value=$(printf '%s' "$value" | sed 's/\\/\\\\/g; s/"/\\"/g')
-  value=$(printf '%s' "$value" | tr '\n' ' ')
-  printf '%s' "$value"
+  FIREBREAK_DOCTOR_JSON_VALUE=$1 python3 - <<'PY'
+import json
+import os
+
+print(json.dumps(os.environ["FIREBREAK_DOCTOR_JSON_VALUE"])[1:-1], end="")
+PY
 }
 
 firebreak_doctor_json_array() {

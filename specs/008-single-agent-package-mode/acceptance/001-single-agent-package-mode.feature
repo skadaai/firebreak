@@ -8,7 +8,7 @@ Feature: Single public local agent package with semantic mode override
 
   Scenario: The same public package reaches the maintenance shell
     Given the Firebreak local agent package "firebreak-codex"
-    When the user launches that package with "AGENT_VM_ENTRYPOINT=shell"
+    When the user launches that package with "FIREBREAK_AGENT_MODE=shell"
     Then the VM should start the maintenance shell
 
   Scenario: Shell behavior is validated without a separate shell package

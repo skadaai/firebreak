@@ -12,7 +12,8 @@ Implemented and validated.
 ## What has landed
 
 - public local agent packages now ship one package per agent instead of separate `*-shell` siblings
-- the local wrapper defaults to `agent` mode and still accepts `AGENT_VM_ENTRYPOINT=shell`
+- the local wrapper defaults to `agent` mode and now documents `FIREBREAK_AGENT_MODE=shell` as the public shell override
+- the local wrapper still accepts `AGENT_VM_ENTRYPOINT` as a compatibility alias
 - the local smoke harness validates shell behavior through the same public package
 - docs and architecture guidance now describe the single-package local-launch model
 

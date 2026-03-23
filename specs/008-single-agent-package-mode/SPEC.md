@@ -39,20 +39,21 @@ That makes the public surface larger than the product behavior actually is, and 
 
 This changeset is behavioral and operational.
 
-It narrows the public local-launch surface so that each agent ships one public package. That package continues to launch the agent by default, while shell mode remains available as an internal/debug override through the existing semantic mode control.
+It narrows the public local-launch surface so that each agent ships one public package. That package continues to launch the agent by default, while shell mode remains available through the semantic `FIREBREAK_AGENT_MODE` control.
 
 The intended landing shape is:
 
 - `firebreak-codex` launches Codex by default
 - `firebreak-claude-code` launches Claude Code by default
-- shell mode is still available through `AGENT_VM_ENTRYPOINT=shell`
+- shell mode is still available through `FIREBREAK_AGENT_MODE=shell`
 - Firebreak no longer exports separate public `*-shell` packages
 
 ## Requirements
 
 - The system shall export one public local-launch package per shipped agent VM.
 - When a user launches a public local agent package without overrides, the system shall start the default agent mode.
-- When a user sets `AGENT_VM_ENTRYPOINT=shell` for a public local agent package, the system shall start the maintenance shell instead of the default agent mode.
+- When a user sets `FIREBREAK_AGENT_MODE=shell` for a public local agent package, the system shall start the maintenance shell instead of the default agent mode.
+- If the legacy `AGENT_VM_ENTRYPOINT` variable is still set, then the system shall continue to accept it as a compatibility alias for this changeset.
 - The system shall treat `agent` and `shell` as the public semantic launch modes for this changeset.
 - The system shall not require a separate public `*-shell` package to access maintenance shell mode.
 - The system shall keep smoke validation for both the default agent mode and the shell override path.
@@ -62,7 +63,7 @@ The intended landing shape is:
 
 - Firebreak exports `firebreak-codex` and `firebreak-claude-code` without separate public `*-shell` siblings.
 - Launching a public local package still starts the agent by default.
-- Setting `AGENT_VM_ENTRYPOINT=shell` against the same public local package reaches the maintenance shell.
+- Setting `FIREBREAK_AGENT_MODE=shell` against the same public local package reaches the maintenance shell.
 - Local smoke tests validate shell behavior through the same public package rather than a separate shell package.
 - Public docs and architecture guidance describe one public package per agent plus the shell override.
 

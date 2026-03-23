@@ -25,12 +25,12 @@ There is no separate application `src/` tree yet. Keep shared behavior in the ba
 
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-codex`
   Runs the Codex MicroVM wrapper with dynamic host `PWD` mounting and launches `codex` by default.
-- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-codex-shell`
-  Runs the same MicroVM, but enters a maintenance shell instead of starting `codex`.
+- `AGENT_VM_ENTRYPOINT=shell nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-codex`
+  Runs the same Codex MicroVM, but enters the maintenance shell instead of starting `codex`.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-claude-code`
   Runs the Claude Code MicroVM wrapper with dynamic host `PWD` mounting and launches `claude` by default.
-- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-claude-code-shell`
-  Runs the Claude Code VM, but enters a maintenance shell instead of starting `claude`.
+- `AGENT_VM_ENTRYPOINT=shell nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-claude-code`
+  Runs the Claude Code VM, but enters the maintenance shell instead of starting `claude`.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-test-smoke-claude-code`
   Runs the lightweight host-side smoke test against the Claude Code VM.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' build .#firebreak-internal-runner-codex`
@@ -69,13 +69,13 @@ Use the smoke test for the core runtime path, then boot the VM manually for beha
 Examples:
 
 - smoke path: `nix run .#firebreak-test-smoke-codex`
-- shell entry path: `nix run .#firebreak-codex-shell`
+- shell entry path: `AGENT_VM_ENTRYPOINT=shell nix run .#firebreak-codex`
 - Claude Code entry path: `nix run .#firebreak-claude-code`
-- Claude Code shell path: `nix run .#firebreak-claude-code-shell`
+- Claude Code shell path: `AGENT_VM_ENTRYPOINT=shell nix run .#firebreak-claude-code`
 - Claude Code smoke path: `nix run .#firebreak-test-smoke-claude-code`
 - tool bootstrap: `codex --version`
 - dynamic path mount: run from a chosen host directory and confirm the same path exists in the guest
-- boot flow: confirm `nix run .#firebreak-codex` enters `codex`, and `nix run .#firebreak-codex-shell` reaches the `dev` shell
+- boot flow: confirm `nix run .#firebreak-codex` enters `codex`, and `AGENT_VM_ENTRYPOINT=shell nix run .#firebreak-codex` reaches the `dev` shell
 - CI runner note: the VM smoke workflow is gated by the repository variable `ENABLE_SELF_HOSTED_VM_SMOKE=1` so repositories without a KVM runner do not queue indefinitely.
 
 ## Commit & Pull Request Guidelines

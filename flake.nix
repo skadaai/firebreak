@@ -77,7 +77,6 @@
         defaultAgentCommand,
         agentConfigDirName,
         defaultAgentConfigHostDir,
-        defaultAgentSessionMode,
       }:
         pkgs.writeShellApplication {
           inherit name;
@@ -85,7 +84,6 @@
           text = renderTemplate {
             "@CONTROL_SOCKET@" = "${controlSocketName}.socket";
             "@DEFAULT_AGENT_COMMAND@" = defaultAgentCommand;
-            "@DEFAULT_AGENT_SESSION_MODE@" = defaultAgentSessionMode;
             "@RUNNER@" = "${self.packages.${system}.${runnerPackage}}/bin/microvm-run";
             "@AGENT_CONFIG_DIR_NAME@" = agentConfigDirName;
             "@DEFAULT_AGENT_CONFIG_HOST_DIR@" = defaultAgentConfigHostDir;
@@ -95,7 +93,6 @@
       mkSmokePackage = {
         name,
         agentPackage,
-        shellPackage,
         agentBin,
         agentDisplayName,
         agentConfigDirName,
@@ -114,7 +111,6 @@
             "@AGENT_CONFIG_DIR_NAME@" = agentConfigDirName;
             "@AGENT_DISPLAY_NAME@" = agentDisplayName;
             "@AGENT_PACKAGE@" = agentPackage;
-            "@AGENT_SHELL_PACKAGE@" = shellPackage;
           } ./modules/base/tests/agent-smoke.sh;
         };
 
@@ -326,21 +322,10 @@
           defaultAgentCommand = "codex";
           agentConfigDirName = ".codex";
           defaultAgentConfigHostDir = "$HOME/.codex";
-          defaultAgentSessionMode = "agent";
-        };
-        firebreak-codex-shell = mkAgentPackage {
-          name = "firebreak-codex-shell";
-          runnerPackage = "firebreak-internal-runner-codex";
-          controlSocketName = "firebreak-codex";
-          defaultAgentCommand = "codex";
-          agentConfigDirName = ".codex";
-          defaultAgentConfigHostDir = "$HOME/.codex";
-          defaultAgentSessionMode = "shell";
         };
         firebreak-test-smoke-codex = mkSmokePackage {
           name = "firebreak-test-smoke-codex";
           agentPackage = "firebreak-codex";
-          shellPackage = "firebreak-codex-shell";
           agentBin = "codex";
           agentDisplayName = "Codex";
           agentConfigDirName = ".codex";
@@ -357,21 +342,10 @@
           defaultAgentCommand = "claude";
           agentConfigDirName = ".claude";
           defaultAgentConfigHostDir = "$HOME/.claude";
-          defaultAgentSessionMode = "agent";
-        };
-        firebreak-claude-code-shell = mkAgentPackage {
-          name = "firebreak-claude-code-shell";
-          runnerPackage = "firebreak-internal-runner-claude-code";
-          controlSocketName = "firebreak-claude-code";
-          defaultAgentCommand = "claude";
-          agentConfigDirName = ".claude";
-          defaultAgentConfigHostDir = "$HOME/.claude";
-          defaultAgentSessionMode = "shell";
         };
         firebreak-test-smoke-claude-code = mkSmokePackage {
           name = "firebreak-test-smoke-claude-code";
           agentPackage = "firebreak-claude-code";
-          shellPackage = "firebreak-claude-code-shell";
           agentBin = "claude";
           agentDisplayName = "Claude Code";
           agentConfigDirName = ".claude";

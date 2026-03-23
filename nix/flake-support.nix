@@ -114,6 +114,20 @@ let
       text = builtins.readFile ../modules/base/tests/test-smoke-project-config-and-doctor.sh;
     };
 
+  mkNpxLauncherSmokePackage = { name }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        bash
+        coreutils
+        gnugrep
+        nodejs_20
+      ];
+      text = renderTemplate {
+        "@REPO_ROOT@" = builtins.toString ../.;
+      } ../modules/base/tests/test-smoke-npx-launcher.sh;
+    };
+
   mkCloudJobPackage = {
     name,
     runnerName,
@@ -269,6 +283,7 @@ in {
     mkFirebreakCliPackage
     mkLoopPackage
     mkLoopSmokePackage
+    mkNpxLauncherSmokePackage
     mkProjectConfigSmokePackage
     mkRunnerPackage
     mkSmokePackage

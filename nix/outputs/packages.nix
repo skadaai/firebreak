@@ -8,6 +8,7 @@
   mkFirebreakCliPackage,
   mkLoopPackage,
   mkLoopSmokePackage,
+  mkNpxLauncherSmokePackage,
   mkProjectConfigSmokePackage,
   mkRunnerPackage,
   mkSmokePackage,
@@ -92,6 +93,10 @@
 
   firebreak-test-smoke-project-config-and-doctor = mkProjectConfigSmokePackage {
     name = "firebreak-test-smoke-project-config-and-doctor";
+  };
+
+  firebreak-test-smoke-npx-launcher = mkNpxLauncherSmokePackage {
+    name = "firebreak-test-smoke-npx-launcher";
   };
 
   firebreak-internal-validate = mkValidationPackage {

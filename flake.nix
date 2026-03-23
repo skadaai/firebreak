@@ -37,6 +37,7 @@
           mkFirebreakCliPackage
           mkLoopPackage
           mkLoopSmokePackage
+          mkNpxLauncherSmokePackage
           mkProjectConfigSmokePackage
           mkRunnerPackage
           mkSmokePackage

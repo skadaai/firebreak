@@ -1,4 +1,5 @@
 .agent-sandbox.env
+node_modules
 
 result
 *.socket

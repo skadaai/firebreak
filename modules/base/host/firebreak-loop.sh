@@ -1,13 +1,13 @@
 set -euf
 
-state_dir=${FIREBREAK_SESSION_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/firebreak/sessions}
+state_dir=${FIREBREAK_TASK_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/firebreak/tasks}
 command=${1:-}
 
 usage() {
   cat <<'EOF' >&2
 usage:
-  firebreak autonomy run \
-    --session-id ID \
+  firebreak internal loop run \
+    --task-id ID \
     --spec PATH \
     --plan TEXT \
     --validation-suite SUITE [--validation-suite SUITE ...] \
@@ -70,18 +70,18 @@ require_file() {
   fi
 }
 
-load_session() {
-  session_id=$1
-  session_root=$state_dir/$session_id
-  metadata_path=$session_root/metadata.json
-  require_file "$metadata_path" "session metadata"
+load_task() {
+  task_id=$1
+  task_root=$state_dir/$task_id
+  metadata_path=$task_root/metadata.json
+  require_file "$metadata_path" "task metadata"
 
-  status=$(cat "$session_root/status")
-  branch=$(cat "$session_root/branch")
-  owner=$(cat "$session_root/owner")
-  primary_checkout=$(cat "$session_root/primary-checkout")
-  worktree_path=$(cat "$session_root/worktree-path")
-  worktree_shared_root=$(cat "$session_root/worktree-shared-root")
+  status=$(cat "$task_root/status")
+  branch=$(cat "$task_root/branch")
+  owner=$(cat "$task_root/owner")
+  primary_checkout=$(cat "$task_root/primary-checkout")
+  worktree_path=$(cat "$task_root/worktree-path")
+  worktree_shared_root=$(cat "$task_root/worktree-shared-root")
 }
 
 emit_array() {
@@ -101,7 +101,7 @@ emit_plan() {
   cat >"$plan_path" <<EOF
 {
   "attempt_id": "$(json_escape "$attempt_id")",
-  "session_id": "$(json_escape "$session_id")",
+  "task_id": "$(json_escape "$task_id")",
   "branch": "$(json_escape "$branch")",
   "owner": "$(json_escape "$owner")",
   "primary_checkout": "$(json_escape "$primary_checkout")",
@@ -123,8 +123,8 @@ emit_summary() {
   cat >"$summary_path" <<EOF
 {
   "attempt_id": "$(json_escape "$attempt_id")",
-  "session_id": "$(json_escape "$session_id")",
-  "session_status": "$(json_escape "$status")",
+  "task_id": "$(json_escape "$task_id")",
+  "task_status": "$(json_escape "$status")",
   "branch": "$(json_escape "$branch")",
   "owner": "$(json_escape "$owner")",
   "result": "$(json_escape "$result")",
@@ -253,7 +253,7 @@ run_validation_suites() {
     while :; do
       check_runtime_budget
       set +e
-      suite_output=$(timeout "$remaining_runtime_secs" @SESSION_BIN@ validate --session-id "$session_id" "$suite_name")
+      suite_output=$(timeout "$remaining_runtime_secs" @TASK_BIN@ validate --task-id "$task_id" "$suite_name")
       suite_status=$?
       set -e
 
@@ -331,8 +331,8 @@ run_review() {
     esac
 
     if is_managed_shared_path "$changed_path"; then
-        printf '%s\n' "$changed_path" >>"$managed_shared_paths_log"
-        continue
+      printf '%s\n' "$changed_path" >>"$managed_shared_paths_log"
+      continue
     fi
 
     printf '%s\n' "$changed_path" >>"$repo_changed_paths_log"
@@ -373,7 +373,7 @@ run_review() {
 
   cat >"$review_path" <<EOF
 {
-  "session_id": "$(json_escape "$session_id")",
+  "task_id": "$(json_escape "$task_id")",
   "review_result": "$(json_escape "$review_result")",
   "diff_check_status": $diff_check_status,
   "diff_check_line_count": $diff_check_count,
@@ -413,28 +413,28 @@ create_commit() {
   (
     cd "$worktree_path"
     git add -A
-    GIT_AUTHOR_NAME=${FIREBREAK_AUTONOMY_AUTHOR_NAME:-"Firebreak Autonomy"} \
-      GIT_AUTHOR_EMAIL=${FIREBREAK_AUTONOMY_AUTHOR_EMAIL:-"firebreak@example.invalid"} \
-      GIT_COMMITTER_NAME=${FIREBREAK_AUTONOMY_COMMITTER_NAME:-"Firebreak Autonomy"} \
-      GIT_COMMITTER_EMAIL=${FIREBREAK_AUTONOMY_COMMITTER_EMAIL:-"firebreak@example.invalid"} \
+    GIT_AUTHOR_NAME=${FIREBREAK_LOOP_AUTHOR_NAME:-"Firebreak Loop"} \
+      GIT_AUTHOR_EMAIL=${FIREBREAK_LOOP_AUTHOR_EMAIL:-"firebreak@example.invalid"} \
+      GIT_COMMITTER_NAME=${FIREBREAK_LOOP_COMMITTER_NAME:-"Firebreak Loop"} \
+      GIT_COMMITTER_EMAIL=${FIREBREAK_LOOP_COMMITTER_EMAIL:-"firebreak@example.invalid"} \
       git commit -m "$commit_message" >/dev/null
   )
   commit_sha=$(git -C "$worktree_path" rev-parse HEAD)
 }
 
 run_attempt() {
-  session_id=""
+  task_id=""
   spec_ref=""
   plan_text=""
   validation_suites=""
   write_paths=""
   commit_message=""
-  attempt_id=${FIREBREAK_ATTEMPT_ID:-}
+  attempt_id=${FIREBREAK_LOOP_ATTEMPT_ID:-}
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      --session-id)
-        session_id=$2
+      --task-id)
+        task_id=$2
         shift 2
         ;;
       --spec)
@@ -469,23 +469,23 @@ run_attempt() {
     esac
   done
 
-  if [ -z "$session_id" ] || [ -z "$spec_ref" ] || [ -z "$plan_text" ] || [ -z "$validation_suites" ]; then
+  if [ -z "$task_id" ] || [ -z "$spec_ref" ] || [ -z "$plan_text" ] || [ -z "$validation_suites" ]; then
     usage
   fi
 
-  validate_token "$session_id" "session id"
+  validate_token "$task_id" "task id"
   if [ -z "$attempt_id" ]; then
     attempt_id="$(date -u +%Y%m%dT%H%M%SZ)"
   fi
   validate_token "$attempt_id" "attempt id"
 
-  load_session "$session_id"
+  load_task "$task_id"
   if [ "$status" != "active" ]; then
-    echo "cannot run autonomy loop for inactive session '$session_id' with status '$status'" >&2
+    echo "cannot run loop for inactive task '$task_id' with status '$status'" >&2
     exit 1
   fi
   if ! [ -d "$worktree_path" ]; then
-    echo "session worktree is missing: $worktree_path" >&2
+    echo "task worktree is missing: $worktree_path" >&2
     exit 1
   fi
 
@@ -493,16 +493,16 @@ run_attempt() {
   write_paths=$(printf '%s\n' "$write_paths" | xargs)
   validation_suite_count=$(printf '%s\n' "$validation_suites" | wc -w | tr -d ' ')
   write_path_count=$(printf '%s\n' "$write_paths" | wc -w | tr -d ' ')
-  max_validation_suites=${FIREBREAK_AUTONOMY_MAX_VALIDATION_SUITES:-8}
-  max_write_paths=${FIREBREAK_AUTONOMY_MAX_WRITE_PATHS:-32}
-  max_parallelism=${FIREBREAK_AUTONOMY_MAX_PARALLELISM:-1}
-  max_runtime_secs=${FIREBREAK_AUTONOMY_MAX_RUNTIME_SECS:-3600}
-  validation_retry_budget=${FIREBREAK_AUTONOMY_VALIDATION_RETRIES:-0}
+  max_validation_suites=${FIREBREAK_LOOP_MAX_VALIDATION_SUITES:-8}
+  max_write_paths=${FIREBREAK_LOOP_MAX_WRITE_PATHS:-32}
+  max_parallelism=${FIREBREAK_LOOP_MAX_PARALLELISM:-1}
+  max_runtime_secs=${FIREBREAK_LOOP_MAX_RUNTIME_SECS:-3600}
+  validation_retry_budget=${FIREBREAK_LOOP_VALIDATION_RETRIES:-0}
   allowed_write_roots=""
 
-  attempt_root=$session_root/autonomy/$attempt_id
+  attempt_root=$task_root/loop/$attempt_id
   if [ -e "$attempt_root" ]; then
-    echo "autonomy attempt already exists: $attempt_id" >&2
+    echo "loop attempt already exists: $attempt_id" >&2
     exit 125
   fi
   plan_path=$attempt_root/plan.json
@@ -522,8 +522,8 @@ run_attempt() {
   resolve_spec_path
   emit_plan
 
-  active_root=$state_dir/autonomy-active
-  active_guard=$state_dir/autonomy-active.guard
+  active_root=$state_dir/loop-active
+  active_guard=$state_dir/loop-active.guard
   active_lock=$active_root/$attempt_id
   mkdir -p "$active_root"
   guard_acquired=0
@@ -535,7 +535,7 @@ run_attempt() {
     sleep 0.1
   done
   if [ "$guard_acquired" = "0" ]; then
-    printf 'could not acquire autonomy parallelism guard\n' >"$policy_path"
+    printf 'could not acquire loop parallelism guard\n' >"$policy_path"
     block_attempt "policy-parallelism-limit"
   fi
   active_count=$(find "$active_root" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
@@ -570,7 +570,7 @@ case "$command" in
     usage
     ;;
   *)
-    echo "unknown firebreak autonomy subcommand: $command" >&2
+    echo "unknown firebreak internal loop subcommand: $command" >&2
     usage
     ;;
 esac

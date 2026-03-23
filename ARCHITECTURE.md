@@ -11,11 +11,11 @@ Firebreak uses a module-oriented layout instead of flat `scripts/` and `tests/` 
 - [`modules/profiles/local/`](./modules/profiles/local): local-launch profile.
   - [`module.nix`](./modules/profiles/local/module.nix): local-only guest and launch behavior layered over the shared runtime.
   - [`host/`](./modules/profiles/local/host): local host-side wrapper and runtime argument helpers.
-  - [`guest/`](./modules/profiles/local/guest): local guest-side boot, session, and console helpers.
+  - [`guest/`](./modules/profiles/local/guest): local guest-side boot, task-preparation, and console helpers.
 - [`modules/profiles/cloud/`](./modules/profiles/cloud): cloud execution profile.
   - [`module.nix`](./modules/profiles/cloud/module.nix): cloud guest behavior layered over the shared runtime.
   - [`host/`](./modules/profiles/cloud/host): cloud host-side runtime argument helpers.
-  - [`guest/`](./modules/profiles/cloud/guest): cloud guest-side session preparation and job execution helpers.
+  - [`guest/`](./modules/profiles/cloud/guest): cloud guest-side task preparation and job execution helpers.
 - [`modules/bun-agent/`](./modules/bun-agent): shared implementation for Bun-managed agent CLIs.
   - [`module.nix`](./modules/bun-agent/module.nix): common Bun-agent overlay logic.
   - [`guest/`](./modules/bun-agent/guest): guest bootstrap and shell-init templates for Bun-backed agents.
@@ -25,7 +25,7 @@ Firebreak uses a module-oriented layout instead of flat `scripts/` and `tests/` 
 ## Separation Of Concerns
 
 - `modules/base` owns the shared guest runtime, common VM settings, reusable shell behavior, and generic smoke validation.
-- `modules/profiles/local` owns local-only launch behavior such as dynamic host cwd sharing, host identity adoption, session preparation, and the interactive console.
+- `modules/profiles/local` owns local-only launch behavior such as dynamic host cwd sharing, host identity adoption, task preparation, and the interactive console.
 - `modules/profiles/cloud` owns cloud-only guest behavior such as fixed workspace semantics, prompt-driven agent execution, and non-interactive job completion.
 - `modules/bun-agent` owns the shared contract for agents launched through Bun, including bootstrap and agent-specific environment exports.
 - Agent modules such as `codex` and `claude-code` should stay thin. They should mostly declare package name, binary name, config directory, and any agent-specific packages or environment exports.

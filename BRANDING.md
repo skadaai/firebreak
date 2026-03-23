@@ -6,10 +6,10 @@ Public naming:
 - Top-level CLI/control plane: firebreak
 - Codex VM entry: firebreak-codex
 - Codex maintenance shell entry: firebreak-codex-shell
-- Codex smoke test entry: firebreak-codex-smoke
+- Codex smoke test entry: firebreak-test-smoke-codex
 - Claude Code VM entry: firebreak-claude-code
 - Claude Code maintenance shell entry: firebreak-claude-code-shell
-- Claude Code smoke test entry: firebreak-claude-code-smoke
+- Claude Code smoke test entry: firebreak-test-smoke-claude-code
 - Current shipped agent VMs: firebreak-codex, firebreak-claude-code
 
 Branding rules:

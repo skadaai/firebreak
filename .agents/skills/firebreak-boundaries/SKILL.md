@@ -1,18 +1,18 @@
 ---
 name: firebreak-boundaries
-description: "Use when a Firebreak task touches files, shared state, or parallel work. This skill enforces write scope, shared-resource boundaries, runtime budgets, and session isolation."
+description: "Use when a Firebreak task touches files, shared state, or parallel work. This skill enforces write scope, shared-resource boundaries, runtime budgets, and task isolation."
 ---
 
 # Firebreak Boundaries
 
-Firebreak autonomy is allowed only inside explicit limits.
+Firebreak loop autonomy is allowed only inside explicit limits.
 
 ## Checks
 
 1. Declare narrow write paths before acting.
-2. Keep shared paths resolved inside the managed session roots.
+2. Keep shared paths resolved inside the managed task roots.
 3. Respect runtime and parallelism budgets.
-4. Keep one mutable worktree per active session.
+4. Keep one mutable worktree per active task.
 
 ## Rules
 

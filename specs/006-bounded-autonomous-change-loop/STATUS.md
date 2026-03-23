@@ -11,13 +11,13 @@ Completed.
 
 ## What has landed
 
-- `firebreak autonomy run` now records a machine-readable attempt plan tied to a tracked spec and isolated session
-- the autonomy harness enforces bounded write-scope policy before validation or commit
-- the autonomy harness runs required validation suites through the session layer and stops with blocked audit output on blocked or failed validation
-- the autonomy harness performs a review pass that persists diff, status, conflict, and diff-check evidence before commit
-- the autonomy harness can create a bounded audit-backed commit with deterministic author metadata
-- the autonomy smoke covers successful, validation-blocked, and policy-blocked attempt paths
-- the top-level Firebreak CLI and agent guidance now document the autonomy command surface
+- `firebreak internal loop run` now records a machine-readable attempt plan tied to a tracked spec and isolated task
+- the loop harness enforces bounded write-scope policy before validation or commit
+- the loop harness runs required validation suites through the task layer and stops with blocked audit output on blocked or failed validation
+- the loop harness performs a review pass that persists diff, status, conflict, and diff-check evidence before commit
+- the loop harness can create a bounded audit-backed commit with deterministic author metadata
+- the internal loop smoke covers successful, validation-blocked, and policy-blocked attempt paths
+- the top-level Firebreak CLI and agent guidance now document the internal loop command surface
 
 ## What remains open
 
@@ -32,5 +32,5 @@ Completed.
 
 ## History
 
-- 2026-03-20: Spec created to define the bounded autonomous development loop that sits above Firebreak work sessions and validation.
-- 2026-03-21: Implemented the first bounded autonomy harness with audit records, policy gates, validation, review, and commit support.
+- 2026-03-20: Spec created to define the bounded autonomous development loop that sits above Firebreak work tasks and validation.
+- 2026-03-21: Implemented the first bounded loop harness with audit records, policy gates, validation, review, and commit support.

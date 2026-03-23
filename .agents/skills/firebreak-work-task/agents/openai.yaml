@@ -1,0 +1,4 @@
+model: "openai"
+prompts:
+  short_description: "Operate inside isolated Firebreak tasks"
+  default_prompt: "Use $firebreak-work-task to start or resume a safe Firebreak work task."

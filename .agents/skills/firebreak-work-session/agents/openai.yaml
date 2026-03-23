@@ -1,6 +1,0 @@
-interface:
-  display_name: "Firebreak Work Session"
-  short_description: "Operate inside isolated Firebreak sessions"
-  default_prompt: "Use $firebreak-work-session to start or resume a safe Firebreak work session."
-policy:
-  allow_implicit_invocation: false

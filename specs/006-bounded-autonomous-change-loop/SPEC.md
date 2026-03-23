@@ -38,11 +38,11 @@ Without a defined change loop, autonomy becomes vague: agents can overreach, ski
 
 This changeset is behavioral and operational.
 
-It defines the agent-facing control loop that sits on top of specs, work sessions, and validation harnesses. The intended landing shape is a bounded autonomous workflow where each substantial change attempt:
+It defines the agent-facing control loop that sits on top of specs, work tasks, and validation harnesses. The intended landing shape is a bounded autonomous workflow where each substantial change attempt:
 
 - starts from a tracked spec or explicit task contract
 - records a plan and current slice
-- executes code changes inside an isolated session
+- executes code changes inside an isolated task
 - runs required validation suites autonomously
 - performs a review pass before commit
 - emits a machine-readable audit record

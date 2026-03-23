@@ -7,7 +7,7 @@ This guide covers the manual steps required to make the workflows in [`.github/w
 This repository has two workflows:
 
 - [`ci.yml`](../.github/workflows/ci.yml): runs hosted `nix flake check`
-- [`vm-smoke.yml`](../.github/workflows/vm-smoke.yml): runs `nix run .#firebreak-codex-smoke` on a self-hosted KVM runner
+- [`vm-smoke.yml`](../.github/workflows/vm-smoke.yml): runs `nix run .#firebreak-test-smoke-codex` on a self-hosted KVM runner
 
 The hosted workflow works immediately. The VM smoke workflow requires a self-hosted runner and one repository variable.
 
@@ -59,4 +59,4 @@ This enables automatic execution of [`vm-smoke.yml`](../.github/workflows/vm-smo
   - verify `ENABLE_SELF_HOSTED_VM_SMOKE=1`
 - VM boot fails immediately:
   - verify the runner machine has working KVM access
-  - verify the runner user can execute `nix run .#firebreak-codex-smoke`
+  - verify the runner user can execute `nix run .#firebreak-test-smoke-codex`

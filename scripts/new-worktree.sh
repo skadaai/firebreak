@@ -16,10 +16,10 @@ fi
 root="$(git rev-parse --show-toplevel)"
 base_ref="${FIREBREAK_WORKTREE_BASE_REF:-main}"
 if [[ -n "$worktree_name" ]]; then
-  worktree_parent="${FIREBREAK_WORKTREE_ROOT:-}"
+  worktree_parent="${FIREBREAK_TASK_WORKTREE_ROOT:-${FIREBREAK_WORKTREE_ROOT:-}}"
 else
   worktree_name="$branch"
-  worktree_parent="${FIREBREAK_WORKTREE_ROOT:-}"
+  worktree_parent="${FIREBREAK_TASK_WORKTREE_ROOT:-${FIREBREAK_WORKTREE_ROOT:-}}"
 fi
 
 if [[ -z "$worktree_parent" ]]; then
@@ -27,13 +27,13 @@ if [[ -z "$worktree_parent" ]]; then
   if [[ -w "$sibling_parent" ]]; then
     worktree_parent="$sibling_parent"
   else
-    state_root="${FIREBREAK_SESSION_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/firebreak/sessions}"
+    state_root="${FIREBREAK_TASK_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/firebreak/tasks}"
     worktree_parent="$state_root/worktrees"
   fi
 fi
 
 mkdir -p "$worktree_parent"
-shared_root="${FIREBREAK_WORKTREE_SHARED_ROOT:-$(cd "$worktree_parent/.." && pwd)}"
+shared_root="${FIREBREAK_TASK_SHARED_ROOT:-${FIREBREAK_WORKTREE_SHARED_ROOT:-$(cd "$worktree_parent/.." && pwd)}}"
 
 log "Repo root: $root"
 log "Worktree parent: $worktree_parent"
@@ -72,7 +72,7 @@ else
   git -C "$wt" switch -c "$branch" >/dev/null
 fi
 
-# Shared dirs live above the worktree root so sessions can reuse agent state.
+# Shared dirs live above the worktree root so tasks can reuse agent state.
 for d in ".direnv" ".codex" ".claude"; do
   shared_path="$shared_root/$d"
   if [[ ! -e "$shared_path" && ! -L "$shared_path" ]]; then

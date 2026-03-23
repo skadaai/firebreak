@@ -72,7 +72,8 @@
 
       mkAgentPackage = {
         name,
-        runnerName,
+        runnerPackage,
+        controlSocketName,
         defaultAgentCommand,
         agentConfigDirName,
         defaultAgentConfigHostDir,
@@ -82,10 +83,10 @@
           inherit name;
           runtimeInputs = with pkgs; [ coreutils virtiofsd ];
           text = renderTemplate {
-            "@CONTROL_SOCKET@" = "${runnerName}.socket";
+            "@CONTROL_SOCKET@" = "${controlSocketName}.socket";
             "@DEFAULT_AGENT_COMMAND@" = defaultAgentCommand;
             "@DEFAULT_AGENT_SESSION_MODE@" = defaultAgentSessionMode;
-            "@RUNNER@" = "${self.packages.${system}."${runnerName}-runner"}/bin/microvm-run";
+            "@RUNNER@" = "${self.packages.${system}.${runnerPackage}}/bin/microvm-run";
             "@AGENT_CONFIG_DIR_NAME@" = agentConfigDirName;
             "@DEFAULT_AGENT_CONFIG_HOST_DIR@" = defaultAgentConfigHostDir;
           } ./modules/profiles/local/host/run-wrapper.sh;
@@ -134,7 +135,7 @@
           ];
           text = renderTemplate {
             "@DEFAULT_STATE_DIR@" = defaultStateDir;
-            "@RUNNER@" = "${self.packages.${system}."${runnerName}-runner"}/bin/microvm-run";
+            "@RUNNER@" = "${self.packages.${system}.${runnerName}}/bin/microvm-run";
           } ./modules/profiles/cloud/host/run-job.sh;
         };
 
@@ -147,7 +148,7 @@
           runtimeInputs = with pkgs; [ coreutils ];
           text = renderTemplate {
             "@JOB_PACKAGE_BIN@" = "${self.packages.${system}.${jobPackage}}/bin/${jobPackage}";
-          } ./modules/profiles/cloud/tests/cloud-smoke.sh;
+          } ./modules/profiles/cloud/tests/test-smoke-cloud-job.sh;
         };
 
       mkValidationPackage = { name }:
@@ -158,10 +159,10 @@
             gnused
           ];
           text = renderTemplate {
-            "@CODEX_SMOKE_BIN@" = "${self.packages.${system}.firebreak-codex-smoke}/bin/firebreak-codex-smoke";
-            "@CODEX_VERSION_BIN@" = "${self.packages.${system}.firebreak-codex-version-smoke}/bin/firebreak-codex-version-smoke";
-            "@CLAUDE_SMOKE_BIN@" = "${self.packages.${system}.firebreak-claude-code-smoke}/bin/firebreak-claude-code-smoke";
-            "@CLOUD_SMOKE_BIN@" = "${self.packages.${system}.firebreak-cloud-job-smoke}/bin/firebreak-cloud-job-smoke";
+            "@CODEX_SMOKE_BIN@" = "${self.packages.${system}.firebreak-test-smoke-codex}/bin/firebreak-test-smoke-codex";
+            "@CODEX_VERSION_BIN@" = "${self.packages.${system}.firebreak-test-smoke-codex-version}/bin/firebreak-test-smoke-codex-version";
+            "@CLAUDE_SMOKE_BIN@" = "${self.packages.${system}.firebreak-test-smoke-claude-code}/bin/firebreak-test-smoke-claude-code";
+            "@CLOUD_SMOKE_BIN@" = "${self.packages.${system}.firebreak-test-smoke-cloud-job}/bin/firebreak-test-smoke-cloud-job";
           } ./modules/base/host/firebreak-validate.sh;
         };
 
@@ -188,10 +189,10 @@
           ];
           text = renderTemplate {
             "@VALIDATE_BIN@" = "${self.packages.${system}.${validatePackage}}/bin/${validatePackage}";
-          } ./modules/base/tests/validation-smoke.sh;
+          } ./modules/base/tests/test-smoke-internal-validate.sh;
         };
 
-      mkSessionPackage = { name }:
+      mkTaskPackage = { name }:
         pkgs.writeShellApplication {
           inherit name;
           runtimeInputs = with pkgs; [
@@ -200,10 +201,10 @@
             git
             gnused
           ];
-          text = builtins.readFile ./modules/base/host/firebreak-session.sh;
+          text = builtins.readFile ./modules/base/host/firebreak-task.sh;
         };
 
-      mkSessionSmokePackage = { name }:
+      mkTaskSmokePackage = { name }:
         pkgs.writeShellApplication {
           inherit name;
           runtimeInputs = with pkgs; [
@@ -214,10 +215,10 @@
             gnugrep
             gnused
           ];
-          text = builtins.readFile ./modules/base/tests/session-smoke.sh;
+          text = builtins.readFile ./modules/base/tests/test-smoke-internal-task.sh;
         };
 
-      mkAutonomyPackage = { name, sessionPackage }:
+      mkLoopPackage = { name, taskPackage }:
         pkgs.writeShellApplication {
           inherit name;
           runtimeInputs = with pkgs; [
@@ -227,11 +228,11 @@
             gnused
           ];
           text = renderTemplate {
-            "@SESSION_BIN@" = "${self.packages.${system}.${sessionPackage}}/bin/${sessionPackage}";
-          } ./modules/base/host/firebreak-autonomy.sh;
+            "@TASK_BIN@" = "${self.packages.${system}.${taskPackage}}/bin/${taskPackage}";
+          } ./modules/base/host/firebreak-loop.sh;
         };
 
-      mkAutonomySmokePackage = { name }:
+      mkLoopSmokePackage = { name }:
         pkgs.writeShellApplication {
           inherit name;
           runtimeInputs = with pkgs; [
@@ -241,17 +242,17 @@
             gnugrep
             gnused
           ];
-          text = builtins.readFile ./modules/base/tests/autonomy-smoke.sh;
+          text = builtins.readFile ./modules/base/tests/test-smoke-internal-loop.sh;
         };
 
-      mkFirebreakCliPackage = { name, validatePackage, sessionPackage, autonomyPackage }:
+      mkFirebreakCliPackage = { name, validatePackage, taskPackage, loopPackage }:
         pkgs.writeShellApplication {
           inherit name;
           runtimeInputs = with pkgs; [ coreutils ];
           text = renderTemplate {
             "@VALIDATE_BIN@" = "${self.packages.${system}.${validatePackage}}/bin/${validatePackage}";
-            "@SESSION_BIN@" = "${self.packages.${system}.${sessionPackage}}/bin/${sessionPackage}";
-            "@AUTONOMY_BIN@" = "${self.packages.${system}.${autonomyPackage}}/bin/${autonomyPackage}";
+            "@TASK_BIN@" = "${self.packages.${system}.${taskPackage}}/bin/${taskPackage}";
+            "@LOOP_BIN@" = "${self.packages.${system}.${loopPackage}}/bin/${loopPackage}";
           } ./modules/base/host/firebreak.sh;
         };
     in {
@@ -313,14 +314,15 @@
 
       packages.${system} = {
         default = self.packages.${system}.firebreak;
-        firebreak-codex-runner = mkRunnerPackage self.nixosConfigurations.firebreak-codex.config.microvm.declaredRunner;
-        firebreak-claude-code-runner = mkRunnerPackage self.nixosConfigurations.firebreak-claude-code.config.microvm.declaredRunner;
-        firebreak-codex-cloud-runner = mkRunnerPackage self.nixosConfigurations.firebreak-codex-cloud.config.microvm.declaredRunner;
-        firebreak-claude-code-cloud-runner = mkRunnerPackage self.nixosConfigurations.firebreak-claude-code-cloud.config.microvm.declaredRunner;
-        firebreak-cloud-smoke-runner = mkRunnerPackage self.nixosConfigurations.firebreak-cloud-smoke.config.microvm.declaredRunner;
+        firebreak-internal-runner-codex = mkRunnerPackage self.nixosConfigurations.firebreak-codex.config.microvm.declaredRunner;
+        firebreak-internal-runner-claude-code = mkRunnerPackage self.nixosConfigurations.firebreak-claude-code.config.microvm.declaredRunner;
+        firebreak-internal-runner-codex-cloud = mkRunnerPackage self.nixosConfigurations.firebreak-codex-cloud.config.microvm.declaredRunner;
+        firebreak-internal-runner-claude-code-cloud = mkRunnerPackage self.nixosConfigurations.firebreak-claude-code-cloud.config.microvm.declaredRunner;
+        firebreak-internal-runner-test-cloud = mkRunnerPackage self.nixosConfigurations.firebreak-cloud-smoke.config.microvm.declaredRunner;
         firebreak-codex = mkAgentPackage {
           name = "firebreak-codex";
-          runnerName = "firebreak-codex";
+          runnerPackage = "firebreak-internal-runner-codex";
+          controlSocketName = "firebreak-codex";
           defaultAgentCommand = "codex";
           agentConfigDirName = ".codex";
           defaultAgentConfigHostDir = "$HOME/.codex";
@@ -328,28 +330,30 @@
         };
         firebreak-codex-shell = mkAgentPackage {
           name = "firebreak-codex-shell";
-          runnerName = "firebreak-codex";
+          runnerPackage = "firebreak-internal-runner-codex";
+          controlSocketName = "firebreak-codex";
           defaultAgentCommand = "codex";
           agentConfigDirName = ".codex";
           defaultAgentConfigHostDir = "$HOME/.codex";
           defaultAgentSessionMode = "shell";
         };
-        firebreak-codex-smoke = mkSmokePackage {
-          name = "firebreak-codex-smoke";
+        firebreak-test-smoke-codex = mkSmokePackage {
+          name = "firebreak-test-smoke-codex";
           agentPackage = "firebreak-codex";
           shellPackage = "firebreak-codex-shell";
           agentBin = "codex";
           agentDisplayName = "Codex";
           agentConfigDirName = ".codex";
         };
-        firebreak-codex-version-smoke = mkAgentVersionSmokePackage {
-          name = "firebreak-codex-version-smoke";
+        firebreak-test-smoke-codex-version = mkAgentVersionSmokePackage {
+          name = "firebreak-test-smoke-codex-version";
           agentPackage = "firebreak-codex";
           agentDisplayName = "Codex";
         };
         firebreak-claude-code = mkAgentPackage {
           name = "firebreak-claude-code";
-          runnerName = "firebreak-claude-code";
+          runnerPackage = "firebreak-internal-runner-claude-code";
+          controlSocketName = "firebreak-claude-code";
           defaultAgentCommand = "claude";
           agentConfigDirName = ".claude";
           defaultAgentConfigHostDir = "$HOME/.claude";
@@ -357,84 +361,85 @@
         };
         firebreak-claude-code-shell = mkAgentPackage {
           name = "firebreak-claude-code-shell";
-          runnerName = "firebreak-claude-code";
+          runnerPackage = "firebreak-internal-runner-claude-code";
+          controlSocketName = "firebreak-claude-code";
           defaultAgentCommand = "claude";
           agentConfigDirName = ".claude";
           defaultAgentConfigHostDir = "$HOME/.claude";
           defaultAgentSessionMode = "shell";
         };
-        firebreak-claude-code-smoke = mkSmokePackage {
-          name = "firebreak-claude-code-smoke";
+        firebreak-test-smoke-claude-code = mkSmokePackage {
+          name = "firebreak-test-smoke-claude-code";
           agentPackage = "firebreak-claude-code";
           shellPackage = "firebreak-claude-code-shell";
           agentBin = "claude";
           agentDisplayName = "Claude Code";
           agentConfigDirName = ".claude";
         };
-        firebreak-codex-cloud-job = mkCloudJobPackage {
-          name = "firebreak-codex-cloud-job";
-          runnerName = "firebreak-codex-cloud";
+        firebreak-internal-job-codex-cloud = mkCloudJobPackage {
+          name = "firebreak-internal-job-codex-cloud";
+          runnerName = "firebreak-internal-runner-codex-cloud";
           defaultStateDir = "$HOME/.firebreak/firebreak-codex-cloud";
         };
-        firebreak-claude-code-cloud-job = mkCloudJobPackage {
-          name = "firebreak-claude-code-cloud-job";
-          runnerName = "firebreak-claude-code-cloud";
+        firebreak-internal-job-claude-code-cloud = mkCloudJobPackage {
+          name = "firebreak-internal-job-claude-code-cloud";
+          runnerName = "firebreak-internal-runner-claude-code-cloud";
           defaultStateDir = "$HOME/.firebreak/firebreak-claude-code-cloud";
         };
-        firebreak-cloud-smoke-job = mkCloudJobPackage {
-          name = "firebreak-cloud-smoke-job";
-          runnerName = "firebreak-cloud-smoke";
+        firebreak-internal-job-test-cloud = mkCloudJobPackage {
+          name = "firebreak-internal-job-test-cloud";
+          runnerName = "firebreak-internal-runner-test-cloud";
           defaultStateDir = "$HOME/.firebreak/firebreak-cloud-smoke";
         };
-        firebreak-cloud-job-smoke = mkCloudSmokePackage {
-          name = "firebreak-cloud-job-smoke";
-          jobPackage = "firebreak-cloud-smoke-job";
+        firebreak-test-smoke-cloud-job = mkCloudSmokePackage {
+          name = "firebreak-test-smoke-cloud-job";
+          jobPackage = "firebreak-internal-job-test-cloud";
         };
-        firebreak-validate = mkValidationPackage {
-          name = "firebreak-validate";
+        firebreak-internal-validate = mkValidationPackage {
+          name = "firebreak-internal-validate";
         };
-        firebreak-validation-smoke = mkValidationSmokePackage {
-          name = "firebreak-validation-smoke";
-          validatePackage = "firebreak-validate";
+        firebreak-test-smoke-internal-validate = mkValidationSmokePackage {
+          name = "firebreak-test-smoke-internal-validate";
+          validatePackage = "firebreak-internal-validate";
         };
-        firebreak-session = mkSessionPackage {
-          name = "firebreak-session";
+        firebreak-internal-task = mkTaskPackage {
+          name = "firebreak-internal-task";
         };
-        firebreak-session-smoke = mkSessionSmokePackage {
-          name = "firebreak-session-smoke";
+        firebreak-test-smoke-internal-task = mkTaskSmokePackage {
+          name = "firebreak-test-smoke-internal-task";
         };
-        firebreak-autonomy = mkAutonomyPackage {
-          name = "firebreak-autonomy";
-          sessionPackage = "firebreak-session";
+        firebreak-internal-loop = mkLoopPackage {
+          name = "firebreak-internal-loop";
+          taskPackage = "firebreak-internal-task";
         };
-        firebreak-autonomy-smoke = mkAutonomySmokePackage {
-          name = "firebreak-autonomy-smoke";
+        firebreak-test-smoke-internal-loop = mkLoopSmokePackage {
+          name = "firebreak-test-smoke-internal-loop";
         };
         firebreak = mkFirebreakCliPackage {
           name = "firebreak";
-          validatePackage = "firebreak-validate";
-          sessionPackage = "firebreak-session";
-          autonomyPackage = "firebreak-autonomy";
+          validatePackage = "firebreak-internal-validate";
+          taskPackage = "firebreak-internal-task";
+          loopPackage = "firebreak-internal-loop";
         };
       };
 
       checks.${system} = {
-        firebreak-codex-runner = self.packages.${system}.firebreak-codex-runner;
+        firebreak-internal-runner-codex = self.packages.${system}.firebreak-internal-runner-codex;
         firebreak-codex-system = self.nixosConfigurations.firebreak-codex.config.system.build.toplevel;
-        firebreak-codex-smoke = self.packages.${system}.firebreak-codex-smoke;
-        firebreak-codex-cloud-runner = self.packages.${system}.firebreak-codex-cloud-runner;
+        firebreak-test-smoke-codex = self.packages.${system}.firebreak-test-smoke-codex;
+        firebreak-internal-runner-codex-cloud = self.packages.${system}.firebreak-internal-runner-codex-cloud;
         firebreak-codex-cloud-system = self.nixosConfigurations.firebreak-codex-cloud.config.system.build.toplevel;
-        firebreak-cloud-job-smoke = self.packages.${system}.firebreak-cloud-job-smoke;
-        firebreak-autonomy-smoke = self.packages.${system}.firebreak-autonomy-smoke;
-        firebreak-session-smoke = self.packages.${system}.firebreak-session-smoke;
-        firebreak-validation-smoke = self.packages.${system}.firebreak-validation-smoke;
-        firebreak-claude-code-runner = self.packages.${system}.firebreak-claude-code-runner;
+        firebreak-test-smoke-cloud-job = self.packages.${system}.firebreak-test-smoke-cloud-job;
+        firebreak-test-smoke-internal-loop = self.packages.${system}.firebreak-test-smoke-internal-loop;
+        firebreak-test-smoke-internal-task = self.packages.${system}.firebreak-test-smoke-internal-task;
+        firebreak-test-smoke-internal-validate = self.packages.${system}.firebreak-test-smoke-internal-validate;
+        firebreak-internal-runner-claude-code = self.packages.${system}.firebreak-internal-runner-claude-code;
         firebreak-claude-code-system = self.nixosConfigurations.firebreak-claude-code.config.system.build.toplevel;
-        firebreak-claude-code-smoke = self.packages.${system}.firebreak-claude-code-smoke;
-        firebreak-claude-code-cloud-runner = self.packages.${system}.firebreak-claude-code-cloud-runner;
+        firebreak-test-smoke-claude-code = self.packages.${system}.firebreak-test-smoke-claude-code;
+        firebreak-internal-runner-claude-code-cloud = self.packages.${system}.firebreak-internal-runner-claude-code-cloud;
         firebreak-claude-code-cloud-system = self.nixosConfigurations.firebreak-claude-code-cloud.config.system.build.toplevel;
-        firebreak-cloud-smoke-runner = self.packages.${system}.firebreak-cloud-smoke-runner;
-        firebreak-cloud-smoke-system = self.nixosConfigurations.firebreak-cloud-smoke.config.system.build.toplevel;
+        firebreak-internal-runner-test-cloud = self.packages.${system}.firebreak-internal-runner-test-cloud;
+        firebreak-test-smoke-cloud-system = self.nixosConfigurations.firebreak-cloud-smoke.config.system.build.toplevel;
       };
     };
 }

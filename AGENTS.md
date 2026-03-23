@@ -4,7 +4,9 @@
 
 This repository is centered on a Nix flake plus reusable VM modules:
 
-- [`flake.nix`](./flake.nix): flake wiring, VM constructors, packages, and checks.
+- [`flake.nix`](./flake.nix): top-level flake inputs and output assembly.
+- [`nix/flake-support.nix`](./nix/flake-support.nix): shared flake helper builders and rendering helpers.
+- [`nix/outputs/`](./nix/outputs): focused flake output assembly for modules, configurations, packages, and checks.
 - [`modules/base/`](./modules/base): shared Firebreak VM runtime, with `module.nix`, shared guest-side helpers, and the generic smoke template.
 - [`modules/profiles/local/`](./modules/profiles/local): local-launch profile, including local host-side helpers and local guest task-preparation helpers.
 - [`modules/profiles/cloud/`](./modules/profiles/cloud): cloud execution profile, including cloud host-side helpers and cloud guest job/task helpers.
@@ -60,7 +62,7 @@ Use standard Nix style:
 - Keep host-side executables under the owning module’s `host/` directory, guest-side executables under `guest/`, and reusable smoke templates under `tests/` inside that module.
 - Keep shared guest behavior in `modules/base`, and put launch-environment-specific behavior under `modules/profiles/<profile>/`.
 
-No formatter is configured in-repo. Keep formatting consistent with existing `flake.nix` structure.
+No formatter is configured in-repo. Keep formatting consistent with the existing Nix files under `flake.nix` and `nix/`.
 
 ## Testing Guidelines
 

@@ -12,6 +12,10 @@ Do not use bare `session` to mean the host-side work unit.
 
 ## Structure
 
+- [`flake.nix`](./flake.nix): flake inputs and top-level output assembly.
+- [`nix/`](./nix): flake support and focused output assembly.
+  - [`flake-support.nix`](./nix/flake-support.nix): shared flake helper builders.
+  - [`outputs/`](./nix/outputs): focused output attrsets for modules, configurations, packages, and checks.
 - [`modules/base/`](./modules/base): shared Firebreak VM runtime.
   - [`module.nix`](./modules/base/module.nix): common guest and VM behavior shared by local and future cloud profiles.
   - [`guest/`](./modules/base/guest): guest-side shell helpers shared across profiles.
@@ -55,3 +59,4 @@ Do not use bare `session` to mean the host-side work unit.
 - Do not add new top-level `scripts/` or `tests/` directories.
 - Keep internal implementation files inside the module that owns them.
 - Keep `flake.nix` as assembly glue, not as the place where runtime logic accumulates.
+- Keep flake implementation helpers and focused output assembly under `nix/`.

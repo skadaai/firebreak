@@ -11,9 +11,9 @@ Implemented and validated.
 
 ## What has landed
 
-- public local agent packages now ship one package per agent instead of separate `*-shell` siblings
-- the local wrapper defaults to `agent` mode and now documents `FIREBREAK_AGENT_MODE=shell` as the public shell override
-- the local wrapper still accepts `AGENT_VM_ENTRYPOINT` as a compatibility alias
+- public local packages now ship one package per workload instead of separate `*-shell` siblings
+- the local wrapper defaults to `run` mode semantics and now documents `FIREBREAK_VM_MODE=shell` as the public shell override
+- the local wrapper still accepts `FIREBREAK_AGENT_MODE` and `AGENT_VM_ENTRYPOINT` as compatibility aliases
 - the local smoke harness validates shell behavior through the same public package
 - docs and architecture guidance now describe the single-package local-launch model
 
@@ -28,5 +28,5 @@ Implemented and validated.
 
 ## History
 
-- 2026-03-23: Spec created to collapse public local agent packages into one package per agent while preserving a semantic shell override.
+- 2026-03-23: Spec created to collapse public local packages into one package per workload while preserving a semantic shell override.
 - 2026-03-23: Implemented the package collapse, migrated smoke coverage to the shell override path, and updated docs.

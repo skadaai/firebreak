@@ -5,7 +5,8 @@ host_uid=$(id -u)
 host_gid=$(id -g)
 firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-/cache}/firebreak/tmp}
 agent_config_mode=${AGENT_CONFIG:-${CODEX_CONFIG:-vm}}
-agent_session_mode=${FIREBREAK_AGENT_MODE:-${AGENT_VM_ENTRYPOINT:-agent}}
+requested_vm_mode=${FIREBREAK_VM_MODE:-${FIREBREAK_AGENT_MODE:-${AGENT_VM_ENTRYPOINT:-run}}}
+agent_session_mode=agent
 default_agent_command=@DEFAULT_AGENT_COMMAND@
 agent_command_override=""
 shell_command_override=${AGENT_VM_COMMAND:-}
@@ -79,12 +80,16 @@ elif [ "$instance_ephemeral" = "1" ]; then
   control_socket=$host_instance_dir/$default_control_socket
 fi
 
-case "$agent_session_mode" in
-  agent|shell)
+case "$requested_vm_mode" in
+  run|agent)
+    agent_session_mode=agent
+    ;;
+  shell)
+    agent_session_mode=shell
     ;;
   *)
-    echo "unsupported FIREBREAK_AGENT_MODE: $agent_session_mode" >&2
-    echo "supported values: agent, shell" >&2
+    echo "unsupported FIREBREAK_VM_MODE: $requested_vm_mode" >&2
+    echo "supported values: run, shell" >&2
     exit 1
     ;;
 esac

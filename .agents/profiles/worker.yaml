@@ -2,8 +2,8 @@ name: "worker"
 kind: "role"
 selection: "exclusive"
 role_scope: "single-slice"
-description: "Implements one bounded Firebreak slice inside an active task."
-when: "Use as the active role when a bounded slice is ready for code changes."
+description: "Implements one bounded Firebreak slice in the selected workspace for an active task."
+when: "Use as the active role when a bounded slice is ready for code changes and the safest practical workspace has been chosen."
 inherits:
   - "base"
 requires_runtime_profile: true

@@ -41,15 +41,31 @@ require_pattern() {
   fi
 }
 
-init_stdout=$(firebreak_cmd init --stdout)
-require_pattern "$init_stdout" "AGENT_CONFIG=workspace" "default AGENT_CONFIG template entry"
-require_pattern "$init_stdout" "# FIREBREAK_VM_MODE=run" "default FIREBREAK_VM_MODE template entry"
+init_template_stdout=$(firebreak_cmd init --non-interactive --stdout)
+require_pattern "$init_template_stdout" "AGENT_CONFIG=workspace" "default AGENT_CONFIG template entry"
+require_pattern "$init_template_stdout" "# FIREBREAK_VM_MODE=run" "default FIREBREAK_VM_MODE template entry"
 
-firebreak_cmd init >/dev/null
+set +e
+interactive_init_output=$(
+  printf '1\n1\nn\nn\ny\n' | firebreak_cmd init 2>&1
+)
+interactive_init_status=$?
+set -e
+
+if [ "$interactive_init_status" -ne 0 ]; then
+  printf '%s\n' "$interactive_init_output" >&2
+  echo "interactive firebreak init did not complete successfully" >&2
+  exit 1
+fi
+
 if ! [ -f "$project_dir/.firebreak.env" ]; then
   echo "project-config smoke did not write .firebreak.env" >&2
   exit 1
 fi
+
+interactive_init_file=$(cat "$project_dir/.firebreak.env")
+require_pattern "$interactive_init_file" "AGENT_CONFIG=workspace" "interactive init AGENT_CONFIG entry"
+require_pattern "$interactive_init_file" "FIREBREAK_VM_MODE=run" "interactive init FIREBREAK_VM_MODE entry"
 
 cat >"$project_dir/.firebreak.env" <<EOF
 AGENT_CONFIG=host

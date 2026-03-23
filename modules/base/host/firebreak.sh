@@ -11,12 +11,12 @@ usage() {
 Skada Firebreak
 
 usage:
-  firebreak init [--force] [--stdout]
+  firebreak init [--force] [--stdout] [--interactive] [--non-interactive]
   firebreak doctor [--verbose] [--json]
   firebreak internal <subcommand> ...
 
 Available commands:
-  init        Write a Firebreak project defaults template
+  init        Interactively write Firebreak project defaults
   doctor      Explain resolved config and launch readiness
   internal    Internal plumbing for Firebreak's self development by agents and automation
 

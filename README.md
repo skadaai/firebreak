@@ -18,10 +18,11 @@ Firebreak is a VM-first control plane for running coding agents with a small pub
 
 ## Project Defaults
 
-Use `firebreak init` to create a project-local `.firebreak.env` file. The file uses the same `KEY=VALUE` spelling as the public environment variables, and real environment variables take precedence over file values.
+`firebreak init` is interactive by default and writes a project-local `.firebreak.env` file tailored to the answers you choose. The file uses the same `KEY=VALUE` spelling as the public environment variables, and real environment variables take precedence over file values.
 
 ```sh
 nix run .#firebreak -- init
+nix run .#firebreak -- init --non-interactive
 nix run .#firebreak -- doctor
 ```
 

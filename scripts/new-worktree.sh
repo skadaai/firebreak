@@ -33,7 +33,7 @@ if [[ -z "$worktree_parent" ]]; then
 fi
 
 mkdir -p "$worktree_parent"
-shared_root="${FIREBREAK_TASK_SHARED_ROOT:-${FIREBREAK_WORKTREE_SHARED_ROOT:-$(cd "$worktree_parent/.." && pwd)}}"
+shared_root="${FIREBREAK_TASK_SHARED_ROOT:-${FIREBREAK_WORKTREE_SHARED_ROOT:-$worktree_parent}}"
 
 log "Repo root: $root"
 log "Worktree parent: $worktree_parent"
@@ -81,13 +81,21 @@ for d in ".direnv" ".codex" ".claude"; do
   ln -sfnr "$shared_path" "$wt/$d"
 done
 
-# Copy env files best-effort (no failure if none exist)
-log "Copying .env* from repo root into new worktree (best-effort)..."
+# Copy untracked env files best-effort so new worktrees inherit local env setup.
+log "Copying untracked env files from repo root into new worktree (best-effort)..."
 shopt -s nullglob
 copied_any=0
-for f in "$root"/.env*; do
+declare -A seen_env_files=()
+for f in "$root"/.env* "$root"/*.env; do
   [[ -f "$f" ]] || continue
   base="$(basename "$f")"
+  if [[ -n "${seen_env_files[$base]:-}" ]]; then
+    continue
+  fi
+  seen_env_files["$base"]=1
+  if ! git -C "$root" ls-files --others --exclude-standard --error-unmatch -- "$base" >/dev/null 2>&1; then
+    continue
+  fi
   if [[ -e "$wt/$base" ]]; then
     log "Skip (already exists): $base"
     continue
@@ -99,7 +107,7 @@ done
 shopt -u nullglob
 
 if [[ "$copied_any" = "0" ]]; then
-  log "No .env* files found in repo root; skipping."
+  log "No untracked env files found in repo root; skipping."
 fi
 
 cat <<EOF

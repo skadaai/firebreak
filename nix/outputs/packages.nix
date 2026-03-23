@@ -8,6 +8,7 @@
   mkFirebreakCliPackage,
   mkLoopPackage,
   mkLoopSmokePackage,
+  mkProjectConfigSmokePackage,
   mkRunnerPackage,
   mkSmokePackage,
   mkTaskPackage,
@@ -31,6 +32,7 @@
     defaultAgentCommand = "codex";
     agentConfigDirName = ".codex";
     defaultAgentConfigHostDir = "$HOME/.codex";
+    agentEnvPrefix = "CODEX";
   };
 
   firebreak-test-smoke-codex = mkSmokePackage {
@@ -54,6 +56,7 @@
     defaultAgentCommand = "claude";
     agentConfigDirName = ".claude";
     defaultAgentConfigHostDir = "$HOME/.claude";
+    agentEnvPrefix = "CLAUDE";
   };
 
   firebreak-test-smoke-claude-code = mkSmokePackage {
@@ -85,6 +88,10 @@
   firebreak-test-smoke-cloud-job = mkCloudSmokePackage {
     name = "firebreak-test-smoke-cloud-job";
     jobPackage = "firebreak-internal-job-test-cloud";
+  };
+
+  firebreak-test-smoke-project-config-and-doctor = mkProjectConfigSmokePackage {
+    name = "firebreak-test-smoke-project-config-and-doctor";
   };
 
   firebreak-internal-validate = mkValidationPackage {

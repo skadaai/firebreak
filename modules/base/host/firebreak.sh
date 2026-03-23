@@ -2,21 +2,37 @@ set -eu
 
 command=${1:-}
 
+@FIREBREAK_PROJECT_CONFIG_LIB@
+@FIREBREAK_INIT_FUNCTIONS@
+@FIREBREAK_DOCTOR_FUNCTIONS@
+
 usage() {
   cat <<'EOF'
 Skada Firebreak
 
 usage:
+  firebreak init [--force] [--stdout]
+  firebreak doctor [--verbose] [--json]
   firebreak internal <subcommand> ...
 
 Available commands:
-  internal    Internal plumbing for agents and automation
+  init        Write a Firebreak project defaults template
+  doctor      Explain resolved config and launch readiness
+  internal    Internal plumbing for Firebreak's self development by agents and automation
 
-Human-facing commands remain reserved until they have clear user value and intuitive UX.
+Other human-facing commands remain reserved until they have clear user value and intuitive UX.
 EOF
 }
 
 case "$command" in
+  init)
+    shift
+    firebreak_init_command "$@"
+    ;;
+  doctor)
+    shift
+    firebreak_doctor_command "$@"
+    ;;
   internal)
     shift
     internal_command=${1:-}

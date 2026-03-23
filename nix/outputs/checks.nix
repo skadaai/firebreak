@@ -6,6 +6,7 @@
   firebreak-internal-runner-codex-cloud = self.packages.${system}.firebreak-internal-runner-codex-cloud;
   firebreak-codex-cloud-system = self.nixosConfigurations.firebreak-codex-cloud.config.system.build.toplevel;
   firebreak-test-smoke-cloud-job = self.packages.${system}.firebreak-test-smoke-cloud-job;
+  firebreak-test-smoke-project-config-and-doctor = self.packages.${system}.firebreak-test-smoke-project-config-and-doctor;
   firebreak-test-smoke-internal-loop = self.packages.${system}.firebreak-test-smoke-internal-loop;
   firebreak-test-smoke-internal-task = self.packages.${system}.firebreak-test-smoke-internal-task;
   firebreak-test-smoke-internal-validate = self.packages.${system}.firebreak-test-smoke-internal-validate;

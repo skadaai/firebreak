@@ -63,16 +63,19 @@ let
     defaultAgentCommand,
     agentConfigDirName,
     defaultAgentConfigHostDir,
+    agentEnvPrefix,
   }:
     pkgs.writeShellApplication {
       inherit name;
-      runtimeInputs = with pkgs; [ coreutils virtiofsd ];
+      runtimeInputs = with pkgs; [ coreutils git virtiofsd ];
       text = renderTemplate {
         "@CONTROL_SOCKET@" = "${controlSocketName}.socket";
         "@DEFAULT_AGENT_COMMAND@" = defaultAgentCommand;
         "@RUNNER@" = "${self.packages.${system}.${runnerPackage}}/bin/microvm-run";
         "@AGENT_CONFIG_DIR_NAME@" = agentConfigDirName;
         "@DEFAULT_AGENT_CONFIG_HOST_DIR@" = defaultAgentConfigHostDir;
+        "@AGENT_ENV_PREFIX@" = agentEnvPrefix;
+        "@FIREBREAK_PROJECT_CONFIG_LIB@" = builtins.readFile ../modules/base/host/firebreak-project-config.sh;
       } ../modules/profiles/local/host/run-wrapper.sh;
     };
 
@@ -98,6 +101,17 @@ let
         "@AGENT_DISPLAY_NAME@" = agentDisplayName;
         "@AGENT_PACKAGE@" = agentPackage;
       } ../modules/base/tests/agent-smoke.sh;
+    };
+
+  mkProjectConfigSmokePackage = { name }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        coreutils
+        git
+        gnugrep
+      ];
+      text = builtins.readFile ../modules/base/tests/test-smoke-project-config-and-doctor.sh;
     };
 
   mkCloudJobPackage = {
@@ -230,11 +244,18 @@ let
   mkFirebreakCliPackage = { name, validatePackage, taskPackage, loopPackage }:
     pkgs.writeShellApplication {
       inherit name;
-      runtimeInputs = with pkgs; [ coreutils ];
+      runtimeInputs = with pkgs; [
+        coreutils
+        git
+        gnused
+      ];
       text = renderTemplate {
         "@VALIDATE_BIN@" = "${self.packages.${system}.${validatePackage}}/bin/${validatePackage}";
         "@TASK_BIN@" = "${self.packages.${system}.${taskPackage}}/bin/${taskPackage}";
         "@LOOP_BIN@" = "${self.packages.${system}.${loopPackage}}/bin/${loopPackage}";
+        "@FIREBREAK_PROJECT_CONFIG_LIB@" = builtins.readFile ../modules/base/host/firebreak-project-config.sh;
+        "@FIREBREAK_INIT_FUNCTIONS@" = builtins.readFile ../modules/base/host/firebreak-init.sh;
+        "@FIREBREAK_DOCTOR_FUNCTIONS@" = builtins.readFile ../modules/base/host/firebreak-doctor.sh;
       } ../modules/base/host/firebreak.sh;
     };
 in {
@@ -248,6 +269,7 @@ in {
     mkFirebreakCliPackage
     mkLoopPackage
     mkLoopSmokePackage
+    mkProjectConfigSmokePackage
     mkRunnerPackage
     mkSmokePackage
     mkTaskPackage

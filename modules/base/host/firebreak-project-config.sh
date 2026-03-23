@@ -1,0 +1,135 @@
+trim_whitespace() {
+  value=$1
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s\n' "$value"
+}
+
+firebreak_reset_project_config_state() {
+  FIREBREAK_RESOLVED_PROJECT_ROOT=""
+  # shellcheck disable=SC2034
+  FIREBREAK_RESOLVED_PROJECT_ROOT_SOURCE=""
+  FIREBREAK_RESOLVED_PROJECT_CONFIG_FILE=""
+  # shellcheck disable=SC2034
+  FIREBREAK_RESOLVED_PROJECT_CONFIG_SOURCE="none"
+  FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS=""
+}
+
+firebreak_project_config_key_allowed() {
+  case "$1" in
+    AGENT_CONFIG|AGENT_CONFIG_HOST_PATH|FIREBREAK_VM_MODE|CODEX_CONFIG|CODEX_CONFIG_HOST_PATH|CLAUDE_CONFIG|CLAUDE_CONFIG_HOST_PATH)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+firebreak_record_ignored_key() {
+  ignored_key=$1
+  case "
+$FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS
+" in
+    *"
+$ignored_key
+"*)
+      ;;
+    *)
+      FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS="${FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS}${FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS:+
+}$ignored_key"
+      ;;
+  esac
+}
+
+firebreak_resolve_project_root() {
+  if [ -n "${FIREBREAK_RESOLVED_PROJECT_ROOT:-}" ]; then
+    return 0
+  fi
+
+  git_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
+  if [ -n "$git_root" ]; then
+    FIREBREAK_RESOLVED_PROJECT_ROOT=$git_root
+    # shellcheck disable=SC2034
+    FIREBREAK_RESOLVED_PROJECT_ROOT_SOURCE="git"
+  else
+    FIREBREAK_RESOLVED_PROJECT_ROOT=$PWD
+    # shellcheck disable=SC2034
+    FIREBREAK_RESOLVED_PROJECT_ROOT_SOURCE="cwd"
+  fi
+}
+
+firebreak_resolve_project_config_file() {
+  firebreak_resolve_project_root
+
+  if [ -n "${FIREBREAK_PROJECT_CONFIG_FILE:-}" ]; then
+    FIREBREAK_RESOLVED_PROJECT_CONFIG_FILE=$FIREBREAK_PROJECT_CONFIG_FILE
+    # shellcheck disable=SC2034
+    FIREBREAK_RESOLVED_PROJECT_CONFIG_SOURCE="env"
+    return 0
+  fi
+
+  candidate_path=$FIREBREAK_RESOLVED_PROJECT_ROOT/.firebreak.env
+  if [ -f "$candidate_path" ]; then
+    FIREBREAK_RESOLVED_PROJECT_CONFIG_FILE=$candidate_path
+    # shellcheck disable=SC2034
+    FIREBREAK_RESOLVED_PROJECT_CONFIG_SOURCE="project-default"
+    return 0
+  fi
+
+  FIREBREAK_RESOLVED_PROJECT_CONFIG_FILE=$candidate_path
+  # shellcheck disable=SC2034
+  FIREBREAK_RESOLVED_PROJECT_CONFIG_SOURCE="none"
+}
+
+firebreak_load_project_config() {
+  firebreak_reset_project_config_state
+  firebreak_resolve_project_config_file
+
+  if ! [ -f "$FIREBREAK_RESOLVED_PROJECT_CONFIG_FILE" ]; then
+    return 0
+  fi
+
+  while IFS= read -r raw_line || [ -n "$raw_line" ]; do
+    line=$(trim_whitespace "$raw_line")
+    [ -n "$line" ] || continue
+    case "$line" in
+      \#*)
+        continue
+        ;;
+      *=*)
+        ;;
+      *)
+        continue
+        ;;
+    esac
+
+    key=$(trim_whitespace "${line%%=*}")
+    value=$(trim_whitespace "${line#*=}")
+
+    case "$key" in
+      ""|*[!A-Za-z0-9_]*)
+        continue
+        ;;
+    esac
+
+    if ! firebreak_project_config_key_allowed "$key"; then
+      firebreak_record_ignored_key "$key"
+      continue
+    fi
+
+    if [ "${value#\"}" != "$value" ] && [ "${value%\"}" != "$value" ] && [ "${#value}" -ge 2 ]; then
+      value=${value#\"}
+      value=${value%\"}
+    elif [ "${value#\'}" != "$value" ] && [ "${value%\'}" != "$value" ] && [ "${#value}" -ge 2 ]; then
+      value=${value#\'}
+      value=${value%\'}
+    fi
+
+    if [ -z "${!key+x}" ]; then
+      printf -v "$key" '%s' "$value"
+      # shellcheck disable=SC2163
+      export "$key"
+    fi
+  done <"$FIREBREAK_RESOLVED_PROJECT_CONFIG_FILE"
+}

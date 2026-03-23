@@ -3,7 +3,7 @@ status: completed
 last_updated: 2026-03-21
 ---
 
-# 005 Isolated Work Sessions Status
+# 005 Isolated Work Tasks Status
 
 ## Current phase
 
@@ -28,7 +28,7 @@ Completed.
 
 - [spec](./SPEC.md)
 - [plan](./PLAN.md)
-- [acceptance](./acceptance/001-work-session-lifecycle.feature)
+- [acceptance](./acceptance/001-work-task-lifecycle.feature)
 
 ## History
 

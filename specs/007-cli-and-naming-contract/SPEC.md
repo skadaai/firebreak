@@ -31,6 +31,14 @@ Without a clear contract, the interface keeps drifting and users have to memoriz
 - define one naming grammar that works across CLI arguments, Nix packages, checks, docs, and file names
 - make test artifacts visibly tests first, instead of normal commands with a trailing suffix
 
+## Terminology
+
+- `task`: an isolated host-side work attempt with its own worktree, runtime state, artifacts, and metadata
+- `agent session`: an interactive or non-interactive agent process context launched inside a VM
+- `conversation thread`: an agent-specific memory or history object, when the agent exposes one
+
+In this changeset, bare `session` must not refer to the host-side work unit.
+
 ## Non-goals
 
 - implementing full human-facing `init`, `doctor`, or `run` workflows in this changeset
@@ -58,6 +66,7 @@ The intended landing shape is:
 - The system shall reserve the top-level `firebreak` command for human-facing entrypoints and the `internal` subtree.
 - When a command primarily exists for agent plumbing or automation, the system shall place it under `firebreak internal ...` instead of the top-level CLI.
 - When a host-side isolated work attempt is represented in the CLI, docs, or machine-readable output, the system shall name that concept `task` instead of `session`.
+- When the docs or CLI refer to an agent runtime or memory concept, the system shall qualify that concept as `agent session` or `conversation thread` instead of using bare `session`.
 - When Firebreak exports internal plumbing as Nix packages, the system shall prefix those package names with `firebreak-internal-`.
 - When Firebreak exports tests as Nix packages or checks, the system shall prefix those names with `firebreak-test-`.
 - When Firebreak names a smoke test package or suite, the system shall place `smoke` immediately after `test`.
@@ -82,7 +91,7 @@ The intended landing shape is:
 - [ARCHITECTURE.md](../../ARCHITECTURE.md)
 - [AGENTS.md](../../AGENTS.md)
 - [spec 004](../004-autonomous-vm-validation/SPEC.md)
-- [spec 005](../005-isolated-work-sessions/SPEC.md)
+- [spec 005](../005-isolated-work-tasks/SPEC.md)
 - [spec 006](../006-bounded-autonomous-change-loop/SPEC.md)
 
 ### Risks

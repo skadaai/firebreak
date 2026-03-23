@@ -2,6 +2,14 @@
 
 Firebreak uses a module-oriented layout instead of flat `scripts/` and `tests/` buckets.
 
+## Terminology
+
+- `task`: an isolated host-side work attempt with its own worktree, runtime state, artifacts, and metadata
+- `agent session`: an interactive or non-interactive agent process context launched inside a VM
+- `conversation thread`: an agent-specific memory or history object, when the agent exposes one
+
+Do not use bare `session` to mean the host-side work unit.
+
 ## Structure
 
 - [`modules/base/`](./modules/base): shared Firebreak VM runtime.

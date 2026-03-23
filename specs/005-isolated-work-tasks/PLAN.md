@@ -3,7 +3,7 @@ status: completed
 last_updated: 2026-03-21
 ---
 
-# 005 Isolated Work Sessions Plan
+# 005 Isolated Work Tasks Plan
 
 ## Implementation slices
 

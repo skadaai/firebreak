@@ -23,7 +23,7 @@ last_updated: 2026-03-21
 ## Dependencies
 
 - [spec 004](../004-autonomous-vm-validation/SPEC.md)
-- [spec 005](../005-isolated-work-sessions/SPEC.md)
+- [spec 005](../005-isolated-work-tasks/SPEC.md)
 - the current repo conventions in [engineering/SPECS.md](../../engineering/SPECS.md) and [AGENTS.md](../../AGENTS.md)
 
 ## Current status

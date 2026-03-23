@@ -75,7 +75,7 @@ It defines the agent-facing control loop that sits on top of specs, work tasks, 
 - [engineering/SPECS.md](../../engineering/SPECS.md)
 - [ARCHITECTURE.md](../../ARCHITECTURE.md)
 - [spec 004](../004-autonomous-vm-validation/SPEC.md)
-- [spec 005](../005-isolated-work-sessions/SPEC.md)
+- [spec 005](../005-isolated-work-tasks/SPEC.md)
 - [AGENTS.md](../../AGENTS.md)
 
 ### Risks

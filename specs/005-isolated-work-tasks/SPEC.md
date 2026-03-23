@@ -3,7 +3,7 @@ status: completed
 last_updated: 2026-03-21
 ---
 
-# 005 Isolated Work Sessions
+# 005 Isolated Work Tasks
 
 ## Problem
 
@@ -63,7 +63,7 @@ The intended landing shape is a task harness that multiple agents can use in par
 
 - A work-task contract exists with explicit worktree, branch, VM-state, and artifact boundaries.
 - Parallel work tasks can run without colliding on VM instance state.
-- Session lifecycle behavior is explicit for create, resume-or-reject, and cleanup/archive paths.
+- Task lifecycle behavior is explicit for create, resume-or-reject, and cleanup/archive paths.
 - Acceptance scenarios exist for isolated creation, parallel execution, and deterministic duplicate-task handling.
 
 ## Dependencies and risks

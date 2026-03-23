@@ -5,10 +5,10 @@ Tagline: reliable isolation for high-trust automation
 Public naming:
 - Top-level CLI/control plane: firebreak
 - Codex VM entry: firebreak-codex
-- Codex maintenance shell entry: firebreak-codex-shell
+- Codex maintenance shell override: AGENT_VM_ENTRYPOINT=shell nix run .#firebreak-codex
 - Codex smoke test entry: firebreak-test-smoke-codex
 - Claude Code VM entry: firebreak-claude-code
-- Claude Code maintenance shell entry: firebreak-claude-code-shell
+- Claude Code maintenance shell override: AGENT_VM_ENTRYPOINT=shell nix run .#firebreak-claude-code
 - Claude Code smoke test entry: firebreak-test-smoke-claude-code
 - Current shipped agent VMs: firebreak-codex, firebreak-claude-code
 

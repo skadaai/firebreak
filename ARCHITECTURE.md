@@ -47,8 +47,7 @@ Do not use bare `session` to mean the host-side work unit.
    - `nixosModules.firebreak-my-agent`
    - `nixosConfigurations.firebreak-my-agent`
    - `packages.firebreak-my-agent`
-   - `packages.firebreak-my-agent-shell`
-   - `packages.firebreak-my-agent-smoke`
+   - `packages.firebreak-test-smoke-my-agent`
 5. Reuse the shared smoke template unless the agent truly needs different validation behavior.
 
 ## Rules

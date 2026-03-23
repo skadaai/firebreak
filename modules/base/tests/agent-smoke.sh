@@ -87,6 +87,7 @@ run_scenario() {
   set +e
   output=$(
     AGENT_CONFIG=$mode \
+      AGENT_VM_ENTRYPOINT=shell \
       FIREBREAK_INSTANCE_EPHEMERAL=1 \
       AGENT_CONFIG_HOST_PATH="${host_config_path:-}" \
       AGENT_VM_COMMAND="$smoke_probe_command" \
@@ -176,8 +177,8 @@ run_agent_exec_scenario() {
 }
 
 run_agent_exec_scenario workspace "default agent entry runs @AGENT_BIN@ --version as a one-shot command" "--version"
-run_scenario @AGENT_SHELL_PACKAGE@ workspace "$expected_workspace_config_dir" "shell entry uses workspace config"
-run_scenario @AGENT_SHELL_PACKAGE@ vm "/var/lib/dev/@AGENT_CONFIG_DIR_NAME@" "shell entry uses vm config"
-run_scenario @AGENT_SHELL_PACKAGE@ host "/run/agent-config-host" "shell entry uses host config" "$host_config_dir"
+run_scenario @AGENT_PACKAGE@ workspace "$expected_workspace_config_dir" "shell override uses workspace config"
+run_scenario @AGENT_PACKAGE@ vm "/var/lib/dev/@AGENT_CONFIG_DIR_NAME@" "shell override uses vm config"
+run_scenario @AGENT_PACKAGE@ host "/run/agent-config-host" "shell override uses host config" "$host_config_dir"
 
 printf '%s\n' "Firebreak smoke test passed"

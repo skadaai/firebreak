@@ -7,10 +7,6 @@
   },
   "files": [
     "bin",
-    "flake.nix",
-    "flake.lock",
-    "modules",
-    "nix",
     "README.md"
   ],
   "engines": {

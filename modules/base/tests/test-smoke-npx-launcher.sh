@@ -1,6 +1,5 @@
 set -eu
 
-caller_cwd=$PWD
 repo_root=@REPO_ROOT@
 if ! [ -f "$repo_root/bin/firebreak.js" ] || ! [ -f "$repo_root/package.json" ]; then
   echo "launcher smoke could not resolve the Firebreak source root" >&2
@@ -52,18 +51,20 @@ fi
 
 rm -f "$nix_args_path" "$nix_cwd_path"
 
-PATH="$fake_bin_dir:$PATH" \
-  FIREBREAK_LAUNCHER_PACKAGE_ROOT="$repo_root" \
-  FIREBREAK_LAUNCHER_KVM_PATH="$fake_kvm_path" \
-  node "$repo_root/bin/firebreak.js" doctor --json
+(
+  cd "$repo_root"
+  PATH="$fake_bin_dir:$PATH" \
+    FIREBREAK_LAUNCHER_KVM_PATH="$fake_kvm_path" \
+    node "$repo_root/bin/firebreak.js" vms >/dev/null
+)
 
 if ! [ -f "$nix_args_path" ]; then
   echo "launcher smoke did not invoke the fake nix binary" >&2
   exit 1
 fi
 
-if ! [ -f "$nix_cwd_path" ] || [ "$(cat "$nix_cwd_path")" != "$caller_cwd" ]; then
-  echo "launcher smoke did not preserve the caller working directory" >&2
+if ! [ -f "$nix_cwd_path" ] || [ "$(cat "$nix_cwd_path")" != "$repo_root" ]; then
+  echo "launcher smoke did not preserve the caller working directory for the local checkout case" >&2
   exit 1
 fi
 
@@ -82,6 +83,33 @@ require_arg "nix-command flakes"
 require_arg "run"
 require_arg "path:$repo_root#firebreak"
 require_arg "--"
+require_arg "vms"
+
+rm -f "$nix_args_path" "$nix_cwd_path"
+
+(
+  cd "$smoke_tmp_dir"
+  PATH="$fake_bin_dir:$PATH" \
+    FIREBREAK_LAUNCHER_KVM_PATH="$fake_kvm_path" \
+    node "$repo_root/bin/firebreak.js" doctor --json >/dev/null
+)
+
+if ! [ -f "$nix_args_path" ]; then
+  echo "launcher smoke did not invoke the fake nix binary for the GitHub fallback case" >&2
+  exit 1
+fi
+
+if ! [ -f "$nix_cwd_path" ] || [ "$(cat "$nix_cwd_path")" != "$smoke_tmp_dir" ]; then
+  echo "launcher smoke did not preserve the caller working directory for the GitHub fallback case" >&2
+  exit 1
+fi
+
+require_arg "--accept-flake-config"
+require_arg "--extra-experimental-features"
+require_arg "nix-command flakes"
+require_arg "run"
+require_arg "github:skadaai/firebreak#firebreak"
+require_arg "--"
 require_arg "doctor"
 require_arg "--json"
 
@@ -89,7 +117,6 @@ rm -f "$nix_args_path" "$nix_cwd_path"
 set +e
 missing_kvm_output=$(
   PATH="$fake_bin_dir:$PATH" \
-    FIREBREAK_LAUNCHER_PACKAGE_ROOT="$repo_root" \
     FIREBREAK_LAUNCHER_KVM_PATH="$smoke_tmp_dir/missing-kvm" \
     node "$repo_root/bin/firebreak.js" internal validate run test-smoke-codex 2>&1
 )

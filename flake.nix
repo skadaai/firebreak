@@ -34,6 +34,7 @@
           mkAgentVersionSmokePackage
           mkCloudJobPackage
           mkCloudSmokePackage
+          mkFirebreakCliSurfaceSmokePackage
           mkFirebreakCliPackage
           mkLoopPackage
           mkLoopSmokePackage

@@ -10,6 +10,17 @@
 
 Firebreak is a VM-first control plane for running coding agents with a small public interface.
 
+## Firebreak CLI
+
+```sh
+firebreak vms
+firebreak run codex
+firebreak run codex --shell
+firebreak run claude-code -- --help
+```
+
+`firebreak vms` lists the public VM workloads. `firebreak run <vm>` launches one of them through the existing Firebreak VM packages.
+
 ## Local Workloads
 
 - `nix run .#firebreak-codex` launches Codex in the local Firebreak VM
@@ -21,6 +32,8 @@ Firebreak is a VM-first control plane for running coding agents with a small pub
 Firebreak ships a thin Node launcher so users can run the Nix-backed CLI with `npx firebreak ...`.
 
 ```sh
+npx firebreak vms
+npx firebreak run codex
 npx firebreak doctor
 npx firebreak init
 ```
@@ -30,6 +43,8 @@ The launcher:
 - checks that the host is `x86_64-linux`
 - checks that `nix` is installed and callable
 - checks that `/dev/kvm` is usable before non-diagnostic commands
+- uses the local Firebreak checkout automatically when you run it inside a cloned Firebreak repo
+- falls back to `github:skadaai/firebreak` when no local Firebreak checkout is present
 - forwards all arguments to the existing Bash Firebreak CLI through `nix run`
 
 ## Project Defaults

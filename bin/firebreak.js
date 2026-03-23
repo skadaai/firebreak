@@ -4,10 +4,14 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
-const packageRoot =
-  process.env.FIREBREAK_LAUNCHER_PACKAGE_ROOT ||
-  path.resolve(__dirname, "..");
+const GITHUB_FLAKE_REF = "github:skadaai/firebreak#firebreak";
+const LOCAL_ROOT_MARKERS = [
+  ["flake.nix"],
+  ["modules", "base", "host", "firebreak.sh"]
+];
+
 const kvmPath = process.env.FIREBREAK_LAUNCHER_KVM_PATH || "/dev/kvm";
+const forcedLocalRoot = process.env.FIREBREAK_LAUNCHER_PACKAGE_ROOT || "";
 const args = process.argv.slice(2);
 const topLevelCommand = args[0] || "";
 
@@ -44,6 +48,53 @@ function checkNix() {
   }
 }
 
+function pathExists(targetPath) {
+  try {
+    fs.accessSync(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function looksLikeFirebreakRoot(candidateRoot) {
+  return LOCAL_ROOT_MARKERS.every((segments) =>
+    pathExists(path.join(candidateRoot, ...segments))
+  );
+}
+
+function findLocalFirebreakRoot(startDir) {
+  let currentDir = path.resolve(startDir);
+
+  while (true) {
+    if (looksLikeFirebreakRoot(currentDir)) {
+      return currentDir;
+    }
+
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) {
+      return null;
+    }
+    currentDir = parentDir;
+  }
+}
+
+function resolveFlakeRef() {
+  if (forcedLocalRoot) {
+    if (!looksLikeFirebreakRoot(forcedLocalRoot)) {
+      fail(`FIREBREAK_LAUNCHER_PACKAGE_ROOT does not point to a Firebreak checkout: ${forcedLocalRoot}`);
+    }
+    return `path:${path.resolve(forcedLocalRoot)}#firebreak`;
+  }
+
+  const localRoot = findLocalFirebreakRoot(process.cwd());
+  if (localRoot) {
+    return `path:${localRoot}#firebreak`;
+  }
+
+  return GITHUB_FLAKE_REF;
+}
+
 function kvmFailureReason() {
   try {
     fs.accessSync(kvmPath, fs.constants.R_OK | fs.constants.W_OK);
@@ -68,7 +119,8 @@ function commandAllowsMissingKvm() {
     topLevelCommand === "-h" ||
     topLevelCommand === "--help" ||
     topLevelCommand === "init" ||
-    topLevelCommand === "doctor"
+    topLevelCommand === "doctor" ||
+    topLevelCommand === "vms"
   );
 }
 
@@ -93,7 +145,7 @@ function checkWorkspacePath() {
 }
 
 function runFirebreak() {
-  const flakeRef = `path:${packageRoot}#firebreak`;
+  const flakeRef = resolveFlakeRef();
   const result = spawnSync(
     "nix",
     [

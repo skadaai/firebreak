@@ -11,7 +11,7 @@ Completed.
 
 ## What has landed
 
-- a host-side `firebreak validate` entrypoint for named VM validation suites
+- a host-side `firebreak internal validate run` entrypoint for named VM validation suites
 - capability detection that reports blocked hosts without turning them into false regressions
 - machine-readable summaries with persisted stdout, stderr, and exit-code artifacts
 - a dedicated validation smoke that exercises both runnable and blocked validation flows
@@ -31,4 +31,4 @@ Completed.
 ## History
 
 - 2026-03-20: Spec created to define a self-service VM validation harness that autonomous Firebreak operators can invoke without human intervention.
-- 2026-03-20: Implemented `firebreak validate`, persisted validation artifacts, and added validation smoke coverage for runnable and blocked hosts.
+- 2026-03-20: Implemented the validation harness, persisted validation artifacts, and added validation smoke coverage for runnable and blocked hosts.

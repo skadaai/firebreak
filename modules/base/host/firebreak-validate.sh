@@ -1,18 +1,18 @@
 set -eu
 
 state_dir=${FIREBREAK_VALIDATION_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/firebreak/validation}
+command=${1:-}
 suite_name=""
 
 usage() {
   cat <<'EOF' >&2
-usage: firebreak-validate SUITE [--state-dir PATH]
+usage: firebreak internal validate run SUITE [--state-dir PATH]
 
 Named suites:
-  local-smoke
-  codex-smoke
-  codex-version
-  claude-code-smoke
-  cloud-smoke
+  test-smoke-codex
+  test-smoke-codex-version
+  test-smoke-claude-code
+  test-smoke-cloud-job
 EOF
   exit 1
 }
@@ -42,14 +42,24 @@ emit_summary() {
 EOF
 }
 
+case "$command" in
+  run)
+    shift
+    ;;
+  ""|--help|-h|help)
+    usage
+    ;;
+  *)
+    echo "unknown firebreak internal validate subcommand: $command" >&2
+    usage
+    ;;
+esac
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --state-dir)
       state_dir=$2
       shift 2
-      ;;
-    --help|-h)
-      usage
       ;;
     -*)
       usage
@@ -80,16 +90,16 @@ required_capability="kvm"
 missing_capability=""
 
 case "$suite_name" in
-  local-smoke|codex-smoke)
+  test-smoke-codex)
     suite_command="@CODEX_SMOKE_BIN@"
     ;;
-  codex-version)
+  test-smoke-codex-version)
     suite_command="@CODEX_VERSION_BIN@"
     ;;
-  claude-code-smoke)
+  test-smoke-claude-code)
     suite_command="@CLAUDE_SMOKE_BIN@"
     ;;
-  cloud-smoke)
+  test-smoke-cloud-job)
     suite_command="@CLOUD_SMOKE_BIN@"
     ;;
   *)

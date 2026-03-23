@@ -6,8 +6,8 @@ This repository is centered on a Nix flake plus reusable VM modules:
 
 - [`flake.nix`](./flake.nix): flake wiring, VM constructors, packages, and checks.
 - [`modules/base/`](./modules/base): shared Firebreak VM runtime, with `module.nix`, shared guest-side helpers, and the generic smoke template.
-- [`modules/profiles/local/`](./modules/profiles/local): local-launch profile, including local host-side helpers and local guest session helpers.
-- [`modules/profiles/cloud/`](./modules/profiles/cloud): cloud execution profile, including cloud host-side helpers and cloud guest job/session helpers.
+- [`modules/profiles/local/`](./modules/profiles/local): local-launch profile, including local host-side helpers and local guest task-preparation helpers.
+- [`modules/profiles/cloud/`](./modules/profiles/cloud): cloud execution profile, including cloud host-side helpers and cloud guest job/task helpers.
 - [`modules/bun-agent/`](./modules/bun-agent): shared helper layer for Bun-managed agent CLIs.
 - [`modules/codex/`](./modules/codex): Codex-specific overlay module.
 - [`modules/claude-code/`](./modules/claude-code): Claude Code-specific overlay module.
@@ -31,23 +31,23 @@ There is no separate application `src/` tree yet. Keep shared behavior in the ba
   Runs the Claude Code MicroVM wrapper with dynamic host `PWD` mounting and launches `claude` by default.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-claude-code-shell`
   Runs the Claude Code VM, but enters a maintenance shell instead of starting `claude`.
-- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-claude-code-smoke`
+- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-test-smoke-claude-code`
   Runs the lightweight host-side smoke test against the Claude Code VM.
-- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' build .#firebreak-codex-runner`
+- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' build .#firebreak-internal-runner-codex`
   Builds the underlying declared runner without launching the VM.
-- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-codex-smoke`
+- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-test-smoke-codex`
   Runs the lightweight host-side smoke test against the interactive Codex VM.
-- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-autonomy-smoke`
-  Runs the bounded autonomous-change-loop smoke against isolated Firebreak sessions.
+- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-test-smoke-internal-loop`
+  Runs the bounded autonomous change-loop smoke against isolated Firebreak tasks.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak`
-  Runs the top-level Firebreak CLI with validation, session, and autonomy subcommands.
+  Runs the top-level Firebreak CLI with the human-facing surface plus the `internal` subtree.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' flake check`
   Runs flake evaluation checks. Use this before submitting changes.
-- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak -- autonomy run ...`
-  Runs the bounded autonomous loop against an existing isolated session, recording plan, policy, validation, review, and commit evidence.
+- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak -- internal loop run ...`
+  Runs the bounded internal loop against an existing isolated task, recording plan, policy, validation, review, and commit evidence.
 - GitHub Actions
   - `.github/workflows/ci.yml` runs hosted `flake check` on pushes and pull requests.
-  - `.github/workflows/vm-smoke.yml` runs `firebreak-codex-smoke` on a self-hosted runner labeled `self-hosted`, `linux`, `x64`, and `kvm`.
+  - `.github/workflows/vm-smoke.yml` runs `firebreak-test-smoke-codex` on a self-hosted runner labeled `self-hosted`, `linux`, `x64`, and `kvm`.
 
 ## Coding Style & Naming Conventions
 
@@ -68,11 +68,11 @@ Use the smoke test for the core runtime path, then boot the VM manually for beha
 
 Examples:
 
-- smoke path: `nix run .#firebreak-codex-smoke`
+- smoke path: `nix run .#firebreak-test-smoke-codex`
 - shell entry path: `nix run .#firebreak-codex-shell`
 - Claude Code entry path: `nix run .#firebreak-claude-code`
 - Claude Code shell path: `nix run .#firebreak-claude-code-shell`
-- Claude Code smoke path: `nix run .#firebreak-claude-code-smoke`
+- Claude Code smoke path: `nix run .#firebreak-test-smoke-claude-code`
 - tool bootstrap: `codex --version`
 - dynamic path mount: run from a chosen host directory and confirm the same path exists in the guest
 - boot flow: confirm `nix run .#firebreak-codex` enters `codex`, and `nix run .#firebreak-codex-shell` reaches the `dev` shell

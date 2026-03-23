@@ -10,7 +10,7 @@ Use the Firebreak harness, not ad hoc shell output, as the source of truth.
 ## Workflow
 
 1. Pick the smallest named suite that proves the slice.
-2. Run it through `firebreak validate`.
+2. Run it through `firebreak internal validate run`.
 3. Read the machine result and artifact paths.
 4. Decide the next action from the result.
 

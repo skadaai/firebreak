@@ -8,7 +8,7 @@ last_updated: 2026-03-21
 ## Implementation slices
 
 1. Define the autonomous attempt record and audit-log contract.
-2. Define how tracked specs, work sessions, and validation suites are selected for a change attempt.
+2. Define how tracked specs, work tasks, and validation suites are selected for a change attempt.
 3. Implement the bounded execution stages: plan, implement, validate, review, and disposition.
 4. Add stop conditions for missing capability, validation failure, and policy violations.
 5. Wire commit creation and final summaries to the audit record.
@@ -16,7 +16,7 @@ last_updated: 2026-03-21
 ## Validation approach
 
 - add behavioral acceptance scenarios under `acceptance/`
-- exercise a successful autonomous change attempt in a bounded session
+- exercise a successful autonomous change attempt in a bounded task
 - exercise blocked paths for missing validation capability and policy violations
 - review whether the resulting audit trail is sufficient for a maintainer to reconstruct what happened
 

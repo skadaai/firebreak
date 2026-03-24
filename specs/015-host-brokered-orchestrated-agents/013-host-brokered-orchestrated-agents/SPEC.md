@@ -1,0 +1,114 @@
+---
+status: in_progress
+last_updated: 2026-03-24
+---
+
+# 015 Host-Brokered Orchestrated Agents
+
+## Problem
+
+Firebreak can already launch individual agent VMs, and external orchestrator recipes such as [external/agent-orchestrator/flake.nix](../../external/agent-orchestrator/flake.nix) can already run inside a Firebreak sandbox.
+
+What Firebreak does not define yet is how an orchestrator inside one Firebreak VM should obtain more agent workers.
+
+Today there are two obvious but incomplete answers:
+
+- install every agent CLI inside the orchestrator VM and run them as regular processes
+- let the orchestrator VM try to launch more VMs from inside itself
+
+The first option collapses isolation, state boundaries, and resource accounting back into one guest. The second option fights Firebreak's current host-runner model and turns nested virtualization into an accidental product contract.
+
+Without an explicit orchestration layer, Firebreak cannot give external orchestrators a stable, high-trust way to fan out work across isolated workers while preserving the current VM runtime boundaries.
+
+## Affected users, actors, or systems
+
+- maintainers designing external Firebreak recipes for agent orchestrators
+- operators who want one orchestrator to fan out into many agent workers
+- future Firebreak host-side schedulers or worker brokers
+- existing Firebreak local-launch packages such as `firebreak-codex` and `firebreak-claude-code`
+
+## Goals
+
+- define a Firebreak-native orchestration contract above the current local VM runtime
+- let an orchestrator request isolated sibling workers without needing to launch nested VMs from inside a guest
+- support more than one worker execution backend, beginning with `process` and `firebreak`
+- keep the guest-visible control surface stable even when the worker backend changes
+- make worker lifecycle, state ownership, and concurrency limits explicit
+
+## Non-goals
+
+- making guest-launched nested MicroVMs part of the Firebreak product contract
+- distributed scheduling across multiple physical hosts
+- unbounded autoscaling without operator-configured limits
+- redesigning existing single-agent packages such as `firebreak-codex` or `firebreak-claude-code`
+- defining every possible external orchestrator integration in the first changeset
+
+## Morphology and scope of the changeset
+
+This changeset is structural and operational.
+
+It introduces an orchestration layer above Firebreak's current VM packages.
+
+The intended landing shape is:
+
+- an orchestrator VM acts as a control plane
+- a host-side Firebreak broker owns worker spawning and lifecycle
+- the orchestrator guest talks to that host broker through a narrow Firebreak control surface instead of launching child VMs directly
+- Firebreak defines worker backends, beginning with `process` and `firebreak`
+- the `firebreak` backend launches sibling worker VMs on the host rather than nested worker VMs inside the guest
+- external recipes can declare which worker kinds they expose and which backend each kind uses
+
+## Requirements
+
+- The system shall define a Firebreak orchestration contract for external orchestrator sandboxes.
+- The system shall provide at least two worker execution backends: `process` and `firebreak`.
+- When an orchestrator requests a `process` worker, the system shall run that worker inside the orchestrator VM under the shared guest runtime.
+- When an orchestrator requests a `firebreak` worker, the system shall ask the host to launch a sibling Firebreak worker instead of asking the guest to launch a nested VM.
+- The system shall not require guest-launched nested virtualization as part of the public orchestration contract.
+- The system shall expose a guest-visible control surface for worker lifecycle operations such as spawn, status, list, and stop.
+- The system shall keep that guest-visible control surface stable across worker backends.
+- The system shall give each spawned worker a stable worker identifier and reviewable metadata.
+- The system shall keep runner state, instance directories, temporary roots, and control sockets for `firebreak` workers under host-side ownership.
+- The system shall allow external recipes to declare orchestratable worker kinds and the backend used for each kind.
+- The system shall allow bounded per-kind or per-recipe concurrency limits.
+- The system shall define how orchestrated workers resolve workspace access so the worker can act on the intended project state.
+- The system shall define how orchestrated workers resolve Firebreak config modes and agent-specific config where those differ from the orchestrator VM.
+- The system shall allow existing Firebreak single-agent packages to remain usable outside the orchestration layer.
+
+## Acceptance criteria
+
+- Firebreak has an explicit orchestration contract that distinguishes `process` workers from `firebreak` workers.
+- The `firebreak` worker path is defined as host-brokered sibling VM launch rather than guest-launched nested virtualization.
+- A guest-visible control surface exists for worker lifecycle operations without exposing raw host runner internals.
+- External recipe authors have a defined way to register worker kinds, worker backends, and concurrency limits.
+- Worker identity, lifecycle state, and host-owned runtime paths are explicit and reviewable.
+- The first integration path can target an external orchestrator recipe such as [external/agent-orchestrator/flake.nix](../../external/agent-orchestrator/flake.nix) without changing the public names of existing single-agent packages.
+
+## Dependencies and risks
+
+### Dependencies
+
+- [engineering/SPECS.md](../../engineering/SPECS.md)
+- [ARCHITECTURE.md](../../ARCHITECTURE.md)
+- [AGENTS.md](../../AGENTS.md)
+- [spec 005](../005-isolated-work-tasks/SPEC.md)
+- [spec 008](../008-single-agent-package-mode/SPEC.md)
+- [spec 009](../009-project-config-and-doctor/SPEC.md)
+- current [modules/profiles/local/host/run-wrapper.sh](../../modules/profiles/local/host/run-wrapper.sh)
+- current [nix/support/projects.nix](../../nix/support/projects.nix)
+- current [external/agent-orchestrator/flake.nix](../../external/agent-orchestrator/flake.nix)
+
+### Risks
+
+- a weak orchestration boundary could leak host-runner internals into guest-facing product surface
+- worker workspace semantics could drift if orchestrator-visible paths and worker-visible paths are not aligned explicitly
+- process and VM backends could diverge semantically if the control surface is not kept intentionally narrow
+- a premature scheduler design could overreach before one local host-brokered integration is proven
+
+## Relevant constitutional and product docs
+
+- [engineering/SPECS.md](../../engineering/SPECS.md)
+- [ARCHITECTURE.md](../../ARCHITECTURE.md)
+- [AGENTS.md](../../AGENTS.md)
+- [README.md](../../README.md)
+- [UPSTREAM_REPOS.md](../../UPSTREAM_REPOS.md)

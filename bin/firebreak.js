@@ -15,6 +15,7 @@ const forcedLocalRoot = process.env.FIREBREAK_LAUNCHER_PACKAGE_ROOT || "";
 const args = process.argv.slice(2);
 const topLevelCommand = args[0] || "";
 const HELP_COMMANDS = new Set(["", "help", "-h", "--help"]);
+const SPINNER_SAFE_COMMANDS = new Set(["", "help", "-h", "--help", "init", "doctor", "vms"]);
 
 const fail = (message) => {
   console.error(`firebreak launcher: ${message}`);
@@ -40,8 +41,12 @@ const checkNix = () => {
     encoding: "utf8"
   });
 
-  if (result.error && result.error.code === "ENOENT") {
-    fail("Nix is not installed. Install Nix first, then run `npx firebreak` again.");
+  if (result.error) {
+    if (result.error.code === "ENOENT") {
+      fail("Nix is not installed. Install Nix first, then run `npx firebreak` again.");
+    }
+
+    fail(`unable to execute nix: [${result.error.code || "unknown"}] ${result.error.message}`);
   }
 
   if (result.status !== 0) {
@@ -119,6 +124,8 @@ const commandAllowsMissingKvm = () => (
   topLevelCommand === "doctor" ||
   topLevelCommand === "vms"
 );
+
+const commandSupportsLiveSpinner = () => SPINNER_SAFE_COMMANDS.has(topLevelCommand);
 
 const checkKvm = () => {
   const failure = kvmFailureReason();
@@ -216,6 +223,10 @@ const createFallbackReporter = (label, flakeRef) => {
 
 const createLoadingReporter = async (label, flakeRef) => {
   const fallbackReporter = createFallbackReporter(label, flakeRef);
+
+  if (!commandSupportsLiveSpinner()) {
+    return fallbackReporter;
+  }
 
   try {
     const oraModule = await import("ora");

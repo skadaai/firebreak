@@ -6,7 +6,7 @@ host_cwd=$PWD
 host_uid=$(id -u)
 host_gid=$(id -g)
 firebreak_load_project_config
-firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
+resolved_firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
 firebreak_state_root=${FIREBREAK_STATE_DIR:-${XDG_STATE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.local/state}/firebreak}
 agent_specific_config_var=@AGENT_ENV_PREFIX@_CONFIG
 agent_specific_host_path_var=@AGENT_ENV_PREFIX@_CONFIG_HOST_PATH
@@ -19,19 +19,6 @@ default_agent_command=@DEFAULT_AGENT_COMMAND@
 agent_command_override=""
 shell_command_override=${AGENT_VM_COMMAND:-}
 agent_config_host_dir=""
-mkdir -p "$firebreak_tmp_root"
-host_runtime_dir=$(mktemp -d "$firebreak_tmp_root/r.XXXXXX")
-host_meta_dir=$host_runtime_dir/m
-host_exec_output_dir=$host_runtime_dir/o
-host_instance_dir=$host_runtime_dir/instance
-runner_stdout_log=$host_runtime_dir/runner.out
-runner_stderr_log=$host_runtime_dir/runner.err
-virtiofsd_hostcwd_log=$host_runtime_dir/v-cwd.log
-virtiofsd_agent_config_log=$host_runtime_dir/v-cfg.log
-virtiofsd_agent_exec_log=$host_runtime_dir/v-out.log
-hostcwd_socket=$host_runtime_dir/cwd.sock
-agent_config_socket=$host_runtime_dir/cfg.sock
-agent_exec_output_socket=$host_runtime_dir/out.sock
 default_control_socket=@CONTROL_SOCKET@
 instance_state_dir=${FIREBREAK_INSTANCE_DIR:-}
 instance_ephemeral=${FIREBREAK_INSTANCE_EPHEMERAL:-0}
@@ -69,6 +56,21 @@ resolve_symlink_target() {
 default_agent_config_host_dir=$(resolve_host_dir "${agent_specific_host_path:-${AGENT_CONFIG_HOST_PATH:-@DEFAULT_AGENT_CONFIG_HOST_DIR@}}")
 
 reject_whitespace_path "$host_cwd" "current working directory"
+reject_whitespace_path "$resolved_firebreak_tmp_root" "Firebreak temporary runtime directory"
+firebreak_tmp_root=$resolved_firebreak_tmp_root
+mkdir -p "$firebreak_tmp_root"
+host_runtime_dir=$(mktemp -d "$firebreak_tmp_root/r.XXXXXX")
+host_meta_dir=$host_runtime_dir/m
+host_exec_output_dir=$host_runtime_dir/o
+host_instance_dir=$host_runtime_dir/instance
+runner_stdout_log=$host_runtime_dir/runner.out
+runner_stderr_log=$host_runtime_dir/runner.err
+virtiofsd_hostcwd_log=$host_runtime_dir/v-cwd.log
+virtiofsd_agent_config_log=$host_runtime_dir/v-cfg.log
+virtiofsd_agent_exec_log=$host_runtime_dir/v-out.log
+hostcwd_socket=$host_runtime_dir/cwd.sock
+agent_config_socket=$host_runtime_dir/cfg.sock
+agent_exec_output_socket=$host_runtime_dir/out.sock
 
 default_instance_key=$(printf '%s' "$host_cwd" | sha256sum | cut -c1-16)
 default_instance_dir=$firebreak_state_root/instances/${default_control_socket%.socket}-$default_instance_key

@@ -57,7 +57,7 @@
               text = ''
                 set -eu
 
-                workspace=${cfg.workspaceMount}
+                workspace="${cfg.workspaceMount}"
                 missing_marker=""
 
                 for marker in ${repoMarkerArgs}; do
@@ -98,7 +98,7 @@
               text = ''
                 set -eu
 
-                workspace=${cfg.workspaceMount}
+                workspace="${cfg.workspaceMount}"
                 missing_marker=""
 
                 for marker in ${repoMarkerArgs}; do
@@ -130,9 +130,9 @@
               bootstrapScript = ''
                 set -eu
 
-                workspace=${cfg.workspaceMount}
-                dev_home=${devHome}
-                dev_user=${cfg.devUser}
+                workspace="${cfg.workspaceMount}"
+                dev_home="${devHome}"
+                dev_user="${cfg.devUser}"
                 state_root="$dev_home/.cache/firebreak-workspaces/${name}"
                 state_file="$state_root/inputs.sha256"
                 missing_marker=""

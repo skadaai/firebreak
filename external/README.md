@@ -32,8 +32,8 @@ nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run
 ```bash
 cd ~/your-project
 FIREBREAK_VM_MODE=shell nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
-  path:./path/to/firebreak/external/agent-orchestrator \
-  --override-input firebreak path:$PWD
+  path:/path/to/firebreak/external/agent-orchestrator \
+  --override-input firebreak path:/path/to/firebreak
 ```
 
 
@@ -57,7 +57,7 @@ For local development inside this repo, test the nested flake against your check
 cd ~/your-project
 nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
   path:/path/to/firebreak/external/agent-orchestrator#firebreak-agent-orchestrator \
-  --override-input firebreak path:/path/to/firebreak/ao
+  --override-input firebreak path:/path/to/firebreak
 ```
 
 If a nested external flake errors with `attribute 'lib' missing`, that means its locked `github:skadaai/firebreak` input is older than the library export available in your checkout. Override the input explicitly when testing locally, or update/publish the upstream Firebreak input first.
@@ -72,4 +72,4 @@ If a nested external flake errors with `attribute 'lib' missing`, that means its
 6. Remaining friction: the local launcher rejects paths with whitespace because the runtime share injection does not support them. That is easy to trip over when sandboxing arbitrary external repos.
 7. Remaining friction: external recipe flakes currently have no generated lockfiles in-tree. That keeps the repo light, but the first host-side build will need to create locks or run with `--no-write-lock-file`.
 8. Remaining friction: full `nix build` validation depends on a writable Nix store or daemon socket. In constrained environments that means Firebreak recipes can be authored but not actually built, which argues for a more explicit validation story or helper command.
-9. Remaining friction: local development against nested external flakes requires `--override-input firebreak path:/path/to/firebreak/ao` until the in-progress Firebreak helper changes are published and consumed by those child locks.
+9. Remaining friction: local development against nested external flakes requires `--override-input firebreak path:/path/to/firebreak` until the in-progress Firebreak helper changes are published and consumed by those child locks.

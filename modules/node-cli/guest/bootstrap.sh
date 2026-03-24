@@ -23,12 +23,22 @@ mkdir -p \
   "$xdg_cache_home" \
   "$xdg_state_home" \
   "$npm_cache_dir"
-chown -R "$dev_user:$dev_user" "$dev_home"
 
 if [ -x "$local_bin/@BIN_NAME@" ] && [ -r "$state_file" ] && [ "$(cat "$state_file")" = '@PACKAGE_SPEC@' ]; then
   printf '%s\n' '@DISPLAY_NAME@: packaged CLI already installed.'
   exit 0
 fi
+
+chown -R "$dev_user:$dev_user" \
+  "$state_root" \
+  "$local_bin" \
+  "$install_prefix" \
+  "$install_prefix/lib/node_modules" \
+  "$install_tmp" \
+  "$xdg_config_home" \
+  "$xdg_cache_home" \
+  "$xdg_state_home" \
+  "$npm_cache_dir"
 
 runuser -u "$dev_user" -- env \
   HOME="$dev_home" \
@@ -59,5 +69,14 @@ runuser -u "$dev_user" -- env \
   ' sh "$package_node_modules" '@PACKAGE_SPEC@'
 
 printf '%s\n' '@PACKAGE_SPEC@' > "$state_file"
-chown -R "$dev_user:$dev_user" "$state_root" "$dev_home"
+chown -R "$dev_user:$dev_user" \
+  "$state_root" \
+  "$local_bin" \
+  "$install_prefix" \
+  "$install_prefix/lib/node_modules" \
+  "$install_tmp" \
+  "$xdg_config_home" \
+  "$xdg_cache_home" \
+  "$xdg_state_home" \
+  "$npm_cache_dir"
 printf '%s\n' '@DISPLAY_NAME@: packaged CLI installed.'

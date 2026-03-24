@@ -14,13 +14,24 @@
 
   outputs = { self, nixpkgs, microvm }:
     let
-      system = "x86_64-linux";
-      support = import ./nix/flake-support.nix {
-        inherit self nixpkgs microvm system;
-      };
+      lib = nixpkgs.lib;
+      defaultSystem = "x86_64-linux";
+      supportedSystems = [
+        defaultSystem
+        "aarch64-linux"
+      ];
+      supports = lib.genAttrs supportedSystems (system:
+        import ./nix/flake-support.nix {
+          inherit self nixpkgs microvm system;
+        });
+      localVmArtifacts = lib.genAttrs supportedSystems (system:
+        import ./nix/outputs/local-vm-artifacts.nix {
+          inherit self;
+          inherit (supports.${system}) mkLocalVmArtifacts pkgs;
+        });
     in {
-      lib.${system} = {
-        inherit (support)
+      lib = lib.genAttrs supportedSystems (system: {
+        inherit (supports.${system})
           mkAgentVm
           mkLocalVmArtifacts
           mkLocalVmPackage
@@ -28,41 +39,40 @@
           mkRunnerPackage
           mkWorkspaceProjectArtifacts
           ;
-      };
+      });
 
       nixosModules = import ./nix/outputs/modules.nix {
         inherit self;
       };
 
-      nixosConfigurations = import ./nix/outputs/configurations.nix {
-        inherit self;
-        inherit (support) mkAgentVm pkgs;
-      };
+      nixosConfigurations = lib.mapAttrs (_: artifacts: artifacts.nixosConfiguration) localVmArtifacts.${defaultSystem};
 
-      packages.${system} = import ./nix/outputs/packages.nix {
-        inherit self system;
-        inherit (support)
-          mkAgentPackage
-          mkAgentVersionSmokePackage
-          mkCloudJobPackage
-          mkCloudSmokePackage
-          mkFirebreakCliSurfaceSmokePackage
-          mkFirebreakCliPackage
-          mkLoopPackage
-          mkLoopSmokePackage
-          mkNpxLauncherSmokePackage
-          mkProjectConfigSmokePackage
-          mkRunnerPackage
-          mkSmokePackage
-          mkTaskPackage
-          mkTaskSmokePackage
-          mkValidationPackage
-          mkValidationSmokePackage
-          ;
-      };
+      packages = lib.genAttrs supportedSystems (system:
+        import ./nix/outputs/packages.nix {
+          inherit self system;
+          localVmArtifacts = localVmArtifacts.${system};
+          inherit (supports.${system})
+            mkAgentVersionSmokePackage
+            mkCloudJobPackage
+            mkCloudSmokePackage
+            mkFirebreakCliSurfaceSmokePackage
+            mkFirebreakCliPackage
+            mkLoopPackage
+            mkLoopSmokePackage
+            mkNpxLauncherSmokePackage
+            mkProjectConfigSmokePackage
+            mkSmokePackage
+            mkTaskPackage
+            mkTaskSmokePackage
+            mkValidationPackage
+            mkValidationSmokePackage
+            ;
+        });
 
-      checks.${system} = import ./nix/outputs/checks.nix {
-        inherit self system;
-      };
+      checks = lib.genAttrs supportedSystems (system:
+        import ./nix/outputs/checks.nix {
+          inherit self system;
+          localVmArtifacts = localVmArtifacts.${system};
+        });
     };
 }

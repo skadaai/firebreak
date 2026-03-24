@@ -50,6 +50,24 @@ if [ "$missing_nix_status" -eq 0 ] || ! printf '%s\n' "$missing_nix_output" | gr
   exit 1
 fi
 
+set +e
+unsupported_arch_output=$(
+  env -i \
+    HOME="${HOME:-/tmp}" \
+    PATH="$empty_bin_dir" \
+    FIREBREAK_LAUNCHER_TEST_PLATFORM=linux \
+    FIREBREAK_LAUNCHER_TEST_ARCH=ia32 \
+    "$node_bin" "$repo_root/bin/firebreak.js" help 2>&1
+)
+unsupported_arch_status=$?
+set -e
+
+if [ "$unsupported_arch_status" -eq 0 ] || ! printf '%s\n' "$unsupported_arch_output" | grep -F -q "x86_64-linux and aarch64-linux"; then
+  printf '%s\n' "$unsupported_arch_output" >&2
+  echo "launcher smoke did not reject unsupported Linux architectures clearly" >&2
+  exit 1
+fi
+
 rm -f "$nix_args_path" "$nix_cwd_path"
 
 vms_output=$(
@@ -76,6 +94,8 @@ doctor_output=$(
   cd "$smoke_tmp_dir"
   PATH="$fake_bin_dir:$PATH" \
     FIREBREAK_LAUNCHER_KVM_PATH="$fake_kvm_path" \
+    FIREBREAK_LAUNCHER_TEST_PLATFORM=linux \
+    FIREBREAK_LAUNCHER_TEST_ARCH=arm64 \
     node "$repo_root/bin/firebreak.js" doctor --json
 )
 

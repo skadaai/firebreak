@@ -131,6 +131,12 @@ in {
       description = "Size of the persistent /var volume in MiB.";
     };
 
+    memoryMiB = mkOption {
+      type = types.ints.positive;
+      default = 1024;
+      description = "Guest RAM size in MiB.";
+    };
+
     varVolumeImage = mkOption {
       type = types.str;
       default = "${cfg.name}-var.img";
@@ -236,6 +242,7 @@ in {
     };
 
     microvm = {
+      mem = cfg.memoryMiB;
       interfaces = [ {
         type = "user";
         id = "vm-user";

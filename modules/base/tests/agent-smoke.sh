@@ -9,7 +9,7 @@ fi
 host_uid=$(id -u)
 host_gid=$(id -g)
 timeout_seconds=${FIREBREAK_SMOKE_TIMEOUT:-${CODEX_VM_SMOKE_TIMEOUT:-900}}
-firebreak_tmp_root=${FIREBREAK_TMPDIR:-${TMPDIR:-/tmp}}/firebreak/tmp
+firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
 mkdir -p "$firebreak_tmp_root"
 host_config_dir=$(mktemp -d "$firebreak_tmp_root/agent-smoke-config.XXXXXX")
 workspace_config_host_path=""

@@ -12,7 +12,7 @@ if [ "$git_common_dir" != ".git" ]; then
   exit 1
 fi
 
-firebreak_tmp_root=${FIREBREAK_TMPDIR:-${TMPDIR:-/tmp}}/firebreak/tmp
+firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
 mkdir -p "$firebreak_tmp_root"
 loop_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-internal-loop.XXXXXX")
 trap 'rm -rf "$loop_tmp_dir"' EXIT INT TERM

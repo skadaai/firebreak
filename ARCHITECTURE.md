@@ -14,7 +14,8 @@ Do not use bare `session` to mean the host-side work unit.
 
 - [`flake.nix`](./flake.nix): flake inputs and top-level output assembly.
 - [`nix/`](./nix): flake support and focused output assembly.
-  - [`flake-support.nix`](./nix/flake-support.nix): shared flake helper builders.
+  - [`flake-support.nix`](./nix/flake-support.nix): thin composition layer for shared flake helpers.
+  - [`support/`](./nix/support): focused helper families for runtime assembly, project recipes, and package builders.
   - [`outputs/`](./nix/outputs): focused output attrsets for modules, configurations, packages, and checks.
 - [`modules/base/`](./modules/base): shared Firebreak VM runtime.
   - [`module.nix`](./modules/base/module.nix): common guest and VM behavior shared by local and future cloud profiles.
@@ -31,6 +32,9 @@ Do not use bare `session` to mean the host-side work unit.
 - [`modules/bun-agent/`](./modules/bun-agent): shared implementation for Bun-managed agent CLIs.
   - [`module.nix`](./modules/bun-agent/module.nix): common Bun-agent overlay logic.
   - [`guest/`](./modules/bun-agent/guest): guest bootstrap and shell-init templates for Bun-backed agents.
+- [`modules/node-cli/`](./modules/node-cli): shared implementation for npm-installed Node CLI sandboxes.
+  - [`module.nix`](./modules/node-cli/module.nix): common Node CLI overlay logic.
+  - [`guest/`](./modules/node-cli/guest): guest bootstrap and shell-init templates for packaged Node CLIs.
 - [`modules/codex/`](./modules/codex): Codex-specific overlay.
 - [`modules/claude-code/`](./modules/claude-code): Claude Code-specific overlay.
 
@@ -40,6 +44,7 @@ Do not use bare `session` to mean the host-side work unit.
 - `modules/profiles/local` owns local-only launch behavior such as dynamic host cwd sharing, host identity adoption, task preparation, and the interactive console.
 - `modules/profiles/cloud` owns cloud-only guest behavior such as fixed workspace semantics, prompt-driven agent execution, and non-interactive job completion.
 - `modules/bun-agent` owns the shared contract for agents launched through Bun, including bootstrap and agent-specific environment exports.
+- `modules/node-cli` owns the shared contract for npm-installed packaged CLIs, including bootstrap, persistent install state, and project launch helpers.
 - Agent modules such as `codex` and `claude-code` should stay thin. They should mostly declare package name, binary name, config directory, and any agent-specific packages or environment exports.
 
 ## Adding A New Agent

@@ -21,12 +21,13 @@ fi
 
 cd "$target"
 
-printf '\nWelcome to %s - %s\n\n' "@BRANDING_NAME@" "@BRANDING_TAGLINE@"
-printf 'vm: %s | mode: %s | workspace: %s\n\n' "@AGENT_VM_NAME@" "$session_mode" "$target"
+printf '\n\e[0m\e[1mWelcome to %s - %s\e[0m\n' "@BRANDING_NAME@" "@BRANDING_TAGLINE@"
+printf '[ vm: %s | mode: %s | workspace: %s ]\n' "@AGENT_VM_NAME@" "$session_mode" "$target"
 
 case "$session_mode" in
   shell)
-    exec @BASH@ -i
+    @BASH@ -i || true
+    exit 0
     ;;
   agent)
     if [ -n "$agent_command" ]; then

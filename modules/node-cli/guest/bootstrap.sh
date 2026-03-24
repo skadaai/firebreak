@@ -54,19 +54,19 @@ runuser -u "$dev_user" -- env \
   npm_config_loglevel=warn \
   CI=1 \
   PATH="$local_bin:$PATH" \
-  sh -lc '
-    set -eu
-    mkdir -p \
-      "$XDG_CONFIG_HOME" \
-      "$XDG_CACHE_HOME" \
-      "$XDG_STATE_HOME" \
-      "$npm_config_cache" \
-      "$npm_config_prefix"
-    rm -rf "$1"
-    rm -f "$npm_config_prefix/bin/@BIN_NAME@"
-    npm install --global --omit=dev "$2"
-    @POST_INSTALL_SCRIPT@
-  ' sh "$package_node_modules" '@PACKAGE_SPEC@'
+  sh -s "$package_node_modules" '@PACKAGE_SPEC@' <<'EOF'
+set -eu
+mkdir -p \
+  "$XDG_CONFIG_HOME" \
+  "$XDG_CACHE_HOME" \
+  "$XDG_STATE_HOME" \
+  "$npm_config_cache" \
+  "$npm_config_prefix"
+rm -rf "$1"
+rm -f "$npm_config_prefix/bin/@BIN_NAME@"
+npm install --global --omit=dev "$2"
+@POST_INSTALL_SCRIPT@
+EOF
 
 printf '%s\n' '@PACKAGE_SPEC@' > "$state_file"
 chown -R "$dev_user:$dev_user" \

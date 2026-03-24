@@ -43,6 +43,18 @@
           let
             cfg = config.agentVm;
             devHome = "/var/lib/${cfg.devUser}";
+            stateRoot = "${devHome}/.cache/firebreak-workspaces/${name}";
+            workspaceOwnedPaths = [
+              stateRoot
+              "${devHome}/.cache/tmp"
+              "${devHome}/.config"
+              "${devHome}/.local/bin"
+              "${devHome}/.local/share/pnpm"
+              "${devHome}/.local/state"
+              "${devHome}/.cargo"
+              "${devHome}/.rustup"
+            ];
+            workspaceOwnedPathLines = lib.concatStringsSep " \\\n  " (map lib.escapeShellArg workspaceOwnedPaths);
             tools = packageSet pkgs;
             bootstrapTools = bootstrapPackageSet pkgs;
             sharedBootstrapPackages = with pkgs; [
@@ -51,6 +63,24 @@
               gnused
               util-linux
             ];
+            launchCommandScript = pkgs.writeShellScript "${name}-workspace-launch-command" ''
+              set -eu
+              cd "$1"
+              ${launchCommand}
+            '';
+            bootstrapCommandScript = pkgs.writeShellScript "${name}-workspace-bootstrap-command" ''
+              set -eu
+              mkdir -p \
+                "$XDG_CONFIG_HOME" \
+                "$XDG_CACHE_HOME/tmp" \
+                "$XDG_STATE_HOME" \
+                "$HOME/.local/bin" \
+                "$PNPM_HOME" \
+                "$CARGO_HOME" \
+                "$RUSTUP_HOME"
+              cd "$WORKSPACE"
+              ${bootstrapCommands}
+            '';
             readyScript = pkgs.writeShellApplication {
               name = readyCommandName;
               runtimeInputs = with pkgs; [ coreutils ];
@@ -114,11 +144,7 @@
                   exit 1
                 fi
 
-                exec bash -lc '
-                  set -eu
-                  cd "$1"
-                  ${launchCommand}
-                ' bash "$workspace"
+                exec ${launchCommandScript} "$workspace"
               '';
             };
           in {
@@ -133,7 +159,7 @@
                 workspace="${cfg.workspaceMount}"
                 dev_home="${devHome}"
                 dev_user="${cfg.devUser}"
-                state_root="$dev_home/.cache/firebreak-workspaces/${name}"
+                state_root="${stateRoot}"
                 state_file="$state_root/inputs.sha256"
                 missing_marker=""
 
@@ -150,15 +176,7 @@
                 fi
 
                 mkdir -p \
-                  "$state_root" \
-                  "$dev_home/.cache/tmp" \
-                  "$dev_home/.config" \
-                  "$dev_home/.local/bin" \
-                  "$dev_home/.local/share/pnpm" \
-                  "$dev_home/.local/state" \
-                  "$dev_home/.cargo" \
-                  "$dev_home/.rustup"
-                chown -R "$dev_user:$dev_user" "$dev_home"
+                  ${workspaceOwnedPathLines}
 
                 hash_input=$(mktemp)
                 {
@@ -181,6 +199,9 @@
                   exit 0
                 fi
 
+                chown -R "$dev_user:$dev_user" \
+                  ${workspaceOwnedPathLines}
+
                 runuser -u "$dev_user" -- env \
                   HOME="$dev_home" \
                   XDG_CONFIG_HOME="$dev_home/.config" \
@@ -192,22 +213,11 @@
                   RUSTUP_HOME="$dev_home/.rustup" \
                   WORKSPACE="$workspace" \
                   PATH="$dev_home/.local/share/pnpm:$dev_home/.local/bin:$dev_home/.cargo/bin:$PATH" \
-                  sh -lc '
-                    set -eu
-                    mkdir -p \
-                      "$XDG_CONFIG_HOME" \
-                      "$XDG_CACHE_HOME/tmp" \
-                      "$XDG_STATE_HOME" \
-                      "$HOME/.local/bin" \
-                      "$PNPM_HOME" \
-                      "$CARGO_HOME" \
-                      "$RUSTUP_HOME"
-                    cd "$WORKSPACE"
-                    ${bootstrapCommands}
-                  '
+                  ${bootstrapCommandScript}
 
                 printf '%s\n' "$current_hash" > "$state_file"
-                chown -R "$dev_user:$dev_user" "$state_root" "$dev_home"
+                chown -R "$dev_user:$dev_user" \
+                  ${workspaceOwnedPathLines}
                 printf '%s\n' '${displayName}: dependency preparation finished.'
               '';
               shellInit = ''

@@ -236,6 +236,7 @@
     launchCommand ? binName,
     launchEnvironment ? { },
     forwardPorts ? [ ],
+    postInstallScript ? "",
     memoryMiB ? 3072,
     runtimePackages ? [ ],
     bootstrapPackages ? null,
@@ -274,6 +275,7 @@
             launchCommandName
             launchEnvironment
             forwardPorts
+            postInstallScript
             readyCommandName
             memoryMiB
             extraShellInit

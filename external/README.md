@@ -26,19 +26,27 @@ Example commands:
 
 ```bash
 cd ~/your-project
-nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run path:/path/to/firebreak/ao/external/agent-orchestrator#firebreak-agent-orchestrator
+nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run path:/path/to/firebreak/external/agent-orchestrator#firebreak-agent-orchestrator
 ```
 
 ```bash
 cd ~/your-project
-nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run path:/path/to/firebreak/ao/external/vibe-kanban#firebreak-vibe-kanban
+FIREBREAK_VM_MODE=shell nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
+  path:./path/to/firebreak/external/agent-orchestrator \
+  --override-input firebreak path:$PWD
+```
+
+
+```bash
+cd ~/your-project
+nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run path:/path/to/firebreak/external/vibe-kanban#firebreak-vibe-kanban
 ```
 
 To build the VM artifacts without launching them:
 
 ```bash
-nix --accept-flake-config --extra-experimental-features 'nix-command flakes' build path:/path/to/firebreak/ao/external/agent-orchestrator#firebreak-internal-runner-agent-orchestrator
-nix --accept-flake-config --extra-experimental-features 'nix-command flakes' build path:/path/to/firebreak/ao/external/vibe-kanban#firebreak-internal-runner-vibe-kanban
+nix --accept-flake-config --extra-experimental-features 'nix-command flakes' build path:/path/to/firebreak/external/agent-orchestrator#firebreak-internal-runner-agent-orchestrator
+nix --accept-flake-config --extra-experimental-features 'nix-command flakes' build path:/path/to/firebreak/external/vibe-kanban#firebreak-internal-runner-vibe-kanban
 ```
 
 The nested flakes are structured so they can live in external repositories and consume a published Firebreak input.
@@ -48,7 +56,7 @@ For local development inside this repo, test the nested flake against your check
 ```bash
 cd ~/your-project
 nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
-  path:/path/to/firebreak/ao/external/agent-orchestrator#firebreak-agent-orchestrator \
+  path:/path/to/firebreak/external/agent-orchestrator#firebreak-agent-orchestrator \
   --override-input firebreak path:/path/to/firebreak/ao
 ```
 

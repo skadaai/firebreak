@@ -9,6 +9,7 @@
   readyCommandName,
   launchEnvironment ? { },
   forwardPorts ? [ ],
+  postInstallScript ? "",
   memoryMiB ? 3072,
   extraSystemPackages ? [ ],
   extraBootstrapPackages ? [ ],
@@ -98,6 +99,7 @@ let
     "@NPM_CACHE_DIR@" = npmCacheDir;
     "@PACKAGE_NODE_MODULES@" = packageNodeModules;
     "@PACKAGE_SPEC@" = packageSpec;
+    "@POST_INSTALL_SCRIPT@" = postInstallScript;
     "@READY_COMMAND_NAME@" = readyCommandName;
     "@TMPDIR@" = installTmp;
     "@XDG_CACHE_HOME@" = xdgCacheHome;

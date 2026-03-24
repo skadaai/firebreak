@@ -55,6 +55,7 @@ runuser -u "$dev_user" -- env \
     rm -rf "$1"
     rm -f "$npm_config_prefix/bin/@BIN_NAME@"
     npm install --global --omit=dev "$2"
+    @POST_INSTALL_SCRIPT@
   ' sh "$package_node_modules" '@PACKAGE_SPEC@'
 
 printf '%s\n' '@PACKAGE_SPEC@' > "$state_file"

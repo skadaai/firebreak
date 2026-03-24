@@ -180,6 +180,7 @@ let
       runtimeInputs = with pkgs; [
         coreutils
         gnugrep
+        python3
       ];
       text = renderTemplate {
         "@FIREBREAK_CLI_BIN@" = "${fakeCli}/bin/firebreak-cli-smoke-firebreak";

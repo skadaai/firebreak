@@ -17,8 +17,16 @@ require_pattern "$vms_output" "codex" "codex VM listing"
 require_pattern "$vms_output" "claude-code" "claude-code VM listing"
 
 vms_json=$(@FIREBREAK_CLI_BIN@ vms --json)
-require_pattern "$vms_json" '"name": "codex"' "codex VM JSON listing"
-require_pattern "$vms_json" '"name": "claude-code"' "claude-code VM JSON listing"
+VMS_JSON=$vms_json python3 - <<'PY'
+import json
+import os
+
+obj = json.loads(os.environ["VMS_JSON"])
+names = {entry["name"] for entry in obj}
+
+assert "codex" in names
+assert "claude-code" in names
+PY
 
 vms_help_output=$(@FIREBREAK_CLI_BIN@ vms --help 2>&1)
 require_pattern "$vms_help_output" "usage:" "vms help usage text"

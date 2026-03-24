@@ -123,8 +123,10 @@ let
       runtimeInputs = with pkgs; [
         bash
         coreutils
+        git
         gnugrep
         nodejs_20
+        python3
       ];
       text = renderTemplate {
         "@REPO_ROOT@" = builtins.toString ../.;
@@ -133,25 +135,50 @@ let
 
   mkFirebreakCliSurfaceSmokePackage = { name }:
     let
-      fakeValidate = pkgs.writeShellScriptBin "firebreak-cli-smoke-validate" ''
-        exit 0
-      '';
-      fakeTask = pkgs.writeShellScriptBin "firebreak-cli-smoke-task" ''
-        exit 0
-      '';
-      fakeLoop = pkgs.writeShellScriptBin "firebreak-cli-smoke-loop" ''
-        exit 0
-      '';
-      fakeCodex = pkgs.writeShellScriptBin "firebreak-cli-smoke-codex" ''
-        printf '%s\n' "__VM__codex"
-        printf '%s\n' "__MODE__''${FIREBREAK_VM_MODE:-unset}"
-        for arg in "$@"; do
-          printf '%s\n' "__ARG__$arg"
+      fakeNix = pkgs.writeShellScriptBin "nix" ''
+        set -eu
+
+        if [ "$#" -gt 0 ] && [ "$1" = "--version" ]; then
+          printf '%s\n' 'nix smoke shim'
+          exit 0
+        fi
+
+        while [ "$#" -gt 0 ] && [ "$1" != "run" ]; do
+          shift
         done
-      '';
-      fakeClaudeCode = pkgs.writeShellScriptBin "firebreak-cli-smoke-claude-code" ''
-        printf '%s\n' "__VM__claude-code"
-        printf '%s\n' "__MODE__''${FIREBREAK_VM_MODE:-unset}"
+
+        [ "$#" -gt 0 ] || exit 1
+        shift
+        installable=''${1:-}
+        shift
+
+        if [ "''${1:-}" = "--" ]; then
+          shift
+        fi
+
+        case "$installable" in
+          *"#firebreak-codex")
+            printf '%s\n' "__VM__codex"
+            printf '%s\n' "__MODE__''${FIREBREAK_VM_MODE:-unset}"
+            ;;
+          *"#firebreak-claude-code")
+            printf '%s\n' "__VM__claude-code"
+            printf '%s\n' "__MODE__''${FIREBREAK_VM_MODE:-unset}"
+            ;;
+          *"#firebreak-internal-validate")
+            printf '%s\n' "__INTERNAL__validate"
+            ;;
+          *"#firebreak-internal-task")
+            printf '%s\n' "__INTERNAL__task"
+            ;;
+          *"#firebreak-internal-loop")
+            printf '%s\n' "__INTERNAL__loop"
+            ;;
+          *)
+            printf '%s\n' "__INSTALLABLE__$installable"
+            ;;
+        esac
+
         for arg in "$@"; do
           printf '%s\n' "__ARG__$arg"
         done
@@ -159,20 +186,19 @@ let
       fakeCli = pkgs.writeShellApplication {
         name = "firebreak-cli-smoke-firebreak";
         runtimeInputs = with pkgs; [
+          bash
           coreutils
           git
+          gnugrep
           gnused
+          python3
+          fakeNix
         ];
-        text = renderTemplate {
-          "@VALIDATE_BIN@" = "${fakeValidate}/bin/firebreak-cli-smoke-validate";
-          "@TASK_BIN@" = "${fakeTask}/bin/firebreak-cli-smoke-task";
-          "@LOOP_BIN@" = "${fakeLoop}/bin/firebreak-cli-smoke-loop";
-          "@CODEX_BIN@" = "${fakeCodex}/bin/firebreak-cli-smoke-codex";
-          "@CLAUDE_CODE_BIN@" = "${fakeClaudeCode}/bin/firebreak-cli-smoke-claude-code";
-          "@FIREBREAK_PROJECT_CONFIG_LIB@" = builtins.readFile ../modules/base/host/firebreak-project-config.sh;
-          "@FIREBREAK_INIT_FUNCTIONS@" = builtins.readFile ../modules/base/host/firebreak-init.sh;
-          "@FIREBREAK_DOCTOR_FUNCTIONS@" = builtins.readFile ../modules/base/host/firebreak-doctor.sh;
-        } ../modules/base/host/firebreak.sh;
+        text = ''
+          export FIREBREAK_LIBEXEC_DIR='${builtins.toString ../modules/base/host}'
+          export FIREBREAK_FLAKE_REF='path:/firebreak-cli-smoke'
+          exec bash "$FIREBREAK_LIBEXEC_DIR/firebreak.sh" "$@"
+        '';
       };
     in
     pkgs.writeShellApplication {
@@ -314,25 +340,32 @@ let
       text = builtins.readFile ../modules/base/tests/test-smoke-internal-loop.sh;
     };
 
-  mkFirebreakCliPackage = { name, validatePackage, taskPackage, loopPackage, codexPackage, claudeCodePackage }:
+  mkFirebreakCliPackage = { name }:
+    let
+      firebreakLibexec = pkgs.runCommand "firebreak-libexec" {} ''
+        mkdir -p "$out/libexec"
+        install -m 0555 ${../modules/base/host/firebreak.sh} "$out/libexec/firebreak.sh"
+        install -m 0555 ${../modules/base/host/firebreak-init.sh} "$out/libexec/firebreak-init.sh"
+        install -m 0555 ${../modules/base/host/firebreak-doctor.sh} "$out/libexec/firebreak-doctor.sh"
+        install -m 0555 ${../modules/base/host/firebreak-project-config.sh} "$out/libexec/firebreak-project-config.sh"
+      '';
+      firebreakFlakeRef = "path:${builtins.toString ../.}";
+    in
     pkgs.writeShellApplication {
       inherit name;
       runtimeInputs = with pkgs; [
+        bash
         coreutils
         git
         gnused
+        nix
         python3
       ];
-      text = renderTemplate {
-        "@VALIDATE_BIN@" = "${self.packages.${system}.${validatePackage}}/bin/${validatePackage}";
-        "@TASK_BIN@" = "${self.packages.${system}.${taskPackage}}/bin/${taskPackage}";
-        "@LOOP_BIN@" = "${self.packages.${system}.${loopPackage}}/bin/${loopPackage}";
-        "@CODEX_BIN@" = "${self.packages.${system}.${codexPackage}}/bin/${codexPackage}";
-        "@CLAUDE_CODE_BIN@" = "${self.packages.${system}.${claudeCodePackage}}/bin/${claudeCodePackage}";
-        "@FIREBREAK_PROJECT_CONFIG_LIB@" = builtins.readFile ../modules/base/host/firebreak-project-config.sh;
-        "@FIREBREAK_INIT_FUNCTIONS@" = builtins.readFile ../modules/base/host/firebreak-init.sh;
-        "@FIREBREAK_DOCTOR_FUNCTIONS@" = builtins.readFile ../modules/base/host/firebreak-doctor.sh;
-      } ../modules/base/host/firebreak.sh;
+      text = ''
+        export FIREBREAK_LIBEXEC_DIR='${firebreakLibexec}/libexec'
+        export FIREBREAK_FLAKE_REF='${firebreakFlakeRef}'
+        exec bash "$FIREBREAK_LIBEXEC_DIR/firebreak.sh" "$@"
+      '';
     };
 in {
   inherit

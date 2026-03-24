@@ -77,8 +77,7 @@ sha256_output=$(printf '%s' "$host_cwd" | sha256sum) || {
   echo "failed to hash current working directory for Firebreak instance state" >&2
   exit 1
 }
-set -- $sha256_output
-default_instance_key=$1
+default_instance_key=${sha256_output%% *}
 if [ -z "$default_instance_key" ]; then
   echo "failed to derive Firebreak instance key from current working directory hash" >&2
   exit 1

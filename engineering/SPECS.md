@@ -1,6 +1,6 @@
 ---
 status: canonical
-last_updated: 2026-03-19
+last_updated: 2026-03-24
 ---
 
 # Specs
@@ -37,6 +37,9 @@ The spec defines:
 - requirements
 - acceptance criteria
 
+`SPEC.md` is the durable contract.
+It should be as atemporal as practical.
+
 ### Execution plan
 
 The execution plan defines:
@@ -49,6 +52,14 @@ The execution plan defines:
 
 The spec says what must be true.
 The plan says how we intend to make it true.
+
+`PLAN.md` and `STATUS.md` carry the time-bound material:
+
+- current rollout shape
+- implementation slices
+- what is landed right now
+- what remains open
+- how understanding changed over time
 
 ## Requirement style
 
@@ -89,6 +100,9 @@ This makes progression visible at a glance and gives stable handles for discussi
 Substantial changes should not begin with code.
 They should begin with a spec.
 
+That does not mean every small refinement deserves a brand-new spec folder.
+If the change refines an existing durable contract, update that spec instead.
+
 ### 2. Plan second
 
 Once the spec is good enough, add a colocated execution plan.
@@ -109,6 +123,12 @@ Each spec should have a small status file capturing:
 - a spec should continue tracking the morphology of the system after initial landing when that context still matters
 - only abandoned, invalidated, or superseded specs should move to `archived/`
 
+### 4a. Prefer amending an existing spec when the contract is the same
+
+- if a change refines, clarifies, or slightly extends an existing durable contract, update the existing spec
+- create a new spec only when the work introduces a distinct durable contract, a distinct architectural decision, or a truly independent changeset
+- do not create a new numbered spec just because the implementation slice is small and convenient to isolate
+
 ### 5. Treat status as a timeline, not a tombstone
 
 The point of `STATUS.md` is not to declare that work is over forever.
@@ -127,10 +147,19 @@ In a living codebase, "implemented" is not the end of thought. It is one phase i
 - if implementation changes the meaning of a requirement, update the spec in the same change
 - if scope changes materially, update the spec before or with the code
 - if the plan changes materially, update the plan in the same change
+- if the contract stays the same, prefer amending the existing spec over creating a sibling spec
 - if a spec is superseded, archive it explicitly rather than letting it silently rot
 - if a shipped system keeps evolving under the same contract, keep the spec live and continue updating its status and history
 - if a tracked change belongs to one product, place it in that product's `specs/` folder
 - if a tracked change belongs upstream of any single product, place it in `org-specs/`
+
+## Timelessness rules
+
+- `SPEC.md` should describe the intended stable contract, not the current migration story
+- `SPEC.md` should avoid "today we do X" or "currently the system..." unless that context is necessary to explain the problem
+- implementation chronology belongs in `STATUS.md`
+- next-step sequencing belongs in `PLAN.md`
+- if a temporary rollout detail matters only during transition, keep it out of `SPEC.md` unless it changes the durable contract
 
 ## Minimum spec contract
 
@@ -145,6 +174,8 @@ Each spec should include:
 - acceptance criteria
 - dependencies and risks
 - links to relevant constitutional and product docs
+
+The spec should read like a contract a future maintainer can still use after the implementation details have changed.
 
 Behavioral specs should also include:
 
@@ -166,6 +197,8 @@ Each plan should include:
 
 The plan should describe the next intended shape of the work.
 It should not pretend the system will stop evolving forever after the first landing.
+
+The plan is the right home for "now vs next" material.
 
 ## Behavioral acceptance model
 
@@ -220,6 +253,8 @@ Each status file should include:
 - the current sources of truth
 - a dated history of meaningful changes in scope, implementation, or understanding
 
+`STATUS.md` is the right home for "now vs then" material.
+
 ## What good looks like
 
 A future agent should be able to answer:
@@ -233,3 +268,9 @@ A future agent should be able to answer:
 - which `.feature` files define the accepted behavior?
 
 without depending on human memory or chat history.
+
+They should also be able to distinguish:
+
+- the timeless contract in `SPEC.md`
+- the current execution intent in `PLAN.md`
+- the historical and rollout context in `STATUS.md`

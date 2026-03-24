@@ -5,9 +5,12 @@
   mkAgentVersionSmokePackage,
   mkCloudJobPackage,
   mkCloudSmokePackage,
+  mkFirebreakCliSurfaceSmokePackage,
   mkFirebreakCliPackage,
   mkLoopPackage,
   mkLoopSmokePackage,
+  mkNpxLauncherSmokePackage,
+  mkProjectConfigSmokePackage,
   mkRunnerPackage,
   mkSmokePackage,
   mkTaskPackage,
@@ -31,6 +34,7 @@
     defaultAgentCommand = "codex";
     agentConfigDirName = ".codex";
     defaultAgentConfigHostDir = "$HOME/.codex";
+    agentEnvPrefix = "CODEX";
   };
 
   firebreak-test-smoke-codex = mkSmokePackage {
@@ -54,6 +58,7 @@
     defaultAgentCommand = "claude";
     agentConfigDirName = ".claude";
     defaultAgentConfigHostDir = "$HOME/.claude";
+    agentEnvPrefix = "CLAUDE";
   };
 
   firebreak-test-smoke-claude-code = mkSmokePackage {
@@ -87,6 +92,18 @@
     jobPackage = "firebreak-internal-job-test-cloud";
   };
 
+  firebreak-test-smoke-project-config-and-doctor = mkProjectConfigSmokePackage {
+    name = "firebreak-test-smoke-project-config-and-doctor";
+  };
+
+  firebreak-test-smoke-npx-launcher = mkNpxLauncherSmokePackage {
+    name = "firebreak-test-smoke-npx-launcher";
+  };
+
+  firebreak-test-smoke-firebreak-cli-surface = mkFirebreakCliSurfaceSmokePackage {
+    name = "firebreak-test-smoke-firebreak-cli-surface";
+  };
+
   firebreak-internal-validate = mkValidationPackage {
     name = "firebreak-internal-validate";
   };
@@ -118,5 +135,7 @@
     validatePackage = "firebreak-internal-validate";
     taskPackage = "firebreak-internal-task";
     loopPackage = "firebreak-internal-loop";
+    codexPackage = "firebreak-codex";
+    claudeCodePackage = "firebreak-claude-code";
   };
 }

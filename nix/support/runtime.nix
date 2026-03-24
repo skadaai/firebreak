@@ -56,16 +56,19 @@ let
     defaultAgentCommand ? "",
     agentConfigDirName,
     defaultAgentConfigHostDir,
+    agentEnvPrefix ? "AGENT",
   }:
     pkgs.writeShellApplication {
       inherit name;
-      runtimeInputs = with pkgs; [ coreutils virtiofsd ];
+      runtimeInputs = with pkgs; [ coreutils git virtiofsd ];
       text = renderTemplate {
         "@CONTROL_SOCKET@" = "${controlSocketName}.socket";
         "@DEFAULT_AGENT_COMMAND@" = defaultAgentCommand;
         "@RUNNER@" = "${runner}/bin/microvm-run";
         "@AGENT_CONFIG_DIR_NAME@" = agentConfigDirName;
         "@DEFAULT_AGENT_CONFIG_HOST_DIR@" = defaultAgentConfigHostDir;
+        "@AGENT_ENV_PREFIX@" = agentEnvPrefix;
+        "@FIREBREAK_PROJECT_CONFIG_LIB@" = builtins.readFile ../../modules/base/host/firebreak-project-config.sh;
       } ../../modules/profiles/local/host/run-wrapper.sh;
     };
 
@@ -76,6 +79,7 @@ let
     defaultAgentCommand ? "",
     agentConfigDirName ? ".firebreak",
     defaultAgentConfigHostDir ? "$HOME/.firebreak/${name}",
+    agentEnvPrefix ? "AGENT",
   }:
     mkAgentPackage {
       inherit
@@ -83,7 +87,8 @@ let
         controlSocketName
         defaultAgentCommand
         agentConfigDirName
-        defaultAgentConfigHostDir;
+        defaultAgentConfigHostDir
+        agentEnvPrefix;
       runner = runnerPackage;
     };
 
@@ -95,6 +100,7 @@ let
     defaultAgentCommand ? "",
     agentConfigDirName ? ".firebreak",
     defaultAgentConfigHostDir ? "$HOME/.firebreak/${name}",
+    agentEnvPrefix ? "AGENT",
   }:
     let
       nixosConfiguration = mkAgentVm {
@@ -108,7 +114,8 @@ let
           controlSocketName
           defaultAgentCommand
           agentConfigDirName
-          defaultAgentConfigHostDir;
+          defaultAgentConfigHostDir
+          agentEnvPrefix;
       };
     in {
       inherit nixosConfiguration package runnerPackage;

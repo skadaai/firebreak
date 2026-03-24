@@ -24,6 +24,90 @@
       } ../../modules/base/tests/agent-smoke.sh;
     };
 
+  mkProjectConfigSmokePackage = { name }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        coreutils
+        git
+        gnugrep
+        python3
+      ];
+      text = renderTemplate {
+        "@REPO_ROOT@" = builtins.toString ../../.;
+      } ../../modules/base/tests/test-smoke-project-config-and-doctor.sh;
+    };
+
+  mkNpxLauncherSmokePackage = { name }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        bash
+        coreutils
+        gnugrep
+        nodejs_20
+      ];
+      text = renderTemplate {
+        "@REPO_ROOT@" = builtins.toString ../../.;
+      } ../../modules/base/tests/test-smoke-npx-launcher.sh;
+    };
+
+  mkFirebreakCliSurfaceSmokePackage = { name }:
+    let
+      fakeValidate = pkgs.writeShellScriptBin "firebreak-cli-smoke-validate" ''
+        exit 0
+      '';
+      fakeTask = pkgs.writeShellScriptBin "firebreak-cli-smoke-task" ''
+        exit 0
+      '';
+      fakeLoop = pkgs.writeShellScriptBin "firebreak-cli-smoke-loop" ''
+        exit 0
+      '';
+      fakeCodex = pkgs.writeShellScriptBin "firebreak-cli-smoke-codex" ''
+        printf '%s\n' "__VM__codex"
+        printf '%s\n' "__MODE__''${FIREBREAK_VM_MODE:-unset}"
+        for arg in "$@"; do
+          printf '%s\n' "__ARG__$arg"
+        done
+      '';
+      fakeClaudeCode = pkgs.writeShellScriptBin "firebreak-cli-smoke-claude-code" ''
+        printf '%s\n' "__VM__claude-code"
+        printf '%s\n' "__MODE__''${FIREBREAK_VM_MODE:-unset}"
+        for arg in "$@"; do
+          printf '%s\n' "__ARG__$arg"
+        done
+      '';
+      fakeCli = pkgs.writeShellApplication {
+        name = "firebreak-cli-smoke-firebreak";
+        runtimeInputs = with pkgs; [
+          coreutils
+          git
+          gnused
+        ];
+        text = renderTemplate {
+          "@VALIDATE_BIN@" = "${fakeValidate}/bin/firebreak-cli-smoke-validate";
+          "@TASK_BIN@" = "${fakeTask}/bin/firebreak-cli-smoke-task";
+          "@LOOP_BIN@" = "${fakeLoop}/bin/firebreak-cli-smoke-loop";
+          "@CODEX_BIN@" = "${fakeCodex}/bin/firebreak-cli-smoke-codex";
+          "@CLAUDE_CODE_BIN@" = "${fakeClaudeCode}/bin/firebreak-cli-smoke-claude-code";
+          "@FIREBREAK_PROJECT_CONFIG_LIB@" = builtins.readFile ../../modules/base/host/firebreak-project-config.sh;
+          "@FIREBREAK_INIT_FUNCTIONS@" = builtins.readFile ../../modules/base/host/firebreak-init.sh;
+          "@FIREBREAK_DOCTOR_FUNCTIONS@" = builtins.readFile ../../modules/base/host/firebreak-doctor.sh;
+        } ../../modules/base/host/firebreak.sh;
+      };
+    in
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        coreutils
+        gnugrep
+        python3
+      ];
+      text = renderTemplate {
+        "@FIREBREAK_CLI_BIN@" = "${fakeCli}/bin/firebreak-cli-smoke-firebreak";
+      } ../../modules/base/tests/test-smoke-firebreak-cli-surface.sh;
+    };
+
   mkCloudJobPackage = {
     name,
     runnerName,
@@ -151,14 +235,24 @@
       text = builtins.readFile ../../modules/base/tests/test-smoke-internal-loop.sh;
     };
 
-  mkFirebreakCliPackage = { name, validatePackage, taskPackage, loopPackage }:
+  mkFirebreakCliPackage = { name, validatePackage, taskPackage, loopPackage, codexPackage, claudeCodePackage }:
     pkgs.writeShellApplication {
       inherit name;
-      runtimeInputs = with pkgs; [ coreutils ];
+      runtimeInputs = with pkgs; [
+        coreutils
+        git
+        gnused
+        python3
+      ];
       text = renderTemplate {
         "@VALIDATE_BIN@" = "${self.packages.${system}.${validatePackage}}/bin/${validatePackage}";
         "@TASK_BIN@" = "${self.packages.${system}.${taskPackage}}/bin/${taskPackage}";
         "@LOOP_BIN@" = "${self.packages.${system}.${loopPackage}}/bin/${loopPackage}";
+        "@CODEX_BIN@" = "${self.packages.${system}.${codexPackage}}/bin/${codexPackage}";
+        "@CLAUDE_CODE_BIN@" = "${self.packages.${system}.${claudeCodePackage}}/bin/${claudeCodePackage}";
+        "@FIREBREAK_PROJECT_CONFIG_LIB@" = builtins.readFile ../../modules/base/host/firebreak-project-config.sh;
+        "@FIREBREAK_INIT_FUNCTIONS@" = builtins.readFile ../../modules/base/host/firebreak-init.sh;
+        "@FIREBREAK_DOCTOR_FUNCTIONS@" = builtins.readFile ../../modules/base/host/firebreak-doctor.sh;
       } ../../modules/base/host/firebreak.sh;
     };
 }

@@ -1,12 +1,19 @@
 set -eu
 
+@FIREBREAK_PROJECT_CONFIG_LIB@
+
 host_cwd=$PWD
 host_uid=$(id -u)
 host_gid=$(id -g)
+firebreak_load_project_config
 firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
 firebreak_state_root=${FIREBREAK_STATE_DIR:-${XDG_STATE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.local/state}/firebreak}
-agent_config_mode=${AGENT_CONFIG:-${CODEX_CONFIG:-vm}}
-requested_vm_mode=${FIREBREAK_VM_MODE:-${FIREBREAK_AGENT_MODE:-${AGENT_VM_ENTRYPOINT:-run}}}
+agent_specific_config_var=@AGENT_ENV_PREFIX@_CONFIG
+agent_specific_host_path_var=@AGENT_ENV_PREFIX@_CONFIG_HOST_PATH
+agent_specific_config=${!agent_specific_config_var:-}
+agent_specific_host_path=${!agent_specific_host_path_var:-}
+agent_config_mode=${agent_specific_config:-${AGENT_CONFIG:-vm}}
+requested_vm_mode=${FIREBREAK_VM_MODE:-run}
 agent_session_mode=agent
 default_agent_command=@DEFAULT_AGENT_COMMAND@
 agent_command_override=""
@@ -59,7 +66,7 @@ resolve_symlink_target() {
   realpath -m "$path"
 }
 
-default_agent_config_host_dir=$(resolve_host_dir "${AGENT_CONFIG_HOST_PATH:-${CODEX_CONFIG_HOST_PATH:-@DEFAULT_AGENT_CONFIG_HOST_DIR@}}")
+default_agent_config_host_dir=$(resolve_host_dir "${agent_specific_host_path:-${AGENT_CONFIG_HOST_PATH:-@DEFAULT_AGENT_CONFIG_HOST_DIR@}}")
 
 reject_whitespace_path "$host_cwd" "current working directory"
 
@@ -90,7 +97,7 @@ else
 fi
 
 case "$requested_vm_mode" in
-  run|agent)
+  run)
     agent_session_mode=agent
     ;;
   shell)
@@ -141,11 +148,8 @@ case "$agent_config_mode" in
     ;;
   workspace|vm|fresh)
     ;;
-  project|local)
-    agent_config_mode=workspace
-    ;;
   *)
-    echo "unsupported AGENT_CONFIG mode: $agent_config_mode" >&2
+    echo "unsupported agent config mode: $agent_config_mode" >&2
     echo "supported modes: host, workspace, vm, fresh" >&2
     exit 1
     ;;

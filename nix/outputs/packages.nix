@@ -132,10 +132,5 @@
 
   firebreak = mkFirebreakCliPackage {
     name = "firebreak";
-    validatePackage = "firebreak-internal-validate";
-    taskPackage = "firebreak-internal-task";
-    loopPackage = "firebreak-internal-loop";
-    codexPackage = "firebreak-codex";
-    claudeCodePackage = "firebreak-claude-code";
   };
 }

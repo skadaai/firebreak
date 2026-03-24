@@ -340,7 +340,7 @@ let
       text = builtins.readFile ../modules/base/tests/test-smoke-internal-loop.sh;
     };
 
-  mkFirebreakCliPackage = { name, validatePackage, taskPackage, loopPackage, codexPackage, claudeCodePackage }:
+  mkFirebreakCliPackage = { name }:
     let
       firebreakLibexec = pkgs.runCommand "firebreak-libexec" {} ''
         mkdir -p "$out/libexec"

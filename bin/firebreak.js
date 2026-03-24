@@ -16,7 +16,8 @@ const LIBEXEC_FILES = [
   "firebreak-project-config.sh"
 ]
 const HELP_COMMANDS = new Set(["", "help", "-h", "--help"])
-const ORA_SPINNER = ["dots", "line", "arc", "toggle", "bouncingBar"]
+const LOCAL_ONLY_COMMANDS = new Set(["", "help", "-h", "--help", "init", "doctor", "vms"])
+const ORA_SPINNER_NAME = "dots"
 
 const args = process.argv.slice(2)
 const topLevelCommand = args[0] || "";
@@ -173,9 +174,21 @@ const internalCommandRequiresNix = () => (
   (args[1] || "") !== ""
 )
 
-const commandRequiresNix = () => (
-  runCommandRequiresNix() || internalCommandRequiresNix()
-)
+const commandRequiresNix = () => {
+  if (LOCAL_ONLY_COMMANDS.has(topLevelCommand)) {
+    return false
+  }
+
+  if (topLevelCommand === "run") {
+    return runCommandRequiresNix()
+  }
+
+  if (topLevelCommand === "internal") {
+    return internalCommandRequiresNix()
+  }
+
+  return true
+}
 
 const commandUsesOra = () => runCommandRequiresNix()
 
@@ -331,7 +344,7 @@ const createReporter = async (flakeRef) => {
       text: "",
       stream: process.stderr,
       discardStdin: false,
-      spinner: ORA_SPINNER
+      spinner: ORA_SPINNER_NAME
     })
     let reminderVisible = false
     let progressTimer = null

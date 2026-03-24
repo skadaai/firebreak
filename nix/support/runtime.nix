@@ -6,6 +6,7 @@ let
     pkgs.runCommand "${runner.name}-compat" {
       nativeBuildInputs = with pkgs; [
         coreutils
+        gnugrep
         gnused
       ];
     } ''
@@ -25,9 +26,14 @@ let
           ln -s "$entry" "$out/bin/$name"
         fi
       done
-      substituteInPlace "$out/bin/microvm-run" \
-        --replace-fail 'aio=io_uring' 'aio=threads' \
-        --replace-fail '-enable-kvm -cpu host,+x2apic,-sgx' '$(if [ -r /dev/kvm ]; then printf "%s" "-enable-kvm -cpu host,+x2apic,-sgx"; else printf "%s" "-cpu max"; fi)'
+      if grep -F -q 'aio=io_uring' "$out/bin/microvm-run"; then
+        substituteInPlace "$out/bin/microvm-run" \
+          --replace-fail 'aio=io_uring' 'aio=threads'
+      fi
+      if [ "${system}" = "x86_64-linux" ] && grep -F -q -- '-enable-kvm -cpu host,+x2apic,-sgx' "$out/bin/microvm-run"; then
+        substituteInPlace "$out/bin/microvm-run" \
+          --replace-fail '-enable-kvm -cpu host,+x2apic,-sgx' '$(if [ -r /dev/kvm ]; then printf "%s" "-enable-kvm -cpu host,+x2apic,-sgx"; else printf "%s" "-cpu max"; fi)'
+      fi
     '';
 
   mkAgentVm = {

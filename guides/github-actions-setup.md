@@ -18,7 +18,7 @@ The hosted workflow works immediately. The VM smoke workflow requires a self-hos
 3. Click `New self-hosted runner`.
 4. Choose:
    - Operating system: Linux
-   - Architecture: x64
+   - Architecture: the Linux host architecture you are registering, such as `x64` or `ARM64`
 5. Prepare a Linux machine that has:
    - Nix installed
    - KVM available
@@ -28,7 +28,6 @@ The hosted workflow works immediately. The VM smoke workflow requires a self-hos
 7. When configuring labels, make sure the runner has:
    - `self-hosted`
    - `linux`
-   - `x64`
    - `kvm`
 8. Start the runner service and confirm it appears as `Idle` in the GitHub runners page.
 
@@ -53,7 +52,7 @@ This enables automatic execution of [`vm-smoke.yml`](../.github/workflows/vm-smo
 ## 4. Common Failure Checks
 
 - Runner never picks up the job:
-  - verify all four labels are present
+  - verify the runner has `self-hosted`, `linux`, and `kvm`
   - verify the runner is online
 - VM smoke job is skipped:
   - verify `ENABLE_SELF_HOSTED_VM_SMOKE=1`

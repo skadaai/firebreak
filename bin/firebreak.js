@@ -24,6 +24,12 @@ const topLevelCommand = args[0] || "";
 const forcedLocalRoot = process.env.FIREBREAK_LAUNCHER_PACKAGE_ROOT || "";
 const kvmPath = process.env.FIREBREAK_LAUNCHER_KVM_PATH || "/dev/kvm";
 const nixHelpersDisabled = process.env.FIREBREAK_LAUNCHER_DISABLE_NIX_HELPERS === "1"
+const launcherPlatform = process.env.FIREBREAK_LAUNCHER_TEST_PLATFORM || process.platform
+const launcherArch = process.env.FIREBREAK_LAUNCHER_TEST_ARCH || process.arch
+const supportedLinuxArchitectures = new Map([
+  ["x64", "x86_64-linux"],
+  ["arm64", "aarch64-linux"]
+])
 
 const fail = (message) => {
   console.error(`firebreak launcher: ${message}`)
@@ -101,12 +107,12 @@ const resolveLibexecDir = (localRoot) => {
 }
 
 const checkPlatform = () => {
-  if (process.platform !== "linux") {
+  if (launcherPlatform !== "linux") {
     fail("Firebreak currently requires a Linux host.")
   }
 
-  if (process.arch !== "x64") {
-    fail("Firebreak currently targets x86_64 Linux hosts.")
+  if (!supportedLinuxArchitectures.has(launcherArch)) {
+    fail(`Firebreak currently targets ${Array.from(supportedLinuxArchitectures.values()).join(" and ")} hosts.`)
   }
 }
 

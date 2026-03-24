@@ -26,6 +26,7 @@ firebreak run claude-code -- --help
 - `nix run .#firebreak-codex` launches Codex in the local Firebreak VM
 - `nix run .#firebreak-claude-code` launches Claude Code in the local Firebreak VM
 - `FIREBREAK_VM_MODE=shell nix run .#firebreak-codex` reaches the maintenance shell for the same VM package
+- supported local host systems: `x86_64-linux` and `aarch64-linux` with usable KVM access
 
 ## NPX Launcher
 
@@ -40,7 +41,7 @@ npx firebreak init
 
 The launcher:
 
-- checks that the host is `x86_64-linux`
+- checks that the host is Linux on `x86_64` or `aarch64`
 - checks that `nix` is installed and callable
 - checks that `/dev/kvm` is usable before non-diagnostic commands
 - uses the local Firebreak checkout automatically when you run it inside a cloned Firebreak repo

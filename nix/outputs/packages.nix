@@ -1,7 +1,7 @@
 {
   self,
   system,
-  mkAgentPackage,
+  localVmArtifacts,
   mkAgentVersionSmokePackage,
   mkCloudJobPackage,
   mkCloudSmokePackage,
@@ -11,7 +11,6 @@
   mkLoopSmokePackage,
   mkNpxLauncherSmokePackage,
   mkProjectConfigSmokePackage,
-  mkRunnerPackage,
   mkSmokePackage,
   mkTaskPackage,
   mkTaskSmokePackage,
@@ -21,21 +20,12 @@
 {
   default = self.packages.${system}.firebreak;
 
-  firebreak-internal-runner-codex = mkRunnerPackage self.nixosConfigurations.firebreak-codex.config.microvm.declaredRunner;
-  firebreak-internal-runner-claude-code = mkRunnerPackage self.nixosConfigurations.firebreak-claude-code.config.microvm.declaredRunner;
-  firebreak-internal-runner-codex-cloud = mkRunnerPackage self.nixosConfigurations.firebreak-codex-cloud.config.microvm.declaredRunner;
-  firebreak-internal-runner-claude-code-cloud = mkRunnerPackage self.nixosConfigurations.firebreak-claude-code-cloud.config.microvm.declaredRunner;
-  firebreak-internal-runner-test-cloud = mkRunnerPackage self.nixosConfigurations.firebreak-cloud-smoke.config.microvm.declaredRunner;
-
-  firebreak-codex = mkAgentPackage {
-    name = "firebreak-codex";
-    runner = self.packages.${system}.firebreak-internal-runner-codex;
-    controlSocketName = "firebreak-codex";
-    defaultAgentCommand = "codex";
-    agentConfigDirName = ".codex";
-    defaultAgentConfigHostDir = "$HOME/.codex";
-    agentEnvPrefix = "CODEX";
-  };
+  firebreak-internal-runner-codex = localVmArtifacts.firebreak-codex.runnerPackage;
+  firebreak-internal-runner-claude-code = localVmArtifacts.firebreak-claude-code.runnerPackage;
+  firebreak-internal-runner-codex-cloud = localVmArtifacts.firebreak-codex-cloud.runnerPackage;
+  firebreak-internal-runner-claude-code-cloud = localVmArtifacts.firebreak-claude-code-cloud.runnerPackage;
+  firebreak-internal-runner-test-cloud = localVmArtifacts.firebreak-cloud-smoke.runnerPackage;
+  firebreak-codex = localVmArtifacts.firebreak-codex.package;
 
   firebreak-test-smoke-codex = mkSmokePackage {
     name = "firebreak-test-smoke-codex";
@@ -51,15 +41,7 @@
     agentDisplayName = "Codex";
   };
 
-  firebreak-claude-code = mkAgentPackage {
-    name = "firebreak-claude-code";
-    runner = self.packages.${system}.firebreak-internal-runner-claude-code;
-    controlSocketName = "firebreak-claude-code";
-    defaultAgentCommand = "claude";
-    agentConfigDirName = ".claude";
-    defaultAgentConfigHostDir = "$HOME/.claude";
-    agentEnvPrefix = "CLAUDE";
-  };
+  firebreak-claude-code = localVmArtifacts.firebreak-claude-code.package;
 
   firebreak-test-smoke-claude-code = mkSmokePackage {
     name = "firebreak-test-smoke-claude-code";

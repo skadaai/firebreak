@@ -18,10 +18,17 @@
           pnpm
           tmux
         ];
+        bootstrapPackages = pkgs: with pkgs; [
+          gcc
+          gnumake
+          pkg-config
+          python3
+        ];
         launchEnvironment = {
-          PORT = "3000";
-          AO_TERMINAL_PORT = "14800";
-          AO_DIRECT_TERMINAL_PORT = "14801";
+          # ao start does not consume PORT as an input; dashboard port comes from
+          # config.port in agent-orchestrator.yaml.
+          # TERMINAL_PORT = "14800";
+          # DIRECT_TERMINAL_PORT = "14801";
         };
         forwardPorts = [
           {
@@ -51,6 +58,7 @@
           ao_root="$npm_config_prefix/lib/node_modules/@composio/ao"
           ao_web_dir=$(node -e "const { dirname } = require(\"path\"); const root = process.argv[1]; const pkg = require.resolve(\"@composio/ao-web/package.json\", { paths: [root] }); process.stdout.write(dirname(pkg));" "$ao_root")
           ao_core_dir="$ao_root/node_modules/@composio/ao-core"
+          npm install --prefix "$ao_web_dir" --no-save --omit=dev node-pty
 
           if ! [ -d "$ao_core_dir" ]; then
             echo "expected @composio/ao-core at $ao_core_dir after npm install" >&2

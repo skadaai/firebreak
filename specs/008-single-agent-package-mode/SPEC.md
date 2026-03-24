@@ -34,6 +34,7 @@ That makes the public surface larger than the product behavior actually is, and 
 - introducing a new human-facing CLI flag in this changeset
 - changing cloud job packaging or cloud execution behavior
 - exposing arbitrary executable paths such as `/bin/bash` as the public contract
+- preserving legacy mode aliases as part of the long-term public interface
 
 ## Morphology and scope of the changeset
 
@@ -53,11 +54,12 @@ The intended landing shape is:
 - The system shall export one public local-launch package per shipped workload VM.
 - When a user launches a public local package without overrides, the system shall start the default run mode.
 - When a user sets `FIREBREAK_VM_MODE=shell` for a public local package, the system shall start the maintenance shell instead of the default run mode.
-- If the legacy `FIREBREAK_AGENT_MODE` or `AGENT_VM_ENTRYPOINT` variables are still set, then the system shall continue to accept them as compatibility aliases for this changeset.
 - The system shall treat `run` and `shell` as the public semantic VM modes for this changeset.
 - The system shall not require a separate public `*-shell` package to access maintenance shell mode.
 - The system shall keep smoke validation for both the default run mode and the shell override path.
 - The system shall update public docs and examples to describe the single-package model.
+- The system shall use `FIREBREAK_VM_MODE` as the only documented public mode selector for this local-launch contract.
+- The system shall not require or document `FIREBREAK_AGENT_MODE` or `AGENT_VM_ENTRYPOINT` as public compatibility aliases once this contract lands.
 
 ## Acceptance criteria
 
@@ -66,6 +68,7 @@ The intended landing shape is:
 - Setting `FIREBREAK_VM_MODE=shell` against the same public local package reaches the maintenance shell.
 - Local smoke tests validate shell behavior through the same public package rather than a separate shell package.
 - Public docs and architecture guidance describe one public package per workload plus the shell override.
+- Public docs and examples use `FIREBREAK_VM_MODE` instead of legacy mode aliases.
 
 ## Dependencies and risks
 

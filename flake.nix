@@ -34,9 +34,12 @@
           mkAgentVersionSmokePackage
           mkCloudJobPackage
           mkCloudSmokePackage
+          mkFirebreakCliSurfaceSmokePackage
           mkFirebreakCliPackage
           mkLoopPackage
           mkLoopSmokePackage
+          mkNpxLauncherSmokePackage
+          mkProjectConfigSmokePackage
           mkRunnerPackage
           mkSmokePackage
           mkTaskPackage

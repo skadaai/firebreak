@@ -1,0 +1,31 @@
+{
+  "name": "firebreak",
+  "version": "0.0.1",
+  "description": "Thin npx launcher for the Firebreak Nix CLI",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/skadaai/firebreak.git"
+  },
+  "author": "Skada.ai",
+  "keywords": [
+    "firebreak",
+    "nix",
+    "cli",
+    "microvm",
+    "sandbox",
+    "codex",
+    "claude-code",
+    "opencode"
+  ],
+  "bin": {
+    "firebreak": "./bin/firebreak.js"
+  },
+  "files": [
+    "bin",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "FSL-1.1-MIT"
+}

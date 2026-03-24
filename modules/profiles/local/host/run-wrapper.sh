@@ -4,6 +4,7 @@ host_cwd=$PWD
 host_uid=$(id -u)
 host_gid=$(id -g)
 firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
+firebreak_state_root=${FIREBREAK_STATE_DIR:-${XDG_STATE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.local/state}/firebreak}
 agent_config_mode=${AGENT_CONFIG:-${CODEX_CONFIG:-vm}}
 requested_vm_mode=${FIREBREAK_VM_MODE:-${FIREBREAK_AGENT_MODE:-${AGENT_VM_ENTRYPOINT:-run}}}
 agent_session_mode=agent
@@ -62,6 +63,9 @@ default_agent_config_host_dir=$(resolve_host_dir "${AGENT_CONFIG_HOST_PATH:-${CO
 
 reject_whitespace_path "$host_cwd" "current working directory"
 
+default_instance_key=$(printf '%s' "$host_cwd" | sha256sum | cut -c1-16)
+default_instance_dir=$firebreak_state_root/instances/${default_control_socket%.socket}-$default_instance_key
+
 if [ -n "$instance_state_dir" ]; then
   case "$instance_state_dir" in
     /*) ;;
@@ -78,6 +82,11 @@ elif [ "$instance_ephemeral" = "1" ]; then
   mkdir -p "$host_instance_dir"
   runner_workdir=$host_instance_dir
   control_socket=$host_instance_dir/$default_control_socket
+else
+  reject_whitespace_path "$default_instance_dir" "default instance state directory"
+  mkdir -p "$default_instance_dir"
+  runner_workdir=$default_instance_dir
+  control_socket=$default_instance_dir/$default_control_socket
 fi
 
 case "$requested_vm_mode" in

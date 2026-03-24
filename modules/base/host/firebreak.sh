@@ -1,10 +1,44 @@
 set -eu
 
+firebreak_libexec_dir=${FIREBREAK_LIBEXEC_DIR:-}
+if [ -z "$firebreak_libexec_dir" ]; then
+  firebreak_libexec_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+fi
+
 command=${1:-}
 
-@FIREBREAK_PROJECT_CONFIG_LIB@
-@FIREBREAK_INIT_FUNCTIONS@
-@FIREBREAK_DOCTOR_FUNCTIONS@
+. "$firebreak_libexec_dir/firebreak-project-config.sh"
+. "$firebreak_libexec_dir/firebreak-init.sh"
+. "$firebreak_libexec_dir/firebreak-doctor.sh"
+
+firebreak_require_flake_ref() {
+  if [ -z "${FIREBREAK_FLAKE_REF:-}" ]; then
+    echo "FIREBREAK_FLAKE_REF is required for commands that launch Firebreak workloads" >&2
+    exit 1
+  fi
+}
+
+firebreak_exec_package() {
+  package_name=$1
+  shift
+
+  firebreak_require_flake_ref
+  if [ "${FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG:-}" = "1" ] && [ -n "${FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES:-}" ]; then
+    exec nix --accept-flake-config --extra-experimental-features "$FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES" \
+      run "$FIREBREAK_FLAKE_REF#$package_name" -- "$@"
+  fi
+
+  if [ "${FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG:-}" = "1" ]; then
+    exec nix --accept-flake-config run "$FIREBREAK_FLAKE_REF#$package_name" -- "$@"
+  fi
+
+  if [ -n "${FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES:-}" ]; then
+    exec nix --extra-experimental-features "$FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES" \
+      run "$FIREBREAK_FLAKE_REF#$package_name" -- "$@"
+  fi
+
+  exec nix run "$FIREBREAK_FLAKE_REF#$package_name" -- "$@"
+}
 
 vms_usage() {
   cat <<'EOF' >&2
@@ -117,16 +151,16 @@ firebreak_run_command() {
   case "$vm_name" in
     codex)
       if [ -n "$requested_vm_mode" ]; then
-        exec env FIREBREAK_VM_MODE="$requested_vm_mode" @CODEX_BIN@ "$@"
+        FIREBREAK_VM_MODE="$requested_vm_mode" firebreak_exec_package "firebreak-codex" "$@"
       else
-        exec @CODEX_BIN@ "$@"
+        firebreak_exec_package "firebreak-codex" "$@"
       fi
       ;;
     claude-code)
       if [ -n "$requested_vm_mode" ]; then
-        exec env FIREBREAK_VM_MODE="$requested_vm_mode" @CLAUDE_CODE_BIN@ "$@"
+        FIREBREAK_VM_MODE="$requested_vm_mode" firebreak_exec_package "firebreak-claude-code" "$@"
       else
-        exec @CLAUDE_CODE_BIN@ "$@"
+        firebreak_exec_package "firebreak-claude-code" "$@"
       fi
       ;;
     *)
@@ -182,15 +216,15 @@ case "$command" in
     case "$internal_command" in
       validate)
         shift
-        exec @VALIDATE_BIN@ "$@"
+        firebreak_exec_package "firebreak-internal-validate" "$@"
         ;;
       task)
         shift
-        exec @TASK_BIN@ "$@"
+        firebreak_exec_package "firebreak-internal-task" "$@"
         ;;
       loop)
         shift
-        exec @LOOP_BIN@ "$@"
+        firebreak_exec_package "firebreak-internal-loop" "$@"
         ;;
       ""|--help|-h|help)
         cat <<'EOF'

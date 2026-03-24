@@ -1,4 +1,4 @@
-.agent-sandbox.env
+*.env
 node_modules
 
 result

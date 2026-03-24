@@ -1,103 +1,136 @@
 #!/usr/bin/env node
 
-const fs = require("node:fs");
-const path = require("node:path");
-const { spawnSync } = require("node:child_process");
+const fs = require("node:fs")
+const path = require("node:path")
+const { spawn, spawnSync } = require("node:child_process")
 
-const GITHUB_FLAKE_REF = "github:skadaai/firebreak#firebreak";
+const GITHUB_FLAKE_REF = "github:skadaai/firebreak";
 const LOCAL_ROOT_MARKERS = [
   ["flake.nix"],
   ["modules", "base", "host", "firebreak.sh"]
-];
+]
+const LIBEXEC_FILES = [
+  "firebreak.sh",
+  "firebreak-init.sh",
+  "firebreak-doctor.sh",
+  "firebreak-project-config.sh"
+]
+const HELP_COMMANDS = new Set(["", "help", "-h", "--help"])
+const LOCAL_ONLY_COMMANDS = new Set(["", "help", "-h", "--help", "init", "doctor", "vms"])
+const ORA_SPINNER_NAME = "dots"
 
-const kvmPath = process.env.FIREBREAK_LAUNCHER_KVM_PATH || "/dev/kvm";
-const forcedLocalRoot = process.env.FIREBREAK_LAUNCHER_PACKAGE_ROOT || "";
-const args = process.argv.slice(2);
+const args = process.argv.slice(2)
 const topLevelCommand = args[0] || "";
+const forcedLocalRoot = process.env.FIREBREAK_LAUNCHER_PACKAGE_ROOT || "";
+const kvmPath = process.env.FIREBREAK_LAUNCHER_KVM_PATH || "/dev/kvm";
+const nixHelpersDisabled = process.env.FIREBREAK_LAUNCHER_DISABLE_NIX_HELPERS === "1"
 
-function fail(message) {
-  console.error(`firebreak launcher: ${message}`);
-  process.exit(1);
+const fail = (message) => {
+  console.error(`firebreak launcher: ${message}`)
+  process.exit(1)
 }
 
-function warn(message) {
-  console.error(`firebreak launcher: ${message}`);
+const warn = (message) => {
+  console.error(`firebreak launcher: ${message}`)
 }
 
-function checkPlatform() {
-  if (process.platform !== "linux") {
-    fail("Firebreak currently requires a Linux host.");
-  }
-
-  if (process.arch !== "x64") {
-    fail("Firebreak currently targets x86_64 Linux hosts.");
-  }
-}
-
-function checkNix() {
-  const result = spawnSync("nix", ["--version"], {
-    encoding: "utf8"
-  });
-
-  if (result.error && result.error.code === "ENOENT") {
-    fail("Nix is not installed. Install Nix first, then run `npx firebreak` again.");
-  }
-
-  if (result.status !== 0) {
-    fail(`Nix is installed but unavailable: ${(result.stderr || result.stdout || "").trim()}`);
-  }
-}
-
-function pathExists(targetPath) {
+const pathExists = (targetPath) => {
   try {
-    fs.accessSync(targetPath);
+    fs.accessSync(targetPath)
     return true;
   } catch {
     return false;
   }
 }
 
-function looksLikeFirebreakRoot(candidateRoot) {
-  return LOCAL_ROOT_MARKERS.every((segments) =>
-    pathExists(path.join(candidateRoot, ...segments))
-  );
-}
+const looksLikeFirebreakRoot = (candidateRoot) => (
+  LOCAL_ROOT_MARKERS.every((segments) => pathExists(path.join(candidateRoot, ...segments)))
+)
 
-function findLocalFirebreakRoot(startDir) {
-  let currentDir = path.resolve(startDir);
+const looksLikeLibexecDir = (candidateDir) => (
+  LIBEXEC_FILES.every((fileName) => pathExists(path.join(candidateDir, fileName)))
+)
+
+const findLocalFirebreakRoot = (startDir) => {
+  let currentDir = path.resolve(startDir)
 
   while (true) {
     if (looksLikeFirebreakRoot(currentDir)) {
       return currentDir;
     }
 
-    const parentDir = path.dirname(currentDir);
+    const parentDir = path.dirname(currentDir)
     if (parentDir === currentDir) {
       return null;
     }
+
     currentDir = parentDir;
   }
 }
 
-function resolveFlakeRef() {
-  if (forcedLocalRoot) {
-    if (!looksLikeFirebreakRoot(forcedLocalRoot)) {
-      fail(`FIREBREAK_LAUNCHER_PACKAGE_ROOT does not point to a Firebreak checkout: ${forcedLocalRoot}`);
-    }
-    return `path:${path.resolve(forcedLocalRoot)}#firebreak`;
+const resolveLocalRoot = () => {
+  if (!forcedLocalRoot) {
+    return findLocalFirebreakRoot(process.cwd())
   }
 
-  const localRoot = findLocalFirebreakRoot(process.cwd());
-  if (localRoot) {
-    return `path:${localRoot}#firebreak`;
+  if (!looksLikeFirebreakRoot(forcedLocalRoot)) {
+    fail(`FIREBREAK_LAUNCHER_PACKAGE_ROOT does not point to a Firebreak checkout: ${forcedLocalRoot}`)
   }
 
-  return GITHUB_FLAKE_REF;
+  return path.resolve(forcedLocalRoot)
 }
 
-function kvmFailureReason() {
+const resolveFlakeRef = (localRoot) => (
+  localRoot ? `path:${localRoot}` : GITHUB_FLAKE_REF
+)
+
+const resolveLibexecDir = (localRoot) => {
+  if (localRoot) {
+    const localLibexecDir = path.join(localRoot, "modules", "base", "host")
+    if (looksLikeLibexecDir(localLibexecDir)) {
+      return localLibexecDir;
+    }
+  }
+
+  const packagedLibexecDir = path.resolve(__dirname, "..", "modules", "base", "host")
+  if (looksLikeLibexecDir(packagedLibexecDir)) {
+    return packagedLibexecDir;
+  }
+
+  fail("unable to resolve the Firebreak shell runtime")
+}
+
+const checkPlatform = () => {
+  if (process.platform !== "linux") {
+    fail("Firebreak currently requires a Linux host.")
+  }
+
+  if (process.arch !== "x64") {
+    fail("Firebreak currently targets x86_64 Linux hosts.")
+  }
+}
+
+const checkNix = () => {
+  const result = spawnSync("nix", ["--version"], {
+    encoding: "utf8"
+  })
+
+  if (result.error) {
+    if (result.error.code === "ENOENT") {
+      fail("Nix is not installed. Install Nix first, then run `npx firebreak` again.")
+    }
+
+    fail(`unable to execute nix: [${result.error.code || "unknown"}] ${result.error.message}`)
+  }
+
+  if (result.status !== 0) {
+    fail(`Nix is installed but unavailable: ${(result.stderr || result.stdout || "").trim()}`)
+  }
+}
+
+const kvmFailureReason = () => {
   try {
-    fs.accessSync(kvmPath, fs.constants.R_OK | fs.constants.W_OK);
+    fs.accessSync(kvmPath, fs.constants.R_OK | fs.constants.W_OK)
     return null;
   } catch (error) {
     if (!fs.existsSync(kvmPath)) {
@@ -112,72 +145,339 @@ function kvmFailureReason() {
   }
 }
 
-function commandAllowsMissingKvm() {
-  return (
-    topLevelCommand === "" ||
-    topLevelCommand === "help" ||
-    topLevelCommand === "-h" ||
-    topLevelCommand === "--help" ||
-    topLevelCommand === "init" ||
-    topLevelCommand === "doctor" ||
-    topLevelCommand === "vms"
-  );
+const runCommandRequiresNix = () => {
+  if (topLevelCommand !== "run") {
+    return false;
+  }
+
+  const runArgs = args.slice(1)
+  if (runArgs.length === 0 || HELP_COMMANDS.has(runArgs[0])) {
+    return false;
+  }
+
+  for (const arg of runArgs.slice(1)) {
+    if (arg === "--") {
+      break;
+    }
+
+    if (HELP_COMMANDS.has(arg)) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
-function checkKvm() {
-  const failure = kvmFailureReason();
+const internalCommandRequiresNix = () => (
+  topLevelCommand === "internal" &&
+  !HELP_COMMANDS.has(args[1] || "") &&
+  (args[1] || "") !== ""
+)
+
+const commandRequiresNix = () => {
+  if (LOCAL_ONLY_COMMANDS.has(topLevelCommand)) {
+    return false
+  }
+
+  if (topLevelCommand === "run") {
+    return runCommandRequiresNix()
+  }
+
+  if (topLevelCommand === "internal") {
+    return internalCommandRequiresNix()
+  }
+
+  return true
+}
+
+const commandUsesOra = () => runCommandRequiresNix()
+
+const checkKvm = () => {
+  const failure = kvmFailureReason()
   if (!failure) {
     return;
   }
 
-  if (commandAllowsMissingKvm()) {
-    warn(`${failure}. Continuing because this command can still provide setup or diagnostics help.`);
+  if (!commandRequiresNix()) {
+    warn(`${failure}. Continuing because this command can still provide setup or diagnostics help.`)
     return;
   }
 
-  fail(`${failure}. Firebreak needs KVM access to run local MicroVM workloads.`);
+  fail(`${failure}. Firebreak needs KVM access to run local MicroVM workloads.`)
 }
 
-function checkWorkspacePath() {
+const checkWorkspacePath = () => {
   if (/\s/.test(process.cwd())) {
-    warn("the current working directory contains whitespace; local VM launch will fail until you move it.");
+    warn("the current working directory contains whitespace; local VM launch will fail until you move it.")
   }
 }
 
-function runFirebreak() {
-  const flakeRef = resolveFlakeRef();
-  const result = spawnSync(
-    "nix",
-    [
-      "--accept-flake-config",
-      "--extra-experimental-features",
-      "nix-command flakes",
-      "run",
-      flakeRef,
-      "--",
-      ...args
-    ],
-    {
-      cwd: process.cwd(),
-      env: process.env,
-      stdio: "inherit"
-    }
-  );
+const formatElapsed = (elapsedMs) => `${(elapsedMs / 1000).toFixed(1)}s`;
 
-  if (result.error) {
-    fail(`unable to launch Firebreak through Nix: ${result.error.message}`);
+const interpolate = (start, end, progress) => start + (end - start) * progress
+const easeOutCubic = (progress) => 1 - Math.pow(1 - progress, 3)
+const easeInOutQuad = (progress) => (
+  progress < 0.5
+    ? 2 * progress * progress
+    : 1 - Math.pow(-2 * progress + 2, 2) / 2
+)
+
+const estimateProgress = (elapsedMs) => {
+  if (elapsedMs <= 5000) {
+    return Math.round(interpolate(4, 18, easeOutCubic(elapsedMs / 5000)))
+  }
+
+  if (elapsedMs <= 15000) {
+    return Math.round(interpolate(18, 42, easeOutCubic((elapsedMs - 5000) / 10000)))
+  }
+
+  if (elapsedMs <= 35000) {
+    return Math.round(interpolate(42, 72, easeInOutQuad((elapsedMs - 15000) / 20000)))
+  }
+
+  if (elapsedMs <= 90000) {
+    return Math.round(interpolate(72, 92, easeInOutQuad((elapsedMs - 35000) / 55000)))
+  }
+
+  const tailProgress = 92 + Math.log1p((elapsedMs - 90000) / 30000) * 2
+  return Math.min(98, Math.round(tailProgress))
+}
+
+const createFallbackReporter = (flakeRef) => {
+  if (!commandRequiresNix()) {
+    return null
+  }
+
+  const startMs = Date.now()
+  const flakeSource = flakeRef.startsWith("path:") ? "local checkout" : "GitHub";
+
+  if (!commandUsesOra()) {
+    return {
+      start() {
+        process.stderr.write(`firebreak launcher: loading Firebreak via ${flakeSource}...\n`)
+      },
+      clear() {
+      },
+      stop(success) {
+        process.stderr.write(
+          `firebreak launcher: ${success ? "ready" : "stopped"} after ${formatElapsed(Date.now() - startMs)}.\n`
+        )
+      }
+    }
+  }
+
+  let spinnerIndex = 0
+  let progressTimer = null
+  let reminderVisible = false
+  let reminderTimer = null
+  const spinnerFrames = ["|", "/", "-", "\\"]
+
+  const spinnerText = () => {
+    const elapsedMs = Date.now() - startMs
+    const progress = estimateProgress(elapsedMs)
+    const reminder = reminderVisible ? " • warming caches on first run" : ""
+    return `firebreak launcher: ${spinnerFrames[spinnerIndex % spinnerFrames.length]} Preparing Firebreak VM via ${flakeSource} (${progress}% • ${formatElapsed(elapsedMs)}${reminder})`
+  }
+
+  return {
+    start() {
+      if (!process.stderr.isTTY) {
+        process.stderr.write(`firebreak launcher: loading Firebreak via ${flakeSource}...\n`)
+        return
+      }
+
+      process.stderr.write(`${spinnerText()}\r`)
+      progressTimer = setInterval(() => {
+        spinnerIndex += 1
+        process.stderr.write(`${spinnerText()}\r`)
+      }, 120)
+      reminderTimer = setTimeout(() => {
+        reminderVisible = true
+      }, 4000)
+    },
+    clear() {
+      if (progressTimer) {
+        clearInterval(progressTimer)
+        progressTimer = null
+      }
+      if (reminderTimer) {
+        clearTimeout(reminderTimer)
+        reminderTimer = null
+      }
+
+      if (process.stderr.isTTY) {
+        process.stderr.write("\r")
+      }
+    },
+    stop(success) {
+      if (progressTimer) {
+        clearInterval(progressTimer)
+        progressTimer = null
+      }
+      if (reminderTimer) {
+        clearTimeout(reminderTimer)
+        reminderTimer = null
+      }
+
+      if (process.stderr.isTTY) {
+        process.stderr.write("\n")
+      }
+      process.stderr.write(
+        `firebreak launcher: ${success ? "ready" : "stopped"} after ${formatElapsed(Date.now() - startMs)}.\n`
+      )
+    }
+  }
+}
+
+const createReporter = async (flakeRef) => {
+  const fallbackReporter = createFallbackReporter(flakeRef)
+  if (!commandUsesOra()) {
+    return fallbackReporter
+  }
+
+  try {
+    const oraModule = await import("ora")
+    const ora = oraModule.default
+    const startMs = Date.now()
+    const flakeSource = flakeRef.startsWith("path:") ? "local checkout" : "GitHub"
+    const spinner = ora({
+      text: "",
+      stream: process.stderr,
+      discardStdin: false,
+      spinner: ORA_SPINNER_NAME
+    })
+    let reminderVisible = false
+    let progressTimer = null
+    let reminderTimer = null
+
+    const spinnerText = () => {
+      const elapsedMs = Date.now() - startMs
+      const progress = estimateProgress(elapsedMs)
+      const reminder = reminderVisible ? " • warming caches on first run" : ""
+      return `Preparing Firebreak VM via ${flakeSource} (${progress}% • ${formatElapsed(elapsedMs)}${reminder})`
+    }
+
+    return {
+      start() {
+        if (!process.stderr.isTTY) {
+          fallbackReporter?.start()
+          return
+        }
+
+        spinner.text = spinnerText()
+        spinner.start()
+        progressTimer = setInterval(() => {
+          spinner.text = spinnerText()
+        }, 120)
+        reminderTimer = setTimeout(() => {
+          reminderVisible = true
+          spinner.text = spinnerText()
+        }, 4000)
+      },
+      clear() {
+        if (!process.stderr.isTTY) {
+          fallbackReporter?.clear?.()
+          return
+        }
+
+        if (progressTimer) {
+          clearInterval(progressTimer)
+          progressTimer = null
+        }
+        if (reminderTimer) {
+          clearTimeout(reminderTimer)
+          reminderTimer = null
+        }
+
+        if (spinner.isSpinning) {
+          spinner.stop()
+        }
+      },
+      stop(success) {
+        if (!process.stderr.isTTY) {
+          fallbackReporter?.stop(success)
+          return
+        }
+
+        if (progressTimer) {
+          clearInterval(progressTimer)
+          progressTimer = null
+        }
+        if (reminderTimer) {
+          clearTimeout(reminderTimer)
+          reminderTimer = null
+        }
+
+        const elapsed = formatElapsed(Date.now() - startMs)
+        if (success) {
+          spinner.succeed(`Firebreak ready after ${elapsed}`)
+        } else {
+          spinner.fail(`Firebreak stopped after ${elapsed}`)
+        }
+      }
+    }
+  } catch {
+    return fallbackReporter
+  }
+}
+
+const runFirebreak = async () => {
+  const localRoot = resolveLocalRoot()
+  const flakeRef = resolveFlakeRef(localRoot)
+  const firebreakLibexecDir = resolveLibexecDir(localRoot)
+  const reporter = await createReporter(flakeRef)
+
+  if (reporter) {
+    reporter.start()
+  }
+
+  let result
+  try {
+    result = await new Promise((resolve, reject) => {
+      const child = spawn(
+        "bash",
+        [path.join(firebreakLibexecDir, "firebreak.sh"), ...args],
+        {
+          cwd: process.cwd(),
+          env: {
+            ...process.env,
+            FIREBREAK_FLAKE_REF: flakeRef,
+            FIREBREAK_LIBEXEC_DIR: firebreakLibexecDir,
+            FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG: nixHelpersDisabled ? "" : "1",
+            FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES: nixHelpersDisabled ? "" : "nix-command flakes"
+          },
+          stdio: "inherit"
+        }
+      )
+
+      child.on("error", reject)
+      child.on("exit", (status, signal) => {
+        resolve({ status, signal })
+      })
+    })
+  } catch (error) {
+    reporter?.stop(false)
+    fail(`unable to launch Firebreak shell entrypoint: ${error.message}`)
+  }
+
+  if (reporter) {
+    reporter.stop(result.status === 0)
   }
 
   if (result.status === null && result.signal) {
-    process.kill(process.pid, result.signal);
-    return;
+    process.kill(process.pid, result.signal)
+    return
   }
 
-  process.exit(result.status === null ? 1 : result.status);
+  process.exit(result.status === null ? 1 : result.status)
 }
 
-checkPlatform();
-checkNix();
-checkKvm();
-checkWorkspacePath();
-runFirebreak();
+checkPlatform()
+if (commandRequiresNix()) {
+  checkNix()
+}
+checkKvm()
+checkWorkspacePath()
+runFirebreak().catch((error) => {
+  fail(`unexpected launcher error: ${error.message}`)
+})

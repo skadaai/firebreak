@@ -165,7 +165,7 @@
       } ../../modules/profiles/cloud/tests/test-smoke-cloud-job.sh;
     };
 
-  mkValidationPackage = { name }:
+  mkValidationPackage = { name, includeCloudSuite ? true }:
     pkgs.writeShellApplication {
       inherit name;
       runtimeInputs = with pkgs; [
@@ -176,7 +176,25 @@
         "@CODEX_SMOKE_BIN@" = "${self.packages.${system}.firebreak-test-smoke-codex}/bin/firebreak-test-smoke-codex";
         "@CODEX_VERSION_BIN@" = "${self.packages.${system}.firebreak-test-smoke-codex-version}/bin/firebreak-test-smoke-codex-version";
         "@CLAUDE_SMOKE_BIN@" = "${self.packages.${system}.firebreak-test-smoke-claude-code}/bin/firebreak-test-smoke-claude-code";
-        "@CLOUD_SMOKE_BIN@" = "${self.packages.${system}.firebreak-test-smoke-cloud-job}/bin/firebreak-test-smoke-cloud-job";
+        "@CLOUD_SMOKE_BIN@" =
+          if includeCloudSuite then
+            "${self.packages.${system}.firebreak-test-smoke-cloud-job}/bin/firebreak-test-smoke-cloud-job"
+          else
+            "";
+        "@CLOUD_SUITE_USAGE@" =
+          if includeCloudSuite then
+            "  test-smoke-cloud-job"
+          else
+            "";
+        "@CLOUD_SUITE_CASE@" =
+          if includeCloudSuite then
+            ''
+  test-smoke-cloud-job)
+    suite_command="@CLOUD_SMOKE_BIN@"
+    ;;
+''
+          else
+            "";
       } ../../modules/base/host/firebreak-validate.sh;
     };
 

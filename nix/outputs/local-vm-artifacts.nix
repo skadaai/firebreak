@@ -1,4 +1,7 @@
-{ self, pkgs, mkLocalVmArtifacts }:
+{ self, pkgs, mkLocalVmArtifacts, includeCloud ? true }:
+let
+  inherit (pkgs) lib;
+in
 {
   firebreak-codex = mkLocalVmArtifacts {
     name = "firebreak-codex";
@@ -20,6 +23,7 @@
     agentEnvPrefix = "CLAUDE";
   };
 
+} // lib.optionalAttrs includeCloud {
   firebreak-codex-cloud = mkLocalVmArtifacts {
     name = "firebreak-codex-cloud";
     profileModules = [ self.nixosModules.firebreak-cloud-profile ];

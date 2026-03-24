@@ -15,22 +15,30 @@
   outputs = { self, nixpkgs, microvm }:
     let
       lib = nixpkgs.lib;
-      defaultSystem = "x86_64-linux";
-      supportedSystems = [
-        defaultSystem
+      defaultHostSystem = "x86_64-linux";
+      supportedHostSystems = [
+        defaultHostSystem
         "aarch64-linux"
+        "aarch64-darwin"
       ];
-      supports = lib.genAttrs supportedSystems (system:
+      guestSystemFor = hostSystem:
+        if hostSystem == "aarch64-darwin" then
+          "aarch64-linux"
+        else
+          hostSystem;
+      supports = lib.genAttrs supportedHostSystems (system:
         import ./nix/flake-support.nix {
           inherit self nixpkgs microvm system;
+          guestSystem = guestSystemFor system;
         });
-      localVmArtifacts = lib.genAttrs supportedSystems (system:
+      localVmArtifacts = lib.genAttrs supportedHostSystems (system:
         import ./nix/outputs/local-vm-artifacts.nix {
           inherit self;
+          includeCloud = supports.${system}.hostIsLinux;
           inherit (supports.${system}) mkLocalVmArtifacts pkgs;
         });
     in {
-      lib = lib.genAttrs supportedSystems (system: {
+      lib = lib.genAttrs supportedHostSystems (system: {
         inherit (supports.${system})
           mkAgentVm
           mkLocalVmArtifacts
@@ -45,13 +53,15 @@
         inherit self;
       };
 
-      nixosConfigurations = lib.mapAttrs (_: artifacts: artifacts.nixosConfiguration) localVmArtifacts.${defaultSystem};
+      nixosConfigurations = lib.mapAttrs (_: artifacts: artifacts.nixosConfiguration) localVmArtifacts.${defaultHostSystem};
 
-      packages = lib.genAttrs supportedSystems (system:
+      packages = lib.genAttrs supportedHostSystems (system:
         import ./nix/outputs/packages.nix {
           inherit self system;
           localVmArtifacts = localVmArtifacts.${system};
           inherit (supports.${system})
+            hostIsLinux
+            lib
             mkAgentVersionSmokePackage
             mkCloudJobPackage
             mkCloudSmokePackage
@@ -69,10 +79,11 @@
             ;
         });
 
-      checks = lib.genAttrs supportedSystems (system:
+      checks = lib.genAttrs supportedHostSystems (system:
         import ./nix/outputs/checks.nix {
           inherit self system;
           localVmArtifacts = localVmArtifacts.${system};
+          inherit (supports.${system}) hostIsLinux lib;
         });
     };
 }

@@ -3,6 +3,8 @@ set -eu
 state_dir=${FIREBREAK_VALIDATION_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/firebreak/validation}
 command=${1:-}
 suite_name=""
+host_os=$(uname -s 2>/dev/null || printf '%s' unknown)
+host_arch=$(uname -m 2>/dev/null || printf '%s' unknown)
 
 usage() {
   cat <<'EOF' >&2
@@ -12,7 +14,7 @@ Named suites:
   test-smoke-codex
   test-smoke-codex-version
   test-smoke-claude-code
-  test-smoke-cloud-job
+@CLOUD_SUITE_USAGE@
 EOF
   exit 1
 }
@@ -86,7 +88,7 @@ case "$state_dir" in
     ;;
 esac
 
-required_capability="kvm"
+required_capability="local-hypervisor"
 missing_capability=""
 
 case "$suite_name" in
@@ -99,9 +101,7 @@ case "$suite_name" in
   test-smoke-claude-code)
     suite_command="@CLAUDE_SMOKE_BIN@"
     ;;
-  test-smoke-cloud-job)
-    suite_command="@CLOUD_SMOKE_BIN@"
-    ;;
+@CLOUD_SUITE_CASE@
   *)
     echo "unknown validation suite: $suite_name" >&2
     usage
@@ -110,10 +110,27 @@ esac
 
 if [ -n "${FIREBREAK_VALIDATION_FORCE_BLOCKED_REASON:-}" ]; then
   missing_capability=$FIREBREAK_VALIDATION_FORCE_BLOCKED_REASON
-elif ! [ -r /dev/kvm ]; then
-  missing_capability="kvm-unavailable"
-elif ! [ -w /dev/kvm ]; then
-  missing_capability="kvm-not-writable"
+else
+  case "$host_os:$host_arch" in
+    Linux:*)
+      required_capability="kvm"
+      if ! [ -r /dev/kvm ]; then
+        missing_capability="kvm-unavailable"
+      elif ! [ -w /dev/kvm ]; then
+        missing_capability="kvm-not-writable"
+      fi
+      ;;
+    Darwin:arm64|Darwin:aarch64)
+      required_capability="apple-silicon-vfkit"
+      ;;
+    Darwin:*)
+      required_capability="apple-silicon-vfkit"
+      missing_capability="unsupported-intel-mac"
+      ;;
+    *)
+      missing_capability="unsupported-host-platform"
+      ;;
+  esac
 fi
 
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)

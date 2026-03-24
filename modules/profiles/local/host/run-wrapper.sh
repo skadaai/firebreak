@@ -57,7 +57,6 @@ default_agent_config_host_dir=$(resolve_host_dir "${agent_specific_host_path:-${
 
 reject_whitespace_path "$host_cwd" "current working directory"
 reject_whitespace_path "$resolved_firebreak_tmp_root" "Firebreak temporary runtime directory"
-reject_whitespace_path "$firebreak_state_root" "Firebreak state root"
 firebreak_tmp_root=$resolved_firebreak_tmp_root
 mkdir -p "$firebreak_tmp_root"
 host_runtime_dir=$(mktemp -d "$firebreak_tmp_root/r.XXXXXX")
@@ -72,18 +71,6 @@ virtiofsd_agent_exec_log=$host_runtime_dir/v-out.log
 hostcwd_socket=$host_runtime_dir/cwd.sock
 agent_config_socket=$host_runtime_dir/cfg.sock
 agent_exec_output_socket=$host_runtime_dir/out.sock
-
-sha256_output=$(printf '%s' "$host_cwd" | sha256sum) || {
-  echo "failed to hash current working directory for Firebreak instance state" >&2
-  exit 1
-}
-default_instance_key=${sha256_output%% *}
-if [ -z "$default_instance_key" ]; then
-  echo "failed to derive Firebreak instance key from current working directory hash" >&2
-  exit 1
-fi
-default_instance_key=$(printf '%.16s' "$default_instance_key")
-default_instance_dir=$firebreak_state_root/instances/${default_control_socket%.socket}-$default_instance_key
 
 if [ -n "$instance_state_dir" ]; then
   case "$instance_state_dir" in
@@ -102,6 +89,18 @@ elif [ "$instance_ephemeral" = "1" ]; then
   runner_workdir=$host_instance_dir
   control_socket=$host_instance_dir/$default_control_socket
 else
+  reject_whitespace_path "$firebreak_state_root" "Firebreak state root"
+  sha256_output=$(printf '%s' "$host_cwd" | sha256sum) || {
+    echo "failed to hash current working directory for Firebreak instance state" >&2
+    exit 1
+  }
+  default_instance_key=${sha256_output%% *}
+  if [ -z "$default_instance_key" ]; then
+    echo "failed to derive Firebreak instance key from current working directory hash" >&2
+    exit 1
+  fi
+  default_instance_key=$(printf '%.16s' "$default_instance_key")
+  default_instance_dir=$firebreak_state_root/instances/${default_control_socket%.socket}-$default_instance_key
   reject_whitespace_path "$default_instance_dir" "default instance state directory"
   mkdir -p "$default_instance_dir"
   runner_workdir=$default_instance_dir

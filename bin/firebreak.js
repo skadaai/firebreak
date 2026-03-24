@@ -190,6 +190,7 @@ const commandRequiresNix = () => {
   return true
 }
 
+const needsNix = commandRequiresNix()
 const commandUsesOra = () => runCommandRequiresNix()
 
 const checkKvm = () => {
@@ -244,7 +245,7 @@ const estimateProgress = (elapsedMs) => {
 }
 
 const createFallbackReporter = (flakeRef) => {
-  if (!commandRequiresNix()) {
+  if (!needsNix) {
     return null
   }
 
@@ -423,7 +424,7 @@ const createReporter = async (flakeRef) => {
 
 const runFirebreak = async () => {
   const localRoot = resolveLocalRoot()
-  const flakeRef = resolveFlakeRef(localRoot)
+  const flakeRef = needsNix ? resolveFlakeRef(localRoot) : ""
   const firebreakLibexecDir = resolveLibexecDir(localRoot)
   const reporter = await createReporter(flakeRef)
 
@@ -441,10 +442,10 @@ const runFirebreak = async () => {
           cwd: process.cwd(),
           env: {
             ...process.env,
-            FIREBREAK_FLAKE_REF: flakeRef,
             FIREBREAK_LIBEXEC_DIR: firebreakLibexecDir,
-            FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG: nixHelpersDisabled ? "" : "1",
-            FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES: nixHelpersDisabled ? "" : "nix-command flakes"
+            FIREBREAK_FLAKE_REF: flakeRef,
+            FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG: needsNix && !nixHelpersDisabled ? "1" : "",
+            FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES: needsNix && !nixHelpersDisabled ? "nix-command flakes" : ""
           },
           stdio: "inherit"
         }
@@ -473,7 +474,7 @@ const runFirebreak = async () => {
 }
 
 checkPlatform()
-if (commandRequiresNix()) {
+if (needsNix) {
   checkNix()
 }
 checkKvm()

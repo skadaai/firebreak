@@ -7,6 +7,7 @@ export TMPDIR="@TMPDIR@"
 export npm_config_cache="@NPM_CACHE_DIR@"
 export npm_config_prefix="@DEV_HOME@/.local"
 export PATH="$LOCAL_BIN:$PATH"
+@LAUNCH_ENV_EXPORTS@
 
 firebreak_refresh_cli() {
   sudo rm -f "@DEV_HOME@/.cache/firebreak-tools/@NAME@/package-spec"

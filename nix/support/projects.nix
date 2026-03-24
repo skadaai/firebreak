@@ -234,6 +234,8 @@
     packageSpec,
     binName,
     launchCommand ? binName,
+    launchEnvironment ? { },
+    forwardPorts ? [ ],
     memoryMiB ? 3072,
     runtimePackages ? [ ],
     bootstrapPackages ? null,
@@ -270,6 +272,8 @@
             binName
             launchCommand
             launchCommandName
+            launchEnvironment
+            forwardPorts
             readyCommandName
             memoryMiB
             extraShellInit

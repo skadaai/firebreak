@@ -15,6 +15,27 @@
         runtimePackages = pkgs: with pkgs; [
           git
         ];
+        launchEnvironment = {
+          FRONTEND_PORT = "3000";
+          BACKEND_PORT = "3001";
+          HOST = "0.0.0.0";
+        };
+        forwardPorts = [
+          {
+            from = "host";
+            proto = "tcp";
+            host.address = "127.0.0.1";
+            host.port = 3000;
+            guest.port = 3000;
+          }
+          {
+            from = "host";
+            proto = "tcp";
+            host.address = "127.0.0.1";
+            host.port = 3001;
+            guest.port = 3001;
+          }
+        ];
         launchCommand = "vibe-kanban";
         extraShellInit = ''
           alias vk-dev='project-launch'

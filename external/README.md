@@ -7,6 +7,11 @@ The current recipes are:
 - [`agent-orchestrator`](./agent-orchestrator): VM profile for `ComposioHQ/agent-orchestrator`
 - [`vibe-kanban`](./vibe-kanban): VM profile for `BloopAI/vibe-kanban`
 
+Current forwarded host ports:
+
+- `agent-orchestrator`: `127.0.0.1:3000`, `127.0.0.1:14800`, `127.0.0.1:14801`
+- `vibe-kanban`: `127.0.0.1:3000`, `127.0.0.1:3001`
+
 These flakes are consumer-oriented sandboxes for the published CLIs. They mount the caller's current working directory as the target workspace, but they do not require a checkout of the upstream tool's own repository.
 
 On the first successful boot, the VM prepares the packaged CLI launcher before opening the console. In normal `run` mode, the VM then enters the tool's primary command against the mounted workspace. In `shell` mode, it drops into the prepared shell instead.

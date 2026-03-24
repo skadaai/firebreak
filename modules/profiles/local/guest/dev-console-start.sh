@@ -26,7 +26,8 @@ printf 'vm: %s | mode: %s | workspace: %s\n\n' "@AGENT_VM_NAME@" "$session_mode"
 
 case "$session_mode" in
   shell)
-    exec @BASH@ -i
+    @BASH@ -i || true
+    exit 0
     ;;
   agent)
     if [ -n "$agent_command" ]; then

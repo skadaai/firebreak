@@ -9,7 +9,7 @@ prompt_file=""
 timeout_seconds=${FIREBREAK_JOB_TIMEOUT_SECONDS:-300}
 max_jobs=${FIREBREAK_MAX_JOBS:-1}
 state_dir=${FIREBREAK_STATE_DIR:-@DEFAULT_STATE_DIR@}
-firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-/cache}/firebreak/tmp}
+firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
 
 usage() {
   cat <<'EOF' >&2

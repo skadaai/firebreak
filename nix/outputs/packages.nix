@@ -26,7 +26,7 @@
 
   firebreak-codex = mkAgentPackage {
     name = "firebreak-codex";
-    runnerPackage = "firebreak-internal-runner-codex";
+    runner = self.packages.${system}.firebreak-internal-runner-codex;
     controlSocketName = "firebreak-codex";
     defaultAgentCommand = "codex";
     agentConfigDirName = ".codex";
@@ -49,7 +49,7 @@
 
   firebreak-claude-code = mkAgentPackage {
     name = "firebreak-claude-code";
-    runnerPackage = "firebreak-internal-runner-claude-code";
+    runner = self.packages.${system}.firebreak-internal-runner-claude-code;
     controlSocketName = "firebreak-claude-code";
     defaultAgentCommand = "claude";
     agentConfigDirName = ".claude";

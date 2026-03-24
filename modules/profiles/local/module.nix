@@ -111,8 +111,8 @@ in {
       wantedBy = [ "multi-user.target" ];
       after = [ "adopt-host-identity.service" "prepare-agent-session.service" ]
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
-      requires = [ "adopt-host-identity.service" "prepare-agent-session.service" ]
-        ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
+      requires = [ "adopt-host-identity.service" "prepare-agent-session.service" ];
+      wants = lib.optional bootstrapEnabled "dev-bootstrap.service";
       conflicts = [ "serial-getty@ttyS0.service" ];
 
       serviceConfig = {

@@ -6,6 +6,7 @@
     extra-trusted-public-keys = [ "microvm.cachix.org-1:oXnBc6hRE3eX5rSYdRyMYXnfzcCxC7yKPTbZXALsqys=" ];
   };
 
+  inputs.nixpkgs.url = "nixpkgs";
   inputs.microvm = {
     url = "github:microvm-nix/microvm.nix";
     inputs.nixpkgs.follows = "nixpkgs";
@@ -18,6 +19,17 @@
         inherit self nixpkgs microvm system;
       };
     in {
+      lib.${system} = {
+        inherit (support)
+          mkAgentVm
+          mkLocalVmArtifacts
+          mkLocalVmPackage
+          mkPackagedNodeCliArtifacts
+          mkRunnerPackage
+          mkWorkspaceProjectArtifacts
+          ;
+      };
+
       nixosModules = import ./nix/outputs/modules.nix {
         inherit self;
       };

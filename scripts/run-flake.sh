@@ -12,7 +12,7 @@ fi
 shift 2
 
 repo_root=$(git rev-parse --show-toplevel)
-scratch_root=${FIREBREAK_RUN_FLAKE_TMPDIR:-${XDG_CACHE_HOME:-/cache}/firebreak/run-flake}
+scratch_root=${FIREBREAK_RUN_FLAKE_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/run-flake}
 mkdir -p "$scratch_root"
 tmp_dir=$(mktemp -d "$scratch_root/export.XXXXXX")
 src_dir=$tmp_dir/source

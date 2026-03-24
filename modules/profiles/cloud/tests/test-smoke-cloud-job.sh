@@ -1,6 +1,6 @@
 set -eu
 
-firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-/cache}/firebreak/tmp}
+firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
 mkdir -p "$firebreak_tmp_root"
 workspace_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-cloud-job-workspace.XXXXXX")
 output_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-cloud-job-output.XXXXXX")

@@ -3,7 +3,7 @@ set -eu
 host_cwd=$PWD
 host_uid=$(id -u)
 host_gid=$(id -g)
-firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-/cache}/firebreak/tmp}
+firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
 agent_config_mode=${AGENT_CONFIG:-${CODEX_CONFIG:-vm}}
 requested_vm_mode=${FIREBREAK_VM_MODE:-${FIREBREAK_AGENT_MODE:-${AGENT_VM_ENTRYPOINT:-run}}}
 agent_session_mode=agent

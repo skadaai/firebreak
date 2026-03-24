@@ -6,7 +6,7 @@ host_cwd=$PWD
 host_uid=$(id -u)
 host_gid=$(id -g)
 firebreak_load_project_config
-firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-/cache}/firebreak/tmp}
+firebreak_tmp_root=${FIREBREAK_TMPDIR:-${TMPDIR:-/tmp}}/firebreak/tmp
 agent_specific_config_var=@AGENT_ENV_PREFIX@_CONFIG
 agent_specific_host_path_var=@AGENT_ENV_PREFIX@_CONFIG_HOST_PATH
 agent_specific_config=${!agent_specific_config_var:-}

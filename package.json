@@ -17,6 +17,9 @@
     "claude-code",
     "opencode"
   ],
+  "optionalDependencies": {
+    "ora": "^8.2.0"
+  },
   "bin": {
     "firebreak": "./bin/firebreak.js"
   },

@@ -23,6 +23,20 @@ firebreak_exec_package() {
   shift
 
   firebreak_require_flake_ref
+  if [ "${FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG:-}" = "1" ] && [ -n "${FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES:-}" ]; then
+    exec nix --accept-flake-config --extra-experimental-features "$FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES" \
+      run "$FIREBREAK_FLAKE_REF#$package_name" -- "$@"
+  fi
+
+  if [ "${FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG:-}" = "1" ]; then
+    exec nix --accept-flake-config run "$FIREBREAK_FLAKE_REF#$package_name" -- "$@"
+  fi
+
+  if [ -n "${FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES:-}" ]; then
+    exec nix --extra-experimental-features "$FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES" \
+      run "$FIREBREAK_FLAKE_REF#$package_name" -- "$@"
+  fi
+
   exec nix run "$FIREBREAK_FLAKE_REF#$package_name" -- "$@"
 }
 

@@ -1,6 +1,6 @@
 set -eu
 
-firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-/cache}/firebreak/tmp}
+firebreak_tmp_root=${FIREBREAK_TMPDIR:-${TMPDIR:-/tmp}}/firebreak/tmp
 mkdir -p "$firebreak_tmp_root"
 state_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-internal-validate-state.XXXXXX")
 blocked_state_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-internal-validate-blocked.XXXXXX")

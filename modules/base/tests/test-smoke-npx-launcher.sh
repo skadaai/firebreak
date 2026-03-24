@@ -6,7 +6,7 @@ if ! [ -f "$repo_root/bin/firebreak.js" ] || ! [ -f "$repo_root/package.json" ];
   exit 1
 fi
 
-firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-/cache}/firebreak/tmp}
+firebreak_tmp_root=${FIREBREAK_TMPDIR:-${TMPDIR:-/tmp}}/firebreak/tmp
 mkdir -p "$firebreak_tmp_root"
 smoke_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-npx-launcher.XXXXXX")
 trap 'rm -rf "$smoke_tmp_dir"' EXIT INT TERM

@@ -24,7 +24,7 @@ cat >"$fake_bin_dir/nix" <<EOF
 #!/usr/bin/env bash
 set -eu
 if [ "\${1:-}" = "--version" ]; then
-  printf '%s\n' 'nix (Nix) 2.18.0'
+  printf '%s\n' 'nix smoke shim'
   exit 0
 fi
 printf '%s\n' "\$PWD" >"$nix_cwd_path"
@@ -38,7 +38,8 @@ missing_nix_output=$(
   env -i \
     HOME="${HOME:-/tmp}" \
     PATH="$empty_bin_dir" \
-    "$node_bin" "$repo_root/bin/firebreak.js" doctor 2>&1
+    FIREBREAK_LAUNCHER_KVM_PATH="$fake_kvm_path" \
+    "$node_bin" "$repo_root/bin/firebreak.js" run codex 2>&1
 )
 missing_nix_status=$?
 set -e
@@ -51,67 +52,43 @@ fi
 
 rm -f "$nix_args_path" "$nix_cwd_path"
 
-(
+vms_output=$(
   cd "$repo_root"
   PATH="$fake_bin_dir:$PATH" \
     FIREBREAK_LAUNCHER_KVM_PATH="$fake_kvm_path" \
-    node "$repo_root/bin/firebreak.js" vms >/dev/null
+    node "$repo_root/bin/firebreak.js" vms
 )
 
-if ! [ -f "$nix_args_path" ]; then
-  echo "launcher smoke did not invoke the fake nix binary" >&2
+if ! printf '%s\n' "$vms_output" | grep -F -q "codex"; then
+  printf '%s\n' "$vms_output" >&2
+  echo "launcher smoke did not print the VM catalog through the local shell path" >&2
   exit 1
 fi
 
-if ! [ -f "$nix_cwd_path" ] || [ "$(cat "$nix_cwd_path")" != "$repo_root" ]; then
-  echo "launcher smoke did not preserve the caller working directory for the local checkout case" >&2
+if [ -f "$nix_args_path" ] || [ -f "$nix_cwd_path" ]; then
+  echo "launcher smoke should not invoke nix for the local VM catalog path" >&2
   exit 1
 fi
-
-require_arg() {
-  expected=$1
-  if ! grep -F -x -q -- "$expected" "$nix_args_path"; then
-    cat "$nix_args_path" >&2
-    echo "launcher smoke missing forwarded nix argument: $expected" >&2
-    exit 1
-  fi
-}
-
-require_arg "--accept-flake-config"
-require_arg "--extra-experimental-features"
-require_arg "nix-command flakes"
-require_arg "run"
-require_arg "path:$repo_root#firebreak"
-require_arg "--"
-require_arg "vms"
 
 rm -f "$nix_args_path" "$nix_cwd_path"
 
-(
+doctor_output=$(
   cd "$smoke_tmp_dir"
   PATH="$fake_bin_dir:$PATH" \
     FIREBREAK_LAUNCHER_KVM_PATH="$fake_kvm_path" \
-    node "$repo_root/bin/firebreak.js" doctor --json >/dev/null
+    node "$repo_root/bin/firebreak.js" doctor --json
 )
 
-if ! [ -f "$nix_args_path" ]; then
-  echo "launcher smoke did not invoke the fake nix binary for the GitHub fallback case" >&2
+if ! printf '%s\n' "$doctor_output" | grep -F -q '"project_root":'; then
+  printf '%s\n' "$doctor_output" >&2
+  echo "launcher smoke did not run doctor through the packaged shell path" >&2
   exit 1
 fi
 
-if ! [ -f "$nix_cwd_path" ] || [ "$(cat "$nix_cwd_path")" != "$smoke_tmp_dir" ]; then
-  echo "launcher smoke did not preserve the caller working directory for the GitHub fallback case" >&2
+if [ -f "$nix_args_path" ] || [ -f "$nix_cwd_path" ]; then
+  echo "launcher smoke should not invoke nix for doctor --json" >&2
   exit 1
 fi
-
-require_arg "--accept-flake-config"
-require_arg "--extra-experimental-features"
-require_arg "nix-command flakes"
-require_arg "run"
-require_arg "github:skadaai/firebreak#firebreak"
-require_arg "--"
-require_arg "doctor"
-require_arg "--json"
 
 rm -f "$nix_args_path" "$nix_cwd_path"
 set +e

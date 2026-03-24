@@ -110,6 +110,7 @@ let
         coreutils
         git
         gnugrep
+        python3
       ];
       text = renderTemplate {
         "@REPO_ROOT@" = builtins.toString ../.;

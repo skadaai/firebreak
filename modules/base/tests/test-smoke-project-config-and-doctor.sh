@@ -6,7 +6,7 @@ if ! [ -f "$repo_root/flake.nix" ]; then
   exit 1
 fi
 
-firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-/cache}/firebreak/tmp}
+firebreak_tmp_root=${FIREBREAK_TMPDIR:-${TMPDIR:-/tmp}}/firebreak/tmp
 mkdir -p "$firebreak_tmp_root"
 smoke_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-project-config.XXXXXX")
 trap 'rm -rf "$smoke_tmp_dir"' EXIT INT TERM
@@ -89,18 +89,39 @@ require_pattern "$doctor_verbose_output" "project_root_source" "doctor verbose p
 require_pattern "$doctor_verbose_output" "git_common_dir" "doctor verbose git common dir"
 
 doctor_json=$(AGENT_CONFIG=vm firebreak_cmd doctor --json)
-require_pattern "$doctor_json" '"project_config_source": "project-default"' "doctor json project config source"
-require_pattern "$doctor_json" '"ignored_config_keys": ["FIREBREAK_TASK_STATE_DIR"]' "doctor json ignored key list"
-require_pattern "$doctor_json" '"codex": {' "doctor json codex section"
-require_pattern "$doctor_json" '"mode": "workspace"' "doctor json Codex mode"
-require_pattern "$doctor_json" "\"path\": \"$project_dir/.codex\"" "doctor json Codex path"
-require_pattern "$doctor_json" '"claude-code": {' "doctor json Claude section"
-require_pattern "$doctor_json" '"mode": "vm"' "doctor json Claude mode"
-require_pattern "$doctor_json" '"vm_mode": "run"' "doctor json default public VM mode"
+DOCTOR_JSON=$doctor_json PROJECT_DIR=$project_dir python3 - <<'PY'
+import json
+import os
+import sys
+
+obj = json.loads(os.environ["DOCTOR_JSON"])
+project_dir = os.environ["PROJECT_DIR"]
+
+assert obj["project_config_source"] == "project-default"
+assert "FIREBREAK_TASK_STATE_DIR" in obj["ignored_config_keys"]
+assert obj["agents"]["codex"]["mode"] == "workspace"
+assert obj["agents"]["codex"]["path"] == f"{project_dir}/.codex"
+assert obj["agents"]["claude-code"]["mode"] == "vm"
+assert obj["vm_mode"] == "run"
+PY
 
 doctor_verbose_json=$(AGENT_CONFIG=vm firebreak_cmd doctor --verbose --json)
-require_pattern "$doctor_verbose_json" '"project_root_source": "cwd"' "doctor verbose json project root source"
-require_pattern "$doctor_verbose_json" '"git_common_dir": "unknown"' "doctor verbose json git common dir"
-require_pattern "$doctor_verbose_json" '"cwd_whitespace": false' "doctor verbose json cwd compatibility"
+DOCTOR_VERBOSE_JSON=$doctor_verbose_json PROJECT_DIR=$project_dir python3 - <<'PY'
+import json
+import os
+import sys
+
+obj = json.loads(os.environ["DOCTOR_VERBOSE_JSON"])
+details = obj["details"]
+project_dir = os.environ["PROJECT_DIR"]
+
+assert obj["project_root_source"] == "cwd"
+assert obj["git_common_dir"] == "unknown"
+assert obj["cwd_whitespace"] is False
+assert details["cwd"] == project_dir
+assert details["project_root_source"] == "cwd"
+assert details["git_common_dir"] == "unknown"
+assert "FIREBREAK_TASK_STATE_DIR" in details["ignored_keys"]
+PY
 
 printf '%s\n' "Firebreak project-config and doctor smoke test passed"

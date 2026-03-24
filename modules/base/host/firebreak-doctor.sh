@@ -176,6 +176,20 @@ EOF
   : "$codex_label" "$codex_source_var" "$claude_label" "$claude_source_var"
 
   if [ "$doctor_output" = "json" ]; then
+    verbose_json_fields=""
+    if [ "$doctor_verbose" = "1" ]; then
+      verbose_json_fields=$(cat <<EOF
+,
+  "details": {
+    "cwd": "$(firebreak_doctor_json_escape "$PWD")",
+    "project_root_source": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_PROJECT_ROOT_SOURCE")",
+    "git_common_dir": "$(firebreak_doctor_json_escape "${git_common_dir:-unknown}")",
+    "ignored_keys": [$(firebreak_doctor_json_array "$FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS")]
+  }
+EOF
+)
+    fi
+
     cat <<EOF
 {
   "project_root": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_PROJECT_ROOT")",
@@ -198,7 +212,7 @@ EOF
       "mode": "$(firebreak_doctor_json_escape "$claude_mode")",
       "path": "$(firebreak_doctor_json_escape "$claude_path")"
     }
-  }
+  }$verbose_json_fields
 }
 EOF
     exit 0

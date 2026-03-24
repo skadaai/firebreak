@@ -37,6 +37,17 @@ require_pattern "$run_claude_shell_output" '__MODE__shell' "shell mode override"
 require_pattern "$run_claude_shell_output" '__ARG__prompt.txt' "claude-code forwarded argument"
 
 set +e
+invalid_vm_mode_output=$(FIREBREAK_VM_MODE=invalid @FIREBREAK_CLI_BIN@ run codex 2>&1)
+invalid_vm_mode_status=$?
+set -e
+
+if [ "$invalid_vm_mode_status" -eq 0 ] || ! printf '%s\n' "$invalid_vm_mode_output" | grep -F -q "unsupported Firebreak VM mode"; then
+  printf '%s\n' "$invalid_vm_mode_output" >&2
+  echo "CLI surface smoke did not reject an invalid FIREBREAK_VM_MODE value" >&2
+  exit 1
+fi
+
+set +e
 unknown_vm_output=$(@FIREBREAK_CLI_BIN@ run unknown 2>&1)
 unknown_vm_status=$?
 set -e

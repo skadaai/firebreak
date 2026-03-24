@@ -105,6 +105,15 @@ firebreak_run_command() {
     esac
   done
 
+  case "$requested_vm_mode" in
+    ""|run|shell)
+      ;;
+    *)
+      echo "unsupported Firebreak VM mode: $requested_vm_mode" >&2
+      run_usage 1
+      ;;
+  esac
+
   case "$vm_name" in
     codex)
       if [ -n "$requested_vm_mode" ]; then

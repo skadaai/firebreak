@@ -12,5 +12,5 @@
   "engines": {
     "node": ">=18"
   },
-  "license": "UNLICENSED"
+  "license": "FSL-1.1-MIT"
 }

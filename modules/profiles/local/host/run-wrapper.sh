@@ -15,6 +15,7 @@ agent_specific_host_path=${!agent_specific_host_path_var:-}
 agent_config_mode=${agent_specific_config:-${AGENT_CONFIG:-vm}}
 requested_vm_mode=${FIREBREAK_VM_MODE:-run}
 multi_agent_config_enabled=@MULTI_AGENT_CONFIG_ENABLED@
+single_agent_config_enabled=1
 agent_session_mode=agent
 default_agent_command=@DEFAULT_AGENT_COMMAND@
 agent_command_override=""
@@ -66,6 +67,11 @@ append_optional_env_default() {
 }
 
 default_agent_config_host_dir=$(resolve_host_dir "${agent_specific_host_path:-${AGENT_CONFIG_HOST_PATH:-@DEFAULT_AGENT_CONFIG_HOST_DIR@}}")
+
+if [ "$multi_agent_config_enabled" = "1" ] && [ "$agent_specific_config_var" = "AGENT_CONFIG" ]; then
+  single_agent_config_enabled=0
+  agent_config_mode=vm
+fi
 
 reject_whitespace_path "$host_cwd" "current working directory"
 reject_whitespace_path "$resolved_firebreak_tmp_root" "Firebreak temporary runtime directory"
@@ -168,49 +174,51 @@ if [ -n "$shell_command_override" ]; then
   agent_command_override=$shell_command_override
 fi
 
-case "$agent_config_mode" in
-  host)
-    agent_config_host_dir=$default_agent_config_host_dir
+if [ "$single_agent_config_enabled" = "1" ]; then
+  case "$agent_config_mode" in
+    host)
+      agent_config_host_dir=$default_agent_config_host_dir
 
-    case "$agent_config_host_dir" in
-      /*) ;;
-      *)
-        echo "AGENT_CONFIG_HOST_PATH must resolve to an absolute host path: $agent_config_host_dir" >&2
-        exit 1
-        ;;
-    esac
+      case "$agent_config_host_dir" in
+        /*) ;;
+        *)
+          echo "AGENT_CONFIG_HOST_PATH must resolve to an absolute host path: $agent_config_host_dir" >&2
+          exit 1
+          ;;
+      esac
 
-    reject_whitespace_path "$agent_config_host_dir" "agent host config path"
+      reject_whitespace_path "$agent_config_host_dir" "agent host config path"
 
-    mkdir -p "$agent_config_host_dir"
-    ;;
-  workspace|vm|fresh)
-    ;;
-  *)
-    echo "unsupported agent config mode: $agent_config_mode" >&2
-    echo "supported modes: host, workspace, vm, fresh" >&2
-    exit 1
-    ;;
-esac
-
-workspace_agent_config_path=$host_cwd/@AGENT_CONFIG_DIR_NAME@
-if [ "$agent_config_mode" = "workspace" ] && [ -L "$workspace_agent_config_path" ]; then
-  resolved_symlink_target=$(resolve_symlink_target "$workspace_agent_config_path")
-    reject_whitespace_path "$resolved_symlink_target" "workspace agent config symlink target"
-    case "$resolved_symlink_target" in
-      "$host_cwd"|"$host_cwd"/*)
-        ;;
-      *)
-        agent_config_mode=host
-        agent_config_host_dir=$resolved_symlink_target
-        target_parent=$(dirname "$agent_config_host_dir")
-        if ! [ -d "$agent_config_host_dir" ] && ! [ -w "$target_parent" ]; then
-          echo "workspace agent config symlink target is not writable on the host; falling back to $default_agent_config_host_dir" >&2
-          agent_config_host_dir=$default_agent_config_host_dir
-        fi
-        mkdir -p "$agent_config_host_dir"
-        ;;
+      mkdir -p "$agent_config_host_dir"
+      ;;
+    workspace|vm|fresh)
+      ;;
+    *)
+      echo "unsupported agent config mode: $agent_config_mode" >&2
+      echo "supported modes: host, workspace, vm, fresh" >&2
+      exit 1
+      ;;
   esac
+
+  workspace_agent_config_path=$host_cwd/@AGENT_CONFIG_DIR_NAME@
+  if [ "$agent_config_mode" = "workspace" ] && [ -L "$workspace_agent_config_path" ]; then
+    resolved_symlink_target=$(resolve_symlink_target "$workspace_agent_config_path")
+      reject_whitespace_path "$resolved_symlink_target" "workspace agent config symlink target"
+      case "$resolved_symlink_target" in
+        "$host_cwd"|"$host_cwd"/*)
+          ;;
+        *)
+          agent_config_mode=host
+          agent_config_host_dir=$resolved_symlink_target
+          target_parent=$(dirname "$agent_config_host_dir")
+          if ! [ -d "$agent_config_host_dir" ] && ! [ -w "$target_parent" ]; then
+            echo "workspace agent config symlink target is not writable on the host; falling back to $default_agent_config_host_dir" >&2
+            agent_config_host_dir=$default_agent_config_host_dir
+          fi
+          mkdir -p "$agent_config_host_dir"
+          ;;
+    esac
+  fi
 fi
 
 # shellcheck disable=SC2329

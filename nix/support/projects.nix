@@ -275,6 +275,7 @@
     mkLocalVmArtifacts {
       inherit name;
       defaultAgentCommand = launchCommandName;
+      multiAgentConfig = multiAgentConfig;
       extraModules = [
         (import ../../modules/node-cli/module.nix {
           inherit

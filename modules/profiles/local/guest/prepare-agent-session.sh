@@ -66,14 +66,15 @@ fi
 
 if [ "@MULTI_AGENT_CONFIG_ENABLED@" = "1" ]; then
   mkdir -p @MULTI_AGENT_CONFIG_HOST_MOUNT@ @MULTI_AGENT_CONFIG_FRESH_ROOT@
+  chown @DEV_USER@:@DEV_USER@ @MULTI_AGENT_CONFIG_FRESH_ROOT@
   rm -f @MULTI_AGENT_CONFIG_MOUNTED_FLAG@
 
   if mountpoint -q @MULTI_AGENT_CONFIG_HOST_MOUNT@; then
     touch @MULTI_AGENT_CONFIG_MOUNTED_FLAG@
-  elif mount -t virtiofs hostmultiagentconfig @MULTI_AGENT_CONFIG_HOST_MOUNT@; then
+  elif mount_output=$(mount -t virtiofs hostmultiagentconfig @MULTI_AGENT_CONFIG_HOST_MOUNT@ 2>&1); then
     touch @MULTI_AGENT_CONFIG_MOUNTED_FLAG@
   else
-    echo "Firebreak multi-agent host config share not available; continuing without host-backed multi-agent config"
+    printf '%s\n' "Firebreak multi-agent host config share not available; continuing without host-backed multi-agent config: $mount_output"
   fi
 fi
 

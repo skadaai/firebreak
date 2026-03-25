@@ -30,7 +30,7 @@ case "$mode" in
     fi
     mounted_flag=${FIREBREAK_MULTI_AGENT_CONFIG_HOST_MOUNTED_FLAG:-/run/firebreak-multi-agent-host-mounted}
     if ! [ -e "$mounted_flag" ]; then
-      echo "Firebreak host config share is not mounted for @WRAPPER_DISPLAY_NAME@; set AGENT_CONFIG_HOST_PATH or use workspace, vm, or fresh mode." >&2
+      echo "Firebreak host config share is not mounted for @WRAPPER_DISPLAY_NAME@; use workspace, vm, or fresh mode, or inspect prepare-agent-session logs for the host-share mount failure." >&2
       exit 1
     fi
     config_dir=${FIREBREAK_MULTI_AGENT_CONFIG_HOST_MOUNT:-/run/agent-config-host-root}/@CONFIG_SUBDIR@

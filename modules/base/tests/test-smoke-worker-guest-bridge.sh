@@ -12,7 +12,7 @@ guest_script=$workspace_dir/guest-bridge-check.sh
 cat >"$guest_script" <<'EOF'
 set -eu
 
-spawn_output=$(firebreak worker spawn --backend process --kind bridge-process --workspace "$PWD" -- sh -c 'printf guest-bridge-ok')
+spawn_output=$(firebreak worker spawn --kind bridge-process --workspace "$PWD")
 printf '__BRIDGE_SPAWN__%s\n' "$spawn_output"
 
 worker_id=$(SPAWN_OUTPUT="$spawn_output" python3 - <<'PY'
@@ -40,7 +40,20 @@ if [ "$show_backend" != "process" ]; then
   exit 1
 fi
 
-stop_spawn_output=$(firebreak worker spawn --backend process --kind bridge-stop --workspace "$PWD" -- sh -c 'sleep 30')
+show_authority=$(SHOW_OUTPUT="$show_output" python3 - <<'PY'
+import json
+import os
+
+print(json.loads(os.environ["SHOW_OUTPUT"])["authority"])
+PY
+)
+
+if [ "$show_authority" != "guest" ]; then
+  echo "guest bridge smoke expected a guest authority, got: $show_authority" >&2
+  exit 1
+fi
+
+stop_spawn_output=$(firebreak worker spawn --kind bridge-stop --workspace "$PWD")
 stop_worker_id=$(STOP_SPAWN_OUTPUT="$stop_spawn_output" python3 - <<'PY'
 import json
 import os

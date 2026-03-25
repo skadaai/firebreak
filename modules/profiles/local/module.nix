@@ -39,6 +39,9 @@ let
     "@USERMOD@" = "${pkgs.shadow}/bin/usermod";
     "@WORKER_BRIDGE_ENABLED@" = if cfg.workerBridgeEnabled then "1" else "0";
     "@WORKER_BRIDGE_MOUNT@" = cfg.workerBridgeMount;
+    "@WORKER_KINDS_FILE@" = cfg.workerKindsFile;
+    "@WORKER_LOCAL_HELPER@" = "firebreak-worker-local-helper";
+    "@WORKER_LOCAL_STATE_DIR@" = cfg.workerLocalStateDir;
     "@WORKSPACE_MOUNT@" = cfg.workspaceMount;
   };
 
@@ -51,6 +54,19 @@ let
     '';
   prepareAgentSessionScript = pkgs.writeShellScript "prepare-agent-session"
     (renderTemplate scriptVars ./guest/prepare-agent-session.sh);
+  firebreakWorkerEngineScript = pkgs.writeShellScript "firebreak-worker-engine"
+    (builtins.readFile ../../base/host/firebreak-worker.sh);
+  firebreakWorkerLocalHelper = pkgs.writeShellApplication {
+    name = "firebreak-worker-local-helper";
+    runtimeInputs = with pkgs; [
+      bash
+      coreutils
+      gnused
+    ];
+    text = renderTemplate (scriptVars // {
+      "@WORKER_ENGINE_SCRIPT@" = "${firebreakWorkerEngineScript}";
+    }) ./guest/firebreak-worker-local-helper.sh;
+  };
   firebreakWorkerBridgeCli = pkgs.writeShellApplication {
     name = "firebreak";
     runtimeInputs = with pkgs; [
@@ -58,7 +74,7 @@ let
       coreutils
       python3
     ];
-    text = renderTemplate scriptVars ./guest/firebreak-worker-bridge-cli.sh;
+    text = renderTemplate scriptVars ./guest/firebreak-worker-cli.sh;
   };
   devConsoleStartScript = pkgs.writeShellScript "dev-console-start"
     (renderTemplate scriptVars ./guest/dev-console-start.sh);
@@ -117,7 +133,10 @@ in {
 
     systemd.services."serial-getty@ttyS0".enable = false;
 
-    environment.systemPackages = lib.mkIf cfg.workerBridgeEnabled [ firebreakWorkerBridgeCli ];
+    environment.systemPackages = lib.mkIf cfg.workerBridgeEnabled [
+      firebreakWorkerBridgeCli
+      firebreakWorkerLocalHelper
+    ];
 
     systemd.services.dev-console = {
       description = "Interactive dev shell on ttyS0";

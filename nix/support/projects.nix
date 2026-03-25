@@ -14,6 +14,7 @@
     extraShellInit ? "",
     extraModules ? [ ],
     workerBridgeEnabled ? false,
+    workerKinds ? { },
   }:
     let
       packageSet =
@@ -40,6 +41,7 @@
       inherit name;
       defaultAgentCommand = launchCommandName;
       inherit workerBridgeEnabled;
+      inherit workerKinds;
       extraModules = [
         ({ config, pkgs, ... }:
           let
@@ -255,6 +257,7 @@
     extraShellInit ? "",
     extraModules ? [ ],
     workerBridgeEnabled ? false,
+    workerKinds ? { },
   }:
     let
       packageSet =
@@ -278,6 +281,7 @@
       inherit name;
       defaultAgentCommand = launchCommandName;
       inherit workerBridgeEnabled;
+      inherit workerKinds;
       extraModules = [
         (import ../../modules/node-cli/module.nix {
           inherit

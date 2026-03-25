@@ -34,7 +34,7 @@ last_updated: 2026-03-25
 
 ## Current status
 
-In progress. The host-broker slice and the first guest-side bridge slice have landed with focused smoke coverage. Recipe-level worker declarations and shared-guest `process` worker semantics remain open.
+In progress. The host-broker slice, the first guest-side bridge slice, and the first worker-kind declaration slice have landed. Guest-local `process` worker semantics now route through guest-owned worker state, while `firebreak` workers still route through the host broker. Richer lifecycle and orchestrator integration work remain open.
 
 ## Open questions
 

@@ -19,14 +19,16 @@ Initial implementation in progress.
 - smoke coverage for the broker lifecycle and the CLI route into `firebreak worker`
 - a local-profile guest bridge that mounts a request-response share and exposes guest-visible `firebreak worker ...` forwarding inside bridge-enabled orchestrator VMs
 - focused VM smoke coverage proving a guest can call the worker surface through that bridge
+- guest-local `process` worker semantics through a guest-owned worker state directory and the same `firebreak worker` nouns
+- first worker-kind declarations in bridge-enabled VMs so a guest can resolve kinds to `process` or `firebreak` without raw backend flags
+- first recipe-level worker-kind declarations in [external/agent-orchestrator/flake.nix](../../external/agent-orchestrator/flake.nix)
 
 ## What remains open
 
-- guest bridge implementation for shared-guest `process` worker semantics
-- worker-kind declaration interface for external recipes
-- first integration against an external orchestrator recipe
-- richer lifecycle behavior such as worker reuse, log streaming, and cleanup policy
-- docs for orchestration lifecycle behavior
+ - first integration against an external orchestrator recipe
+ - richer lifecycle behavior such as worker reuse, log streaming, and cleanup policy
+ - docs for orchestration lifecycle behavior
+ - focused runtime validation for declared `firebreak` worker kinds through the guest-visible orchestrator path
 
 ## Current sources of truth
 
@@ -39,3 +41,4 @@ Initial implementation in progress.
 - 2026-03-24: Landed the first host-broker slice with `firebreak worker`, worker metadata, `process` and `firebreak` backend spawning, and focused smoke coverage.
 - 2026-03-25: Promoted the broker surface from maintainer-only `internal` naming to the top-level public `worker` command and aligned the slice vocabulary around workers instead of agents.
 - 2026-03-25: Landed the first guest-bridge slice for local orchestrator VMs with a mounted request-response channel, guest-visible `firebreak worker` forwarding, and focused bridge smoke coverage.
+- 2026-03-25: Split worker execution authority cleanly so declared `process` workers are guest-local while declared `firebreak` workers stay host-brokered, and added recipe-level worker-kind declarations.

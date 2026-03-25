@@ -109,12 +109,16 @@ let
     defaultAgentConfigHostDir ? "$HOME/.firebreak/${name}",
     agentEnvPrefix ? "AGENT",
     workerBridgeEnabled ? false,
+    workerKinds ? { },
   }:
     let
       nixosConfiguration = mkAgentVm {
         inherit name profileModules;
         extraModules =
           extraModules
+          ++ nixpkgs.lib.optional (workerKinds != { }) {
+            agentVm.workerKindsJson = builtins.toJSON workerKinds;
+          }
           ++ nixpkgs.lib.optional workerBridgeEnabled {
             agentVm.workerBridgeEnabled = true;
           };

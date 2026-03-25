@@ -265,6 +265,21 @@
         name = "firebreak-worker-guest-bridge-smoke-vm";
         defaultAgentCommand = "bash";
         workerBridgeEnabled = true;
+        workerKinds = {
+          bridge-process = {
+            backend = "process";
+            command = [ "sh" "-c" "printf guest-bridge-ok" ];
+          };
+          bridge-stop = {
+            backend = "process";
+            command = [ "sh" "-c" "sleep 30" ];
+          };
+          bridge-firebreak = {
+            backend = "firebreak";
+            package = "firebreak-codex";
+            vm_mode = "run";
+          };
+        };
         extraModules = [
           ({ pkgs, ... }: {
             agentVm.extraSystemPackages = with pkgs; [

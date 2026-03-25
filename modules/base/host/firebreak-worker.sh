@@ -1,6 +1,8 @@
 set -eu
 
 state_dir=${FIREBREAK_WORKER_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/firebreak/worker-broker}
+worker_authority=${FIREBREAK_WORKER_AUTHORITY:-host}
+worker_allow_firebreak=${FIREBREAK_WORKER_ALLOW_FIREBREAK:-1}
 command=${1:-}
 
 usage() {
@@ -87,6 +89,7 @@ write_metadata() {
   cat >"$worker_root/metadata.json" <<EOF
 {
   "worker_id": "$(json_escape "$worker_id")",
+  "authority": "$(json_escape "$worker_authority")",
   "backend": "$(json_escape "$backend")",
   "kind": "$(json_escape "$kind")",
   "status": "$(json_escape "$status")",
@@ -391,6 +394,10 @@ spawn_worker() {
       }
       ;;
     firebreak)
+      if [ "$worker_allow_firebreak" != "1" ]; then
+        echo "firebreak backend is unavailable in this worker runtime" >&2
+        exit 1
+      fi
       [ -n "$package_name" ] || {
         echo "firebreak backend requires --package" >&2
         exit 1

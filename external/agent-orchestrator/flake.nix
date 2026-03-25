@@ -13,6 +13,18 @@
         packageSpec = "@composio/ao";
         binName = "ao";
         workerBridgeEnabled = true;
+        workerKinds = {
+          codex = {
+            backend = "firebreak";
+            package = "firebreak-codex";
+            vm_mode = "run";
+          };
+          claude-code = {
+            backend = "firebreak";
+            package = "firebreak-claude-code";
+            vm_mode = "run";
+          };
+        };
         runtimePackages = pkgs: with pkgs; [
           git
           gh

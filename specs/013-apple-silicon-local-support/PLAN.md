@@ -1,5 +1,5 @@
 ---
-status: draft
+status: in_progress
 last_updated: 2026-03-24
 ---
 
@@ -8,10 +8,10 @@ last_updated: 2026-03-24
 ## Implementation slices
 
 1. Define the Apple Silicon local-support contract in this spec.
-2. Add `aarch64-darwin` host-side flake exports while keeping the Linux and Darwin guest/runtime concerns explicit.
+2. Add `aarch64-darwin` host-side flake exports while keeping Linux and Darwin host/guest concerns explicit.
 3. Introduce a host-specific local runtime split:
-   - Linux local path remains QEMU-first
-   - Apple Silicon local path uses `vfkit`
+   - Linux local path remains QEMU-first.
+   - Apple Silicon local path uses `vfkit`.
 4. Refactor local sharing and host-metadata plumbing so the Apple Silicon path uses `vfkit`-compatible semantics.
 5. Update launcher and diagnostics to:
    - recognize Apple Silicon local support
@@ -42,9 +42,10 @@ This MVP is intentionally narrower than full platform parity. It is the first pr
 
 ## Validation approach
 
-- run `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' flake check` on Linux to confirm the existing path remains intact
-- evaluate the relevant `aarch64-darwin` package outputs from the flake
-- add or update launcher smoke coverage for Darwin platform checks where that can be exercised without Apple hardware
+- run `bash ./scripts/run-flake.sh eval .#packages.aarch64-darwin.firebreak-codex.name --raw`
+- run `bash ./scripts/run-flake.sh eval .#packages.aarch64-darwin.firebreak-claude-code.name --raw`
+- run `bash ./scripts/run-flake.sh eval .#checks.aarch64-darwin.firebreak-codex-system.drvPath --raw`
+- run `bash ./scripts/run-flake.sh run .#firebreak-test-smoke-npx-launcher`
 - manually validate on a real Apple Silicon Mac:
   - `nix run .#firebreak-codex`
   - `FIREBREAK_VM_MODE=shell nix run .#firebreak-codex`
@@ -63,10 +64,10 @@ This MVP is intentionally narrower than full platform parity. It is the first pr
 
 ## Current status
 
-Specified only. Implementation has not started.
+Implemented in the bounded Firebreak task worktree, with flake evaluation and launcher smoke validation completed. Real Apple Silicon runtime validation on hardware remains open.
 
 ## Open questions
 
-- whether Apple Silicon local support should initially migrate only host metadata sharing away from `9p`, or define a cleaner shared local-share contract immediately
-- whether Linux and Apple Silicon local runtimes should share one wrapper with host-specific hooks or split into separate host runtime modules
-- what minimum automated smoke coverage is realistic before Apple Silicon hardware validation becomes mandatory
+- whether the `vfkit` share injection path should remain a Firebreak wrapper concern or move into a more explicit local-runtime abstraction later
+- whether Linux and Apple Silicon local runtimes should share one wrapper with host-specific hooks or split further into separate host runtime modules
+- what minimum Apple Silicon hardware validation is required before this support is documented as fully supported rather than evaluation-complete

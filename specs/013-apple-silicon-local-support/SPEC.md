@@ -1,5 +1,5 @@
 ---
-status: draft
+status: in_progress
 last_updated: 2026-03-24
 ---
 
@@ -61,6 +61,7 @@ The intended landing shape is:
 - The system shall support Firebreak local workload packages on `aarch64-darwin`.
 - The system shall use `aarch64-linux` guests for Apple Silicon local workloads.
 - The system shall use `vfkit` as the Apple Silicon local runtime.
+- The system shall use `microvm.vmHostPackages` to build host-side runner tooling for the selected host platform.
 - The system shall keep Apple Silicon local support limited to local workloads for this changeset.
 - The system shall not expose user-selectable runtime-profile choice as part of Apple Silicon local support.
 - The system shall keep the existing public local workload names and CLI entrypoints unchanged.
@@ -70,6 +71,7 @@ The intended landing shape is:
 - The system shall provide a minimum viable first launch path that supports interactive local launch, shell mode, workspace sharing, agent config sharing, and one-shot agent command execution on Apple Silicon.
 - If Firebreak is launched on `x86_64-darwin`, then the system shall fail clearly because Intel Mac support is out of scope.
 - If Firebreak is launched on macOS for cloud execution paths, then the system shall fail clearly because cloud macOS support is out of scope.
+- The system shall keep cloud workload packages and cloud validation Linux-only.
 
 ## Acceptance criteria
 
@@ -82,6 +84,7 @@ The intended landing shape is:
 - launcher and diagnostics behavior distinguish Apple Silicon local readiness from Linux KVM readiness.
 - Linux local documentation and behavior continue to describe one QEMU-backed Linux local path rather than a generalized runtime-selection surface.
 - unsupported Darwin cases such as `x86_64-darwin` fail clearly.
+- cloud packages remain absent from `aarch64-darwin` outputs.
 
 ## Dependencies and risks
 
@@ -101,6 +104,7 @@ The intended landing shape is:
 - Apple Silicon local share behavior may require a clearer contract for host metadata transport than the current Linux-specific `9p` path
 - host and guest architecture alignment for `vfkit` may force broader guest-architecture awareness than the current Linux local path needs
 - partial support that boots but does not preserve workspace, config, or one-shot command behavior would create a misleading product contract
+- launch-time share injection for `vfkit` is more fragile than the current Linux QEMU path because it relies on runtime argument extension
 
 ## Relevant constitutional and product docs
 

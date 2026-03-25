@@ -1,4 +1,4 @@
-@spec-013
+@spec-013 @apple-silicon
 Feature: Apple Silicon local support
 
   Scenario: Local launch on an Apple Silicon Mac

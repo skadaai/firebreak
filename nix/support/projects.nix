@@ -13,6 +13,7 @@
     readyCommands ? [ ],
     extraShellInit ? "",
     extraModules ? [ ],
+    workerBridgeEnabled ? false,
   }:
     let
       packageSet =
@@ -38,6 +39,7 @@
     mkLocalVmArtifacts {
       inherit name;
       defaultAgentCommand = launchCommandName;
+      inherit workerBridgeEnabled;
       extraModules = [
         ({ config, pkgs, ... }:
           let
@@ -252,6 +254,7 @@
     bootstrapPackages ? null,
     extraShellInit ? "",
     extraModules ? [ ],
+    workerBridgeEnabled ? false,
   }:
     let
       packageSet =
@@ -274,6 +277,7 @@
     mkLocalVmArtifacts {
       inherit name;
       defaultAgentCommand = launchCommandName;
+      inherit workerBridgeEnabled;
       extraModules = [
         (import ../../modules/node-cli/module.nix {
           inherit

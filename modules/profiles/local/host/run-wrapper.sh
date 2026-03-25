@@ -68,9 +68,17 @@ runner_stderr_log=$host_runtime_dir/runner.err
 virtiofsd_hostcwd_log=$host_runtime_dir/v-cwd.log
 virtiofsd_agent_config_log=$host_runtime_dir/v-cfg.log
 virtiofsd_agent_exec_log=$host_runtime_dir/v-out.log
+virtiofsd_worker_bridge_log=$host_runtime_dir/v-worker.log
 hostcwd_socket=$host_runtime_dir/cwd.sock
 agent_config_socket=$host_runtime_dir/cfg.sock
 agent_exec_output_socket=$host_runtime_dir/out.sock
+worker_bridge_dir=$host_runtime_dir/w
+worker_bridge_socket=$host_runtime_dir/worker.sock
+worker_bridge_socket_env=""
+worker_bridge_server_log=$host_runtime_dir/worker-bridge.log
+worker_bridge_server_script=$host_runtime_dir/firebreak-worker-bridge-host.sh
+worker_helper_script=$host_runtime_dir/firebreak-worker.sh
+worker_bridge_enabled=@WORKER_BRIDGE_ENABLED@
 
 if [ -n "$instance_state_dir" ]; then
   case "$instance_state_dir" in
@@ -200,6 +208,14 @@ cleanup() {
     kill "$agent_exec_output_virtiofsd_pid" 2>/dev/null || true
     wait "$agent_exec_output_virtiofsd_pid" 2>/dev/null || true
   fi
+  if [ -n "${worker_bridge_virtiofsd_pid:-}" ]; then
+    kill "$worker_bridge_virtiofsd_pid" 2>/dev/null || true
+    wait "$worker_bridge_virtiofsd_pid" 2>/dev/null || true
+  fi
+  if [ -n "${worker_bridge_server_pid:-}" ]; then
+    kill "$worker_bridge_server_pid" 2>/dev/null || true
+    wait "$worker_bridge_server_pid" 2>/dev/null || true
+  fi
   rm -f "$control_socket"
   if [ "$debug_keep_runtime" = "1" ]; then
     echo "keeping Firebreak runtime directory: $host_runtime_dir" >&2
@@ -211,7 +227,18 @@ trap cleanup EXIT INT TERM
 
 mkdir -p "$host_meta_dir"
 mkdir -p "$host_exec_output_dir"
+mkdir -p "$worker_bridge_dir/requests"
 rm -f "$control_socket"
+
+if [ "$worker_bridge_enabled" = "1" ]; then
+  cat >"$worker_helper_script" <<'__FIREBREAK_WORKER_SCRIPT__'
+@FIREBREAK_WORKER_LIB@
+__FIREBREAK_WORKER_SCRIPT__
+  cat >"$worker_bridge_server_script" <<'__FIREBREAK_WORKER_BRIDGE_HOST_SCRIPT__'
+@FIREBREAK_WORKER_BRIDGE_HOST_LIB@
+__FIREBREAK_WORKER_BRIDGE_HOST_SCRIPT__
+  chmod 0555 "$worker_helper_script" "$worker_bridge_server_script"
+fi
 
 start_virtiofsd() {
   shared_dir=$1
@@ -258,6 +285,17 @@ if [ "$agent_session_mode" = "agent-exec" ]; then
   start_virtiofsd "$host_exec_output_dir" "$agent_exec_output_socket" "$virtiofsd_agent_exec_log"
   agent_exec_output_virtiofsd_pid=$started_virtiofsd_pid
 fi
+if [ "$worker_bridge_enabled" = "1" ]; then
+  start_virtiofsd "$worker_bridge_dir" "$worker_bridge_socket" "$virtiofsd_worker_bridge_log"
+  worker_bridge_virtiofsd_pid=$started_virtiofsd_pid
+  worker_bridge_socket_env=$worker_bridge_socket
+  env \
+    FIREBREAK_FLAKE_REF='@FIREBREAK_FLAKE_REF@' \
+    FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG='1' \
+    FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
+    bash "$worker_bridge_server_script" "$worker_bridge_dir" "$worker_helper_script" >"$worker_bridge_server_log" 2>&1 &
+  worker_bridge_server_pid=$!
+fi
 
 runner_status=0
 if [ "$agent_session_mode" = "agent-exec" ]; then
@@ -269,6 +307,7 @@ if [ "$agent_session_mode" = "agent-exec" ]; then
       MICROVM_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
       MICROVM_AGENT_CONFIG_HOST_SOCKET="$agent_config_socket" \
       MICROVM_AGENT_EXEC_OUTPUT_SOCKET="$agent_exec_output_socket" \
+      MICROVM_WORKER_BRIDGE_SOCKET="$worker_bridge_socket_env" \
       @RUNNER@ "$@"
   ) >"$runner_stdout_log" 2>"$runner_stderr_log" || runner_status=$?
 else
@@ -279,6 +318,7 @@ else
       MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
       MICROVM_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
       MICROVM_AGENT_CONFIG_HOST_SOCKET="$agent_config_socket" \
+      MICROVM_WORKER_BRIDGE_SOCKET="$worker_bridge_socket_env" \
       @RUNNER@ "$@"
   ) || runner_status=$?
 fi
@@ -306,6 +346,12 @@ if [ "$agent_session_mode" = "agent-exec" ]; then
       if [ -s "$virtiofsd_agent_exec_log" ]; then
         cat "$virtiofsd_agent_exec_log" >&2
       fi
+      if [ -s "$virtiofsd_worker_bridge_log" ]; then
+        cat "$virtiofsd_worker_bridge_log" >&2
+      fi
+      if [ -s "$worker_bridge_server_log" ]; then
+        cat "$worker_bridge_server_log" >&2
+      fi
     fi
     exit "$command_status"
   fi
@@ -321,6 +367,12 @@ if [ "$agent_session_mode" = "agent-exec" ]; then
   fi
   if [ -s "$virtiofsd_agent_exec_log" ]; then
     cat "$virtiofsd_agent_exec_log" >&2
+  fi
+  if [ -s "$virtiofsd_worker_bridge_log" ]; then
+    cat "$virtiofsd_worker_bridge_log" >&2
+  fi
+  if [ -s "$worker_bridge_server_log" ]; then
+    cat "$worker_bridge_server_log" >&2
   fi
 fi
 

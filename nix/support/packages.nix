@@ -1,4 +1,4 @@
-{ self, system, pkgs, renderTemplate }:
+{ self, system, pkgs, renderTemplate, mkLocalVmArtifacts }:
 {
   mkSmokePackage = {
     name,
@@ -257,6 +257,35 @@
       text = renderTemplate {
         "@AGENT_BIN@" = "${self.packages.${system}.${workerPackage}}/bin/${workerPackage}";
       } ../../modules/base/tests/test-smoke-worker.sh;
+    };
+
+  mkWorkerGuestBridgeSmokePackage = { name }:
+    let
+      bridgeVm = mkLocalVmArtifacts {
+        name = "firebreak-worker-guest-bridge-smoke-vm";
+        defaultAgentCommand = "bash";
+        workerBridgeEnabled = true;
+        extraModules = [
+          ({ pkgs, ... }: {
+            agentVm.extraSystemPackages = with pkgs; [
+              gnugrep
+              gnused
+              python3
+            ];
+          })
+        ];
+      };
+    in
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        bash
+        coreutils
+        gnugrep
+      ];
+      text = renderTemplate {
+        "@BRIDGE_VM_BIN@" = "${bridgeVm.package}/bin/firebreak-worker-guest-bridge-smoke-vm";
+      } ../../modules/base/tests/test-smoke-worker-guest-bridge.sh;
     };
 
   mkLoopPackage = { name, taskPackage }:

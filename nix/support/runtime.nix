@@ -57,10 +57,11 @@ let
     agentConfigDirName,
     defaultAgentConfigHostDir,
     agentEnvPrefix ? "AGENT",
+    workerBridgeEnabled ? false,
   }:
     pkgs.writeShellApplication {
       inherit name;
-      runtimeInputs = with pkgs; [ coreutils git virtiofsd ];
+      runtimeInputs = with pkgs; [ bash coreutils git gnused nix python3 virtiofsd ];
       text = renderTemplate {
         "@CONTROL_SOCKET@" = "${controlSocketName}.socket";
         "@DEFAULT_AGENT_COMMAND@" = defaultAgentCommand;
@@ -69,6 +70,10 @@ let
         "@DEFAULT_AGENT_CONFIG_HOST_DIR@" = defaultAgentConfigHostDir;
         "@AGENT_ENV_PREFIX@" = agentEnvPrefix;
         "@FIREBREAK_PROJECT_CONFIG_LIB@" = builtins.readFile ../../modules/base/host/firebreak-project-config.sh;
+        "@FIREBREAK_FLAKE_REF@" = "path:${builtins.toString ../../.}";
+        "@FIREBREAK_WORKER_LIB@" = builtins.readFile ../../modules/base/host/firebreak-worker.sh;
+        "@FIREBREAK_WORKER_BRIDGE_HOST_LIB@" = builtins.readFile ../../modules/profiles/local/host/firebreak-worker-bridge-host.sh;
+        "@WORKER_BRIDGE_ENABLED@" = if workerBridgeEnabled then "1" else "0";
       } ../../modules/profiles/local/host/run-wrapper.sh;
     };
 
@@ -80,6 +85,7 @@ let
     agentConfigDirName ? ".firebreak",
     defaultAgentConfigHostDir ? "$HOME/.firebreak/${name}",
     agentEnvPrefix ? "AGENT",
+    workerBridgeEnabled ? false,
   }:
     mkAgentPackage {
       inherit
@@ -88,7 +94,8 @@ let
         defaultAgentCommand
         agentConfigDirName
         defaultAgentConfigHostDir
-        agentEnvPrefix;
+        agentEnvPrefix
+        workerBridgeEnabled;
       runner = runnerPackage;
     };
 
@@ -101,10 +108,16 @@ let
     agentConfigDirName ? ".firebreak",
     defaultAgentConfigHostDir ? "$HOME/.firebreak/${name}",
     agentEnvPrefix ? "AGENT",
+    workerBridgeEnabled ? false,
   }:
     let
       nixosConfiguration = mkAgentVm {
-        inherit name extraModules profileModules;
+        inherit name profileModules;
+        extraModules =
+          extraModules
+          ++ nixpkgs.lib.optional workerBridgeEnabled {
+            agentVm.workerBridgeEnabled = true;
+          };
       };
       runnerPackage = mkRunnerPackage nixosConfiguration.config.microvm.declaredRunner;
       package = mkLocalVmPackage {
@@ -115,7 +128,8 @@ let
           defaultAgentCommand
           agentConfigDirName
           defaultAgentConfigHostDir
-          agentEnvPrefix;
+          agentEnvPrefix
+          workerBridgeEnabled;
       };
     in {
       inherit nixosConfiguration package runnerPackage;

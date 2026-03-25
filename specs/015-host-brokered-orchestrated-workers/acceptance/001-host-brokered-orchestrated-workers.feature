@@ -25,6 +25,12 @@ Feature: Host-brokered orchestrated workers
     Then Firebreak exposes the same lifecycle nouns across backends
     And Firebreak does not require raw host runner arguments in the guest-visible contract
 
+  Scenario: orchestrator guest reaches the worker surface through a Firebreak bridge
+    Given a local Firebreak orchestrator VM with worker bridging enabled
+    When the guest runs "firebreak worker spawn"
+    Then Firebreak forwards that request through the guest-visible bridge instead of exposing raw host runner internals
+    And the guest can read the resulting worker metadata through the same surface
+
   Scenario: firebreak worker runtime state remains host-owned
     Given an orchestrated worker that uses the "firebreak" backend
     When Firebreak allocates the worker runtime state

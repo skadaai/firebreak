@@ -37,6 +37,8 @@ let
     "@START_DIR_FILE@" = cfg.startDirFile;
     "@RUNUSER@" = "${pkgs.util-linux}/bin/runuser";
     "@USERMOD@" = "${pkgs.shadow}/bin/usermod";
+    "@WORKER_BRIDGE_ENABLED@" = if cfg.workerBridgeEnabled then "1" else "0";
+    "@WORKER_BRIDGE_MOUNT@" = cfg.workerBridgeMount;
     "@WORKSPACE_MOUNT@" = cfg.workspaceMount;
   };
 
@@ -49,6 +51,15 @@ let
     '';
   prepareAgentSessionScript = pkgs.writeShellScript "prepare-agent-session"
     (renderTemplate scriptVars ./guest/prepare-agent-session.sh);
+  firebreakWorkerBridgeCli = pkgs.writeShellApplication {
+    name = "firebreak";
+    runtimeInputs = with pkgs; [
+      bash
+      coreutils
+      python3
+    ];
+    text = renderTemplate scriptVars ./guest/firebreak-worker-bridge-cli.sh;
+  };
   devConsoleStartScript = pkgs.writeShellScript "dev-console-start"
     (renderTemplate scriptVars ./guest/dev-console-start.sh);
   bootstrapEnabled = cfg.bootstrapScript != null;
@@ -105,6 +116,8 @@ in {
     };
 
     systemd.services."serial-getty@ttyS0".enable = false;
+
+    environment.systemPackages = lib.mkIf cfg.workerBridgeEnabled [ firebreakWorkerBridgeCli ];
 
     systemd.services.dev-console = {
       description = "Interactive dev shell on ttyS0";

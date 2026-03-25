@@ -34,10 +34,10 @@ last_updated: 2026-03-25
 
 ## Current status
 
-In progress. The first host-broker slice has landed with worker lifecycle commands and smoke coverage, but guest-side bridge integration and recipe-level worker declarations remain open.
+In progress. The host-broker slice and the first guest-side bridge slice have landed with focused smoke coverage. Recipe-level worker declarations and shared-guest `process` worker semantics remain open.
 
 ## Open questions
 
-- whether the first guest-visible control surface should be a CLI, a mounted Unix-socket protocol, or both
+- whether the guest-visible bridge should remain file-share based or converge on a mounted Unix-socket protocol after the first landing
 - whether the first `firebreak` worker backend should always create fresh workers or permit bounded worker reuse
 - how much worker log streaming belongs in the first landing versus a follow-up

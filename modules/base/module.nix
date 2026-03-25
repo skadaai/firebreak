@@ -188,6 +188,18 @@ in {
       default = null;
       description = "Optional oneshot bootstrap script that runs before the console starts.";
     };
+
+    workerBridgeEnabled = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Whether the guest exposes the Firebreak worker bridge surface for host-brokered worker requests.";
+    };
+
+    workerBridgeMount = mkOption {
+      type = types.str;
+      default = "/run/firebreak-worker-bridge";
+      description = "Guest path for the optional host-shared worker bridge request-response directory.";
+    };
   };
 
   config = {

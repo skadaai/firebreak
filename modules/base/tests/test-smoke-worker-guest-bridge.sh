@@ -1,0 +1,90 @@
+set -eu
+
+firebreak_tmp_root=${FIREBREAK_TMPDIR:-${TMPDIR:-/tmp}}/firebreak/tmp
+mkdir -p "$firebreak_tmp_root"
+smoke_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-worker-guest-bridge.XXXXXX")
+trap 'rm -rf "$smoke_tmp_dir"' EXIT INT TERM
+
+workspace_dir=$smoke_tmp_dir/workspace
+mkdir -p "$workspace_dir"
+
+guest_script=$workspace_dir/guest-bridge-check.sh
+cat >"$guest_script" <<'EOF'
+set -eu
+
+spawn_output=$(firebreak worker spawn --backend process --kind bridge-process --workspace "$PWD" -- sh -c 'printf guest-bridge-ok')
+printf '__BRIDGE_SPAWN__%s\n' "$spawn_output"
+
+worker_id=$(SPAWN_OUTPUT="$spawn_output" python3 - <<'PY'
+import json
+import os
+
+print(json.loads(os.environ["SPAWN_OUTPUT"])["worker_id"])
+PY
+)
+printf '__BRIDGE_ID__%s\n' "$worker_id"
+
+show_output=$(firebreak worker show --worker-id "$worker_id")
+printf '__BRIDGE_SHOW__%s\n' "$show_output"
+
+show_backend=$(SHOW_OUTPUT="$show_output" python3 - <<'PY'
+import json
+import os
+
+print(json.loads(os.environ["SHOW_OUTPUT"])["backend"])
+PY
+)
+
+if [ "$show_backend" != "process" ]; then
+  echo "guest bridge smoke expected a process backend, got: $show_backend" >&2
+  exit 1
+fi
+
+stop_spawn_output=$(firebreak worker spawn --backend process --kind bridge-stop --workspace "$PWD" -- sh -c 'sleep 30')
+stop_worker_id=$(STOP_SPAWN_OUTPUT="$stop_spawn_output" python3 - <<'PY'
+import json
+import os
+
+print(json.loads(os.environ["STOP_SPAWN_OUTPUT"])["worker_id"])
+PY
+)
+
+stop_output=$(firebreak worker stop --worker-id "$stop_worker_id")
+printf '__BRIDGE_STOP__%s\n' "$stop_output"
+
+stop_status=$(STOP_OUTPUT="$stop_output" python3 - <<'PY'
+import json
+import os
+
+print(json.loads(os.environ["STOP_OUTPUT"])["status"])
+PY
+)
+
+if [ "$stop_status" != "stopping" ] && [ "$stop_status" != "stopped" ]; then
+  echo "guest bridge smoke expected a stopping or stopped worker status, got: $stop_status" >&2
+  exit 1
+fi
+
+list_output=$(firebreak worker list)
+printf '__BRIDGE_LIST__%s\n' "$list_output"
+
+if ! printf '%s\n' "$list_output" | grep -F -q "$worker_id"; then
+  echo "guest bridge smoke did not list the spawned worker" >&2
+  exit 1
+fi
+
+printf '%s\n' '__BRIDGE_OK__'
+EOF
+
+output=$(
+  cd "$workspace_dir"
+  FIREBREAK_INSTANCE_EPHEMERAL=1 @BRIDGE_VM_BIN@ "$guest_script"
+)
+
+if ! printf '%s\n' "$output" | grep -F -q '__BRIDGE_OK__'; then
+  printf '%s\n' "$output" >&2
+  echo "worker guest bridge smoke did not complete successfully" >&2
+  exit 1
+fi
+
+printf '%s\n' "Firebreak worker guest bridge smoke test passed"

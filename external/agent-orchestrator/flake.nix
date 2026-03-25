@@ -12,6 +12,7 @@
         tagline = "agent-orchestrator cli sandbox";
         packageSpec = "@composio/ao";
         binName = "ao";
+        workerBridgeEnabled = true;
         runtimePackages = pkgs: with pkgs; [
           git
           gh
@@ -19,9 +20,8 @@
           tmux
         ];
         launchEnvironment = {
-          PORT = "3000";
-          AO_TERMINAL_PORT = "14800";
-          AO_DIRECT_TERMINAL_PORT = "14801";
+          TERMINAL_PORT = "14800";
+          DIRECT_TERMINAL_PORT = "14801";
         };
         forwardPorts = [
           {

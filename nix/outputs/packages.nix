@@ -17,6 +17,7 @@
   mkTaskSmokePackage,
   mkValidationPackage,
   mkValidationSmokePackage,
+  mkWorkerGuestBridgeSmokePackage,
   mkWorkerPackage,
   mkWorkerSmokePackage,
 }:
@@ -130,6 +131,10 @@
   firebreak-test-smoke-worker = mkWorkerSmokePackage {
     name = "firebreak-test-smoke-worker";
     workerPackage = "firebreak-worker";
+  };
+
+  firebreak-test-smoke-worker-guest-bridge = mkWorkerGuestBridgeSmokePackage {
+    name = "firebreak-test-smoke-worker-guest-bridge";
   };
 
   firebreak-internal-loop = mkLoopPackage {

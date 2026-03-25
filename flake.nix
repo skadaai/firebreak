@@ -58,6 +58,7 @@
           mkTaskSmokePackage
           mkValidationPackage
           mkValidationSmokePackage
+          mkWorkerGuestBridgeSmokePackage
           mkWorkerPackage
           mkWorkerSmokePackage
           ;

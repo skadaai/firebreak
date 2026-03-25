@@ -5,6 +5,7 @@ session_mode=agent
 session_command_file=@HOST_META_MOUNT@/agent-command
 session_mode_file=@HOST_META_MOUNT@/agent-session-mode
 start_dir=@WORKSPACE_MOUNT@
+worker_bridge_enabled=@WORKER_BRIDGE_ENABLED@
 
 for _ in $(seq 1 50); do
   if [ -d @WORKSPACE_MOUNT@ ] && [ -r "$metadata" ]; then
@@ -37,6 +38,16 @@ if [ "$session_mode" = "agent-exec" ]; then
   if ! mountpoint -q @AGENT_EXEC_OUTPUT_MOUNT@; then
     if ! mount -t virtiofs hostexecoutput @AGENT_EXEC_OUTPUT_MOUNT@; then
       echo "failed to mount agent exec output share" >&2
+      exit 1
+    fi
+  fi
+fi
+
+if [ "$worker_bridge_enabled" = "1" ]; then
+  mkdir -p @WORKER_BRIDGE_MOUNT@
+  if ! mountpoint -q @WORKER_BRIDGE_MOUNT@; then
+    if ! mount -t virtiofs hostworkerbridge @WORKER_BRIDGE_MOUNT@; then
+      echo "failed to mount Firebreak worker bridge share" >&2
       exit 1
     fi
   fi

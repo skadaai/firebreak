@@ -72,6 +72,12 @@
           mkdir -p "$ao_web_dir/node_modules/@composio"
           ln -sfn "$ao_core_dir" "$ao_web_dir/node_modules/@composio/ao-core"
         '';
+        installBinScripts = {
+          codex = firebreak.lib.${system}.mkWorkerProxyScript {
+            kind = "codex";
+            versionOutput = "codex firebreak-worker wrapper";
+          };
+        };
         launchCommand = "ao start .";
         extraShellInit = ''
           alias ao-start='project-launch'

@@ -1,5 +1,59 @@
 { lib, pkgs, renderTemplate, mkLocalVmArtifacts }:
 {
+  mkWorkerProxyScript =
+    {
+      kind,
+      versionOutput ? "${kind} firebreak worker proxy",
+    }:
+    ''
+      #!/usr/bin/env bash
+      set -eu
+
+      if [ "''${1:-}" = "--version" ]; then
+        printf '%s\n' ${lib.escapeShellArg versionOutput}
+        exit 0
+      fi
+
+      workspace=$PWD
+      spawn_output=$(firebreak worker spawn --kind ${lib.escapeShellArg kind} --workspace "$workspace" -- "$@")
+      printf '%s\n' "$spawn_output"
+
+      worker_id=$(SPAWN_OUTPUT="$spawn_output" node -e 'process.stdout.write(JSON.parse(process.env.SPAWN_OUTPUT).worker_id)')
+      if [ -z "$worker_id" ]; then
+        echo "failed to extract Firebreak worker id from spawn output" >&2
+        exit 1
+      fi
+
+      cleanup() {
+        firebreak worker stop --worker-id "$worker_id" >/dev/null 2>&1 || true
+      }
+
+      trap cleanup INT TERM
+
+      last_status=""
+      for _ in $(seq 1 3600); do
+        show_output=$(firebreak worker show --worker-id "$worker_id")
+        status=$(SHOW_OUTPUT="$show_output" node -e 'const data = JSON.parse(process.env.SHOW_OUTPUT); process.stdout.write(String(data.status ?? ""));')
+
+        if [ "$status" != "$last_status" ]; then
+          printf '%s\n' "firebreak worker $worker_id status: $status"
+          last_status=$status
+        fi
+
+        case "$status" in
+          exited|stopped)
+            exit_code=$(SHOW_OUTPUT="$show_output" node -e 'const data = JSON.parse(process.env.SHOW_OUTPUT); const value = data.exit_code; process.stdout.write(value === null || value === undefined ? "" : String(value));')
+            exit "''${exit_code:-0}"
+            ;;
+        esac
+
+        sleep 1
+      done
+
+      echo "timed out waiting for Firebreak worker $worker_id to finish" >&2
+      exit 124
+    '';
+
   mkWorkspaceProjectArtifacts = {
     name,
     displayName,
@@ -251,6 +305,7 @@
     launchEnvironment ? { },
     forwardPorts ? [ ],
     postInstallScript ? "",
+    installBinScripts ? { },
     memoryMiB ? 3072,
     runtimePackages ? [ ],
     bootstrapPackages ? null,
@@ -294,6 +349,7 @@
             launchEnvironment
             forwardPorts
             postInstallScript
+            installBinScripts
             readyCommandName
             memoryMiB
             extraShellInit

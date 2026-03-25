@@ -10,6 +10,7 @@
   launchEnvironment ? { },
   forwardPorts ? [ ],
   postInstallScript ? "",
+  installBinScripts ? { },
   memoryMiB ? 3072,
   extraSystemPackages ? [ ],
   extraBootstrapPackages ? [ ],
@@ -33,6 +34,21 @@ let
   installTmp = "${xdgCacheHome}/tmp";
   installPrefix = "${devHome}/.local";
   packageNodeModules = "${installPrefix}/lib/node_modules/${packageSpec}";
+  installBinScriptSnippet =
+    lib.concatStringsSep "\n"
+      (lib.mapAttrsToList
+        (scriptName: scriptText:
+          let
+            heredocName = "FIREBREAK_BIN_${lib.toUpper (builtins.replaceStrings [ "-" "." "/" ] [ "_" "_" "_" ] scriptName)}";
+          in
+          ''
+            mkdir -p "$npm_config_prefix/bin"
+            cat >"$npm_config_prefix/bin/${scriptName}" <<'${heredocName}'
+            ${scriptText}
+            ${heredocName}
+            chmod 0555 "$npm_config_prefix/bin/${scriptName}"
+          '')
+        installBinScripts);
   launchEnvironmentExports = lib.concatStringsSep "\n"
     (lib.mapAttrsToList (name: value: "export ${name}=${lib.escapeShellArg (toString value)}") launchEnvironment);
   hostForwardSummaries =
@@ -92,6 +108,7 @@ let
     "@DEV_USER@" = cfg.devUser;
     "@DISPLAY_NAME@" = displayName;
     "@EXTRA_SHELL_INIT@" = extraShellInit;
+    "@INSTALL_BIN_SCRIPTS@" = installBinScriptSnippet;
     "@LAUNCH_COMMAND_NAME@" = launchCommandName;
     "@LAUNCH_ENV_EXPORTS@" = launchEnvironmentExports;
     "@LOCAL_BIN@" = localBin;

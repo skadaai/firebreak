@@ -26,6 +26,7 @@
           mkLocalVmPackage
           mkPackagedNodeCliArtifacts
           mkRunnerPackage
+          mkWorkerProxyScript
           mkWorkspaceProjectArtifacts
           ;
       };

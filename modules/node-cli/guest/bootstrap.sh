@@ -66,6 +66,7 @@ rm -rf "$1"
 rm -f "$npm_config_prefix/bin/@BIN_NAME@"
 npm install --global --omit=dev "$2"
 @POST_INSTALL_SCRIPT@
+@INSTALL_BIN_SCRIPTS@
 EOF
 
 printf '%s\n' '@PACKAGE_SPEC@' > "$state_file"

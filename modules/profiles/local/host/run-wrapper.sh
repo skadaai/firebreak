@@ -16,6 +16,7 @@ agent_config_mode=${agent_specific_config:-${AGENT_CONFIG:-vm}}
 requested_vm_mode=${FIREBREAK_VM_MODE:-run}
 agent_session_mode=agent
 default_agent_command=@DEFAULT_AGENT_COMMAND@
+host_system=@HOST_SYSTEM@
 agent_command_override=""
 shell_command_override=${AGENT_VM_COMMAND:-}
 agent_config_host_dir=""
@@ -32,6 +33,17 @@ reject_whitespace_path() {
   case "$path" in
     *[[:space:]]*)
       echo "$description contains whitespace, which microvm runtime share injection does not support: $path" >&2
+      exit 1
+      ;;
+  esac
+}
+
+reject_comma_path() {
+  path=$1
+  description=$2
+  case "$path" in
+    *,*)
+      echo "$description contains a comma, which the Apple Silicon vfkit runtime share injection does not support: $path" >&2
       exit 1
       ;;
   esac
@@ -57,6 +69,10 @@ default_agent_config_host_dir=$(resolve_host_dir "${agent_specific_host_path:-${
 
 reject_whitespace_path "$host_cwd" "current working directory"
 reject_whitespace_path "$resolved_firebreak_tmp_root" "Firebreak temporary runtime directory"
+if [ "$host_system" = "aarch64-darwin" ]; then
+  reject_comma_path "$host_cwd" "current working directory"
+  reject_comma_path "$resolved_firebreak_tmp_root" "Firebreak temporary runtime directory"
+fi
 firebreak_tmp_root=$resolved_firebreak_tmp_root
 mkdir -p "$firebreak_tmp_root"
 host_runtime_dir=$(mktemp -d "$firebreak_tmp_root/r.XXXXXX")
@@ -154,6 +170,9 @@ case "$agent_config_mode" in
     esac
 
     reject_whitespace_path "$agent_config_host_dir" "agent host config path"
+    if [ "$host_system" = "aarch64-darwin" ]; then
+      reject_comma_path "$agent_config_host_dir" "agent host config path"
+    fi
 
     mkdir -p "$agent_config_host_dir"
     ;;
@@ -180,6 +199,9 @@ if [ "$agent_config_mode" = "workspace" ] && [ -L "$workspace_agent_config_path"
         if ! [ -d "$agent_config_host_dir" ] && ! [ -w "$target_parent" ]; then
           echo "workspace agent config symlink target is not writable on the host; falling back to $default_agent_config_host_dir" >&2
           agent_config_host_dir=$default_agent_config_host_dir
+        fi
+        if [ "$host_system" = "aarch64-darwin" ]; then
+          reject_comma_path "$agent_config_host_dir" "workspace agent config symlink target"
         fi
         mkdir -p "$agent_config_host_dir"
         ;;
@@ -247,39 +269,50 @@ if [ -n "$agent_command_override" ]; then
   printf '%s\n' "$agent_command_override" > "$host_meta_dir/agent-command"
 fi
 
-start_virtiofsd "$host_cwd" "$hostcwd_socket" "$virtiofsd_hostcwd_log"
-hostcwd_virtiofsd_pid=$started_virtiofsd_pid
+if [ "$host_system" != "aarch64-darwin" ]; then
+  start_virtiofsd "$host_cwd" "$hostcwd_socket" "$virtiofsd_hostcwd_log"
+  hostcwd_virtiofsd_pid=$started_virtiofsd_pid
 
-if [ -n "$agent_config_host_dir" ]; then
-  start_virtiofsd "$agent_config_host_dir" "$agent_config_socket" "$virtiofsd_agent_config_log"
-  agent_config_virtiofsd_pid=$started_virtiofsd_pid
+  if [ -n "$agent_config_host_dir" ]; then
+    start_virtiofsd "$agent_config_host_dir" "$agent_config_socket" "$virtiofsd_agent_config_log"
+    agent_config_virtiofsd_pid=$started_virtiofsd_pid
+  fi
+  if [ "$agent_session_mode" = "agent-exec" ]; then
+    start_virtiofsd "$host_exec_output_dir" "$agent_exec_output_socket" "$virtiofsd_agent_exec_log"
+    agent_exec_output_virtiofsd_pid=$started_virtiofsd_pid
+  fi
 fi
-if [ "$agent_session_mode" = "agent-exec" ]; then
-  start_virtiofsd "$host_exec_output_dir" "$agent_exec_output_socket" "$virtiofsd_agent_exec_log"
-  agent_exec_output_virtiofsd_pid=$started_virtiofsd_pid
-fi
+
+run_runner() {
+  if [ "$host_system" = "aarch64-darwin" ]; then
+    env \
+      MICROVM_VFKIT_HOST_META_DIR="$host_meta_dir" \
+      MICROVM_VFKIT_HOST_CWD_DIR="$host_cwd" \
+      MICROVM_VFKIT_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
+      MICROVM_VFKIT_AGENT_EXEC_OUTPUT_DIR="$host_exec_output_dir" \
+      @RUNNER@ "$@"
+    return
+  fi
+
+  env \
+    MICROVM_HOST_META_DIR="$host_meta_dir" \
+    MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
+    MICROVM_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
+    MICROVM_AGENT_CONFIG_HOST_SOCKET="$agent_config_socket" \
+    MICROVM_AGENT_EXEC_OUTPUT_SOCKET="$agent_exec_output_socket" \
+    @RUNNER@ "$@"
+}
 
 runner_status=0
 if [ "$agent_session_mode" = "agent-exec" ]; then
   (
     cd "$runner_workdir"
-    env \
-      MICROVM_HOST_META_DIR="$host_meta_dir" \
-      MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
-      MICROVM_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
-      MICROVM_AGENT_CONFIG_HOST_SOCKET="$agent_config_socket" \
-      MICROVM_AGENT_EXEC_OUTPUT_SOCKET="$agent_exec_output_socket" \
-      @RUNNER@ "$@"
+    run_runner "$@"
   ) >"$runner_stdout_log" 2>"$runner_stderr_log" || runner_status=$?
 else
   (
     cd "$runner_workdir"
-    env \
-      MICROVM_HOST_META_DIR="$host_meta_dir" \
-      MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
-      MICROVM_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
-      MICROVM_AGENT_CONFIG_HOST_SOCKET="$agent_config_socket" \
-      @RUNNER@ "$@"
+    run_runner "$@"
   ) || runner_status=$?
 fi
 

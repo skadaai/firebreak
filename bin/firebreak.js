@@ -107,13 +107,20 @@ const resolveLibexecDir = (localRoot) => {
 }
 
 const checkPlatform = () => {
-  if (launcherPlatform !== "linux") {
-    fail("Firebreak currently requires a Linux host.")
+  if (launcherPlatform === "linux" && supportedLinuxArchitectures.has(launcherArch)) {
+    return;
   }
 
-  if (!supportedLinuxArchitectures.has(launcherArch)) {
-    fail(`Firebreak currently targets ${Array.from(supportedLinuxArchitectures.values()).join(" and ")} hosts.`)
+  if (launcherPlatform === "darwin" && launcherArch === "arm64") {
+    console.warn('Support on macOS is EXPERIMENTAL! Please report issues at https://github.com/skadaai/firebreak/issues')
+    return;
   }
+
+  if (launcherPlatform === "darwin") {
+    fail("Firebreak local support on macOS requires Apple Silicon (arm64). Intel Macs are not supported.")
+  }
+
+  fail(`Firebreak currently targets ${Array.from(supportedLinuxArchitectures.values()).join(", ")} and aarch64-darwin hosts.`)
 }
 
 const checkNix = () => {
@@ -200,6 +207,10 @@ const needsNix = commandRequiresNix()
 const commandUsesOra = () => runCommandRequiresNix()
 
 const checkKvm = () => {
+  if (launcherPlatform !== "linux") {
+    return;
+  }
+
   const failure = kvmFailureReason()
   if (!failure) {
     return;

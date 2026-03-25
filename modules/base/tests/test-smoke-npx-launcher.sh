@@ -20,6 +20,22 @@ mkdir -p "$fake_bin_dir" "$empty_bin_dir"
 : >"$fake_kvm_path"
 node_bin=$(command -v node)
 
+assert_no_nix_invocation() {
+  context=$1
+
+  if [ -f "$nix_args_path" ]; then
+    cat "$nix_args_path" >&2
+    echo "launcher smoke should not invoke nix for $context" >&2
+    exit 1
+  fi
+
+  if [ -f "$nix_cwd_path" ]; then
+    cat "$nix_cwd_path" >&2
+    echo "launcher smoke should not invoke nix for $context" >&2
+    exit 1
+  fi
+}
+
 cat >"$fake_bin_dir/nix" <<EOF
 #!/usr/bin/env bash
 set -eu
@@ -62,7 +78,7 @@ unsupported_arch_output=$(
 unsupported_arch_status=$?
 set -e
 
-if [ "$unsupported_arch_status" -eq 0 ] || ! printf '%s\n' "$unsupported_arch_output" | grep -F -q "x86_64-linux and aarch64-linux"; then
+if [ "$unsupported_arch_status" -eq 0 ] || ! printf '%s\n' "$unsupported_arch_output" | grep -F -q "aarch64-darwin hosts"; then
   printf '%s\n' "$unsupported_arch_output" >&2
   echo "launcher smoke did not reject unsupported Linux architectures clearly" >&2
   exit 1
@@ -107,6 +123,64 @@ fi
 
 if [ -f "$nix_args_path" ] || [ -f "$nix_cwd_path" ]; then
   echo "launcher smoke should not invoke nix for doctor --json" >&2
+  exit 1
+fi
+
+rm -f "$nix_args_path" "$nix_cwd_path"
+
+darwin_vms_output=$(
+  cd "$repo_root"
+  PATH="$fake_bin_dir:$PATH" \
+    FIREBREAK_LAUNCHER_TEST_PLATFORM=darwin \
+    FIREBREAK_LAUNCHER_TEST_ARCH=arm64 \
+    node "$repo_root/bin/firebreak.js" vms
+)
+
+if ! printf '%s\n' "$darwin_vms_output" | grep -F -q "codex"; then
+  printf '%s\n' "$darwin_vms_output" >&2
+  echo "launcher smoke did not accept Apple Silicon macOS for local-only commands" >&2
+  exit 1
+fi
+
+assert_no_nix_invocation "the Apple Silicon macOS VM catalog path"
+
+set +e
+intel_mac_output=$(
+  PATH="$fake_bin_dir:$PATH" \
+    FIREBREAK_LAUNCHER_TEST_PLATFORM=darwin \
+    FIREBREAK_LAUNCHER_TEST_ARCH=x64 \
+    node "$repo_root/bin/firebreak.js" doctor 2>&1
+)
+intel_mac_status=$?
+set -e
+
+if [ "$intel_mac_status" -eq 0 ] || ! printf '%s\n' "$intel_mac_output" | grep -F -q "Apple Silicon"; then
+  printf '%s\n' "$intel_mac_output" >&2
+  echo "launcher smoke did not reject Intel Macs clearly" >&2
+  exit 1
+fi
+
+assert_no_nix_invocation "the Intel Mac rejection path"
+
+rm -f "$nix_args_path" "$nix_cwd_path"
+
+darwin_validate_output=$(
+  PATH="$fake_bin_dir:$PATH" \
+    FIREBREAK_LAUNCHER_TEST_PLATFORM=darwin \
+    FIREBREAK_LAUNCHER_TEST_ARCH=arm64 \
+    FIREBREAK_LAUNCHER_KVM_PATH="$smoke_tmp_dir/missing-kvm" \
+    node "$repo_root/bin/firebreak.js" internal validate run test-smoke-codex 2>&1
+)
+
+if ! [ -f "$nix_args_path" ]; then
+  printf '%s\n' "$darwin_validate_output" >&2
+  echo "launcher smoke should invoke nix for Apple Silicon macOS validation without KVM preflight" >&2
+  exit 1
+fi
+
+if ! printf '%s\n' "$darwin_validate_output" | grep -F -q "Firebreak"; then
+  printf '%s\n' "$darwin_validate_output" >&2
+  echo "launcher smoke did not print the expected Apple Silicon macOS validation output" >&2
   exit 1
 fi
 

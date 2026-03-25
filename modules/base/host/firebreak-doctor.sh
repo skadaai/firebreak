@@ -50,6 +50,30 @@ firebreak_doctor_report_line() {
   printf '%-24s %s\n' "$key" "$value"
 }
 
+firebreak_doctor_host_platform() {
+  host_os=$(uname -s 2>/dev/null || printf '%s' unknown)
+  host_arch=$(uname -m 2>/dev/null || printf '%s' unknown)
+  host_os=$(printf '%s' "$host_os" | tr '[:upper:]' '[:lower:]')
+  printf '%s-%s\n' "$host_arch" "$host_os"
+}
+
+firebreak_doctor_local_runtime() {
+  case "$(uname -s 2>/dev/null || printf '%s' unknown):$(uname -m 2>/dev/null || printf '%s' unknown)" in
+    Linux:*)
+      printf '%s\n' "qemu"
+      ;;
+    Darwin:arm64|Darwin:aarch64)
+      printf '%s\n' "vfkit"
+      ;;
+    Darwin:*)
+      printf '%s\n' "unsupported-intel-mac"
+      ;;
+    *)
+      printf '%s\n' "unsupported-host"
+      ;;
+  esac
+}
+
 firebreak_doctor_detect_kvm() {
   if ! [ -e /dev/kvm ]; then
     printf '%s\n' "missing"
@@ -165,7 +189,13 @@ firebreak_doctor_command() {
   vm_mode=${FIREBREAK_VM_MODE:-run}
   git_common_dir=$(firebreak_doctor_git_common_dir)
   primary_checkout=$(firebreak_doctor_primary_checkout_state "$git_common_dir")
-  kvm_state=$(firebreak_doctor_detect_kvm)
+  host_platform=$(firebreak_doctor_host_platform)
+  local_runtime=$(firebreak_doctor_local_runtime)
+  if [ "$local_runtime" = "qemu" ]; then
+    kvm_state=$(firebreak_doctor_detect_kvm)
+  else
+    kvm_state="not-applicable"
+  fi
 
   IFS='|' read -r codex_label codex_mode codex_path codex_source_var <<EOF
 $(firebreak_doctor_resolve_agent_state "codex" "CODEX" "$HOME/.codex" ".codex")
@@ -196,6 +226,8 @@ EOF
   "project_root_source": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_PROJECT_ROOT_SOURCE")",
   "project_config_file": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_PROJECT_CONFIG_FILE")",
   "project_config_source": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_PROJECT_CONFIG_SOURCE")",
+  "host_platform": "$(firebreak_doctor_json_escape "$host_platform")",
+  "local_runtime": "$(firebreak_doctor_json_escape "$local_runtime")",
   "cwd": "$(firebreak_doctor_json_escape "$PWD")",
   "cwd_whitespace": $([ "$cwd_whitespace" = "yes" ] && printf 'true' || printf 'false'),
   "vm_mode": "$(firebreak_doctor_json_escape "$vm_mode")",
@@ -222,6 +254,8 @@ EOF
   printf 'Summary\n'
   firebreak_doctor_report_line "project_root" "$FIREBREAK_RESOLVED_PROJECT_ROOT"
   firebreak_doctor_report_line "project_config" "${FIREBREAK_RESOLVED_PROJECT_CONFIG_SOURCE}: ${FIREBREAK_RESOLVED_PROJECT_CONFIG_FILE}"
+  firebreak_doctor_report_line "host_platform" "$host_platform"
+  firebreak_doctor_report_line "local_runtime" "$local_runtime"
   firebreak_doctor_report_line "vm_mode" "$vm_mode"
   firebreak_doctor_report_line "cwd_whitespace" "$cwd_whitespace"
   firebreak_doctor_report_line "primary_checkout" "$primary_checkout"
@@ -245,8 +279,19 @@ EOF
     ok)
       :
       ;;
+    not-applicable)
+      :
+      ;;
     *)
       printf '%s\n' "- Fix /dev/kvm access if you want validation suites that require KVM to pass instead of blocking."
+      ;;
+  esac
+  case "$local_runtime" in
+    unsupported-intel-mac)
+      printf '%s\n' "- Firebreak local support on macOS is Apple Silicon only. Use an Apple Silicon Mac or a supported Linux host."
+      ;;
+    unsupported-host)
+      printf '%s\n' "- Firebreak local workloads currently require Linux or Apple Silicon macOS."
       ;;
   esac
   if [ "$primary_checkout" = "no" ]; then
@@ -255,7 +300,7 @@ EOF
   if [ -n "$FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS" ]; then
     printf '%s\n' "- Remove unsupported keys from .firebreak.env or keep them in the shell environment instead."
   fi
-  if [ "$cwd_whitespace" != "yes" ] && [ "$kvm_state" = "ok" ] && [ "$primary_checkout" != "no" ] && [ -z "$FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS" ]; then
+  if [ "$cwd_whitespace" != "yes" ] && [ "$primary_checkout" != "no" ] && [ -z "$FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS" ] && { [ "$kvm_state" = "ok" ] || [ "$kvm_state" = "not-applicable" ]; }; then
     printf '%s\n' "- No obvious launch blockers detected."
   fi
 }

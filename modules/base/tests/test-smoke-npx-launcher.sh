@@ -20,6 +20,22 @@ mkdir -p "$fake_bin_dir" "$empty_bin_dir"
 : >"$fake_kvm_path"
 node_bin=$(command -v node)
 
+assert_no_nix_invocation() {
+  context=$1
+
+  if [ -f "$nix_args_path" ]; then
+    cat "$nix_args_path" >&2
+    echo "launcher smoke should not invoke nix for $context" >&2
+    exit 1
+  fi
+
+  if [ -f "$nix_cwd_path" ]; then
+    cat "$nix_cwd_path" >&2
+    echo "launcher smoke should not invoke nix for $context" >&2
+    exit 1
+  fi
+}
+
 cat >"$fake_bin_dir/nix" <<EOF
 #!/usr/bin/env bash
 set -eu
@@ -126,6 +142,8 @@ if ! printf '%s\n' "$darwin_vms_output" | grep -F -q "codex"; then
   exit 1
 fi
 
+assert_no_nix_invocation "the Apple Silicon macOS VM catalog path"
+
 set +e
 intel_mac_output=$(
   PATH="$fake_bin_dir:$PATH" \
@@ -141,6 +159,8 @@ if [ "$intel_mac_status" -eq 0 ] || ! printf '%s\n' "$intel_mac_output" | grep -
   echo "launcher smoke did not reject Intel Macs clearly" >&2
   exit 1
 fi
+
+assert_no_nix_invocation "the Intel Mac rejection path"
 
 rm -f "$nix_args_path" "$nix_cwd_path"
 

@@ -21,15 +21,17 @@ Initial implementation in progress.
 - focused VM smoke coverage proving a guest can call the worker surface through that bridge
 - guest-local `process` worker semantics through a guest-owned worker state directory and the same `firebreak worker` nouns
 - first worker-kind declarations in bridge-enabled VMs so a guest can resolve kinds to `process` or `firebreak` without raw backend flags
+- per-kind bounded concurrency through `max_instances` in worker-kind declarations
 - first recipe-level worker-kind declarations in [external/agent-orchestrator/flake.nix](../../external/agent-orchestrator/flake.nix)
 - generic packaged-node-cli support for declarative extra bin scripts
+- a generic packaged-node bootstrap-readiness helper (`firebreak-bootstrap-wait`) for recipe-owned validation and wrapper probing
 - a reusable Firebreak worker-proxy script helper for external recipes that want a CLI name to resolve through `firebreak worker`
+- a recipe-owned smoke path in [external/agent-orchestrator/flake.nix](../../external/agent-orchestrator/flake.nix) for validating bootstrap readiness and worker-proxy wrapper installation without moving orchestrator logic into Firebreak core
 
 ## What remains open
 
- - fully passing end-to-end validation for the first external orchestrator recipe
+ - fully passing end-to-end validation for real worker creation from the first external orchestrator recipe
  - richer lifecycle behavior such as worker reuse, log streaming, and cleanup policy
- - docs for orchestration lifecycle behavior
  - focused runtime validation for declared `firebreak` worker kinds through the guest-visible orchestrator path
 
 ## Current sources of truth
@@ -45,3 +47,4 @@ Initial implementation in progress.
 - 2026-03-25: Landed the first guest-bridge slice for local orchestrator VMs with a mounted request-response channel, guest-visible `firebreak worker` forwarding, and focused bridge smoke coverage.
 - 2026-03-25: Split worker execution authority cleanly so declared `process` workers are guest-local while declared `firebreak` workers stay host-brokered, and added recipe-level worker-kind declarations.
 - 2026-03-25: Added generic packaged-node-cli support for declarative extra bin scripts and a reusable worker-proxy helper so external recipes can route selected CLI names through `firebreak worker` without adding orchestrator-specific code to Firebreak's shared layers.
+- 2026-03-25: Added a generic packaged-node bootstrap-readiness helper, bounded per-kind concurrency via `max_instances`, and a recipe-owned validation path for the first external orchestrator recipe.

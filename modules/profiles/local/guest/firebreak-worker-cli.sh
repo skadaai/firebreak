@@ -124,6 +124,85 @@ print(json.dumps(local_items + bridge_items, indent=2))
 PY
 }
 
+bridge_list_json() {
+  if [ -d "$bridge_dir" ]; then
+    bridge_request list
+  else
+    printf '%s\n' '[]'
+  fi
+}
+
+resolve_kind_max_instances() {
+  kind_json=$1
+
+  KIND_JSON=$kind_json python3 - <<'PY'
+import json
+import os
+import sys
+
+data = json.loads(os.environ["KIND_JSON"])
+value = data.get("max_instances", data.get("maxInstances"))
+
+if value is None or value == "":
+    print("")
+    raise SystemExit(0)
+
+if isinstance(value, int):
+    parsed = value
+elif isinstance(value, str) and value.isdigit():
+    parsed = int(value)
+else:
+    print("worker kind max_instances must be a positive integer", file=sys.stderr)
+    raise SystemExit(1)
+
+if parsed <= 0:
+    print("worker kind max_instances must be greater than zero", file=sys.stderr)
+    raise SystemExit(1)
+
+print(parsed)
+PY
+}
+
+count_active_workers_for_kind() {
+  kind_name=$1
+  local_json=$("$local_helper" list)
+  bridge_json=$(bridge_list_json)
+
+  KIND_NAME=$kind_name LOCAL_JSON=$local_json BRIDGE_JSON=$bridge_json python3 - <<'PY'
+import json
+import os
+
+kind_name = os.environ["KIND_NAME"]
+active_statuses = {"created", "running", "stopping"}
+items = json.loads(os.environ["LOCAL_JSON"]) + json.loads(os.environ["BRIDGE_JSON"])
+count = 0
+
+for item in items:
+    if item.get("kind") != kind_name:
+        continue
+    if item.get("status") in active_statuses:
+        count += 1
+
+print(count)
+PY
+}
+
+enforce_kind_limit() {
+  kind_json=$1
+  kind_name=$2
+
+  max_instances=$(resolve_kind_max_instances "$kind_json")
+  if [ -z "$max_instances" ]; then
+    return 0
+  fi
+
+  active_count=$(count_active_workers_for_kind "$kind_name")
+  if [ "$active_count" -ge "$max_instances" ]; then
+    echo "worker kind '$kind_name' reached max_instances=$max_instances" >&2
+    exit 1
+  fi
+}
+
 local_worker_exists() {
   worker_id=$1
   [ -f "$local_state_dir/workers/$worker_id/metadata.json" ]
@@ -194,6 +273,8 @@ case "$subcommand" in
       backend=$(resolve_kind_field "$kind_json" "backend")
     fi
 
+    enforce_kind_limit "$kind_json" "$kind"
+
     case "$backend" in
       process)
         if [ "$#" -eq 0 ]; then
@@ -253,7 +334,7 @@ PY
     shift
     [ "$#" -eq 0 ] || usage
     local_json=$("$local_helper" list)
-    bridge_json=$(bridge_request list)
+    bridge_json=$(bridge_list_json)
     merge_lists "$local_json" "$bridge_json"
     ;;
   show)

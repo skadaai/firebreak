@@ -11,6 +11,7 @@ export PATH="$LOCAL_BIN:$PATH"
 
 firebreak_refresh_cli() {
   sudo rm -f "@DEV_HOME@/.cache/firebreak-tools/@NAME@/package-spec"
+  sudo rm -f "@BOOTSTRAP_READY_MARKER@"
   sudo rm -rf "@PACKAGE_NODE_MODULES@" "@NPM_CACHE_DIR@"
   sudo rm -f "@LOCAL_BIN@/@BIN_NAME@"
   sudo systemctl restart dev-bootstrap.service && @READY_COMMAND_NAME@

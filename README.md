@@ -77,3 +77,37 @@ AGENT_CONFIG=workspace
 - KVM availability and primary-checkout state
 
 Use `nix run .#firebreak -- doctor --json` for machine-readable output.
+
+## Orchestrated Workers
+
+Firebreak exposes a public `worker` surface for orchestrator-style sandboxes:
+
+```sh
+firebreak worker spawn --kind codex --workspace "$PWD" -- --version
+firebreak worker list
+firebreak worker show --worker-id codex-1234abcd
+firebreak worker stop --worker-id codex-1234abcd
+```
+
+Bridge-enabled recipes can declare `workerKinds` that resolve a stable kind name onto a backend such as `process` or `firebreak`.
+
+Example external recipe fragment:
+
+```nix
+workerKinds = {
+  codex = {
+    backend = "firebreak";
+    package = "firebreak-codex";
+    vm_mode = "run";
+    max_instances = 4;
+  };
+};
+
+installBinScripts = {
+  codex = firebreak.lib.${system}.mkWorkerProxyScript {
+    kind = "codex";
+  };
+};
+```
+
+For packaged node-cli recipes, Firebreak also exposes `firebreak-bootstrap-wait` inside the guest so recipe-owned validation can wait for the shared bootstrap service to finish before probing installed CLIs or worker-proxy wrappers.

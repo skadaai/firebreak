@@ -1,11 +1,14 @@
 {
   description = "Firebreak sandbox recipe for ComposioHQ/agent-orchestrator";
 
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   inputs.firebreak.url = "github:skadaai/firebreak";
+  inputs.firebreak.inputs.nixpkgs.follows = "nixpkgs";
 
-  outputs = { firebreak, ... }:
+  outputs = { firebreak, nixpkgs, ... }:
     let
       system = "x86_64-linux";
+      pkgs = nixpkgs.legacyPackages.${system};
       project = firebreak.lib.${system}.mkPackagedNodeCliArtifacts {
         name = "firebreak-agent-orchestrator";
         displayName = "Agent Orchestrator";
@@ -18,11 +21,13 @@
             backend = "firebreak";
             package = "firebreak-codex";
             vm_mode = "run";
+            max_instances = 4;
           };
           claude-code = {
             backend = "firebreak";
             package = "firebreak-claude-code";
             vm_mode = "run";
+            max_instances = 2;
           };
         };
         runtimePackages = pkgs: with pkgs; [
@@ -83,6 +88,18 @@
           alias ao-start='project-launch'
         '';
       };
+      smokePackage = pkgs.writeShellApplication {
+        name = "firebreak-test-smoke-agent-orchestrator-worker-proxy";
+        runtimeInputs = with pkgs; [
+          bash
+          coreutils
+          gnugrep
+        ];
+        text = builtins.replaceStrings
+          [ "@AGENT_ORCHESTRATOR_BIN@" ]
+          [ "${project.package}/bin/firebreak-agent-orchestrator" ]
+          (builtins.readFile ./tests/test-smoke-worker-proxy.sh);
+      };
     in {
       nixosConfigurations.firebreak-agent-orchestrator = project.nixosConfiguration;
 
@@ -90,6 +107,11 @@
         default = project.package;
         firebreak-agent-orchestrator = project.package;
         firebreak-internal-runner-agent-orchestrator = project.runnerPackage;
+        firebreak-test-smoke-agent-orchestrator-worker-proxy = smokePackage;
+      };
+
+      checks.${system} = {
+        firebreak-test-smoke-agent-orchestrator-worker-proxy = smokePackage;
       };
     };
 }

@@ -274,6 +274,11 @@
             backend = "process";
             command = [ "sh" "-c" "sleep 30" ];
           };
+          bridge-limited = {
+            backend = "process";
+            command = [ "sh" "-c" "sleep 30" ];
+            max_instances = 1;
+          };
           bridge-firebreak = {
             backend = "firebreak";
             package = "firebreak-codex";

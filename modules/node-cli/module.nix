@@ -34,6 +34,7 @@ let
   installTmp = "${xdgCacheHome}/tmp";
   installPrefix = "${devHome}/.local";
   packageNodeModules = "${installPrefix}/lib/node_modules/${packageSpec}";
+  bootstrapReadyMarker = "${devHome}/.cache/firebreak-tools/${vmName}/bootstrap-ready";
   installBinScriptSnippet =
     lib.concatStringsSep "\n"
       (lib.mapAttrsToList
@@ -93,6 +94,7 @@ let
       printf 'workspace: %s\n' '${cfg.workspaceMount}'
       printf 'default command: %s\n' '${launchCommand}'
       printf 'cli binary: %s\n' '${binName}'
+      printf 'bootstrap wait: %s\n' 'firebreak-bootstrap-wait'
       ${lib.optionalString (hostForwardSummaries != [ ]) ''
         printf 'forwarded host ports:\n'
         for endpoint in ${lib.escapeShellArgs hostForwardSummaries}; do
@@ -102,8 +104,47 @@ let
       printf 'refresh cli: firebreak-refresh-cli\n\n'
     '';
   };
+  bootstrapWaitScript = pkgs.writeShellApplication {
+    name = "firebreak-bootstrap-wait";
+    runtimeInputs = with pkgs; [ coreutils ];
+    text = ''
+      set -eu
+
+      ready_marker='${bootstrapReadyMarker}'
+      timeout_seconds=''${FIREBREAK_BOOTSTRAP_WAIT_TIMEOUT_SECONDS:-300}
+      elapsed_seconds=0
+
+      if [ -z "$timeout_seconds" ]; then
+        echo "FIREBREAK_BOOTSTRAP_WAIT_TIMEOUT_SECONDS must be a non-negative integer" >&2
+        exit 1
+      fi
+
+      case "$timeout_seconds" in
+        *[!0-9]*)
+          echo "FIREBREAK_BOOTSTRAP_WAIT_TIMEOUT_SECONDS must be a non-negative integer" >&2
+          exit 1
+          ;;
+      esac
+
+      while [ "$elapsed_seconds" -lt "$timeout_seconds" ]; do
+        if [ -r "$ready_marker" ]; then
+          exit 0
+        fi
+        sleep 1
+        elapsed_seconds=$((elapsed_seconds + 1))
+      done
+
+      if [ -r "$ready_marker" ]; then
+        exit 0
+      fi
+
+      echo "timed out waiting for Firebreak bootstrap readiness marker: $ready_marker" >&2
+      exit 1
+    '';
+  };
   scriptVars = {
     "@BIN_NAME@" = binName;
+    "@BOOTSTRAP_READY_MARKER@" = bootstrapReadyMarker;
     "@DEV_HOME@" = devHome;
     "@DEV_USER@" = cfg.devUser;
     "@DISPLAY_NAME@" = displayName;
@@ -131,6 +172,7 @@ in {
       memoryMiB = lib.mkDefault memoryMiB;
       extraSystemPackages = with pkgs; [
         nodejs_20
+        bootstrapWaitScript
         launchScript
         readyScript
       ] ++ extraSystemPackages;

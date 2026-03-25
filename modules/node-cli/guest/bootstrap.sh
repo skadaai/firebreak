@@ -12,6 +12,7 @@ install_prefix="$dev_home/.local"
 package_node_modules=@PACKAGE_NODE_MODULES@
 state_root="$dev_home/.cache/firebreak-tools/@NAME@"
 state_file="$state_root/package-spec"
+ready_marker=@BOOTSTRAP_READY_MARKER@
 
 mkdir -p \
   "$state_root" \
@@ -25,9 +26,12 @@ mkdir -p \
   "$npm_cache_dir"
 
 if [ -x "$local_bin/@BIN_NAME@" ] && [ -r "$state_file" ] && [ "$(cat "$state_file")" = '@PACKAGE_SPEC@' ]; then
+  printf '%s\n' '@PACKAGE_SPEC@' > "$ready_marker"
   printf '%s\n' '@DISPLAY_NAME@: packaged CLI already installed.'
   exit 0
 fi
+
+rm -f "$ready_marker"
 
 chown -R "$dev_user:$dev_user" \
   "$state_root" \
@@ -70,6 +74,7 @@ npm install --global --omit=dev "$2"
 EOF
 
 printf '%s\n' '@PACKAGE_SPEC@' > "$state_file"
+printf '%s\n' '@PACKAGE_SPEC@' > "$ready_marker"
 chown -R "$dev_user:$dev_user" \
   "$state_root" \
   "$local_bin" \
@@ -79,5 +84,6 @@ chown -R "$dev_user:$dev_user" \
   "$xdg_config_home" \
   "$xdg_cache_home" \
   "$xdg_state_home" \
-  "$npm_cache_dir"
+  "$npm_cache_dir" \
+  "$ready_marker"
 printf '%s\n' '@DISPLAY_NAME@: packaged CLI installed.'

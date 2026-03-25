@@ -81,6 +81,7 @@ The intended landing shape is:
 - The `firebreak` worker path is defined as host-brokered sibling VM launch rather than guest-launched nested virtualization.
 - A guest-visible control surface exists for worker lifecycle operations without exposing raw host runner internals.
 - External recipe authors have a defined way to register worker kinds, worker backends, and concurrency limits.
+- External packaged-cli recipes have a defined bootstrap-readiness contract and can install recipe-owned worker-proxy wrappers without modifying Firebreak core.
 - Worker identity, lifecycle state, and host-owned runtime paths are explicit and reviewable.
 - The first integration path can target an external orchestrator recipe such as [external/agent-orchestrator/flake.nix](../../external/agent-orchestrator/flake.nix) without changing the public names of existing single-agent packages.
 

@@ -14,7 +14,7 @@ last_updated: 2026-03-25
 5. Implement the `firebreak` worker backend by launching sibling Firebreak workers with host-owned state roots.
 6. Implement the `process` worker backend as the baseline shared-guest execution path.
 7. Integrate the first external orchestrator recipe against the new control surface.
-8. Add focused validation for the first external orchestrator recipe, including worker-wrapper installation and worker creation semantics.
+8. Add focused validation for the first external orchestrator recipe, including worker-wrapper installation, bootstrap readiness, and worker creation semantics.
 9. Add smoke and manual validation for worker lifecycle, backend selection, workspace semantics, and cleanup.
 
 ## Validation approach
@@ -35,7 +35,7 @@ last_updated: 2026-03-25
 
 ## Current status
 
-In progress. The host-broker slice, the first guest-side bridge slice, the first worker-kind declaration slice, and the first external-recipe wrapper-installation slice have landed. Guest-local `process` worker semantics now route through guest-owned worker state, while `firebreak` workers still route through the host broker. Focused end-to-end validation for a real orchestrator recipe is still open.
+In progress. The host-broker slice, the first guest-side bridge slice, the first worker-kind declaration slice, the first bounded-concurrency slice, and the first external-recipe wrapper-installation slice have landed. Packaged node-cli recipes now also have a guest-visible bootstrap-readiness helper. Guest-local `process` worker semantics now route through guest-owned worker state, while `firebreak` workers still route through the host broker. Focused end-to-end validation for real worker creation from an external orchestrator recipe is still open.
 
 ## Open questions
 

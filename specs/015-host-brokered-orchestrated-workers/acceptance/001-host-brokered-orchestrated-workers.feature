@@ -1,5 +1,5 @@
 @spec-015
-Feature: Host-brokered orchestrated agents
+Feature: Host-brokered orchestrated workers
 
   Scenario: external recipe declares process and firebreak worker kinds
     Given an external Firebreak orchestrator recipe

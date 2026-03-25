@@ -58,6 +58,8 @@
           mkTaskSmokePackage
           mkValidationPackage
           mkValidationSmokePackage
+          mkWorkerPackage
+          mkWorkerSmokePackage
           ;
       };
 

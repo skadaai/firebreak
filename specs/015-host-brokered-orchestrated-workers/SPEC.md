@@ -1,15 +1,15 @@
 ---
 status: in_progress
-last_updated: 2026-03-24
+last_updated: 2026-03-25
 ---
 
-# 015 Host-Brokered Orchestrated Agents
+# 015 Host-Brokered Orchestrated Workers
 
 ## Problem
 
 Firebreak can already launch individual agent VMs, and external orchestrator recipes such as [external/agent-orchestrator/flake.nix](../../external/agent-orchestrator/flake.nix) can already run inside a Firebreak sandbox.
 
-What Firebreak does not define yet is how an orchestrator inside one Firebreak VM should obtain more agent workers.
+What Firebreak does not define yet is how an orchestrator inside one Firebreak VM should obtain more workers.
 
 Today there are two obvious but incomplete answers:
 
@@ -23,7 +23,7 @@ Without an explicit orchestration layer, Firebreak cannot give external orchestr
 ## Affected users, actors, or systems
 
 - maintainers designing external Firebreak recipes for agent orchestrators
-- operators who want one orchestrator to fan out into many agent workers
+- operators who want one orchestrator to fan out into many workers
 - future Firebreak host-side schedulers or worker brokers
 - existing Firebreak local-launch packages such as `firebreak-codex` and `firebreak-claude-code`
 

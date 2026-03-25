@@ -93,6 +93,9 @@
           *"#firebreak-internal-loop")
             printf '%s\n' "__INTERNAL__loop"
             ;;
+          *"#firebreak-worker")
+            printf '%s\n' "__WORKER__broker"
+            ;;
           *)
             printf '%s\n' "__INSTALLABLE__$installable"
             ;;
@@ -218,6 +221,17 @@
       text = builtins.readFile ../../modules/base/host/firebreak-task.sh;
     };
 
+  mkWorkerPackage = { name }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        bash
+        coreutils
+        gnused
+      ];
+      text = builtins.readFile ../../modules/base/host/firebreak-worker.sh;
+    };
+
   mkTaskSmokePackage = { name }:
     pkgs.writeShellApplication {
       inherit name;
@@ -230,6 +244,19 @@
         gnused
       ];
       text = builtins.readFile ../../modules/base/tests/test-smoke-internal-task.sh;
+    };
+
+  mkWorkerSmokePackage = { name, workerPackage }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        bash
+        coreutils
+        gnugrep
+      ];
+      text = renderTemplate {
+        "@AGENT_BIN@" = "${self.packages.${system}.${workerPackage}}/bin/${workerPackage}";
+      } ../../modules/base/tests/test-smoke-worker.sh;
     };
 
   mkLoopPackage = { name, taskPackage }:

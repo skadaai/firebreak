@@ -34,6 +34,9 @@ require_pattern "$vms_help_output" "usage:" "vms help usage text"
 run_help_output=$(@FIREBREAK_CLI_BIN@ run --help 2>&1)
 require_pattern "$run_help_output" "usage:" "run help usage text"
 
+worker_help_output=$(@FIREBREAK_CLI_BIN@ worker --help 2>&1)
+require_pattern "$worker_help_output" "__WORKER__broker" "worker delegation"
+
 run_codex_output=$(@FIREBREAK_CLI_BIN@ run codex -- --version)
 require_pattern "$run_codex_output" '__VM__codex' "codex run delegation"
 require_pattern "$run_codex_output" '__MODE__unset' "default run mode passthrough"

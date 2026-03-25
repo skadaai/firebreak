@@ -180,6 +180,7 @@ usage:
   firebreak doctor [--verbose] [--json]
   firebreak vms [--json]
   firebreak run <vm> [--shell] [-- <vm args...>]
+  firebreak worker <subcommand> ...
   firebreak internal <subcommand> ...
 
 Available commands:
@@ -187,6 +188,7 @@ Available commands:
   doctor      Explain resolved config and launch readiness
   vms         List the public Firebreak VM workloads
   run         Launch a public Firebreak VM workload
+  worker      Manage host-brokered Firebreak workers
   internal    Internal plumbing for Firebreak's self development by agents and automation
 
 Other human-facing commands remain reserved until they have clear user value and intuitive UX.
@@ -209,6 +211,10 @@ case "$command" in
   run)
     shift
     firebreak_run_command "$@"
+    ;;
+  worker)
+    shift
+    firebreak_exec_package "firebreak-worker" "$@"
     ;;
   internal)
     shift

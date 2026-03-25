@@ -17,6 +17,8 @@
   mkTaskSmokePackage,
   mkValidationPackage,
   mkValidationSmokePackage,
+  mkWorkerPackage,
+  mkWorkerSmokePackage,
 }:
 {
   default = self.packages.${system}.firebreak;
@@ -117,8 +119,17 @@
     name = "firebreak-internal-task";
   };
 
+  firebreak-worker = mkWorkerPackage {
+    name = "firebreak-worker";
+  };
+
   firebreak-test-smoke-internal-task = mkTaskSmokePackage {
     name = "firebreak-test-smoke-internal-task";
+  };
+
+  firebreak-test-smoke-worker = mkWorkerSmokePackage {
+    name = "firebreak-test-smoke-worker";
+    workerPackage = "firebreak-worker";
   };
 
   firebreak-internal-loop = mkLoopPackage {

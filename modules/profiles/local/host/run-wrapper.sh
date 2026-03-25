@@ -61,7 +61,7 @@ append_optional_env_default() {
   [ -n "$value" ] || return 0
 
   printf -v quoted_value '%q' "$value"
-  printf ': "${%s:=%s}"\n' "$key" "$quoted_value" >> "$multi_agent_config_env_file"
+  printf ": \"\${%s:=%s}\"\n" "$key" "$quoted_value" >> "$multi_agent_config_env_file"
   printf 'export %s\n' "$key" >> "$multi_agent_config_env_file"
 }
 

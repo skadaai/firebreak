@@ -108,7 +108,7 @@ EOF
         "@HOST_SYSTEM@" = system;
         "@CONTROL_SOCKET@" = "${controlSocketName}.socket";
         "@DEFAULT_AGENT_COMMAND@" = defaultAgentCommand;
-        "@RUNNER@" = runnerWrapper;
+        "@RUNNER@" = "${runnerWrapper}";
         "@AGENT_CONFIG_DIR_NAME@" = agentConfigDirName;
         "@DEFAULT_AGENT_CONFIG_HOST_DIR@" = defaultAgentConfigHostDir;
         "@AGENT_ENV_PREFIX@" = agentEnvPrefix;

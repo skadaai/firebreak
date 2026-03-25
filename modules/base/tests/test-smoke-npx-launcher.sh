@@ -149,15 +149,19 @@ darwin_validate_output=$(
     FIREBREAK_LAUNCHER_TEST_PLATFORM=darwin \
     FIREBREAK_LAUNCHER_TEST_ARCH=arm64 \
     FIREBREAK_LAUNCHER_KVM_PATH="$smoke_tmp_dir/missing-kvm" \
-    node "$repo_root/bin/firebreak.js" internal validate run test-smoke-codex
+    node "$repo_root/bin/firebreak.js" internal validate run test-smoke-codex 2>&1
 )
 
-if ! [ -f "$nix_args_path" ] || ! printf '%s\n' "$darwin_validate_output" | grep -F -q "Firebreak"; then
-  if ! [ -f "$nix_args_path" ]; then
-    printf '%s\n' "$darwin_validate_output" >&2
-    echo "launcher smoke should invoke nix for Apple Silicon macOS validation without KVM preflight" >&2
-    exit 1
-  fi
+if ! [ -f "$nix_args_path" ]; then
+  printf '%s\n' "$darwin_validate_output" >&2
+  echo "launcher smoke should invoke nix for Apple Silicon macOS validation without KVM preflight" >&2
+  exit 1
+fi
+
+if ! printf '%s\n' "$darwin_validate_output" | grep -F -q "Firebreak"; then
+  printf '%s\n' "$darwin_validate_output" >&2
+  echo "launcher smoke did not print the expected Apple Silicon macOS validation output" >&2
+  exit 1
 fi
 
 rm -f "$nix_args_path" "$nix_cwd_path"

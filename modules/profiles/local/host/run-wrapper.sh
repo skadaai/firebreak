@@ -14,11 +14,13 @@ agent_specific_config=${!agent_specific_config_var:-}
 agent_specific_host_path=${!agent_specific_host_path_var:-}
 agent_config_mode=${agent_specific_config:-${AGENT_CONFIG:-vm}}
 requested_vm_mode=${FIREBREAK_VM_MODE:-run}
+multi_agent_config_enabled=@MULTI_AGENT_CONFIG_ENABLED@
 agent_session_mode=agent
 default_agent_command=@DEFAULT_AGENT_COMMAND@
 agent_command_override=""
 shell_command_override=${AGENT_VM_COMMAND:-}
 agent_config_host_dir=""
+shared_agent_config_host_dir=""
 default_control_socket=@CONTROL_SOCKET@
 instance_state_dir=${FIREBREAK_INSTANCE_DIR:-}
 instance_ephemeral=${FIREBREAK_INSTANCE_EPHEMERAL:-0}
@@ -53,6 +55,16 @@ resolve_symlink_target() {
   realpath -m "$path"
 }
 
+append_optional_env_default() {
+  key=$1
+  value=$2
+  [ -n "$value" ] || return 0
+
+  printf -v quoted_value '%q' "$value"
+  printf ': "${%s:=%s}"\n' "$key" "$quoted_value" >> "$multi_agent_config_env_file"
+  printf 'export %s\n' "$key" >> "$multi_agent_config_env_file"
+}
+
 default_agent_config_host_dir=$(resolve_host_dir "${agent_specific_host_path:-${AGENT_CONFIG_HOST_PATH:-@DEFAULT_AGENT_CONFIG_HOST_DIR@}}")
 
 reject_whitespace_path "$host_cwd" "current working directory"
@@ -67,10 +79,25 @@ runner_stdout_log=$host_runtime_dir/runner.out
 runner_stderr_log=$host_runtime_dir/runner.err
 virtiofsd_hostcwd_log=$host_runtime_dir/v-cwd.log
 virtiofsd_agent_config_log=$host_runtime_dir/v-cfg.log
+virtiofsd_multi_agent_config_log=$host_runtime_dir/v-multi-cfg.log
 virtiofsd_agent_exec_log=$host_runtime_dir/v-out.log
 hostcwd_socket=$host_runtime_dir/cwd.sock
 agent_config_socket=$host_runtime_dir/cfg.sock
+multi_agent_config_socket=$host_runtime_dir/multi-cfg.sock
 agent_exec_output_socket=$host_runtime_dir/out.sock
+
+if [ "$multi_agent_config_enabled" = "1" ]; then
+  shared_agent_config_host_dir=$default_agent_config_host_dir
+  case "$shared_agent_config_host_dir" in
+    /*) ;;
+    *)
+      echo "AGENT_CONFIG_HOST_PATH must resolve to an absolute host path for multi-agent config share: $shared_agent_config_host_dir" >&2
+      exit 1
+      ;;
+  esac
+  reject_whitespace_path "$shared_agent_config_host_dir" "multi-agent host config root"
+  mkdir -p "$shared_agent_config_host_dir"
+fi
 
 if [ -n "$instance_state_dir" ]; then
   case "$instance_state_dir" in
@@ -196,6 +223,10 @@ cleanup() {
     kill "$agent_config_virtiofsd_pid" 2>/dev/null || true
     wait "$agent_config_virtiofsd_pid" 2>/dev/null || true
   fi
+  if [ -n "${multi_agent_config_virtiofsd_pid:-}" ]; then
+    kill "$multi_agent_config_virtiofsd_pid" 2>/dev/null || true
+    wait "$multi_agent_config_virtiofsd_pid" 2>/dev/null || true
+  fi
   if [ -n "${agent_exec_output_virtiofsd_pid:-}" ]; then
     kill "$agent_exec_output_virtiofsd_pid" 2>/dev/null || true
     wait "$agent_exec_output_virtiofsd_pid" 2>/dev/null || true
@@ -212,6 +243,7 @@ trap cleanup EXIT INT TERM
 mkdir -p "$host_meta_dir"
 mkdir -p "$host_exec_output_dir"
 rm -f "$control_socket"
+multi_agent_config_env_file=$host_meta_dir/firebreak-multi-agent.env
 
 start_virtiofsd() {
   shared_dir=$1
@@ -243,6 +275,11 @@ printf '%s\n' "$host_uid" > "$host_meta_dir/host-uid"
 printf '%s\n' "$host_gid" > "$host_meta_dir/host-gid"
 printf '%s\n' "$agent_config_mode" > "$host_meta_dir/agent-config-mode"
 printf '%s\n' "$agent_session_mode" > "$host_meta_dir/agent-session-mode"
+: > "$multi_agent_config_env_file"
+append_optional_env_default "AGENT_CONFIG" "${AGENT_CONFIG:-}"
+append_optional_env_default "AGENT_CONFIG_HOST_PATH" "${AGENT_CONFIG_HOST_PATH:-}"
+append_optional_env_default "CODEX_CONFIG" "${CODEX_CONFIG:-}"
+append_optional_env_default "CLAUDE_CONFIG" "${CLAUDE_CONFIG:-}"
 if [ -n "$agent_command_override" ]; then
   printf '%s\n' "$agent_command_override" > "$host_meta_dir/agent-command"
 fi
@@ -253,6 +290,10 @@ hostcwd_virtiofsd_pid=$started_virtiofsd_pid
 if [ -n "$agent_config_host_dir" ]; then
   start_virtiofsd "$agent_config_host_dir" "$agent_config_socket" "$virtiofsd_agent_config_log"
   agent_config_virtiofsd_pid=$started_virtiofsd_pid
+fi
+if [ -n "$shared_agent_config_host_dir" ]; then
+  start_virtiofsd "$shared_agent_config_host_dir" "$multi_agent_config_socket" "$virtiofsd_multi_agent_config_log"
+  multi_agent_config_virtiofsd_pid=$started_virtiofsd_pid
 fi
 if [ "$agent_session_mode" = "agent-exec" ]; then
   start_virtiofsd "$host_exec_output_dir" "$agent_exec_output_socket" "$virtiofsd_agent_exec_log"
@@ -268,6 +309,8 @@ if [ "$agent_session_mode" = "agent-exec" ]; then
       MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
       MICROVM_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
       MICROVM_AGENT_CONFIG_HOST_SOCKET="$agent_config_socket" \
+      MICROVM_MULTI_AGENT_CONFIG_HOST_DIR="$shared_agent_config_host_dir" \
+      MICROVM_MULTI_AGENT_CONFIG_HOST_SOCKET="$multi_agent_config_socket" \
       MICROVM_AGENT_EXEC_OUTPUT_SOCKET="$agent_exec_output_socket" \
       @RUNNER@ "$@"
   ) >"$runner_stdout_log" 2>"$runner_stderr_log" || runner_status=$?
@@ -279,6 +322,8 @@ else
       MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
       MICROVM_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
       MICROVM_AGENT_CONFIG_HOST_SOCKET="$agent_config_socket" \
+      MICROVM_MULTI_AGENT_CONFIG_HOST_DIR="$shared_agent_config_host_dir" \
+      MICROVM_MULTI_AGENT_CONFIG_HOST_SOCKET="$multi_agent_config_socket" \
       @RUNNER@ "$@"
   ) || runner_status=$?
 fi

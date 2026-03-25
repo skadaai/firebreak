@@ -34,6 +34,10 @@ let
     "@ID@" = "${pkgs.coreutils}/bin/id";
     "@GROUPMOD@" = "${pkgs.shadow}/bin/groupmod";
     "@MKDIR@" = "${pkgs.coreutils}/bin/mkdir";
+    "@MULTI_AGENT_CONFIG_ENABLED@" = if cfg.multiAgentConfig.enable then "1" else "0";
+    "@MULTI_AGENT_CONFIG_FRESH_ROOT@" = cfg.multiAgentConfig.freshRoot;
+    "@MULTI_AGENT_CONFIG_HOST_MOUNT@" = cfg.multiAgentConfig.hostMount;
+    "@MULTI_AGENT_CONFIG_MOUNTED_FLAG@" = cfg.multiAgentConfig.mountedFlag;
     "@START_DIR_FILE@" = cfg.startDirFile;
     "@RUNUSER@" = "${pkgs.util-linux}/bin/runuser";
     "@USERMOD@" = "${pkgs.shadow}/bin/usermod";

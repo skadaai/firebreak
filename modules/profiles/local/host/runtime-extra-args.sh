@@ -20,6 +20,12 @@ if [ -n "${MICROVM_AGENT_CONFIG_HOST_DIR:-}" ]; then
     -device vhost-user-fs-pci,chardev=fs-hostagentconfig,tag=hostagentconfig
 fi
 
+if [ -n "${MICROVM_MULTI_AGENT_CONFIG_HOST_DIR:-}" ]; then
+  printf '%s\n' \
+    -chardev socket,id=fs-hostmultiagentconfig,path="$MICROVM_MULTI_AGENT_CONFIG_HOST_SOCKET" \
+    -device vhost-user-fs-pci,chardev=fs-hostmultiagentconfig,tag=hostmultiagentconfig
+fi
+
 if [ -n "${MICROVM_AGENT_EXEC_OUTPUT_SOCKET:-}" ]; then
   printf '%s\n' \
     -chardev socket,id=fs-agentexecoutput,path="$MICROVM_AGENT_EXEC_OUTPUT_SOCKET" \

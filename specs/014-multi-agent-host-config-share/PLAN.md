@@ -1,6 +1,6 @@
 ---
-status: draft
-last_updated: 2026-03-24
+status: in_progress
+last_updated: 2026-03-25
 ---
 
 # 014 Plan
@@ -8,9 +8,9 @@ last_updated: 2026-03-24
 ## Implementation slices
 
 1. Define the durable multi-agent host config root contract and the stable per-agent subdirectory naming or override rules.
-2. Extend the packaged Node CLI sandbox layer so a recipe can opt into multi-agent host config behavior.
+2. Land the shared runtime shape: one `agentVm.multiAgentConfig` subtree, one guest env file, and one shared wrapper implementation.
 3. Add guest-visible wrapper commands for shipped agents such as Codex and Claude Code that resolve Firebreak selectors and export agent-native config env vars.
-4. Decide whether the shared-root contract needs one new public env var for multi-agent host roots or can reuse the existing per-agent host path selectors without ambiguity.
+4. Consume the shared contract from a packaged external recipe without recipe-local mount hacks.
 5. Add acceptance coverage for generic-vs-agent-specific precedence, per-agent host subdirectory resolution, and wrapper env export behavior.
 6. Update docs and external recipe examples to describe the multi-agent host config share model.
 
@@ -30,10 +30,10 @@ last_updated: 2026-03-24
 
 ## Current status
 
-Specified only. Implementation has not started.
+In progress. The first implementation slice now uses a smaller shared contract: one `agentVm.multiAgentConfig` subtree, one host-backed root transport in the local profile, one guest env file for selector defaults, and one shared wrapper implementation in the base runtime. Broader validation coverage and documentation still remain open.
 
 ## Open questions
 
-- whether the shared host root should use a new public env var or reuse the existing host-path selectors with multi-agent-specific interpretation
 - what the stable per-agent subdirectory names should be for shipped agents and future external recipes
 - whether Firebreak should generate wrappers only for shipped agent CLIs or provide a generic wrapper family for external recipes
+- whether per-agent host-path overrides belong in a later extension or should stay out of the public contract entirely

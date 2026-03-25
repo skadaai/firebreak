@@ -8,7 +8,11 @@ if [ "$USER" = "@DEV_USER@" ]; then
   export BUN_TMPDIR="$TMPDIR"
   export BUN_INSTALL_CACHE_DIR="$XDG_CACHE_HOME/bun/install/cache"
   export BUN_RUNTIME_TRANSPILER_CACHE_PATH="$XDG_CACHE_HOME/bun/transpiler"
-  export PATH="$LOCAL_BIN:$BUN_INSTALL/bin:$PATH"
+  if [ -n "${FIREBREAK_MULTI_AGENT_WRAPPER_BIN_DIR:-}" ]; then
+    export PATH="$FIREBREAK_MULTI_AGENT_WRAPPER_BIN_DIR:$LOCAL_BIN:$BUN_INSTALL/bin:$PATH"
+  else
+    export PATH="$LOCAL_BIN:$BUN_INSTALL/bin:$PATH"
+  fi
 
   agent_config_dir=@DEV_HOME@/@AGENT_CONFIG_DIR_NAME@
   if [ -n "${AGENT_CONFIG_DIR:-}" ]; then

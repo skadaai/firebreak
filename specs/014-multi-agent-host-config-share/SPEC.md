@@ -1,6 +1,6 @@
 ---
-status: draft
-last_updated: 2026-03-24
+status: in_progress
+last_updated: 2026-03-25
 ---
 
 # 014 Multi-Agent Host Config Share
@@ -57,6 +57,7 @@ The intended landing shape is:
 - agent-specific selectors such as `CODEX_CONFIG` and `CLAUDE_CONFIG` continue to override the generic selector for their matching tools
 - Firebreak-provided wrapper commands translate the resolved Firebreak config location into the env vars the agent CLI actually understands
 - dedicated single-agent workloads keep their existing single-directory host config behavior
+- the first public contract stays small: one shared host root, fixed per-agent subdirectories, and per-agent mode overrides without per-agent host-path overrides
 
 ## Requirements
 
@@ -64,15 +65,15 @@ The intended landing shape is:
 - Where a sandbox enables the multi-agent host config share contract, the system shall mount one host-backed config root into that guest instead of requiring one independent host share per agent.
 - Where a sandbox enables the multi-agent host config share contract, the system shall resolve stable per-agent subdirectories inside that mounted host root.
 - The system shall keep the single-agent host config contract for dedicated Firebreak workloads unchanged.
-- When a multi-agent sandbox resolves Codex config in `host` mode, the system shall map that resolution to the Codex subdirectory within the mounted host config root unless a Codex-specific host path override is set.
-- When a multi-agent sandbox resolves Claude Code config in `host` mode, the system shall map that resolution to the Claude subdirectory within the mounted host config root unless a Claude-specific host path override is set.
+- When a multi-agent sandbox resolves Codex config in `host` mode, the system shall map that resolution to the Codex subdirectory within the mounted host config root.
+- When a multi-agent sandbox resolves Claude Code config in `host` mode, the system shall map that resolution to the Claude subdirectory within the mounted host config root.
 - When both a generic selector and an agent-specific selector are present, the system shall give precedence to the agent-specific selector for that matching tool.
 - When a multi-agent sandbox launches Codex through the Firebreak wrapper, the system shall export the resolved directory through Codex-native env vars rather than expecting Codex to understand Firebreak selector vars directly.
 - When a multi-agent sandbox launches Claude Code through the Firebreak wrapper, the system shall export the resolved directory through Claude-native env vars rather than expecting Claude Code to understand Firebreak selector vars directly.
 - The system shall support `workspace`, `vm`, and `fresh` modes for wrappers in the same way as the existing Firebreak config contract.
 - Where `host` mode is enabled for a multi-agent sandbox, the system shall expose enough mounted host state for multiple agent wrappers to resolve distinct host-backed directories in the same guest.
 - The system shall not require one tool's host config directory to be reused as another tool's host config directory as part of the public contract.
-- The system shall document the stable subdirectory naming or override rules for each shipped agent made available through the multi-agent host config share.
+- The system shall document the stable subdirectory naming rules for each shipped agent made available through the multi-agent host config share.
 
 ## Acceptance criteria
 

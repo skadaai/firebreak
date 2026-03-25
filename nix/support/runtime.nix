@@ -57,6 +57,7 @@ let
     agentConfigDirName,
     defaultAgentConfigHostDir,
     agentEnvPrefix ? "AGENT",
+    multiAgentConfig ? { },
   }:
     pkgs.writeShellApplication {
       inherit name;
@@ -68,6 +69,7 @@ let
         "@AGENT_CONFIG_DIR_NAME@" = agentConfigDirName;
         "@DEFAULT_AGENT_CONFIG_HOST_DIR@" = defaultAgentConfigHostDir;
         "@AGENT_ENV_PREFIX@" = agentEnvPrefix;
+        "@MULTI_AGENT_CONFIG_ENABLED@" = if (multiAgentConfig.enable or false) then "1" else "0";
         "@FIREBREAK_PROJECT_CONFIG_LIB@" = builtins.readFile ../../modules/base/host/firebreak-project-config.sh;
       } ../../modules/profiles/local/host/run-wrapper.sh;
     };
@@ -80,6 +82,7 @@ let
     agentConfigDirName ? ".firebreak",
     defaultAgentConfigHostDir ? "$HOME/.firebreak/${name}",
     agentEnvPrefix ? "AGENT",
+    multiAgentConfig ? { },
   }:
     mkAgentPackage {
       inherit
@@ -88,7 +91,8 @@ let
         defaultAgentCommand
         agentConfigDirName
         defaultAgentConfigHostDir
-        agentEnvPrefix;
+        agentEnvPrefix
+        multiAgentConfig;
       runner = runnerPackage;
     };
 
@@ -101,6 +105,7 @@ let
     agentConfigDirName ? ".firebreak",
     defaultAgentConfigHostDir ? "$HOME/.firebreak/${name}",
     agentEnvPrefix ? "AGENT",
+    multiAgentConfig ? { },
   }:
     let
       nixosConfiguration = mkAgentVm {
@@ -115,7 +120,8 @@ let
           defaultAgentCommand
           agentConfigDirName
           defaultAgentConfigHostDir
-          agentEnvPrefix;
+          agentEnvPrefix
+          multiAgentConfig;
       };
     in {
       inherit nixosConfiguration package runnerPackage;

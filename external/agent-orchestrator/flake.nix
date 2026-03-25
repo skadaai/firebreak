@@ -58,6 +58,9 @@
           ao_root="$npm_config_prefix/lib/node_modules/@composio/ao"
           ao_web_dir=$(node -e "const { dirname } = require(\"path\"); const root = process.argv[1]; const pkg = require.resolve(\"@composio/ao-web/package.json\", { paths: [root] }); process.stdout.write(dirname(pkg));" "$ao_root")
           ao_core_dir="$ao_root/node_modules/@composio/ao-core"
+          npm install --global --omit=dev \
+            "@anthropic-ai/claude-code@latest" \
+            "@openai/codex@latest"
           npm install --prefix "$ao_web_dir" --no-save --omit=dev node-pty
 
           if ! [ -d "$ao_core_dir" ]; then
@@ -68,6 +71,28 @@
           mkdir -p "$ao_web_dir/node_modules/@composio"
           ln -sfn "$ao_core_dir" "$ao_web_dir/node_modules/@composio/ao-core"
         '';
+        multiAgentConfig = {
+          enable = true;
+          agents = {
+            codex = {
+              displayName = "Codex";
+              selectorPrefix = "CODEX";
+              configSubdir = "codex";
+              configEnvExports = ''
+                export CODEX_HOME="$config_dir"
+                export CODEX_CONFIG_DIR="$config_dir"
+              '';
+            };
+            claude = {
+              displayName = "Claude Code";
+              selectorPrefix = "CLAUDE";
+              configSubdir = "claude";
+              configEnvExports = ''
+                export CLAUDE_CONFIG_DIR="$config_dir"
+              '';
+            };
+          };
+        };
         launchCommand = "ao start .";
         extraShellInit = ''
           alias ao-start='project-launch'

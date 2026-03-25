@@ -250,6 +250,7 @@
     memoryMiB ? 3072,
     runtimePackages ? [ ],
     bootstrapPackages ? null,
+    multiAgentConfig ? { },
     extraShellInit ? "",
     extraModules ? [ ],
   }:
@@ -288,6 +289,7 @@
             postInstallScript
             readyCommandName
             memoryMiB
+            multiAgentConfig
             extraShellInit
             ;
           vmName = name;

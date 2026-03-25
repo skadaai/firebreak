@@ -100,6 +100,18 @@
           [ "${project.package}/bin/firebreak-agent-orchestrator" ]
           (builtins.readFile ./tests/test-smoke-worker-proxy.sh);
       };
+      workerSpawnSmokePackage = pkgs.writeShellApplication {
+        name = "firebreak-test-smoke-agent-orchestrator-worker-spawn";
+        runtimeInputs = with pkgs; [
+          bash
+          coreutils
+          gnugrep
+        ];
+        text = builtins.replaceStrings
+          [ "@AGENT_ORCHESTRATOR_BIN@" ]
+          [ "${project.package}/bin/firebreak-agent-orchestrator" ]
+          (builtins.readFile ./tests/test-smoke-worker-spawn.sh);
+      };
     in {
       nixosConfigurations.firebreak-agent-orchestrator = project.nixosConfiguration;
 
@@ -108,10 +120,12 @@
         firebreak-agent-orchestrator = project.package;
         firebreak-internal-runner-agent-orchestrator = project.runnerPackage;
         firebreak-test-smoke-agent-orchestrator-worker-proxy = smokePackage;
+        firebreak-test-smoke-agent-orchestrator-worker-spawn = workerSpawnSmokePackage;
       };
 
       checks.${system} = {
         firebreak-test-smoke-agent-orchestrator-worker-proxy = smokePackage;
+        firebreak-test-smoke-agent-orchestrator-worker-spawn = workerSpawnSmokePackage;
       };
     };
 }

@@ -27,6 +27,7 @@ Initial implementation in progress.
 - a generic packaged-node bootstrap-readiness helper (`firebreak-bootstrap-wait`) for recipe-owned validation and wrapper probing
 - a reusable Firebreak worker-proxy script helper for external recipes that want a CLI name to resolve through `firebreak worker`
 - a recipe-owned smoke path in [external/agent-orchestrator/flake.nix](../../external/agent-orchestrator/flake.nix) for validating bootstrap readiness and worker-proxy wrapper installation without moving orchestrator logic into Firebreak core
+- a recipe-owned smoke path in [external/agent-orchestrator/flake.nix](../../external/agent-orchestrator/flake.nix) for real declared-worker creation through the guest-visible `firebreak worker` surface
 
 ## What remains open
 

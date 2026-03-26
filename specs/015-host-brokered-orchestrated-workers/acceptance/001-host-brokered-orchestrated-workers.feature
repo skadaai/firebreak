@@ -27,7 +27,7 @@ Feature: Host-brokered orchestrated workers
 
   Scenario: orchestrator guest reaches the worker surface through a Firebreak bridge
     Given a local Firebreak orchestrator VM with worker bridging enabled
-    When the guest runs "firebreak worker spawn"
+    When the guest runs "firebreak worker run"
     Then Firebreak forwards that request through the guest-visible bridge instead of exposing raw host runner internals
     And the guest can read the resulting worker metadata through the same surface
 

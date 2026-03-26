@@ -83,10 +83,11 @@ Use `nix run .#firebreak -- doctor --json` for machine-readable output.
 Firebreak exposes a public `worker` surface for orchestrator-style sandboxes:
 
 ```sh
-firebreak worker spawn --kind codex --workspace "$PWD" -- --version
-firebreak worker list
-firebreak worker show --worker-id codex-1234abcd
-firebreak worker stop --worker-id codex-1234abcd
+firebreak worker run --kind codex --workspace "$PWD" -- --version
+firebreak worker ps
+firebreak worker inspect codex-1234abcd
+firebreak worker stop codex-1234abcd
+firebreak worker rm codex-1234abcd
 ```
 
 Bridge-enabled recipes can declare `workerKinds` that resolve a stable kind name onto a backend such as `process` or `firebreak`.

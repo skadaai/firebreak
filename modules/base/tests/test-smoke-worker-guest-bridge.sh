@@ -12,19 +12,19 @@ guest_script=$workspace_dir/guest-bridge-check.sh
 cat >"$guest_script" <<'EOF'
 set -eu
 
-spawn_output=$(firebreak worker spawn --kind bridge-process --workspace "$PWD")
+spawn_output=$(firebreak worker run --kind bridge-process --workspace "$PWD" --json)
 printf '__BRIDGE_SPAWN__%s\n' "$spawn_output"
 
-worker_id=$(SPAWN_OUTPUT="$spawn_output" python3 - <<'PY'
+worker_id=$(RUN_OUTPUT="$spawn_output" python3 - <<'PY'
 import json
 import os
 
-print(json.loads(os.environ["SPAWN_OUTPUT"])["worker_id"])
+print(json.loads(os.environ["RUN_OUTPUT"])["worker_id"])
 PY
 )
 printf '__BRIDGE_ID__%s\n' "$worker_id"
 
-show_output=$(firebreak worker show --worker-id "$worker_id")
+show_output=$(firebreak worker inspect "$worker_id")
 printf '__BRIDGE_SHOW__%s\n' "$show_output"
 
 show_backend=$(SHOW_OUTPUT="$show_output" python3 - <<'PY'
@@ -53,16 +53,16 @@ if [ "$show_authority" != "guest" ]; then
   exit 1
 fi
 
-stop_spawn_output=$(firebreak worker spawn --kind bridge-stop --workspace "$PWD")
-stop_worker_id=$(STOP_SPAWN_OUTPUT="$stop_spawn_output" python3 - <<'PY'
+stop_spawn_output=$(firebreak worker run --kind bridge-stop --workspace "$PWD" --json)
+stop_worker_id=$(STOP_RUN_OUTPUT="$stop_spawn_output" python3 - <<'PY'
 import json
 import os
 
-print(json.loads(os.environ["STOP_SPAWN_OUTPUT"])["worker_id"])
+print(json.loads(os.environ["STOP_RUN_OUTPUT"])["worker_id"])
 PY
 )
 
-stop_output=$(firebreak worker stop --worker-id "$stop_worker_id")
+stop_output=$(firebreak worker stop --json "$stop_worker_id")
 printf '__BRIDGE_STOP__%s\n' "$stop_output"
 
 stop_status=$(STOP_OUTPUT="$stop_output" python3 - <<'PY'
@@ -78,17 +78,17 @@ if [ "$stop_status" != "stopping" ] && [ "$stop_status" != "stopped" ]; then
   exit 1
 fi
 
-limited_spawn_output=$(firebreak worker spawn --kind bridge-limited --workspace "$PWD")
-limited_worker_id=$(LIMITED_SPAWN_OUTPUT="$limited_spawn_output" python3 - <<'PY'
+limited_spawn_output=$(firebreak worker run --kind bridge-limited --workspace "$PWD" --json)
+limited_worker_id=$(LIMITED_RUN_OUTPUT="$limited_spawn_output" python3 - <<'PY'
 import json
 import os
 
-print(json.loads(os.environ["LIMITED_SPAWN_OUTPUT"])["worker_id"])
+print(json.loads(os.environ["LIMITED_RUN_OUTPUT"])["worker_id"])
 PY
 )
 
 set +e
-limited_second_output=$(firebreak worker spawn --kind bridge-limited --workspace "$PWD" 2>&1)
+limited_second_output=$(firebreak worker run --kind bridge-limited --workspace "$PWD" 2>&1)
 limited_second_status=$?
 set -e
 
@@ -98,9 +98,9 @@ if [ "$limited_second_status" -eq 0 ] || ! printf '%s\n' "$limited_second_output
   exit 1
 fi
 
-firebreak worker stop --worker-id "$limited_worker_id" >/dev/null
+firebreak worker stop "$limited_worker_id" >/dev/null
 
-list_output=$(firebreak worker list)
+list_output=$(firebreak worker ps -a)
 printf '__BRIDGE_LIST__%s\n' "$list_output"
 
 if ! printf '%s\n' "$list_output" | grep -F -q "$worker_id"; then
@@ -108,21 +108,21 @@ if ! printf '%s\n' "$list_output" | grep -F -q "$worker_id"; then
   exit 1
 fi
 
-stop_all_spawn_one=$(firebreak worker spawn --kind bridge-stop --workspace "$PWD")
-stop_all_one_id=$(STOP_ALL_SPAWN_ONE="$stop_all_spawn_one" python3 - <<'PY'
+stop_all_spawn_one=$(firebreak worker run --kind bridge-stop --workspace "$PWD" --json)
+stop_all_one_id=$(STOP_ALL_RUN_ONE="$stop_all_spawn_one" python3 - <<'PY'
 import json
 import os
 
-print(json.loads(os.environ["STOP_ALL_SPAWN_ONE"])["worker_id"])
+print(json.loads(os.environ["STOP_ALL_RUN_ONE"])["worker_id"])
 PY
 )
 
-stop_all_spawn_two=$(firebreak worker spawn --kind bridge-stop --workspace "$PWD")
-stop_all_two_id=$(STOP_ALL_SPAWN_TWO="$stop_all_spawn_two" python3 - <<'PY'
+stop_all_spawn_two=$(firebreak worker run --kind bridge-stop --workspace "$PWD" --json)
+stop_all_two_id=$(STOP_ALL_RUN_TWO="$stop_all_spawn_two" python3 - <<'PY'
 import json
 import os
 
-print(json.loads(os.environ["STOP_ALL_SPAWN_TWO"])["worker_id"])
+print(json.loads(os.environ["STOP_ALL_RUN_TWO"])["worker_id"])
 PY
 )
 

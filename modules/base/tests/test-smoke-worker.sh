@@ -39,45 +39,40 @@ done
 EOF
 chmod +x "$fake_bin_dir/nix"
 
-spawn_process_output=$(
+process_worker_id=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ spawn --backend process --kind smoke-process --workspace "$workspace_dir" -- sh -c 'printf worker-ok'
+    @AGENT_BIN@ run --backend process --kind smoke-process --workspace "$workspace_dir" -- sh -c 'printf worker-ok'
 )
 
-process_worker_id=$(printf '%s\n' "$spawn_process_output" | sed -n 's/.*"worker_id": "\([^"]*\)".*/\1/p' | head -n 1)
 if [ -z "$process_worker_id" ]; then
-  printf '%s\n' "$spawn_process_output" >&2
   echo "worker smoke did not return a process worker id" >&2
   exit 1
 fi
 
 for _ in 1 2 3 4 5 6 7 8 9 10; do
-  process_show_output=$(
+  process_inspect_output=$(
     FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-      @AGENT_BIN@ show --worker-id "$process_worker_id"
+      @AGENT_BIN@ inspect "$process_worker_id"
   )
-  if printf '%s\n' "$process_show_output" | grep -F -q '"status": "exited"'; then
+  if printf '%s\n' "$process_inspect_output" | grep -F -q '"status": "exited"'; then
     break
   fi
   sleep 0.1
 done
 
-if ! printf '%s\n' "$process_show_output" | grep -F -q '"backend": "process"'; then
-  printf '%s\n' "$process_show_output" >&2
+if ! printf '%s\n' "$process_inspect_output" | grep -F -q '"backend": "process"'; then
+  printf '%s\n' "$process_inspect_output" >&2
   echo "worker smoke did not preserve the process backend in metadata" >&2
   exit 1
 fi
 
-process_stdout_path=$(printf '%s\n' "$process_show_output" | sed -n 's/.*"stdout_path": "\([^"]*\)".*/\1/p' | head -n 1)
-if [ -z "$process_stdout_path" ] || ! [ -f "$process_stdout_path" ]; then
-  printf '%s\n' "$process_show_output" >&2
-  echo "worker smoke did not produce a process stdout path" >&2
-  exit 1
-fi
-
-if ! grep -F -q 'worker-ok' "$process_stdout_path"; then
-  cat "$process_stdout_path" >&2
-  echo "worker smoke did not run the process worker command" >&2
+process_logs_output=$(
+  FIREBREAK_WORKER_STATE_DIR="$state_dir" \
+    @AGENT_BIN@ logs "$process_worker_id"
+)
+if ! printf '%s\n' "$process_logs_output" | grep -F -q 'worker-ok'; then
+  printf '%s\n' "$process_logs_output" >&2
+  echo "worker smoke did not expose process worker logs" >&2
   exit 1
 fi
 
@@ -87,7 +82,7 @@ spawn_firebreak_output=$(
     FIREBREAK_FLAKE_REF='path:/firebreak-worker-smoke' \
     FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG=1 \
     FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
-    @AGENT_BIN@ spawn --backend firebreak --kind smoke-firebreak --workspace "$workspace_dir" --package firebreak-codex -- --version
+    @AGENT_BIN@ run --backend firebreak --kind smoke-firebreak --workspace "$workspace_dir" --package firebreak-codex --json -- --version
 )
 
 firebreak_worker_id=$(printf '%s\n' "$spawn_firebreak_output" | sed -n 's/.*"worker_id": "\([^"]*\)".*/\1/p' | head -n 1)
@@ -98,93 +93,70 @@ if [ -z "$firebreak_worker_id" ]; then
 fi
 
 for _ in 1 2 3 4 5 6 7 8 9 10; do
-  firebreak_show_output=$(
+  firebreak_inspect_output=$(
     FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-      @AGENT_BIN@ show --worker-id "$firebreak_worker_id"
+      @AGENT_BIN@ inspect "$firebreak_worker_id"
   )
-  if printf '%s\n' "$firebreak_show_output" | grep -F -q '"status": "exited"'; then
+  if printf '%s\n' "$firebreak_inspect_output" | grep -F -q '"status": "exited"'; then
     break
   fi
   sleep 0.1
 done
 
-if ! printf '%s\n' "$firebreak_show_output" | grep -F -q '"backend": "firebreak"'; then
-  printf '%s\n' "$firebreak_show_output" >&2
+if ! printf '%s\n' "$firebreak_inspect_output" | grep -F -q '"backend": "firebreak"'; then
+  printf '%s\n' "$firebreak_inspect_output" >&2
   echo "worker smoke did not preserve the firebreak backend in metadata" >&2
   exit 1
 fi
 
-if ! printf '%s\n' "$firebreak_show_output" | grep -F -q '"package_name": "firebreak-codex"'; then
-  printf '%s\n' "$firebreak_show_output" >&2
+if ! printf '%s\n' "$firebreak_inspect_output" | grep -F -q '"package_name": "firebreak-codex"'; then
+  printf '%s\n' "$firebreak_inspect_output" >&2
   echo "worker smoke did not preserve the firebreak package name" >&2
   exit 1
 fi
 
-firebreak_stdout_path=$(printf '%s\n' "$firebreak_show_output" | sed -n 's/.*"stdout_path": "\([^"]*\)".*/\1/p' | head -n 1)
-if [ -z "$firebreak_stdout_path" ] || ! [ -f "$firebreak_stdout_path" ]; then
-  printf '%s\n' "$firebreak_show_output" >&2
-  echo "worker smoke did not produce a firebreak stdout path" >&2
-  exit 1
-fi
-
-if ! grep -F -q '__INSTALLABLE__path:/firebreak-worker-smoke#firebreak-codex' "$firebreak_stdout_path"; then
-  cat "$firebreak_stdout_path" >&2
+firebreak_logs_output=$(
+  FIREBREAK_WORKER_STATE_DIR="$state_dir" \
+    @AGENT_BIN@ logs "$firebreak_worker_id"
+)
+if ! printf '%s\n' "$firebreak_logs_output" | grep -F -q '__INSTALLABLE__path:/firebreak-worker-smoke#firebreak-codex'; then
+  printf '%s\n' "$firebreak_logs_output" >&2
   echo "worker smoke did not route the firebreak worker through nix run" >&2
   exit 1
 fi
 
-spawn_stop_output=$(
+stop_worker_id=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ spawn --backend process --kind smoke-stop --workspace "$workspace_dir" -- sh -c 'sleep 30'
+    @AGENT_BIN@ run --backend process --kind smoke-stop --workspace "$workspace_dir" -- sh -c 'sleep 30'
 )
 
-stop_worker_id=$(printf '%s\n' "$spawn_stop_output" | sed -n 's/.*"worker_id": "\([^"]*\)".*/\1/p' | head -n 1)
-if [ -z "$stop_worker_id" ]; then
-  printf '%s\n' "$spawn_stop_output" >&2
-  echo "worker smoke did not return a stoppable worker id" >&2
-  exit 1
-fi
-
-FIREBREAK_WORKER_STATE_DIR="$state_dir" @AGENT_BIN@ stop --worker-id "$stop_worker_id" >/dev/null
+FIREBREAK_WORKER_STATE_DIR="$state_dir" @AGENT_BIN@ stop "$stop_worker_id" >/dev/null
 
 for _ in 1 2 3 4 5 6 7 8 9 10; do
-  stop_show_output=$(
+  stop_inspect_output=$(
     FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-      @AGENT_BIN@ show --worker-id "$stop_worker_id"
+      @AGENT_BIN@ inspect "$stop_worker_id"
   )
-  if printf '%s\n' "$stop_show_output" | grep -F -q '"status": "stopped"'; then
+  if printf '%s\n' "$stop_inspect_output" | grep -F -q '"status": "stopped"'; then
     break
   fi
   sleep 0.1
 done
 
-if ! printf '%s\n' "$stop_show_output" | grep -F -q '"status": "stopped"'; then
-  printf '%s\n' "$stop_show_output" >&2
+if ! printf '%s\n' "$stop_inspect_output" | grep -F -q '"status": "stopped"'; then
+  printf '%s\n' "$stop_inspect_output" >&2
   echo "worker smoke did not report a stopped worker" >&2
   exit 1
 fi
 
-spawn_stop_all_one=$(
+stop_all_one_worker_id=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ spawn --backend process --kind smoke-stop-all-one --workspace "$workspace_dir" -- sh -c 'sleep 30'
+    @AGENT_BIN@ run --backend process --kind smoke-stop-all-one --workspace "$workspace_dir" -- sh -c 'sleep 30'
 )
-stop_all_one_worker_id=$(printf '%s\n' "$spawn_stop_all_one" | sed -n 's/.*"worker_id": "\([^"]*\)".*/\1/p' | head -n 1)
-if [ -z "$stop_all_one_worker_id" ]; then
-  printf '%s\n' "$spawn_stop_all_one" >&2
-  echo "worker smoke did not return the first stop --all worker id" >&2
-  exit 1
-fi
-
-spawn_stop_all_two=$(
+stop_all_two_worker_id=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ spawn --backend process --kind smoke-stop-all-two --workspace "$workspace_dir" -- sh -c 'sleep 30'
+    @AGENT_BIN@ run --backend process --kind smoke-stop-all-two --workspace "$workspace_dir" -- sh -c 'sleep 30'
 )
-stop_all_two_worker_id=$(printf '%s\n' "$spawn_stop_all_two" | sed -n 's/.*"worker_id": "\([^"]*\)".*/\1/p' | head -n 1)
-if [ -z "$stop_all_two_worker_id" ]; then
-  printf '%s\n' "$spawn_stop_all_two" >&2
-  echo "worker smoke did not return the second stop --all worker id" >&2
-  exit 1
-fi
 
 stop_all_output=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
@@ -203,20 +175,55 @@ if ! printf '%s\n' "$stop_all_output" | grep -F -q "$stop_all_two_worker_id"; th
   exit 1
 fi
 
-list_output=$(
+ps_output=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ list
+    @AGENT_BIN@ ps -a
 )
 
-if ! printf '%s\n' "$list_output" | grep -F -q "$process_worker_id"; then
-  printf '%s\n' "$list_output" >&2
+if ! printf '%s\n' "$ps_output" | grep -F -q "$process_worker_id"; then
+  printf '%s\n' "$ps_output" >&2
   echo "worker smoke did not list the process worker" >&2
   exit 1
 fi
 
-if ! printf '%s\n' "$list_output" | grep -F -q "$firebreak_worker_id"; then
-  printf '%s\n' "$list_output" >&2
+if ! printf '%s\n' "$ps_output" | grep -F -q "$firebreak_worker_id"; then
+  printf '%s\n' "$ps_output" >&2
   echo "worker smoke did not list the firebreak worker" >&2
+  exit 1
+fi
+
+rm_output=$(
+  FIREBREAK_WORKER_STATE_DIR="$state_dir" \
+    @AGENT_BIN@ rm "$process_worker_id"
+)
+if ! printf '%s\n' "$rm_output" | grep -F -q "$process_worker_id"; then
+  printf '%s\n' "$rm_output" >&2
+  echo "worker smoke did not remove a stopped worker" >&2
+  exit 1
+fi
+
+prune_target_id=$(
+  FIREBREAK_WORKER_STATE_DIR="$state_dir" \
+    @AGENT_BIN@ run --backend process --kind smoke-prune --workspace "$workspace_dir" -- sh -c 'printf prune-ok'
+)
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  prune_inspect_output=$(
+    FIREBREAK_WORKER_STATE_DIR="$state_dir" \
+      @AGENT_BIN@ inspect "$prune_target_id"
+  )
+  if printf '%s\n' "$prune_inspect_output" | grep -F -q '"status": "exited"'; then
+    break
+  fi
+  sleep 0.1
+done
+
+prune_output=$(
+  FIREBREAK_WORKER_STATE_DIR="$state_dir" \
+    @AGENT_BIN@ prune
+)
+if ! printf '%s\n' "$prune_output" | grep -F -q "$prune_target_id"; then
+  printf '%s\n' "$prune_output" >&2
+  echo "worker smoke did not prune an exited worker" >&2
   exit 1
 fi
 

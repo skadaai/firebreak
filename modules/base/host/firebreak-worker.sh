@@ -8,13 +8,15 @@ command=${1:-}
 usage() {
   cat <<'EOF' >&2
 usage:
-  firebreak worker spawn --backend BACKEND --kind KIND [--workspace PATH] [--package NAME] [--vm-mode MODE] [--] COMMAND...
-  firebreak worker list
-  firebreak worker show --worker-id ID
-  firebreak worker stop --worker-id ID
-  firebreak worker stop --all
+  firebreak worker run --backend BACKEND --kind KIND [--workspace PATH] [--package NAME] [--vm-mode MODE] [--json] [--] COMMAND...
+  firebreak worker ps [-a|--all] [--json]
+  firebreak worker inspect WORKER_ID
+  firebreak worker logs [--stdout|--stderr] [-f|--follow] WORKER_ID
+  firebreak worker stop [--all] [--json] [WORKER_ID...]
+  firebreak worker rm [--all] [--force] [--json] [WORKER_ID...]
+  firebreak worker prune [--force] [--json]
 EOF
-  exit 1
+  exit "${1:-1}"
 }
 
 json_escape() {
@@ -48,6 +50,37 @@ require_absolute_dir() {
 
 worker_root_for_id() {
   printf '%s\n' "$state_dir/workers/$1"
+}
+
+worker_is_active_status() {
+  case "$1" in
+    active|running|stopping)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+worker_summary_json() {
+  cat <<EOF
+{
+  "worker_id": "$(json_escape "$worker_id")",
+  "authority": "$(json_escape "$worker_authority")",
+  "backend": "$(json_escape "$backend")",
+  "kind": "$(json_escape "$kind")",
+  "status": "$(json_escape "$status")",
+  "workspace": "$(json_escape "$workspace")",
+  "package_name": $(if [ -n "$package_name" ]; then printf '"%s"' "$(json_escape "$package_name")"; else printf 'null'; fi),
+  "vm_mode": $(if [ -n "$vm_mode" ]; then printf '"%s"' "$(json_escape "$vm_mode")"; else printf 'null'; fi),
+  "pid": $pid,
+  "created_at": "$(json_escape "$created_at")",
+  "finished_at": $(if [ -n "$finished_at" ]; then printf '"%s"' "$(json_escape "$finished_at")"; else printf 'null'; fi),
+  "exit_code": $(if [ -n "$exit_code" ]; then printf '%s' "$exit_code"; else printf 'null'; fi),
+  "stop_requested": $([ "$stop_requested" = "1" ] && printf 'true' || printf 'false')
+}
+EOF
 }
 
 write_metadata() {
@@ -173,6 +206,9 @@ refresh_worker_status() {
   if kill -0 "$pid" 2>/dev/null; then
     if [ "$stop_requested" = "1" ] && [ "$status" != "stopping" ]; then
       status="stopping"
+      write_metadata
+    elif [ "$status" = "active" ]; then
+      status="running"
       write_metadata
     fi
     return 0
@@ -339,6 +375,7 @@ EOF
 }
 
 spawn_worker() {
+  run_json=0
   backend=""
   kind=""
   workspace=$PWD
@@ -366,6 +403,10 @@ spawn_worker() {
       --vm-mode)
         vm_mode=$2
         shift 2
+        ;;
+      --json)
+        run_json=1
+        shift
         ;;
       --)
         shift
@@ -426,7 +467,7 @@ spawn_worker() {
   mkdir -p "$worker_root"
   stdout_path=$worker_root/stdout.log
   stderr_path=$worker_root/stderr.log
-  status="active"
+  status="running"
   pid=0
   finished_at=""
   exit_code=""
@@ -448,59 +489,46 @@ spawn_worker() {
   nohup bash "$launch_script" >/dev/null 2>&1 &
   pid=$!
   write_metadata
-  cat "$worker_root/metadata.json"
+
+  if [ "$run_json" = "1" ]; then
+    cat "$worker_root/metadata.json"
+  else
+    printf '%s\n' "$worker_id"
+  fi
 }
 
-list_workers() {
+for_each_worker() {
   mkdir -p "$state_dir/workers"
-  first=1
-  printf '[\n'
   for candidate_root in "$state_dir"/workers/*; do
     [ -d "$candidate_root" ] || continue
     worker_id=$(basename "$candidate_root")
     refresh_worker_status "$worker_id"
-    if [ "$first" = "1" ]; then
-      first=0
-    else
-      printf ',\n'
-    fi
-    cat "$candidate_root/metadata.json"
+    "$@" "$worker_id"
   done
-  printf '\n]\n'
 }
 
-show_worker() {
-  worker_id=""
+emit_ps_row() {
+  worker_id=$1
+  load_worker "$worker_id"
+  exit_value=-
+  if [ -n "$exit_code" ]; then
+    exit_value=$exit_code
+  fi
+  printf '%-22s %-14s %-10s %-10s %-6s\n' "$worker_id" "$kind" "$backend" "$status" "$exit_value"
+}
+
+ps_workers() {
+  ps_all=0
+  ps_json=0
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      --worker-id)
-        worker_id=$2
-        shift 2
+      -a|--all)
+        ps_all=1
+        shift
         ;;
-      *)
-        usage
-        ;;
-    esac
-  done
-
-  [ -n "$worker_id" ] || usage
-  refresh_worker_status "$worker_id"
-  cat "$(worker_root_for_id "$worker_id")/metadata.json"
-}
-
-stop_worker() {
-  worker_id=""
-  stop_all=0
-
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-      --worker-id)
-        worker_id=$2
-        shift 2
-        ;;
-      --all)
-        stop_all=1
+      --json)
+        ps_json=1
         shift
         ;;
       *)
@@ -509,44 +537,94 @@ stop_worker() {
     esac
   done
 
-  if [ "$stop_all" = "1" ] && [ -n "$worker_id" ]; then
-    usage
-  fi
-
-  if [ "$stop_all" = "1" ]; then
-    mkdir -p "$state_dir/workers"
+  if [ "$ps_json" = "1" ]; then
     first=1
     printf '[\n'
     for candidate_root in "$state_dir"/workers/*; do
       [ -d "$candidate_root" ] || continue
       worker_id=$(basename "$candidate_root")
+      refresh_worker_status "$worker_id"
       load_worker "$worker_id"
-
-      stop_requested=1
-      if kill -0 "$pid" 2>/dev/null; then
-        status="stopping"
-        write_metadata
-        if [ -f "$worker_root/child-pid" ]; then
-          child_pid=$(cat "$worker_root/child-pid")
-          kill "$child_pid" 2>/dev/null || true
-        fi
-        kill "$pid" 2>/dev/null || true
-      else
-        refresh_worker_status "$worker_id"
+      if [ "$ps_all" != "1" ] && ! worker_is_active_status "$status"; then
+        continue
       fi
-
       if [ "$first" = "1" ]; then
         first=0
       else
         printf ',\n'
       fi
-      cat "$worker_root/metadata.json"
+      worker_summary_json
     done
     printf '\n]\n'
     return 0
   fi
 
-  [ -n "$worker_id" ] || usage
+  printf '%-22s %-14s %-10s %-10s %-6s\n' "WORKER ID" "KIND" "BACKEND" "STATUS" "EXIT"
+  for candidate_root in "$state_dir"/workers/*; do
+    [ -d "$candidate_root" ] || continue
+    worker_id=$(basename "$candidate_root")
+    refresh_worker_status "$worker_id"
+    load_worker "$worker_id"
+    if [ "$ps_all" != "1" ] && ! worker_is_active_status "$status"; then
+      continue
+    fi
+    emit_ps_row "$worker_id"
+  done
+}
+
+inspect_worker() {
+  [ "$#" -eq 1 ] || usage
+  refresh_worker_status "$1"
+  cat "$(worker_root_for_id "$1")/metadata.json"
+}
+
+logs_worker() {
+  logs_stdout=1
+  logs_follow=0
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --stdout)
+        logs_stdout=1
+        shift
+        ;;
+      --stderr)
+        logs_stdout=0
+        shift
+        ;;
+      -f|--follow)
+        logs_follow=1
+        shift
+        ;;
+      -*)
+        usage
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+  [ "$#" -eq 1 ] || usage
+  load_worker "$1"
+
+  if [ "$logs_follow" = "1" ]; then
+    if [ "$logs_stdout" = "1" ]; then
+      exec tail -n +1 -f "$stdout_path"
+    fi
+    exec tail -n +1 -f "$stderr_path"
+  fi
+
+  if [ "$logs_stdout" = "1" ]; then
+    cat "$stdout_path"
+  else
+    cat "$stderr_path"
+  fi
+}
+
+stop_one_worker() {
+  worker_id=$1
+  refresh_worker_status "$worker_id"
   load_worker "$worker_id"
 
   stop_requested=1
@@ -557,34 +635,292 @@ stop_worker() {
       child_pid=$(cat "$worker_root/child-pid")
       kill "$child_pid" 2>/dev/null || true
     fi
-    kill "$pid"
+    kill "$pid" 2>/dev/null || true
   else
     refresh_worker_status "$worker_id"
   fi
+}
 
-  cat "$worker_root/metadata.json"
+emit_json_array_from_worker_ids() {
+  first=1
+  printf '[\n'
+  for worker_id in "$@"; do
+    if [ "$first" = "1" ]; then
+      first=0
+    else
+      printf ',\n'
+    fi
+    cat "$(worker_root_for_id "$worker_id")/metadata.json"
+  done
+  printf '\n]\n'
+}
+
+stop_worker() {
+  stop_all=0
+  stop_json=0
+  stop_ids=()
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --all)
+        stop_all=1
+        shift
+        ;;
+      --json)
+        stop_json=1
+        shift
+        ;;
+      -*)
+        usage
+        ;;
+      *)
+        validate_token "$1" "worker id"
+        stop_ids+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  if [ "$stop_all" = "1" ] && [ "${#stop_ids[@]}" -gt 0 ]; then
+    usage
+  fi
+  if [ "$stop_all" != "1" ] && [ "${#stop_ids[@]}" -eq 0 ]; then
+    usage
+  fi
+
+  if [ "$stop_all" = "1" ]; then
+    stop_ids=()
+    for candidate_root in "$state_dir"/workers/*; do
+      [ -d "$candidate_root" ] || continue
+      worker_id=$(basename "$candidate_root")
+      refresh_worker_status "$worker_id"
+      load_worker "$worker_id"
+      if worker_is_active_status "$status"; then
+        stop_ids+=("$worker_id")
+      fi
+    done
+  fi
+
+  [ "${#stop_ids[@]}" -gt 0 ] || {
+    if [ "$stop_json" = "1" ]; then
+      printf '%s\n' '[]'
+    fi
+    return 0
+  }
+
+  for worker_id in "${stop_ids[@]}"; do
+    stop_one_worker "$worker_id"
+  done
+
+  if [ "$stop_json" = "1" ]; then
+    if [ "${#stop_ids[@]}" -eq 1 ] && [ "$stop_all" != "1" ]; then
+      cat "$(worker_root_for_id "${stop_ids[0]}")/metadata.json"
+    else
+      emit_json_array_from_worker_ids "${stop_ids[@]}"
+    fi
+  else
+    for worker_id in "${stop_ids[@]}"; do
+      printf '%s\n' "$worker_id"
+    done
+  fi
+}
+
+wait_until_worker_stops() {
+  target_worker_id=$1
+  for _ in $(seq 1 300); do
+    refresh_worker_status "$target_worker_id"
+    load_worker "$target_worker_id"
+    if ! worker_is_active_status "$status"; then
+      return 0
+    fi
+    sleep 0.1
+  done
+  return 1
+}
+
+remove_one_worker() {
+  target_worker_id=$1
+  remove_force=$2
+
+  refresh_worker_status "$target_worker_id"
+  load_worker "$target_worker_id"
+
+  if worker_is_active_status "$status"; then
+    if [ "$remove_force" != "1" ]; then
+      echo "worker is still running: $target_worker_id" >&2
+      exit 1
+    fi
+    stop_one_worker "$target_worker_id"
+    if ! wait_until_worker_stops "$target_worker_id"; then
+      echo "timed out waiting for worker to stop before removal: $target_worker_id" >&2
+      exit 1
+    fi
+    load_worker "$target_worker_id"
+  fi
+
+  removed_metadata=$(cat "$worker_root/metadata.json")
+  rm -rf "$worker_root"
+  printf '%s\n' "$removed_metadata"
+}
+
+rm_worker() {
+  rm_all=0
+  rm_force=0
+  rm_json=0
+  rm_ids=()
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --all)
+        rm_all=1
+        shift
+        ;;
+      --force)
+        rm_force=1
+        shift
+        ;;
+      --json)
+        rm_json=1
+        shift
+        ;;
+      -*)
+        usage
+        ;;
+      *)
+        validate_token "$1" "worker id"
+        rm_ids+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  if [ "$rm_all" = "1" ] && [ "${#rm_ids[@]}" -gt 0 ]; then
+    usage
+  fi
+  if [ "$rm_all" != "1" ] && [ "${#rm_ids[@]}" -eq 0 ]; then
+    usage
+  fi
+
+  if [ "$rm_all" = "1" ]; then
+    rm_ids=()
+    for candidate_root in "$state_dir"/workers/*; do
+      [ -d "$candidate_root" ] || continue
+      worker_id=$(basename "$candidate_root")
+      rm_ids+=("$worker_id")
+    done
+  fi
+
+  first=1
+  if [ "$rm_json" = "1" ] && ! { [ "$rm_all" != "1" ] && [ "${#rm_ids[@]}" -eq 1 ]; }; then
+    printf '[\n'
+  fi
+
+  for worker_id in "${rm_ids[@]}"; do
+    removed_metadata=$(remove_one_worker "$worker_id" "$rm_force")
+    if [ "$rm_json" = "1" ]; then
+      if [ "${#rm_ids[@]}" -eq 1 ] && [ "$rm_all" != "1" ]; then
+        printf '%s\n' "$removed_metadata"
+      else
+        if [ "$first" = "1" ]; then
+          first=0
+        else
+          printf ',\n'
+        fi
+        printf '%s' "$removed_metadata"
+      fi
+    else
+      printf '%s\n' "$worker_id"
+    fi
+  done
+
+  if [ "$rm_json" = "1" ] && ! { [ "$rm_all" != "1" ] && [ "${#rm_ids[@]}" -eq 1 ]; }; then
+    printf '\n]\n'
+  fi
+}
+
+prune_workers() {
+  prune_force=0
+  prune_json=0
+  prune_ids=()
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --force)
+        prune_force=1
+        shift
+        ;;
+      --json)
+        prune_json=1
+        shift
+        ;;
+      *)
+        usage
+        ;;
+    esac
+  done
+
+  for candidate_root in "$state_dir"/workers/*; do
+    [ -d "$candidate_root" ] || continue
+    worker_id=$(basename "$candidate_root")
+    refresh_worker_status "$worker_id"
+    load_worker "$worker_id"
+    if worker_is_active_status "$status"; then
+      if [ "$prune_force" = "1" ]; then
+        prune_ids+=("$worker_id")
+      fi
+    else
+      prune_ids+=("$worker_id")
+    fi
+  done
+
+  if [ "${#prune_ids[@]}" -eq 0 ]; then
+    if [ "$prune_json" = "1" ]; then
+      printf '%s\n' '[]'
+    fi
+    return 0
+  fi
+
+  prune_args=()
+  if [ "$prune_force" = "1" ]; then
+    prune_args+=(--force)
+  fi
+  if [ "$prune_json" = "1" ]; then
+    prune_args+=(--json)
+  fi
+  rm_worker "${prune_args[@]}" "${prune_ids[@]}"
 }
 
 case "$command" in
-  spawn)
+  run)
     shift
     spawn_worker "$@"
     ;;
-  list)
+  ps)
     shift
-    [ "$#" -eq 0 ] || usage
-    list_workers
+    ps_workers "$@"
     ;;
-  show)
+  inspect)
     shift
-    show_worker "$@"
+    inspect_worker "$@"
+    ;;
+  logs)
+    shift
+    logs_worker "$@"
     ;;
   stop)
     shift
     stop_worker "$@"
     ;;
+  rm)
+    shift
+    rm_worker "$@"
+    ;;
+  prune)
+    shift
+    prune_workers "$@"
+    ;;
   ""|--help|-h|help)
-    usage
+    usage 0
     ;;
   *)
     echo "unknown firebreak worker subcommand: $command" >&2

@@ -14,29 +14,29 @@ set -eu
 
 FIREBREAK_BOOTSTRAP_WAIT_TIMEOUT_SECONDS=60 firebreak-bootstrap-wait
 
-spawn_output=$(firebreak worker spawn --kind codex --workspace "$PWD" -- --version)
-printf '__SPAWN__%s\n' "$spawn_output"
+run_output=$(firebreak worker run --kind codex --workspace "$PWD" --json -- --version)
+printf '__RUN__%s\n' "$run_output"
 
-worker_id=$(SPAWN_OUTPUT="$spawn_output" node -e 'process.stdout.write(JSON.parse(process.env.SPAWN_OUTPUT).worker_id)')
+worker_id=$(RUN_OUTPUT="$run_output" node -e 'process.stdout.write(JSON.parse(process.env.RUN_OUTPUT).worker_id)')
 printf '__WORKER_ID__%s\n' "$worker_id"
 
 for _ in $(seq 1 240); do
-  show_output=$(firebreak worker show --worker-id "$worker_id")
-  status=$(SHOW_OUTPUT="$show_output" node -e 'const data = JSON.parse(process.env.SHOW_OUTPUT); process.stdout.write(String(data.status ?? ""));')
+  inspect_output=$(firebreak worker inspect "$worker_id")
+  status=$(INSPECT_OUTPUT="$inspect_output" node -e 'const data = JSON.parse(process.env.INSPECT_OUTPUT); process.stdout.write(String(data.status ?? ""));')
   printf '__STATUS__%s\n' "$status"
 
   case "$status" in
     exited|stopped)
-      exit_code=$(SHOW_OUTPUT="$show_output" node -e 'const data = JSON.parse(process.env.SHOW_OUTPUT); process.stdout.write(String(data.exit_code ?? ""));')
+      exit_code=$(INSPECT_OUTPUT="$inspect_output" node -e 'const data = JSON.parse(process.env.INSPECT_OUTPUT); process.stdout.write(String(data.exit_code ?? ""));')
       if [ "$exit_code" != "0" ]; then
         echo "codex worker exited with non-zero code: $exit_code" >&2
         exit 1
       fi
 
-      list_output=$(firebreak worker list)
-      printf '__LIST__%s\n' "$list_output"
+      list_output=$(firebreak worker ps -a)
+      printf '__PS__%s\n' "$list_output"
       if ! printf '%s\n' "$list_output" | grep -F -q "$worker_id"; then
-        echo "worker list did not include the spawned codex worker" >&2
+        echo "worker ps did not include the spawned codex worker" >&2
         exit 1
       fi
 
@@ -75,4 +75,4 @@ if ! printf '%s\n' "$output" | grep -F -q '__WORKER_OK__'; then
   exit 1
 fi
 
-printf '%s\n' "Agent Orchestrator worker spawn smoke test passed"
+printf '%s\n' "Agent Orchestrator worker run smoke test passed"

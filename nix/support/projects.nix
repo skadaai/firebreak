@@ -15,25 +15,25 @@
       fi
 
       workspace=$PWD
-      spawn_output=$(firebreak worker spawn --kind ${lib.escapeShellArg kind} --workspace "$workspace" -- "$@")
-      printf '%s\n' "$spawn_output"
+      run_output=$(firebreak worker run --kind ${lib.escapeShellArg kind} --workspace "$workspace" --json -- "$@")
+      printf '%s\n' "$run_output"
 
-      worker_id=$(SPAWN_OUTPUT="$spawn_output" node -e 'process.stdout.write(JSON.parse(process.env.SPAWN_OUTPUT).worker_id)')
+      worker_id=$(RUN_OUTPUT="$run_output" node -e 'process.stdout.write(JSON.parse(process.env.RUN_OUTPUT).worker_id)')
       if [ -z "$worker_id" ]; then
-        echo "failed to extract Firebreak worker id from spawn output" >&2
+        echo "failed to extract Firebreak worker id from run output" >&2
         exit 1
       fi
 
       cleanup() {
-        firebreak worker stop --worker-id "$worker_id" >/dev/null 2>&1 || true
+        firebreak worker stop "$worker_id" >/dev/null 2>&1 || true
       }
 
       trap cleanup INT TERM
 
       last_status=""
       for _ in $(seq 1 3600); do
-        show_output=$(firebreak worker show --worker-id "$worker_id")
-        status=$(SHOW_OUTPUT="$show_output" node -e 'const data = JSON.parse(process.env.SHOW_OUTPUT); process.stdout.write(String(data.status ?? ""));')
+        inspect_output=$(firebreak worker inspect "$worker_id")
+        status=$(INSPECT_OUTPUT="$inspect_output" node -e 'const data = JSON.parse(process.env.INSPECT_OUTPUT); process.stdout.write(String(data.status ?? ""));')
 
         if [ "$status" != "$last_status" ]; then
           printf '%s\n' "firebreak worker $worker_id status: $status"
@@ -42,7 +42,7 @@
 
         case "$status" in
           exited|stopped)
-            exit_code=$(SHOW_OUTPUT="$show_output" node -e 'const data = JSON.parse(process.env.SHOW_OUTPUT); const value = data.exit_code; process.stdout.write(value === null || value === undefined ? "" : String(value));')
+            exit_code=$(INSPECT_OUTPUT="$inspect_output" node -e 'const data = JSON.parse(process.env.INSPECT_OUTPUT); const value = data.exit_code; process.stdout.write(value === null || value === undefined ? "" : String(value));')
             exit "''${exit_code:-0}"
             ;;
         esac

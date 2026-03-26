@@ -212,6 +212,21 @@ if ! printf '%s\n' "$rm_output" | grep -F -q "$process_worker_id"; then
   exit 1
 fi
 
+force_rm_worker_id=$(
+  FIREBREAK_WORKER_STATE_DIR="$state_dir" \
+    @AGENT_BIN@ run --backend process --kind smoke-force-rm --workspace "$workspace_dir" -- sh -c 'sleep 30'
+)
+
+force_rm_output=$(
+  FIREBREAK_WORKER_STATE_DIR="$state_dir" \
+    @AGENT_BIN@ rm --force "$force_rm_worker_id"
+)
+if ! printf '%s\n' "$force_rm_output" | grep -F -q "$force_rm_worker_id"; then
+  printf '%s\n' "$force_rm_output" >&2
+  echo "worker smoke did not force-remove a running worker" >&2
+  exit 1
+fi
+
 prune_target_id=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
     @AGENT_BIN@ run --backend process --kind smoke-prune --workspace "$workspace_dir" -- sh -c 'printf prune-ok'

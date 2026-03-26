@@ -52,6 +52,23 @@ worker_root_for_id() {
   printf '%s\n' "$state_dir/workers/$1"
 }
 
+process_is_alive() {
+  target_pid=$1
+
+  if ! kill -0 "$target_pid" 2>/dev/null; then
+    return 1
+  fi
+
+  if [ -r "/proc/$target_pid/stat" ]; then
+    process_state=$(awk '{print $3}' "/proc/$target_pid/stat" 2>/dev/null || true)
+    if [ "$process_state" = "Z" ]; then
+      return 1
+    fi
+  fi
+
+  return 0
+}
+
 worker_is_active_status() {
   case "$1" in
     active|running|stopping)
@@ -203,7 +220,7 @@ refresh_worker_status() {
     return 0
   fi
 
-  if kill -0 "$pid" 2>/dev/null; then
+  if process_is_alive "$pid"; then
     if [ "$stop_requested" = "1" ] && [ "$status" != "stopping" ]; then
       status="stopping"
       write_metadata
@@ -657,7 +674,7 @@ stop_one_worker() {
   load_worker "$worker_id"
 
   stop_requested=1
-  if kill -0 "$pid" 2>/dev/null; then
+  if process_is_alive "$pid"; then
     status="stopping"
     write_metadata
     if [ -f "$worker_root/child-pid" ]; then
@@ -668,6 +685,22 @@ stop_one_worker() {
   else
     refresh_worker_status "$worker_id"
   fi
+}
+
+force_kill_worker() {
+  target_worker_id=$1
+  refresh_worker_status "$target_worker_id"
+  load_worker "$target_worker_id"
+
+  stop_requested=1
+  status="stopping"
+  write_metadata
+
+  if [ -f "$worker_root/child-pid" ]; then
+    child_pid=$(cat "$worker_root/child-pid")
+    kill -KILL "$child_pid" 2>/dev/null || true
+  fi
+  kill -KILL "$pid" 2>/dev/null || true
 }
 
 emit_json_array_from_worker_ids() {
@@ -781,8 +814,11 @@ remove_one_worker() {
     fi
     stop_one_worker "$target_worker_id"
     if ! wait_until_worker_stops "$target_worker_id"; then
-      echo "timed out waiting for worker to stop before removal: $target_worker_id" >&2
-      exit 1
+      force_kill_worker "$target_worker_id"
+      if ! wait_until_worker_stops "$target_worker_id"; then
+        echo "timed out waiting for worker to stop before removal: $target_worker_id" >&2
+        exit 1
+      fi
     fi
     load_worker "$target_worker_id"
   fi

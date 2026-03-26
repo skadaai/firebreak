@@ -128,13 +128,13 @@ PY
 
   trap cleanup_attach EXIT INT TERM
 
+  mv "$request_tmp_path" "$request_dir/request.json"
+
   cat <"$stdout_fifo" &
   stdout_forward_pid=$!
 
   cat >"$stdin_fifo" &
   stdin_forward_pid=$!
-
-  mv "$request_tmp_path" "$request_dir/request.json"
 
   for _ in $(seq 1 36000); do
     if [ -f "$request_dir/response.exit-code" ]; then

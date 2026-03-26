@@ -78,6 +78,15 @@ if [ "$stop_status" != "stopping" ] && [ "$stop_status" != "stopped" ]; then
   exit 1
 fi
 
+attach_output=$(firebreak worker run --kind bridge-firebreak --workspace "$PWD" --attach -- --version)
+printf '__BRIDGE_ATTACH__%s\n' "$attach_output"
+
+if ! printf '%s\n' "$attach_output" | grep -F -q 'codex-cli'; then
+  printf '%s\n' "$attach_output" >&2
+  echo "guest bridge smoke did not expose attached firebreak worker output" >&2
+  exit 1
+fi
+
 limited_spawn_output=$(firebreak worker run --kind bridge-limited --workspace "$PWD" --json)
 limited_worker_id=$(LIMITED_RUN_OUTPUT="$limited_spawn_output" python3 - <<'PY'
 import json

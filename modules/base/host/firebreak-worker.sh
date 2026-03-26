@@ -592,6 +592,26 @@ emit_ps_row() {
   printf '%-22s %-14s %-10s %-10s %-6s\n' "$worker_id" "$kind" "$backend" "$status" "$exit_value"
 }
 
+print_ps_table() {
+  json_input=$1
+  JSON_INPUT=$json_input python3 - <<'PY'
+import json
+import os
+
+items = json.loads(os.environ["JSON_INPUT"])
+print(f"{'WORKER ID':<22} {'KIND':<14} {'BACKEND':<10} {'STATUS':<10} {'EXIT':<6}")
+for item in items:
+    exit_code = item.get("exit_code")
+    print(
+        f"{item.get('worker_id', ''):<22} "
+        f"{item.get('kind', ''):<14} "
+        f"{item.get('backend', ''):<10} "
+        f"{item.get('status', ''):<10} "
+        f"{('-' if exit_code is None else exit_code)!s:<6}"
+    )
+PY
+}
+
 ps_workers() {
   ps_all=0
   ps_json=0

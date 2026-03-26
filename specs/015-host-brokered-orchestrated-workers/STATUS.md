@@ -1,13 +1,13 @@
 ---
-status: in_progress
-last_updated: 2026-03-25
+status: completed
+last_updated: 2026-03-26
 ---
 
 # 015 Status
 
 ## Current phase
 
-Initial implementation in progress.
+Implemented and validated for the first external orchestrator recipe.
 
 ## What has landed
 
@@ -31,9 +31,9 @@ Initial implementation in progress.
 
 ## What remains open
 
- - fully passing end-to-end validation for real worker creation from the first external orchestrator recipe
- - richer lifecycle behavior such as worker reuse, log streaming, and cleanup policy
- - focused runtime validation for declared `firebreak` worker kinds through the guest-visible orchestrator path
+- richer lifecycle behavior such as worker reuse, log filtering, and cleanup policy refinements
+- possible transport hardening beyond the first file-share bridge, such as a mounted Unix-socket protocol
+- broader recipe adoption and validation beyond the first external orchestrator recipe
 
 ## Current sources of truth
 
@@ -50,3 +50,4 @@ Initial implementation in progress.
 - 2026-03-25: Added generic packaged-node-cli support for declarative extra bin scripts and a reusable worker-proxy helper so external recipes can route selected CLI names through `firebreak worker` without adding orchestrator-specific code to Firebreak's shared layers.
 - 2026-03-25: Added a generic packaged-node bootstrap-readiness helper, bounded per-kind concurrency via `max_instances`, and a recipe-owned validation path for the first external orchestrator recipe.
 - 2026-03-26: Reworked the public worker CLI around `run`, `ps`, `inspect`, `logs`, `stop`, `rm`, and `prune`, made default listing concise, and added worker cleanup semantics.
+- 2026-03-26: Confirmed the first external orchestrator recipe manually in a real runtime: guest-visible worker execution, host-owned worker state, concise listing, cleanup, and bounded concurrency all behaved as specified.

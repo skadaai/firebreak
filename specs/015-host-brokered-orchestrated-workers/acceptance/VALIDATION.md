@@ -4,6 +4,21 @@ This guide defines the validation steps required to move spec 015 out of its ini
 
 Markdown is the right format here because the validation contract needs to stay human-readable, reviewable in Git, and easy to update as the implementation slices evolve.
 
+## Recorded Outcome
+
+The initial validation bar for spec 015 was satisfied on 2026-03-26.
+
+Evidence used for that phase change:
+
+- the fast automated checks in this repository passed for the host broker and the public CLI route
+- the external recipe exports were validated through `flake show`
+- the remaining runtime-critical behavior was confirmed manually inside the first external orchestrator VM:
+  - `firebreak-bootstrap-wait` was available
+  - `ao` and the `codex` worker-proxy wrapper were available
+  - `firebreak worker run`, `ps`, `inspect`, `stop`, and `rm` behaved correctly
+  - host-owned worker state and logs were present on the host
+  - the fifth concurrent `codex` run was rejected at the configured `max_instances` limit
+
 ## Automated Tests
 
 Run these from the repository root.
@@ -188,3 +203,5 @@ Spec 015 is ready to move beyond `Initial implementation in progress` when:
 1. every automated step above exits successfully in a real runtime environment
 2. the manual checks confirm host-owned runtime behavior and understandable operator-facing semantics
 3. the status file can truthfully say the first external orchestrator recipe is implemented and validated
+
+That exit criterion is now met.

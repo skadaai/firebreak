@@ -1,6 +1,6 @@
 ---
-status: in_progress
-last_updated: 2026-03-25
+status: completed
+last_updated: 2026-03-26
 ---
 
 # 015 Plan
@@ -35,7 +35,7 @@ last_updated: 2026-03-25
 
 ## Current status
 
-In progress. The host-broker slice, the first guest-side bridge slice, the first worker-kind declaration slice, the first bounded-concurrency slice, and the first external-recipe wrapper-installation slice have landed. Packaged node-cli recipes now also have a guest-visible bootstrap-readiness helper. Guest-local `process` worker semantics now route through guest-owned worker state, while `firebreak` workers still route through the host broker. A recipe-owned smoke path for real worker creation now exists for the first external orchestrator recipe, but it is not yet validated cleanly in this environment.
+Implemented and validated for the first external orchestrator recipe. The host-broker slice, the guest-side bridge slice, worker-kind declarations, bounded concurrency, packaged node-cli bootstrap readiness, the worker-proxy helper, and the first recipe-owned worker lifecycle validation path have all landed and now have both automated and manual runtime evidence.
 
 ## Open questions
 

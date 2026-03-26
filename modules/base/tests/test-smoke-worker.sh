@@ -219,6 +219,12 @@ if ! printf '%s\n' "$debug_output" | grep -F -q "\"worker_id\": \"$firebreak_wor
   exit 1
 fi
 
+if ! printf '%s\n' "$debug_output" | grep -F -q '"last_trace_event": "command-exit:0"'; then
+  printf '%s\n' "$debug_output" >&2
+  echo "worker smoke debug did not include the last trace event" >&2
+  exit 1
+fi
+
 debug_text_output=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
     @AGENT_BIN@ debug
@@ -233,6 +239,12 @@ fi
 if ! printf '%s\n' "$debug_text_output" | grep -F -q "$firebreak_worker_id"; then
   printf '%s\n' "$debug_text_output" >&2
   echo "worker smoke debug text output did not include the firebreak worker" >&2
+  exit 1
+fi
+
+if ! printf '%s\n' "$debug_text_output" | grep -F -q 'last_trace_event:'; then
+  printf '%s\n' "$debug_text_output" >&2
+  echo "worker smoke debug text output did not include worker detail diagnostics" >&2
   exit 1
 fi
 

@@ -73,4 +73,15 @@ if ! printf '%s\n' "$inspect_output" | grep -F -q '"trace_path": '; then
   exit 1
 fi
 
+debug_output=$(
+  FIREBREAK_WORKER_STATE_DIR="$state_dir" \
+    @AGENT_BIN@ debug --json
+)
+
+if ! printf '%s\n' "$debug_output" | grep -F -q '"last_trace_event": "command-exit:0"'; then
+  printf '%s\n' "$debug_output" >&2
+  echo "attached firebreak worker smoke expected the last trace event in debug output" >&2
+  exit 1
+fi
+
 printf '%s\n' "Firebreak attached firebreak worker smoke test passed"

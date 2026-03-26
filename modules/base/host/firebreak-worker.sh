@@ -1056,16 +1056,87 @@ debug_read_workers_json() {
 import json
 import os
 from pathlib import Path
+from typing import Optional
 
 workers_dir = Path(os.environ["FIREBREAK_WORKERS_DIR"])
 items = []
+
+
+def read_text(path: Path) -> Optional[str]:
+    if not path.is_file():
+        return None
+    return path.read_text(encoding="utf-8").strip()
+
+
+def file_size(path_str: Optional[str]) -> Optional[int]:
+    if not path_str:
+        return None
+    path = Path(path_str)
+    if not path.exists():
+        return None
+    try:
+        return path.stat().st_size
+    except OSError:
+        return None
+
+
+def tail_text(path: Path, line_count: int = 20) -> Optional[str]:
+    if not path.is_file():
+        return None
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    if not lines:
+        return None
+    return "\n".join(lines[-line_count:])
+
+
+def last_trace_event(trace_tail: Optional[str]) -> Optional[str]:
+    if not trace_tail:
+        return None
+    last_line = trace_tail.splitlines()[-1].strip()
+    if not last_line:
+        return None
+    parts = last_line.split(" ", 1)
+    if len(parts) != 2:
+        return last_line
+    return parts[1]
+
+
+def pid_alive(pid: Optional[int]) -> Optional[bool]:
+    if pid is None:
+        return None
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    stat_path = Path("/proc") / str(pid) / "stat"
+    if stat_path.is_file():
+        try:
+            process_state = stat_path.read_text(encoding="utf-8").split()[2]
+        except Exception:
+            return True
+        return process_state != "Z"
+    return True
 
 if workers_dir.is_dir():
     for worker_dir in sorted(workers_dir.iterdir()):
         metadata_path = worker_dir / "metadata.json"
         if metadata_path.is_file():
             try:
-                items.append(json.loads(metadata_path.read_text(encoding="utf-8")))
+                item = json.loads(metadata_path.read_text(encoding="utf-8"))
+                trace_path = Path(item.get("trace_path") or worker_dir / "trace.log")
+                trace_tail = tail_text(trace_path)
+                child_pid_raw = read_text(worker_dir / "child-pid")
+                child_pid = int(child_pid_raw) if child_pid_raw and child_pid_raw.isdigit() else None
+                item["stdout_size"] = file_size(item.get("stdout_path"))
+                item["stderr_size"] = file_size(item.get("stderr_path"))
+                item["trace_size"] = file_size(str(trace_path))
+                item["trace_tail"] = trace_tail
+                item["last_trace_event"] = last_trace_event(trace_tail)
+                item["pid_alive"] = pid_alive(item.get("pid"))
+                item["child_pid"] = child_pid
+                item["child_pid_alive"] = pid_alive(child_pid)
+                item["instance_dir"] = str(worker_dir / "instance") if (worker_dir / "instance").is_dir() else None
+                items.append(item)
                 continue
             except Exception:
                 pass
@@ -1083,11 +1154,21 @@ if workers_dir.is_dir():
                 "pid": None,
                 "stdout_path": None,
                 "stderr_path": None,
+                "trace_path": str(worker_dir / "trace.log"),
                 "worker_root": str(worker_dir),
                 "created_at": None,
                 "finished_at": None,
                 "exit_code": None,
                 "stop_requested": False,
+                "stdout_size": None,
+                "stderr_size": None,
+                "trace_size": None,
+                "trace_tail": tail_text(worker_dir / "trace.log"),
+                "last_trace_event": last_trace_event(tail_text(worker_dir / "trace.log")),
+                "pid_alive": None,
+                "child_pid": None,
+                "child_pid_alive": None,
+                "instance_dir": str(worker_dir / "instance") if (worker_dir / "instance").is_dir() else None,
             }
         )
 
@@ -1173,6 +1254,34 @@ EOF
   if [ "$worker_count" -gt 0 ]; then
     printf '\n%s\n' 'Workers'
     print_ps_table "$workers_json"
+    printf '\n%s\n' 'Worker details'
+    WORKERS_JSON=$workers_json python3 - <<'PY'
+import json
+import os
+
+for item in json.loads(os.environ["WORKERS_JSON"]):
+    print(f"- {item.get('worker_id')}")
+    print(f"  status: {item.get('status')}")
+    print(f"  backend: {item.get('backend')}")
+    print(f"  pid: {item.get('pid')} alive={item.get('pid_alive')}")
+    child_pid = item.get("child_pid")
+    if child_pid is not None:
+        print(f"  child_pid: {child_pid} alive={item.get('child_pid_alive')}")
+    print(f"  stdout_size: {item.get('stdout_size')}")
+    print(f"  stderr_size: {item.get('stderr_size')}")
+    print(f"  trace_size: {item.get('trace_size')}")
+    last_trace_event = item.get("last_trace_event")
+    if last_trace_event:
+        print(f"  last_trace_event: {last_trace_event}")
+    instance_dir = item.get("instance_dir")
+    if instance_dir:
+        print(f"  instance_dir: {instance_dir}")
+    trace_tail = item.get("trace_tail")
+    if trace_tail:
+        print("  trace_tail:")
+        for line in trace_tail.splitlines():
+            print(f"    {line}")
+PY
   fi
   if [ "$request_count" -gt 0 ]; then
     printf '\n%s\n' 'Requests'

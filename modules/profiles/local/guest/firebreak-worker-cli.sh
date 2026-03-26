@@ -13,6 +13,7 @@ usage:
   firebreak worker list
   firebreak worker show --worker-id ID
   firebreak worker stop --worker-id ID
+  firebreak worker stop --all
 EOF
   exit "${1:-1}"
 }
@@ -350,14 +351,26 @@ PY
     ;;
   stop)
     shift
-    [ "$#" -eq 2 ] || usage
-    [ "$1" = "--worker-id" ] || usage
-    worker_id=$2
-    if local_worker_exists "$worker_id"; then
-      exec "$local_helper" stop --worker-id "$worker_id"
-    fi
-    bridge_request stop --worker-id "$worker_id"
-    exit $?
+    case "${1:-}" in
+      --all)
+        [ "$#" -eq 1 ] || usage
+        local_json=$("$local_helper" stop --all)
+        bridge_json=$(bridge_request stop --all)
+        merge_lists "$local_json" "$bridge_json"
+        ;;
+      --worker-id)
+        [ "$#" -eq 2 ] || usage
+        worker_id=$2
+        if local_worker_exists "$worker_id"; then
+          exec "$local_helper" stop --worker-id "$worker_id"
+        fi
+        bridge_request stop --worker-id "$worker_id"
+        exit $?
+        ;;
+      *)
+        usage
+        ;;
+    esac
     ;;
   ""|help|-h|--help)
     usage 0

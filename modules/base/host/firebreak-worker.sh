@@ -12,6 +12,7 @@ usage:
   firebreak worker list
   firebreak worker show --worker-id ID
   firebreak worker stop --worker-id ID
+  firebreak worker stop --all
 EOF
   exit 1
 }
@@ -490,6 +491,7 @@ show_worker() {
 
 stop_worker() {
   worker_id=""
+  stop_all=0
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -497,11 +499,52 @@ stop_worker() {
         worker_id=$2
         shift 2
         ;;
+      --all)
+        stop_all=1
+        shift
+        ;;
       *)
         usage
         ;;
     esac
   done
+
+  if [ "$stop_all" = "1" ] && [ -n "$worker_id" ]; then
+    usage
+  fi
+
+  if [ "$stop_all" = "1" ]; then
+    mkdir -p "$state_dir/workers"
+    first=1
+    printf '[\n'
+    for candidate_root in "$state_dir"/workers/*; do
+      [ -d "$candidate_root" ] || continue
+      worker_id=$(basename "$candidate_root")
+      load_worker "$worker_id"
+
+      stop_requested=1
+      if kill -0 "$pid" 2>/dev/null; then
+        status="stopping"
+        write_metadata
+        if [ -f "$worker_root/child-pid" ]; then
+          child_pid=$(cat "$worker_root/child-pid")
+          kill "$child_pid" 2>/dev/null || true
+        fi
+        kill "$pid" 2>/dev/null || true
+      else
+        refresh_worker_status "$worker_id"
+      fi
+
+      if [ "$first" = "1" ]; then
+        first=0
+      else
+        printf ',\n'
+      fi
+      cat "$worker_root/metadata.json"
+    done
+    printf '\n]\n'
+    return 0
+  fi
 
   [ -n "$worker_id" ] || usage
   load_worker "$worker_id"

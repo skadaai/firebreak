@@ -108,6 +108,37 @@ if ! printf '%s\n' "$list_output" | grep -F -q "$worker_id"; then
   exit 1
 fi
 
+stop_all_spawn_one=$(firebreak worker spawn --kind bridge-stop --workspace "$PWD")
+stop_all_one_id=$(STOP_ALL_SPAWN_ONE="$stop_all_spawn_one" python3 - <<'PY'
+import json
+import os
+
+print(json.loads(os.environ["STOP_ALL_SPAWN_ONE"])["worker_id"])
+PY
+)
+
+stop_all_spawn_two=$(firebreak worker spawn --kind bridge-stop --workspace "$PWD")
+stop_all_two_id=$(STOP_ALL_SPAWN_TWO="$stop_all_spawn_two" python3 - <<'PY'
+import json
+import os
+
+print(json.loads(os.environ["STOP_ALL_SPAWN_TWO"])["worker_id"])
+PY
+)
+
+stop_all_output=$(firebreak worker stop --all)
+printf '__BRIDGE_STOP_ALL__%s\n' "$stop_all_output"
+
+if ! printf '%s\n' "$stop_all_output" | grep -F -q "$stop_all_one_id"; then
+  echo "guest bridge smoke stop --all did not include the first running worker" >&2
+  exit 1
+fi
+
+if ! printf '%s\n' "$stop_all_output" | grep -F -q "$stop_all_two_id"; then
+  echo "guest bridge smoke stop --all did not include the second running worker" >&2
+  exit 1
+fi
+
 printf '%s\n' '__BRIDGE_OK__'
 EOF
 

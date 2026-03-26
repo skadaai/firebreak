@@ -164,6 +164,45 @@ if ! printf '%s\n' "$stop_show_output" | grep -F -q '"status": "stopped"'; then
   exit 1
 fi
 
+spawn_stop_all_one=$(
+  FIREBREAK_WORKER_STATE_DIR="$state_dir" \
+    @AGENT_BIN@ spawn --backend process --kind smoke-stop-all-one --workspace "$workspace_dir" -- sh -c 'sleep 30'
+)
+stop_all_one_worker_id=$(printf '%s\n' "$spawn_stop_all_one" | sed -n 's/.*"worker_id": "\([^"]*\)".*/\1/p' | head -n 1)
+if [ -z "$stop_all_one_worker_id" ]; then
+  printf '%s\n' "$spawn_stop_all_one" >&2
+  echo "worker smoke did not return the first stop --all worker id" >&2
+  exit 1
+fi
+
+spawn_stop_all_two=$(
+  FIREBREAK_WORKER_STATE_DIR="$state_dir" \
+    @AGENT_BIN@ spawn --backend process --kind smoke-stop-all-two --workspace "$workspace_dir" -- sh -c 'sleep 30'
+)
+stop_all_two_worker_id=$(printf '%s\n' "$spawn_stop_all_two" | sed -n 's/.*"worker_id": "\([^"]*\)".*/\1/p' | head -n 1)
+if [ -z "$stop_all_two_worker_id" ]; then
+  printf '%s\n' "$spawn_stop_all_two" >&2
+  echo "worker smoke did not return the second stop --all worker id" >&2
+  exit 1
+fi
+
+stop_all_output=$(
+  FIREBREAK_WORKER_STATE_DIR="$state_dir" \
+    @AGENT_BIN@ stop --all
+)
+
+if ! printf '%s\n' "$stop_all_output" | grep -F -q "$stop_all_one_worker_id"; then
+  printf '%s\n' "$stop_all_output" >&2
+  echo "worker smoke stop --all did not include the first running worker" >&2
+  exit 1
+fi
+
+if ! printf '%s\n' "$stop_all_output" | grep -F -q "$stop_all_two_worker_id"; then
+  printf '%s\n' "$stop_all_output" >&2
+  echo "worker smoke stop --all did not include the second running worker" >&2
+  exit 1
+fi
+
 list_output=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
     @AGENT_BIN@ list

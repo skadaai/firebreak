@@ -51,6 +51,26 @@ case "$session_mode" in
     fi
     exec @BASH@ -i
     ;;
+  agent-attach-exec)
+    mkdir -p @AGENT_EXEC_OUTPUT_MOUNT@
+    printf '%s\n' "dev-console-start" > @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
+    if [ -n "$agent_command" ]; then
+      exec env FIREBREAK_AGENT_COMMAND="$agent_command" @BASH@ -ic '
+        status=0
+        stage_path=@AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
+        exit_code_path=@AGENT_EXEC_OUTPUT_MOUNT@/exit_code
+        mkdir -p @AGENT_EXEC_OUTPUT_MOUNT@
+        printf "%s\n" "command-start" >"$stage_path"
+        eval "$FIREBREAK_AGENT_COMMAND" || status=$?
+        printf "%s\n" "$status" >"$exit_code_path"
+        printf "%s\n" "command-exit:$status" >"$stage_path"
+        sudo poweroff >/dev/null 2>&1 || true
+        exit "$status"
+      '
+    fi
+    printf '%s\n' "interactive-shell-fallback" > @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
+    exec @BASH@ -i
+    ;;
   *)
     printf 'unknown agent session mode: %s\n' "$session_mode" >&2
     exec @BASH@ -i

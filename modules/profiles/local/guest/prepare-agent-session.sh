@@ -33,7 +33,7 @@ fi
 printf '%s\n' "$session_mode" > @AGENT_SESSION_MODE_FILE@
 chmod 0644 @AGENT_SESSION_MODE_FILE@
 
-if [ "$session_mode" = "agent-exec" ]; then
+if [ "$session_mode" = "agent-exec" ] || [ "$session_mode" = "agent-attach-exec" ]; then
   mkdir -p @AGENT_EXEC_OUTPUT_MOUNT@
   if ! mountpoint -q @AGENT_EXEC_OUTPUT_MOUNT@; then
     if ! mount -t virtiofs hostexecoutput @AGENT_EXEC_OUTPUT_MOUNT@; then
@@ -41,6 +41,7 @@ if [ "$session_mode" = "agent-exec" ]; then
       exit 1
     fi
   fi
+  printf '%s\n' "prepare-agent-session-mounted-exec-output" > @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
 fi
 
 if [ "$worker_bridge_enabled" = "1" ]; then
@@ -56,6 +57,9 @@ fi
 if [ -r "$session_command_file" ]; then
   cat "$session_command_file" > @AGENT_COMMAND_FILE@
   chmod 0644 @AGENT_COMMAND_FILE@
+  if [ "$session_mode" = "agent-attach-exec" ]; then
+    printf '%s\n' "prepare-agent-session-command-ready" > @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
+  fi
 fi
 
 if [ "$start_dir" != "@WORKSPACE_MOUNT@" ]; then

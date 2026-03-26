@@ -415,11 +415,18 @@ if [ "\$attach_mode" = "1" ]; then
   printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "attach-foreground-start" >>"\$trace_path"
   printf '%s\n' "$$" >"\$child_pid_path"
   printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "firebreak-command-start" >>"\$trace_path"
-  env FIREBREAK_INSTANCE_DIR="\$instance_dir" FIREBREAK_VM_MODE="\$vm_mode" $nix_command$quoted_args
+  env -u AGENT_CONFIG -u AGENT_CONFIG_HOST_PATH \
+    FIREBREAK_INSTANCE_DIR="\$instance_dir" \
+    FIREBREAK_VM_MODE="\$vm_mode" \
+    FIREBREAK_AGENT_SESSION_MODE_OVERRIDE="agent-attach-exec" \
+    $nix_command$quoted_args
   command_status=\$?
 else
   printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "detached-background-start" >>"\$trace_path"
-  env FIREBREAK_INSTANCE_DIR="\$instance_dir" FIREBREAK_VM_MODE="\$vm_mode" $nix_command$quoted_args &
+  env -u AGENT_CONFIG -u AGENT_CONFIG_HOST_PATH \
+    FIREBREAK_INSTANCE_DIR="\$instance_dir" \
+    FIREBREAK_VM_MODE="\$vm_mode" \
+    $nix_command$quoted_args &
   child_pid=\$!
   printf '%s\n' "\$child_pid" >"\$child_pid_path"
   wait "\$child_pid"
@@ -1101,6 +1108,62 @@ def last_trace_event(trace_tail: Optional[str]) -> Optional[str]:
     return parts[1]
 
 
+def maybe_load_json(path: Path):
+    if not path.is_file():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def nested_runtime_snapshot(worker_dir: Path):
+    instance_dir = worker_dir / "instance"
+    metadata = maybe_load_json(instance_dir / ".firebreak-runtime.json")
+    if not isinstance(metadata, dict):
+        return None
+
+    log_keys = [
+        "wrapper_trace_log",
+        "runner_stdout_log",
+        "runner_stderr_log",
+        "virtiofs_hostcwd_log",
+        "virtiofs_agent_config_log",
+        "virtiofs_agent_exec_log",
+        "virtiofs_worker_bridge_log",
+        "worker_bridge_server_log",
+    ]
+    log_tails = {}
+    log_sizes = {}
+    for key in log_keys:
+        path_value = metadata.get(key)
+        if not path_value:
+            continue
+        log_sizes[key] = file_size(path_value)
+        tail = tail_text(Path(path_value), line_count=20)
+        if tail:
+            log_tails[key] = tail
+
+    snapshot = dict(metadata)
+    snapshot["log_tails"] = log_tails
+    snapshot["log_sizes"] = log_sizes
+
+    agent_exec_output_dir = metadata.get("agent_exec_output_dir")
+    if agent_exec_output_dir:
+        agent_exec_dir = Path(agent_exec_output_dir)
+        agent_exec = {}
+        for name in ["attach_stage", "exit_code", "stdout", "stderr"]:
+            path = agent_exec_dir / name
+            if path.exists():
+                agent_exec[f"{name}_size"] = file_size(str(path))
+                text = tail_text(path, line_count=20)
+                if text:
+                    agent_exec[f"{name}_tail"] = text
+        if agent_exec:
+            snapshot["agent_exec_output"] = agent_exec
+    return snapshot
+
+
 def pid_alive(pid: Optional[int]) -> Optional[bool]:
     if pid is None:
         return None
@@ -1116,6 +1179,64 @@ def pid_alive(pid: Optional[int]) -> Optional[bool]:
             return True
         return process_state != "Z"
     return True
+
+
+def process_info(pid: int):
+    proc_dir = Path("/proc") / str(pid)
+    if not proc_dir.is_dir():
+        return None
+    cmdline = ""
+    cmdline_path = proc_dir / "cmdline"
+    if cmdline_path.is_file():
+        raw = cmdline_path.read_bytes().replace(b"\x00", b" ").strip()
+        cmdline = raw.decode("utf-8", errors="replace")
+    state = None
+    tty_nr = None
+    stat_path = proc_dir / "stat"
+    if stat_path.is_file():
+        try:
+            parts = stat_path.read_text(encoding="utf-8").split()
+            if len(parts) > 6:
+                state = parts[2]
+                tty_nr = parts[6]
+        except Exception:
+            pass
+    return {
+        "pid": pid,
+        "alive": pid_alive(pid),
+        "state": state,
+        "tty_nr": tty_nr,
+        "cmdline": cmdline,
+    }
+
+
+def process_children(pid: int):
+    children_path = Path("/proc") / str(pid) / "task" / str(pid) / "children"
+    if not children_path.is_file():
+        return []
+    try:
+        data = children_path.read_text(encoding="utf-8").strip()
+    except Exception:
+        return []
+    if not data:
+        return []
+    result = []
+    for token in data.split():
+        if token.isdigit():
+            result.append(int(token))
+    return result
+
+
+def process_tree(pid: Optional[int], depth: int = 0, max_depth: int = 3):
+    if pid is None or depth > max_depth:
+        return []
+    info = process_info(pid)
+    if info is None:
+        return []
+    rows = [dict(info, depth=depth)]
+    for child_pid in process_children(pid):
+        rows.extend(process_tree(child_pid, depth + 1, max_depth))
+    return rows
 
 if workers_dir.is_dir():
     for worker_dir in sorted(workers_dir.iterdir()):
@@ -1136,6 +1257,8 @@ if workers_dir.is_dir():
                 item["child_pid"] = child_pid
                 item["child_pid_alive"] = pid_alive(child_pid)
                 item["instance_dir"] = str(worker_dir / "instance") if (worker_dir / "instance").is_dir() else None
+                item["nested_runtime"] = nested_runtime_snapshot(worker_dir)
+                item["process_tree"] = process_tree(item.get("pid"))
                 items.append(item)
                 continue
             except Exception:
@@ -1169,6 +1292,8 @@ if workers_dir.is_dir():
                 "child_pid": None,
                 "child_pid_alive": None,
                 "instance_dir": str(worker_dir / "instance") if (worker_dir / "instance").is_dir() else None,
+                "nested_runtime": nested_runtime_snapshot(worker_dir),
+                "process_tree": [],
             }
         )
 
@@ -1276,11 +1401,43 @@ for item in json.loads(os.environ["WORKERS_JSON"]):
     instance_dir = item.get("instance_dir")
     if instance_dir:
         print(f"  instance_dir: {instance_dir}")
+    nested_runtime = item.get("nested_runtime")
+    if isinstance(nested_runtime, dict):
+        runtime_dir = nested_runtime.get("host_runtime_dir")
+        if runtime_dir:
+            print(f"  nested_runtime_dir: {runtime_dir}")
+        session_mode = nested_runtime.get("session_mode")
+        if session_mode:
+            print(f"  nested_session_mode: {session_mode}")
+        log_sizes = nested_runtime.get("log_sizes") or {}
+        for key, size in log_sizes.items():
+            print(f"  {key}_size: {size}")
+        log_tails = nested_runtime.get("log_tails") or {}
+        for key, tail in log_tails.items():
+            print(f"  {key}:")
+            for line in str(tail).splitlines():
+                print(f"    {line}")
+        agent_exec_output = nested_runtime.get("agent_exec_output") or {}
+        for key, value in agent_exec_output.items():
+            if key.endswith("_tail"):
+                print(f"  agent_exec_{key}:")
+                for line in str(value).splitlines():
+                    print(f"    {line}")
+            else:
+                print(f"  agent_exec_{key}: {value}")
     trace_tail = item.get("trace_tail")
     if trace_tail:
         print("  trace_tail:")
         for line in trace_tail.splitlines():
             print(f"    {line}")
+    process_tree = item.get("process_tree") or []
+    if process_tree:
+        print("  process_tree:")
+        for node in process_tree:
+            indent = "    " + "  " * int(node.get("depth") or 0)
+            state = node.get("state")
+            cmdline = node.get("cmdline") or ""
+            print(f"{indent}{node.get('pid')} state={state} alive={node.get('alive')} cmd={cmdline}")
 PY
   fi
   if [ "$request_count" -gt 0 ]; then

@@ -61,7 +61,7 @@ let
   }:
     pkgs.writeShellApplication {
       inherit name;
-      runtimeInputs = with pkgs; [ bash coreutils git gnused nix python3 virtiofsd ];
+      runtimeInputs = with pkgs; [ bash coreutils git gnused nix python3 util-linux virtiofsd ];
       text = renderTemplate {
         "@CONTROL_SOCKET@" = "${controlSocketName}.socket";
         "@DEFAULT_AGENT_COMMAND@" = defaultAgentCommand;

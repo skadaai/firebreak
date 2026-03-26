@@ -33,6 +33,7 @@ if [ "\${1:-}" = "--" ]; then
 fi
 
 printf '%s\n' "__INSTALLABLE__\$installable"
+printf '%s\n' "__SESSION_MODE__\${FIREBREAK_AGENT_SESSION_MODE_OVERRIDE:-}"
 for arg in "\$@"; do
   printf '%s\n' "__ARG__\$arg"
 done
@@ -83,6 +84,21 @@ attach_process_output=$(
 if ! printf '%s\n' "$attach_process_output" | grep -F -q 'attached-ok'; then
   printf '%s\n' "$attach_process_output" >&2
   echo "worker smoke did not expose attached process output" >&2
+  exit 1
+fi
+
+attach_firebreak_default_output=$(
+  PATH="$fake_bin_dir:$PATH" \
+    FIREBREAK_WORKER_STATE_DIR="$state_dir" \
+    FIREBREAK_FLAKE_REF='path:/firebreak-worker-smoke' \
+    FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG=1 \
+    FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
+    @AGENT_BIN@ run --attach --backend firebreak --kind smoke-firebreak-attach-default --workspace "$workspace_dir" --package firebreak-codex
+)
+
+if ! printf '%s\n' "$attach_firebreak_default_output" | grep -F -q '__SESSION_MODE__agent-attach-exec'; then
+  printf '%s\n' "$attach_firebreak_default_output" >&2
+  echo "worker smoke did not force attached firebreak workers into agent-attach-exec mode" >&2
   exit 1
 fi
 

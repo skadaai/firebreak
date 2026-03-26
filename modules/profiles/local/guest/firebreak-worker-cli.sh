@@ -168,34 +168,78 @@ PY
 
   cleanup_attach() {
     restore_tty
-    if [ -n "${stdin_forward_pid:-}" ]; then
-      kill "$stdin_forward_pid" 2>/dev/null || true
-    fi
-    if [ -n "${stdout_forward_pid:-}" ]; then
-      kill "$stdout_forward_pid" 2>/dev/null || true
-    fi
   }
 
   trap cleanup_attach EXIT INT TERM
 
   mv "$request_tmp_path" "$request_dir/request.json"
+  REQUEST_DIR=$request_dir STDIN_FIFO=$stdin_fifo STDOUT_FIFO=$stdout_fifo python3 - <<'PY'
+import os
+import select
+import sys
+import threading
 
-  cat <"$stdout_fifo" &
-  stdout_forward_pid=$!
+request_dir = os.environ["REQUEST_DIR"]
+stdin_fifo = os.environ["STDIN_FIFO"]
+stdout_fifo = os.environ["STDOUT_FIFO"]
+exit_code_path = os.path.join(request_dir, "response.exit-code")
+stdin_fd = sys.stdin.fileno()
+stdout_fd = sys.stdout.fileno()
 
-  if [ -t 0 ]; then
-    cat >"$stdin_fifo" &
-  else
-    : >"$stdin_fifo" &
-  fi
-  stdin_forward_pid=$!
+stdin_pipe_fd = os.open(stdin_fifo, os.O_WRONLY)
+stdout_pipe_fd = os.open(stdout_fifo, os.O_RDONLY | os.O_NONBLOCK)
 
-  for _ in $(seq 1 36000); do
-    if [ -f "$request_dir/response.exit-code" ]; then
-      break
-    fi
-    sleep 0.1
-  done
+stdout_done = threading.Event()
+
+def pump_stdout() -> None:
+    try:
+        while True:
+            readable, _, _ = select.select([stdout_pipe_fd], [], [], 0.1)
+            if stdout_pipe_fd not in readable:
+                if stdout_done.is_set():
+                    break
+                continue
+            try:
+                chunk = os.read(stdout_pipe_fd, 4096)
+            except BlockingIOError:
+                continue
+            if not chunk:
+                break
+            os.write(stdout_fd, chunk)
+    finally:
+        stdout_done.set()
+
+stdout_thread = threading.Thread(target=pump_stdout, daemon=True)
+stdout_thread.start()
+
+try:
+    while True:
+        if os.path.exists(exit_code_path):
+            break
+        readable, _, _ = select.select([stdin_fd], [], [], 0.1)
+        if stdin_fd not in readable:
+            continue
+        chunk = os.read(stdin_fd, 4096)
+        if not chunk:
+            break
+        os.write(stdin_pipe_fd, chunk)
+finally:
+    try:
+        os.close(stdin_pipe_fd)
+    except OSError:
+        pass
+
+while not os.path.exists(exit_code_path) and not stdout_done.is_set():
+    stdout_thread.join(timeout=0.1)
+
+stdout_done.set()
+stdout_thread.join(timeout=2)
+
+try:
+    os.close(stdout_pipe_fd)
+except OSError:
+    pass
+PY
 
   cleanup_attach
   trap - EXIT INT TERM

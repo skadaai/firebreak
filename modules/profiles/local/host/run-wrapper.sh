@@ -14,6 +14,7 @@ agent_specific_config=${!agent_specific_config_var:-}
 agent_specific_host_path=${!agent_specific_host_path_var:-}
 agent_config_mode=${agent_specific_config:-${AGENT_CONFIG:-vm}}
 requested_vm_mode=${FIREBREAK_VM_MODE:-run}
+agent_session_mode_override=${FIREBREAK_AGENT_SESSION_MODE_OVERRIDE:-}
 agent_session_mode=agent
 default_agent_command=@DEFAULT_AGENT_COMMAND@
 agent_command_override=""
@@ -79,6 +80,11 @@ worker_bridge_server_log=$host_runtime_dir/worker-bridge.log
 worker_bridge_server_script=$host_runtime_dir/firebreak-worker-bridge-host.sh
 worker_helper_script=$host_runtime_dir/firebreak-worker.sh
 worker_bridge_enabled=@WORKER_BRIDGE_ENABLED@
+wrapper_trace_log=$host_runtime_dir/wrapper-trace.log
+
+trace_wrapper() {
+  printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >>"$wrapper_trace_log"
+}
 
 if [ -n "$instance_state_dir" ]; then
   case "$instance_state_dir" in
@@ -115,6 +121,8 @@ else
   control_socket=$default_instance_dir/$default_control_socket
 fi
 
+runtime_debug_file=$runner_workdir/.firebreak-runtime.json
+
 case "$requested_vm_mode" in
   run)
     agent_session_mode=agent
@@ -147,6 +155,18 @@ fi
 if [ -n "$shell_command_override" ]; then
   agent_session_mode=agent-exec
   agent_command_override=$shell_command_override
+fi
+
+if [ -n "$agent_session_mode_override" ]; then
+  case "$agent_session_mode_override" in
+    shell|agent|agent-exec|agent-attach-exec)
+      agent_session_mode=$agent_session_mode_override
+      ;;
+    *)
+      echo "unsupported FIREBREAK_AGENT_SESSION_MODE_OVERRIDE: $agent_session_mode_override" >&2
+      exit 1
+      ;;
+  esac
 fi
 
 case "$agent_config_mode" in
@@ -229,6 +249,26 @@ mkdir -p "$host_meta_dir"
 mkdir -p "$host_exec_output_dir"
 mkdir -p "$worker_bridge_dir/requests"
 rm -f "$control_socket"
+: >"$wrapper_trace_log"
+
+cat >"$runtime_debug_file" <<EOF
+{
+  "host_runtime_dir": "$(printf '%s' "$host_runtime_dir" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "runner_workdir": "$(printf '%s' "$runner_workdir" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "session_mode": "$(printf '%s' "$agent_session_mode" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "control_socket": "$(printf '%s' "$control_socket" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "agent_exec_output_dir": "$(printf '%s' "$host_exec_output_dir" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "wrapper_trace_log": "$(printf '%s' "$wrapper_trace_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "runner_stdout_log": "$(printf '%s' "$runner_stdout_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "runner_stderr_log": "$(printf '%s' "$runner_stderr_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "virtiofs_hostcwd_log": "$(printf '%s' "$virtiofsd_hostcwd_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "virtiofs_agent_config_log": "$(printf '%s' "$virtiofsd_agent_config_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "virtiofs_agent_exec_log": "$(printf '%s' "$virtiofsd_agent_exec_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "virtiofs_worker_bridge_log": "$(printf '%s' "$virtiofsd_worker_bridge_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "worker_bridge_server_log": "$(printf '%s' "$worker_bridge_server_log" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+}
+EOF
+trace_wrapper "wrapper-start"
 
 if [ "$worker_bridge_enabled" = "1" ]; then
   cat >"$worker_helper_script" <<'__FIREBREAK_WORKER_SCRIPT__'
@@ -276,14 +316,17 @@ fi
 
 start_virtiofsd "$host_cwd" "$hostcwd_socket" "$virtiofsd_hostcwd_log"
 hostcwd_virtiofsd_pid=$started_virtiofsd_pid
+trace_wrapper "virtiofs-hostcwd-ready"
 
 if [ -n "$agent_config_host_dir" ]; then
   start_virtiofsd "$agent_config_host_dir" "$agent_config_socket" "$virtiofsd_agent_config_log"
   agent_config_virtiofsd_pid=$started_virtiofsd_pid
+  trace_wrapper "virtiofs-agent-config-ready"
 fi
-if [ "$agent_session_mode" = "agent-exec" ]; then
+if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
   start_virtiofsd "$host_exec_output_dir" "$agent_exec_output_socket" "$virtiofsd_agent_exec_log"
   agent_exec_output_virtiofsd_pid=$started_virtiofsd_pid
+  trace_wrapper "virtiofs-agent-exec-ready"
 fi
 if [ "$worker_bridge_enabled" = "1" ]; then
   start_virtiofsd "$worker_bridge_dir" "$worker_bridge_socket" "$virtiofsd_worker_bridge_log"
@@ -296,9 +339,11 @@ if [ "$worker_bridge_enabled" = "1" ]; then
     FIREBREAK_WORKER_BRIDGE_DIR="$worker_bridge_dir" \
     bash "$worker_bridge_server_script" "$worker_bridge_dir" "$worker_helper_script" >"$worker_bridge_server_log" 2>&1 &
   worker_bridge_server_pid=$!
+  trace_wrapper "worker-bridge-ready"
 fi
 
 runner_status=0
+trace_wrapper "runner-start"
 if [ "$agent_session_mode" = "agent-exec" ]; then
   (
     cd "$runner_workdir"
@@ -311,6 +356,26 @@ if [ "$agent_session_mode" = "agent-exec" ]; then
       MICROVM_WORKER_BRIDGE_SOCKET="$worker_bridge_socket_env" \
       @RUNNER@ "$@"
   ) >"$runner_stdout_log" 2>"$runner_stderr_log" || runner_status=$?
+elif [ "$agent_session_mode" = "agent-attach-exec" ]; then
+  attach_runner_script=$host_runtime_dir/attached-runner.sh
+  quoted_runner_args=""
+  for arg in "$@"; do
+    printf -v quoted_runner_arg '%q' "$arg"
+    quoted_runner_args="$quoted_runner_args $quoted_runner_arg"
+  done
+  cat >"$attach_runner_script" <<EOF
+set -eu
+cd "$(printf '%s' "$runner_workdir" | sed "s/'/'\\\\''/g")"
+export MICROVM_HOST_META_DIR='$(printf '%s' "$host_meta_dir" | sed "s/'/'\\\\''/g")'
+export MICROVM_HOST_CWD_SOCKET='$(printf '%s' "$hostcwd_socket" | sed "s/'/'\\\\''/g")'
+export MICROVM_AGENT_CONFIG_HOST_DIR='$(printf '%s' "$agent_config_host_dir" | sed "s/'/'\\\\''/g")'
+export MICROVM_AGENT_CONFIG_HOST_SOCKET='$(printf '%s' "$agent_config_socket" | sed "s/'/'\\\\''/g")'
+export MICROVM_AGENT_EXEC_OUTPUT_SOCKET='$(printf '%s' "$agent_exec_output_socket" | sed "s/'/'\\\\''/g")'
+export MICROVM_WORKER_BRIDGE_SOCKET='$(printf '%s' "$worker_bridge_socket_env" | sed "s/'/'\\\\''/g")'
+exec @RUNNER@$quoted_runner_args
+EOF
+  chmod 0555 "$attach_runner_script"
+  script -qefc "$(printf "%s" "$attach_runner_script")" "$runner_stdout_log" || runner_status=$?
 else
   (
     cd "$runner_workdir"
@@ -323,17 +388,21 @@ else
       @RUNNER@ "$@"
   ) || runner_status=$?
 fi
+trace_wrapper "runner-exit:$runner_status"
 
 if [ "$agent_session_mode" = "agent-exec" ]; then
   if [ -f "$host_exec_output_dir/stdout" ]; then
     cat "$host_exec_output_dir/stdout"
+    trace_wrapper "agent-exec-stdout-present"
   fi
   if [ -f "$host_exec_output_dir/stderr" ]; then
     cat "$host_exec_output_dir/stderr" >&2
+    trace_wrapper "agent-exec-stderr-present"
   fi
 
   if [ -f "$host_exec_output_dir/exit_code" ]; then
     IFS= read -r command_status < "$host_exec_output_dir/exit_code" || command_status=$runner_status
+    trace_wrapper "agent-exec-exit-code:$command_status"
     if [ "$command_status" -ne 0 ] && [ -s "$runner_stderr_log" ]; then
       cat "$runner_stderr_log" >&2
     fi
@@ -356,6 +425,7 @@ if [ "$agent_session_mode" = "agent-exec" ]; then
     fi
     exit "$command_status"
   fi
+  trace_wrapper "agent-exec-exit-code-missing"
 
   if [ -s "$runner_stderr_log" ]; then
     cat "$runner_stderr_log" >&2
@@ -375,6 +445,21 @@ if [ "$agent_session_mode" = "agent-exec" ]; then
   if [ -s "$worker_bridge_server_log" ]; then
     cat "$worker_bridge_server_log" >&2
   fi
+fi
+
+if [ "$agent_session_mode" = "agent-attach-exec" ]; then
+  if [ -f "$host_exec_output_dir/attach_stage" ]; then
+    IFS= read -r attach_stage < "$host_exec_output_dir/attach_stage" || attach_stage=""
+    if [ -n "$attach_stage" ]; then
+      trace_wrapper "agent-attach-stage:$attach_stage"
+    fi
+  fi
+  if [ -f "$host_exec_output_dir/exit_code" ]; then
+    IFS= read -r command_status < "$host_exec_output_dir/exit_code" || command_status=$runner_status
+    trace_wrapper "agent-attach-exit-code:$command_status"
+    exit "$command_status"
+  fi
+  trace_wrapper "agent-attach-exit-code-missing"
 fi
 
 exit "$runner_status"

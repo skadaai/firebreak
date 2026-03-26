@@ -6,12 +6,13 @@ if ! [ -f "$repo_root/flake.nix" ]; then
   exit 1
 fi
 
-firebreak_tmp_root=${FIREBREAK_TMPDIR:-${TMPDIR:-/tmp}}/firebreak/tmp
+firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
 mkdir -p "$firebreak_tmp_root"
 smoke_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-project-config.XXXXXX")
-trap 'rm -rf "$smoke_tmp_dir"' EXIT INT TERM
+trap 'chmod -R u+w "$smoke_tmp_dir" 2>/dev/null || true; rm -rf "$smoke_tmp_dir"' EXIT INT TERM
 
 project_dir=$smoke_tmp_dir/project
+git_repo_dir=$smoke_tmp_dir/git-repo
 mkdir -p "$project_dir"
 
 unset AGENT_CONFIG
@@ -27,6 +28,28 @@ firebreak_cmd() {
   (
     cd "$project_dir"
     nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run "path:$repo_root#firebreak" -- "$@"
+  )
+}
+
+prepare_git_repo() {
+  mkdir -p "$git_repo_dir"
+  cp -R "$repo_root/." "$git_repo_dir"
+  rm -rf "$git_repo_dir/.git"
+  chmod -R u+w "$git_repo_dir"
+  (
+    cd "$git_repo_dir"
+    git init -q
+    git config user.email smoke@example.invalid
+    git config user.name "Firebreak Smoke"
+    git add -A
+    git commit -q -m "smoke"
+  )
+}
+
+exact_firebreak_cmd() {
+  (
+    cd "$git_repo_dir"
+    nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak -- "$@"
   )
 }
 
@@ -122,6 +145,39 @@ assert details["cwd"] == project_dir
 assert details["project_root_source"] == "cwd"
 assert details["git_common_dir"] == "unknown"
 assert "FIREBREAK_TASK_STATE_DIR" in details["ignored_keys"]
+PY
+
+prepare_git_repo
+
+exact_doctor_json=$(exact_firebreak_cmd doctor --json)
+EXACT_DOCTOR_JSON=$exact_doctor_json GIT_REPO_DIR=$git_repo_dir python3 - <<'PY'
+import json
+import os
+
+obj = json.loads(os.environ["EXACT_DOCTOR_JSON"])
+git_repo_dir = os.environ["GIT_REPO_DIR"]
+
+assert obj["project_root"] == git_repo_dir
+assert obj["cwd"] == git_repo_dir
+assert obj["project_config_source"] == "none"
+PY
+
+exact_worker_state_dir=$smoke_tmp_dir/exact-worker-state
+mkdir -p "$exact_worker_state_dir"
+exact_worker_debug_json=$(
+  FIREBREAK_WORKER_STATE_DIR="$exact_worker_state_dir" \
+    exact_firebreak_cmd worker debug --json
+)
+EXACT_WORKER_DEBUG_JSON=$exact_worker_debug_json EXACT_WORKER_STATE_DIR=$exact_worker_state_dir python3 - <<'PY'
+import json
+import os
+
+obj = json.loads(os.environ["EXACT_WORKER_DEBUG_JSON"])
+
+assert obj["authority"] == "host"
+assert obj["state_dir"] == os.environ["EXACT_WORKER_STATE_DIR"]
+assert obj["worker_count"] == 0
+assert obj["requests"] == []
 PY
 
 printf '%s\n' "Firebreak project-config and doctor smoke test passed"

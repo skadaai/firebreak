@@ -52,10 +52,11 @@ let
           in
           ''
             mkdir -p "$npm_config_prefix/bin"
+            rm -f "$npm_config_prefix/bin/${scriptName}"
             cat >"$npm_config_prefix/bin/${scriptName}" <<'${heredocName}'
             ${scriptText}
             ${heredocName}
-            chmod 0555 "$npm_config_prefix/bin/${scriptName}"
+            chmod 0755 "$npm_config_prefix/bin/${scriptName}"
           '')
         installBinScripts);
   launchEnvironmentExports = lib.concatStringsSep "\n"

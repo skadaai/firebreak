@@ -13,6 +13,7 @@
   firebreak-test-smoke-internal-task = self.packages.${system}.firebreak-test-smoke-internal-task;
   firebreak-test-smoke-internal-validate = self.packages.${system}.firebreak-test-smoke-internal-validate;
   firebreak-test-smoke-worker = self.packages.${system}.firebreak-test-smoke-worker;
+  firebreak-test-smoke-worker-firebreak-attach = self.packages.${system}.firebreak-test-smoke-worker-firebreak-attach;
   firebreak-test-smoke-worker-guest-bridge = self.packages.${system}.firebreak-test-smoke-worker-guest-bridge;
   firebreak-internal-runner-claude-code = self.packages.${system}.firebreak-internal-runner-claude-code;
   firebreak-claude-code-system = self.nixosConfigurations.firebreak-claude-code.config.system.build.toplevel;

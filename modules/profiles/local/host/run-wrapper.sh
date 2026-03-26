@@ -293,6 +293,7 @@ if [ "$worker_bridge_enabled" = "1" ]; then
     FIREBREAK_FLAKE_REF='@FIREBREAK_FLAKE_REF@' \
     FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG='1' \
     FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
+    FIREBREAK_WORKER_BRIDGE_DIR="$worker_bridge_dir" \
     bash "$worker_bridge_server_script" "$worker_bridge_dir" "$worker_helper_script" >"$worker_bridge_server_log" 2>&1 &
   worker_bridge_server_pid=$!
 fi

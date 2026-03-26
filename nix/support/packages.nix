@@ -259,6 +259,21 @@
       } ../../modules/base/tests/test-smoke-worker.sh;
     };
 
+  mkWorkerFirebreakAttachSmokePackage = { name, workerPackage }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        bash
+        coreutils
+        findutils
+        gnugrep
+      ];
+      text = renderTemplate {
+        "@AGENT_BIN@" = "${self.packages.${system}.${workerPackage}}/bin/${workerPackage}";
+        "@REPO_ROOT@" = builtins.toString ../../.;
+      } ../../modules/base/tests/test-smoke-worker-firebreak-attach.sh;
+    };
+
   mkWorkerGuestBridgeSmokePackage = { name }:
     let
       bridgeVm = mkLocalVmArtifacts {
@@ -292,6 +307,7 @@
               gnused
               python3
             ];
+            networking.firewall.enable = false;
           })
         ];
       };
@@ -343,6 +359,7 @@
         install -m 0555 ${../../modules/base/host/firebreak-init.sh} "$out/libexec/firebreak-init.sh"
         install -m 0555 ${../../modules/base/host/firebreak-doctor.sh} "$out/libexec/firebreak-doctor.sh"
         install -m 0555 ${../../modules/base/host/firebreak-project-config.sh} "$out/libexec/firebreak-project-config.sh"
+        install -m 0555 ${../../modules/base/host/firebreak-worker.sh} "$out/libexec/firebreak-worker.sh"
       '';
       firebreakFlakeRef = "path:${builtins.toString ../../.}";
     in
@@ -359,6 +376,8 @@
       text = ''
         export FIREBREAK_LIBEXEC_DIR='${firebreakLibexec}/libexec'
         export FIREBREAK_FLAKE_REF='${firebreakFlakeRef}'
+        export FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG='1'
+        export FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes'
         exec bash "$FIREBREAK_LIBEXEC_DIR/firebreak.sh" "$@"
       '';
     };

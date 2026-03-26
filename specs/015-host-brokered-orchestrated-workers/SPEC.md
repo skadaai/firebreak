@@ -1,6 +1,6 @@
 ---
 status: in_progress
-last_updated: 2026-03-25
+last_updated: 2026-03-26
 ---
 
 # 015 Host-Brokered Orchestrated Workers
@@ -34,6 +34,8 @@ Without an explicit orchestration layer, Firebreak cannot give external orchestr
 - support more than one worker execution backend, beginning with `process` and `firebreak`
 - keep the guest-visible control surface stable even when the worker backend changes
 - make worker lifecycle, state ownership, and concurrency limits explicit
+- support both detached and attached worker execution semantics across the `process` and `firebreak` backends
+- preserve real terminal semantics for attached `firebreak` workers so interactive CLIs can use sibling workers directly
 
 ## Non-goals
 
@@ -71,6 +73,9 @@ The intended landing shape is:
 - The system shall keep runner state, instance directories, temporary roots, and control sockets for `firebreak` workers under host-side ownership.
 - The system shall allow external recipes to declare orchestratable worker kinds and the backend used for each kind.
 - The system shall allow bounded per-kind or per-recipe concurrency limits.
+- The system shall support attached worker execution for both the `process` and `firebreak` backends.
+- When an attached `firebreak` worker runs through the host broker, the system shall preserve a real terminal path to the sibling worker instead of degrading it into a detached log-only job.
+- The system shall provide focused validation and reviewable diagnostics for attached `firebreak` worker execution.
 - The system shall define how orchestrated workers resolve workspace access so the worker can act on the intended project state.
 - The system shall define how orchestrated workers resolve Firebreak config modes and agent-specific config where those differ from the orchestrator VM.
 - The system shall allow existing Firebreak single-agent packages to remain usable outside the orchestration layer.
@@ -81,6 +86,7 @@ The intended landing shape is:
 - The `firebreak` worker path is defined as host-brokered sibling VM launch rather than guest-launched nested virtualization.
 - A guest-visible control surface exists for worker lifecycle operations without exposing raw host runner internals.
 - External recipe authors have a defined way to register worker kinds, worker backends, and concurrency limits.
+- Attached `firebreak` workers can be validated through a focused runtime path that proves interactive sibling-worker execution instead of only detached worker creation.
 - External packaged-cli recipes have a defined bootstrap-readiness contract and can install recipe-owned worker-proxy wrappers without modifying Firebreak core.
 - Worker identity, lifecycle state, and host-owned runtime paths are explicit and reviewable.
 - The first integration path can target an external orchestrator recipe such as [external/agent-orchestrator/flake.nix](../../external/agent-orchestrator/flake.nix) without changing the public names of existing single-agent packages.

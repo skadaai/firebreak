@@ -17,6 +17,7 @@
   mkTaskSmokePackage,
   mkValidationPackage,
   mkValidationSmokePackage,
+  mkWorkerFirebreakAttachSmokePackage,
   mkWorkerGuestBridgeSmokePackage,
   mkWorkerPackage,
   mkWorkerSmokePackage,
@@ -130,6 +131,11 @@
 
   firebreak-test-smoke-worker = mkWorkerSmokePackage {
     name = "firebreak-test-smoke-worker";
+    workerPackage = "firebreak-worker";
+  };
+
+  firebreak-test-smoke-worker-firebreak-attach = mkWorkerFirebreakAttachSmokePackage {
+    name = "firebreak-test-smoke-worker-firebreak-attach";
     workerPackage = "firebreak-worker";
   };
 

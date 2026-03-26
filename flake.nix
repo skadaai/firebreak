@@ -60,9 +60,19 @@
           mkValidationPackage
           mkValidationSmokePackage
           mkWorkerGuestBridgeSmokePackage
+          mkWorkerFirebreakAttachSmokePackage
           mkWorkerPackage
           mkWorkerSmokePackage
           ;
+      };
+
+      apps.${system} = {
+        default = self.apps.${system}.firebreak;
+
+        firebreak = {
+          type = "app";
+          program = "${self.packages.${system}.firebreak}/bin/firebreak";
+        };
       };
 
       checks.${system} = import ./nix/outputs/checks.nix {

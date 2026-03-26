@@ -13,6 +13,7 @@ usage:
   firebreak worker ps [-a|--all] [--json]
   firebreak worker inspect WORKER_ID
   firebreak worker logs [--stdout|--stderr] [-f|--follow] WORKER_ID
+  firebreak worker debug [--json]
   firebreak worker stop [--all] [--json] [WORKER_ID...]
   firebreak worker rm [--all] [--force] [--json] [WORKER_ID...]
   firebreak worker prune [--force] [--json]
@@ -81,12 +82,29 @@ bridge_request_attach() {
   mkdir -p "$requests_dir"
   request_dir=$(mktemp -d "$requests_dir/request.XXXXXX")
   request_tmp_path=$request_dir/request.json.tmp
-  stdin_fifo=$request_dir/stdin.pipe
-  stdout_fifo=$request_dir/stdout.pipe
+  interactive_mode=0
+  if [ -t 0 ] && [ -t 1 ]; then
+    interactive_mode=1
+  fi
 
-  mkfifo "$stdin_fifo" "$stdout_fifo"
+  if [ "$interactive_mode" = "1" ]; then
+    stdin_fifo=$request_dir/stdin.pipe
+    stdout_fifo=$request_dir/stdout.pipe
+    mkfifo "$stdin_fifo" "$stdout_fifo"
+  fi
 
-  REQUEST_PATH=$request_tmp_path STDIN_FIFO=$stdin_fifo STDOUT_FIFO=$stdout_fifo python3 - "$@" <<'PY'
+  request_term=${TERM:-}
+  request_columns=${COLUMNS:-}
+  request_lines=${LINES:-}
+  if [ "$interactive_mode" = "1" ]; then
+    stty_size=$(stty size 2>/dev/null || true)
+    if [ -n "$stty_size" ]; then
+      request_lines=${stty_size%% *}
+      request_columns=${stty_size##* }
+    fi
+  fi
+
+  REQUEST_PATH=$request_tmp_path INTERACTIVE_MODE=$interactive_mode REQUEST_TERM=$request_term REQUEST_COLUMNS=$request_columns REQUEST_LINES=$request_lines python3 - "$@" <<'PY'
 import json
 import os
 import sys
@@ -97,18 +115,50 @@ with open(request_path, "w", encoding="utf-8") as handle:
         {
             "argv": sys.argv[1:],
             "attach": True,
-            "stdin_fifo": os.environ["STDIN_FIFO"],
-            "stdout_fifo": os.environ["STDOUT_FIFO"],
+            "interactive": os.environ["INTERACTIVE_MODE"] == "1",
+            "term": os.environ.get("REQUEST_TERM", ""),
+            "columns": os.environ.get("REQUEST_COLUMNS", ""),
+            "lines": os.environ.get("REQUEST_LINES", ""),
         },
         handle,
     )
 PY
 
-  tty_state=""
-  if [ -t 0 ] && [ -t 1 ]; then
-    tty_state=$(stty -g)
-    stty raw -echo
+  if [ "$interactive_mode" != "1" ]; then
+    mv "$request_tmp_path" "$request_dir/request.json"
+
+    for _ in $(seq 1 36000); do
+      if [ -f "$request_dir/response.exit-code" ]; then
+        break
+      fi
+      sleep 0.1
+    done
+
+    if ! [ -f "$request_dir/response.exit-code" ]; then
+      echo "timed out waiting for Firebreak worker attach response" >&2
+      exit 1
+    fi
+
+    if [ -f "$request_dir/response.stdout" ]; then
+      cat "$request_dir/response.stdout"
+    fi
+    if [ -f "$request_dir/response.stderr" ]; then
+      cat "$request_dir/response.stderr" >&2
+    fi
+
+    IFS= read -r bridge_exit_code < "$request_dir/response.exit-code" || bridge_exit_code=1
+    case "$bridge_exit_code" in
+      ''|*[!0-9]*)
+        echo "invalid Firebreak worker bridge exit code: $bridge_exit_code" >&2
+        exit 1
+        ;;
+    esac
+    return "$bridge_exit_code"
   fi
+
+  tty_state=""
+  tty_state=$(stty -g)
+  stty raw -echo
 
   restore_tty() {
     if [ -n "$tty_state" ]; then
@@ -133,7 +183,11 @@ PY
   cat <"$stdout_fifo" &
   stdout_forward_pid=$!
 
-  cat >"$stdin_fifo" &
+  if [ -t 0 ]; then
+    cat >"$stdin_fifo" &
+  else
+    : >"$stdin_fifo" &
+  fi
   stdin_forward_pid=$!
 
   for _ in $(seq 1 36000); do
@@ -311,8 +365,22 @@ PY
 
 count_active_workers_for_kind() {
   kind_name=$1
-  local_json=$("$local_helper" ps --all --json)
-  bridge_json=$(bridge_ps_json --all)
+  kind_backend=$2
+
+  case "$kind_backend" in
+    process)
+      local_json=$("$local_helper" ps --all --json)
+      bridge_json='[]'
+      ;;
+    firebreak)
+      local_json='[]'
+      bridge_json=$(bridge_ps_json --all)
+      ;;
+    *)
+      local_json=$("$local_helper" ps --all --json)
+      bridge_json=$(bridge_ps_json --all)
+      ;;
+  esac
 
   KIND_NAME=$kind_name LOCAL_JSON=$local_json BRIDGE_JSON=$bridge_json python3 - <<'PY'
 import json
@@ -336,13 +404,14 @@ PY
 enforce_kind_limit() {
   kind_json=$1
   kind_name=$2
+  kind_backend=$3
 
   max_instances=$(resolve_kind_max_instances "$kind_json")
   if [ -z "$max_instances" ]; then
     return 0
   fi
 
-  active_count=$(count_active_workers_for_kind "$kind_name")
+  active_count=$(count_active_workers_for_kind "$kind_name" "$kind_backend")
   if [ "$active_count" -ge "$max_instances" ]; then
     echo "worker kind '$kind_name' reached max_instances=$max_instances" >&2
     exit 1
@@ -493,9 +562,17 @@ case "$subcommand" in
       exit 1
     fi
 
+    case "$backend" in
+      process|firebreak) ;;
+      *)
+        echo "unsupported worker backend: $backend" >&2
+        exit 1
+        ;;
+    esac
+
     acquire_kind_spawn_lock "$kind"
     trap release_kind_spawn_lock EXIT INT TERM
-    enforce_kind_limit "$kind_json" "$kind"
+    enforce_kind_limit "$kind_json" "$kind" "$backend"
 
     case "$backend" in
       process)
@@ -571,12 +648,6 @@ PY
         trap - EXIT INT TERM
         exit "$run_status"
         ;;
-      *)
-        release_kind_spawn_lock
-        trap - EXIT INT TERM
-        echo "unsupported worker backend: $backend" >&2
-        exit 1
-        ;;
     esac
     ;;
   ps)
@@ -636,6 +707,56 @@ PY
     fi
     bridge_request logs "$@"
     exit $?
+    ;;
+  debug)
+    shift
+    debug_json=0
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --json)
+          debug_json=1
+          shift
+          ;;
+        *)
+          usage
+          ;;
+      esac
+    done
+
+    local_debug_json=$("$local_helper" debug --json)
+    if [ -z "$local_debug_json" ]; then
+      local_debug_json='{"authority":"guest","state_dir":null,"worker_count":0,"active_worker_count":0,"workers":[],"requests":[]}'
+    fi
+    if [ -d "$bridge_dir" ]; then
+      bridge_debug_json=$(bridge_request debug --json)
+      if [ -z "$bridge_debug_json" ]; then
+        bridge_debug_json='null'
+      fi
+    else
+      bridge_debug_json='null'
+    fi
+
+    if [ "$debug_json" = "1" ]; then
+      LOCAL_DEBUG_JSON=$local_debug_json BRIDGE_DEBUG_JSON=$bridge_debug_json python3 - <<'PY'
+import json
+import os
+
+bridge_payload = os.environ["BRIDGE_DEBUG_JSON"]
+result = {
+    "local": json.loads(os.environ["LOCAL_DEBUG_JSON"]),
+    "bridge": None if bridge_payload == "null" else json.loads(bridge_payload),
+}
+print(json.dumps(result, indent=2))
+PY
+      exit 0
+    fi
+
+    printf '%s\n' 'Local worker runtime'
+    "$local_helper" debug
+    if [ -d "$bridge_dir" ]; then
+      printf '\n%s\n' 'Host bridge runtime'
+      bridge_request debug
+    fi
     ;;
   stop)
     shift

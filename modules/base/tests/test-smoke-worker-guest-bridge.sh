@@ -1,6 +1,11 @@
 set -eu
 
-firebreak_tmp_root=${FIREBREAK_TMPDIR:-${TMPDIR:-/tmp}}/firebreak/tmp
+default_firebreak_tmpdir=${TMPDIR:-/tmp}
+if [ -d /cache ] && [ -w /cache ]; then
+  default_firebreak_tmpdir=/cache/firebreak
+fi
+
+firebreak_tmp_root=${FIREBREAK_TMPDIR:-$default_firebreak_tmpdir}/firebreak/tmp
 mkdir -p "$firebreak_tmp_root"
 smoke_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-worker-guest-bridge.XXXXXX")
 trap 'rm -rf "$smoke_tmp_dir"' EXIT INT TERM
@@ -57,7 +62,23 @@ if [ "$show_authority" != "guest" ]; then
   exit 1
 fi
 
+debug_output=$(firebreak worker debug --json)
+printf '__BRIDGE_DEBUG__%s\n' "$debug_output"
+
+if ! printf '%s\n' "$debug_output" | grep -F -q '"bridge"'; then
+  printf '%s\n' "$debug_output" >&2
+  echo "guest bridge smoke did not expose host bridge diagnostics" >&2
+  exit 1
+fi
+
+if ! printf '%s\n' "$debug_output" | grep -F -q "$worker_id"; then
+  printf '%s\n' "$debug_output" >&2
+  echo "guest bridge smoke debug did not include the guest worker id" >&2
+  exit 1
+fi
+
 stop_spawn_output=$(firebreak worker run --kind bridge-stop --workspace "$PWD" --json)
+printf '%s\n' '__BRIDGE_STOP_SPAWNED__'
 stop_worker_id=$(STOP_RUN_OUTPUT="$stop_spawn_output" python3 - <<'PY'
 import json
 import os
@@ -82,6 +103,7 @@ if [ "$stop_status" != "stopping" ] && [ "$stop_status" != "stopped" ]; then
   exit 1
 fi
 
+printf '%s\n' '__BRIDGE_ATTACH_START__'
 attach_output=$(firebreak worker run --kind bridge-firebreak --workspace "$PWD" --attach -- --version)
 printf '__BRIDGE_ATTACH__%s\n' "$attach_output"
 
@@ -91,6 +113,7 @@ if ! printf '%s\n' "$attach_output" | grep -F -q 'codex-cli'; then
   exit 1
 fi
 
+printf '%s\n' '__BRIDGE_LIMIT_START__'
 limited_spawn_output=$(firebreak worker run --kind bridge-limited --workspace "$PWD" --json)
 limited_worker_id=$(LIMITED_RUN_OUTPUT="$limited_spawn_output" python3 - <<'PY'
 import json
@@ -157,7 +180,8 @@ EOF
 
 output=$(
   cd "$workspace_dir"
-  FIREBREAK_INSTANCE_EPHEMERAL=1 @BRIDGE_VM_BIN@ "$guest_script"
+  env -u AGENT_CONFIG -u AGENT_CONFIG_HOST_PATH -u CODEX_CONFIG -u CODEX_CONFIG_HOST_PATH -u CLAUDE_CONFIG -u CLAUDE_CONFIG_HOST_PATH \
+    FIREBREAK_INSTANCE_EPHEMERAL=1 @BRIDGE_VM_BIN@ "$guest_script"
 )
 
 if ! printf '%s\n' "$output" | grep -F -q '__BRIDGE_OK__'; then

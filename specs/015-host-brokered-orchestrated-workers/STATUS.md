@@ -1,5 +1,5 @@
 ---
-status: completed
+status: in_progress
 last_updated: 2026-03-26
 ---
 
@@ -7,7 +7,7 @@ last_updated: 2026-03-26
 
 ## Current phase
 
-Implemented and validated for the first external orchestrator recipe.
+Reopened for attached `firebreak` worker hardening.
 
 ## What has landed
 
@@ -28,9 +28,13 @@ Implemented and validated for the first external orchestrator recipe.
 - a reusable Firebreak worker-proxy script helper for external recipes that want a CLI name to resolve through `firebreak worker`
 - a recipe-owned smoke path in [external/agent-orchestrator/flake.nix](../../external/agent-orchestrator/flake.nix) for validating bootstrap readiness and worker-proxy wrapper installation without moving orchestrator logic into Firebreak core
 - a recipe-owned smoke path in [external/agent-orchestrator/flake.nix](../../external/agent-orchestrator/flake.nix) for real declared-worker creation through the guest-visible `firebreak worker` surface
+- the attached execution contract has been identified as the remaining weak spot inside the `firebreak` backend rather than in worker-kind declaration or detached worker lifecycle plumbing
 
 ## What remains open
 
+- a minimal attached `firebreak` worker smoke that proves sibling-worker execution without routing through the external orchestrator recipe first
+- focused diagnostics for request publication, bridge processing, worker launch, and attached worker completion
+- a validated attached `codex` proxy path through the external orchestrator recipe after the minimal attached `firebreak` path is proven
 - richer lifecycle behavior such as worker reuse, log filtering, and cleanup policy refinements
 - possible transport hardening beyond the first file-share bridge, such as a mounted Unix-socket protocol
 - broader recipe adoption and validation beyond the first external orchestrator recipe
@@ -51,3 +55,4 @@ Implemented and validated for the first external orchestrator recipe.
 - 2026-03-25: Added a generic packaged-node bootstrap-readiness helper, bounded per-kind concurrency via `max_instances`, and a recipe-owned validation path for the first external orchestrator recipe.
 - 2026-03-26: Reworked the public worker CLI around `run`, `ps`, `inspect`, `logs`, `stop`, `rm`, and `prune`, made default listing concise, and added worker cleanup semantics.
 - 2026-03-26: Confirmed the first external orchestrator recipe manually in a real runtime: guest-visible worker execution, host-owned worker state, concise listing, cleanup, and bounded concurrency all behaved as specified.
+- 2026-03-26: Reopened the spec after confirming that attached sibling-worker execution for interactive `firebreak` workers is still incomplete even though detached lifecycle behavior and manual detached validation already passed.

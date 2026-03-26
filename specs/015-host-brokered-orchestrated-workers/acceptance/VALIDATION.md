@@ -6,7 +6,7 @@ Markdown is the right format here because the validation contract needs to stay 
 
 ## Recorded Outcome
 
-The initial validation bar for spec 015 was satisfied on 2026-03-26.
+The initial detached validation bar for spec 015 was satisfied on 2026-03-26.
 
 Evidence used for that phase change:
 
@@ -18,6 +18,8 @@ Evidence used for that phase change:
   - `firebreak worker run`, `ps`, `inspect`, `stop`, and `rm` behaved correctly
   - host-owned worker state and logs were present on the host
   - the fifth concurrent `codex` run was rejected at the configured `max_instances` limit
+
+The spec was reopened later on 2026-03-26 after attached sibling-worker execution for the `firebreak` backend proved incomplete for interactive `codex` use. The next validation target is therefore narrower: prove attached `firebreak` worker execution in isolation before routing it back through the external orchestrator recipe.
 
 ## Automated Tests
 
@@ -78,7 +80,21 @@ Expected result:
 - the smoke exits `0`
 - the output includes `Firebreak worker guest bridge smoke test passed`
 
-### 5. Evaluate the external recipe outputs
+### 5. Validate minimal attached `firebreak` worker execution
+
+Purpose: prove the worker runtime can attach to a sibling Firebreak VM without the external orchestrator recipe in the way.
+
+```sh
+nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run "path:$PWD#firebreak-test-smoke-worker-firebreak-attach"
+```
+
+Expected result:
+
+- the smoke exits `0`
+- the output includes `Firebreak attached firebreak worker smoke test passed`
+- the attached run returns command output from the sibling worker instead of hanging after worker creation
+
+### 6. Evaluate the external recipe outputs
 
 Purpose: prove the external orchestrator recipe exports the expected packages and checks, including recipe-owned worker smoke outputs.
 
@@ -93,7 +109,7 @@ Expected result:
   - `firebreak-test-smoke-agent-orchestrator-worker-proxy`
   - `firebreak-test-smoke-agent-orchestrator-worker-spawn`
 
-### 6. Validate the external recipe bootstrap and worker-proxy wrapper
+### 7. Validate the external recipe bootstrap and worker-proxy wrapper
 
 Purpose: prove the external recipe can wait for bootstrap, resolve the packaged `ao` CLI, and expose the `codex` worker-proxy wrapper without modifying Firebreak core.
 
@@ -106,7 +122,7 @@ Expected result:
 - the smoke exits `0`
 - the output includes `Agent Orchestrator worker proxy smoke test passed`
 
-### 7. Validate real declared-worker creation from the external recipe
+### 8. Validate real declared-worker creation from the external recipe
 
 Purpose: prove the first external orchestrator recipe can spawn a declared `firebreak` worker kind through the guest-visible `firebreak worker` surface.
 
@@ -139,6 +155,7 @@ Check:
 - `firebreak-bootstrap-wait` is available
 - `ao` is available
 - `codex --version` reports the worker-proxy wrapper version string
+- `firebreak worker debug --json` returns both a `local` section and a `bridge` section
 
 ### 2. Spawn a declared worker manually from inside the orchestrator VM
 
@@ -148,6 +165,7 @@ Run inside the guest:
 
 ```sh
 firebreak-bootstrap-wait
+firebreak worker debug --json
 firebreak worker run --kind codex --workspace "$PWD" --json -- --version
 firebreak worker ps
 firebreak worker inspect <worker-id>
@@ -160,6 +178,7 @@ Check:
 - the spawned worker gets a stable `worker_id`
 - `inspect` reports backend `firebreak`
 - `inspect` reports reviewable metadata and a sensible status transition
+- `debug --json` reports the host bridge request and worker state without host-side `pgrep` or manual path inspection
 - `rm` removes the stopped worker cleanly
 
 ### 3. Verify host-owned runtime state for a `firebreak` worker
@@ -176,6 +195,14 @@ Check on the host after spawning a worker:
   `/home/<user>/.local/state/firebreak/worker-broker/workers/<worker-id>/stdout.log`
   `/home/<user>/.local/state/firebreak/worker-broker/workers/<worker-id>/stderr.log`
 - the guest did not need direct nested-VM privileges to launch the worker
+
+Where possible, prefer the guest-visible diagnosis command first:
+
+```sh
+firebreak worker debug --json
+```
+
+Use direct host path inspection only when the debug output itself looks incomplete or inconsistent.
 
 ### 4. Verify concurrency limits manually
 
@@ -204,4 +231,4 @@ Spec 015 is ready to move beyond `Initial implementation in progress` when:
 2. the manual checks confirm host-owned runtime behavior and understandable operator-facing semantics
 3. the status file can truthfully say the first external orchestrator recipe is implemented and validated
 
-That exit criterion is now met.
+That exit criterion was met for the detached lifecycle path, but the spec is reopened until the focused attached `firebreak` worker validation also passes.

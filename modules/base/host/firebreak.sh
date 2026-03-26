@@ -11,6 +11,12 @@ command=${1:-}
 . "$firebreak_libexec_dir/firebreak-init.sh"
 . "$firebreak_libexec_dir/firebreak-doctor.sh"
 
+firebreak_exec_libexec() {
+  script_name=$1
+  shift
+  exec bash "$firebreak_libexec_dir/$script_name" "$@"
+}
+
 firebreak_require_flake_ref() {
   if [ -z "${FIREBREAK_FLAKE_REF:-}" ]; then
     echo "FIREBREAK_FLAKE_REF is required for commands that launch Firebreak workloads" >&2
@@ -214,7 +220,7 @@ case "$command" in
     ;;
   worker)
     shift
-    firebreak_exec_package "firebreak-worker" "$@"
+    firebreak_exec_libexec "firebreak-worker.sh" "$@"
     ;;
   internal)
     shift

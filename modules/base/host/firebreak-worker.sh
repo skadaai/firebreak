@@ -12,6 +12,7 @@ usage:
   firebreak worker ps [-a|--all] [--json]
   firebreak worker inspect WORKER_ID
   firebreak worker logs [--stdout|--stderr] [-f|--follow] WORKER_ID
+  firebreak worker debug [--json]
   firebreak worker stop [--all] [--json] [WORKER_ID...]
   firebreak worker rm [--all] [--force] [--json] [WORKER_ID...]
   firebreak worker prune [--force] [--json]
@@ -92,6 +93,7 @@ worker_summary_json() {
   "package_name": $(if [ -n "$package_name" ]; then printf '"%s"' "$(json_escape "$package_name")"; else printf 'null'; fi),
   "vm_mode": $(if [ -n "$vm_mode" ]; then printf '"%s"' "$(json_escape "$vm_mode")"; else printf 'null'; fi),
   "pid": $pid,
+  "trace_path": "$(json_escape "$trace_path")",
   "created_at": "$(json_escape "$created_at")",
   "finished_at": $(if [ -n "$finished_at" ]; then printf '"%s"' "$(json_escape "$finished_at")"; else printf 'null'; fi),
   "exit_code": $(if [ -n "$exit_code" ]; then printf '%s' "$exit_code"; else printf 'null'; fi),
@@ -111,6 +113,7 @@ write_metadata() {
   printf '%s\n' "$pid" >"$worker_root/pid"
   printf '%s\n' "$stdout_path" >"$worker_root/stdout-path"
   printf '%s\n' "$stderr_path" >"$worker_root/stderr-path"
+  printf '%s\n' "$trace_path" >"$worker_root/trace-path"
   if [ -n "$package_name" ]; then
     printf '%s\n' "$package_name" >"$worker_root/package-name"
   else
@@ -150,6 +153,7 @@ write_metadata() {
   "pid": $pid,
   "stdout_path": "$(json_escape "$stdout_path")",
   "stderr_path": "$(json_escape "$stderr_path")",
+  "trace_path": "$(json_escape "$trace_path")",
   "worker_root": "$(json_escape "$worker_root")",
   "created_at": "$(json_escape "$created_at")",
   "finished_at": $(if [ -n "$finished_at" ]; then printf '"%s"' "$(json_escape "$finished_at")"; else printf 'null'; fi),
@@ -177,6 +181,10 @@ load_worker() {
   pid=$(cat "$worker_root/pid")
   stdout_path=$(cat "$worker_root/stdout-path")
   stderr_path=$(cat "$worker_root/stderr-path")
+  trace_path=$worker_root/trace.log
+  if [ -f "$worker_root/trace-path" ]; then
+    trace_path=$(cat "$worker_root/trace-path")
+  fi
   package_name=""
   vm_mode=""
   finished_at=""
@@ -261,6 +269,7 @@ write_process_launch_script() {
   quoted_workspace=$(quote_arg "$workspace")
   quoted_stdout=$(quote_arg "$stdout_path")
   quoted_stderr=$(quote_arg "$stderr_path")
+  quoted_trace=$(quote_arg "$trace_path")
   quoted_exit_code=$(quote_arg "$worker_root/exit-code")
   quoted_finished_at=$(quote_arg "$worker_root/finished-at")
   quoted_child_pid=$(quote_arg "$worker_root/child-pid")
@@ -275,6 +284,7 @@ set -eu
 workspace=$quoted_workspace
 stdout_path=$quoted_stdout
 stderr_path=$quoted_stderr
+trace_path=$quoted_trace
 exit_code_path=$quoted_exit_code
 finished_at_path=$quoted_finished_at
 child_pid_path=$quoted_child_pid
@@ -282,6 +292,7 @@ attach_mode=$attach_mode
 
 finish() {
   status=\$1
+  printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "command-exit:\$status" >>"\$trace_path"
   printf '%s\n' "\$status" >"\$exit_code_path"
   date -u +%Y-%m-%dT%H:%M:%SZ >"\$finished_at_path"
 }
@@ -297,6 +308,7 @@ stop_child() {
 
 trap stop_child INT TERM
 
+printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "launch-script-start" >>"\$trace_path"
 cd "\$workspace"
 if [ "\$attach_mode" != "1" ]; then
   exec 1>"\$stdout_path"
@@ -305,10 +317,12 @@ fi
 
 set +e
 if [ "\$attach_mode" = "1" ]; then
+  printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "attach-foreground-start" >>"\$trace_path"
   printf '%s\n' "$$" >"\$child_pid_path"
   $quoted_command
   command_status=\$?
 else
+  printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "detached-background-start" >>"\$trace_path"
   $quoted_command &
   child_pid=\$!
   printf '%s\n' "\$child_pid" >"\$child_pid_path"
@@ -335,6 +349,7 @@ write_firebreak_launch_script() {
   quoted_workspace=$(quote_arg "$workspace")
   quoted_stdout=$(quote_arg "$stdout_path")
   quoted_stderr=$(quote_arg "$stderr_path")
+  quoted_trace=$(quote_arg "$trace_path")
   quoted_exit_code=$(quote_arg "$worker_root/exit-code")
   quoted_finished_at=$(quote_arg "$worker_root/finished-at")
   quoted_child_pid=$(quote_arg "$worker_root/child-pid")
@@ -361,6 +376,7 @@ set -eu
 workspace=$quoted_workspace
 stdout_path=$quoted_stdout
 stderr_path=$quoted_stderr
+trace_path=$quoted_trace
 exit_code_path=$quoted_exit_code
 finished_at_path=$quoted_finished_at
 child_pid_path=$quoted_child_pid
@@ -370,6 +386,7 @@ attach_mode=$attach_mode
 
 finish() {
   status=\$1
+  printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "command-exit:\$status" >>"\$trace_path"
   printf '%s\n' "\$status" >"\$exit_code_path"
   date -u +%Y-%m-%dT%H:%M:%SZ >"\$finished_at_path"
 }
@@ -386,6 +403,7 @@ stop_child() {
 trap stop_child INT TERM
 
 mkdir -p "\$instance_dir"
+printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "launch-script-start" >>"\$trace_path"
 cd "\$workspace"
 if [ "\$attach_mode" != "1" ]; then
   exec 1>"\$stdout_path"
@@ -394,10 +412,13 @@ fi
 
 set +e
 if [ "\$attach_mode" = "1" ]; then
+  printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "attach-foreground-start" >>"\$trace_path"
   printf '%s\n' "$$" >"\$child_pid_path"
+  printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "firebreak-command-start" >>"\$trace_path"
   env FIREBREAK_INSTANCE_DIR="\$instance_dir" FIREBREAK_VM_MODE="\$vm_mode" $nix_command$quoted_args
   command_status=\$?
 else
+  printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "detached-background-start" >>"\$trace_path"
   env FIREBREAK_INSTANCE_DIR="\$instance_dir" FIREBREAK_VM_MODE="\$vm_mode" $nix_command$quoted_args &
   child_pid=\$!
   printf '%s\n' "\$child_pid" >"\$child_pid_path"
@@ -513,6 +534,7 @@ spawn_worker() {
   mkdir -p "$worker_root"
   stdout_path=$worker_root/stdout.log
   stderr_path=$worker_root/stderr.log
+  trace_path=$worker_root/trace.log
   status="running"
   pid=0
   finished_at=""
@@ -520,6 +542,7 @@ spawn_worker() {
   stop_requested=0
   : >"$stdout_path"
   : >"$stderr_path"
+  : >"$trace_path"
 
   launch_script=$worker_root/launch.sh
   case "$backend" in
@@ -719,6 +742,53 @@ emit_json_array_from_worker_ids() {
       printf ',\n'
     fi
     cat "$(worker_root_for_id "$worker_id")/metadata.json"
+  done
+  printf '\n]\n'
+}
+
+debug_requests_json() {
+  bridge_debug_dir=${FIREBREAK_WORKER_BRIDGE_DIR:-}
+  if [ -z "$bridge_debug_dir" ] || ! [ -d "$bridge_debug_dir/requests" ]; then
+    printf '%s\n' '[]'
+    return 0
+  fi
+
+  first=1
+  printf '[\n'
+  for request_dir in "$bridge_debug_dir"/requests/*; do
+    [ -d "$request_dir" ] || continue
+    request_id=$(basename "$request_dir")
+    request_payload=""
+    request_trace=""
+    request_exit_code=""
+    has_response=false
+
+    if [ -f "$request_dir/request.json" ]; then
+      request_payload=$(cat "$request_dir/request.json")
+    fi
+    if [ -f "$request_dir/trace.log" ]; then
+      request_trace=$(tail -n 20 "$request_dir/trace.log")
+    fi
+    if [ -f "$request_dir/response.exit-code" ]; then
+      request_exit_code=$(cat "$request_dir/response.exit-code")
+      has_response=true
+    fi
+
+    if [ "$first" = "1" ]; then
+      first=0
+    else
+      printf ',\n'
+    fi
+
+    cat <<EOF
+{
+  "request_id": "$(json_escape "$request_id")",
+  "request_json": $(if [ -n "$request_payload" ]; then printf '"%s"' "$(json_escape "$request_payload")"; else printf 'null'; fi),
+  "trace_tail": $(if [ -n "$request_trace" ]; then printf '"%s"' "$(json_escape "$request_trace")"; else printf 'null'; fi),
+  "response_exit_code": $(if [ -n "$request_exit_code" ]; then printf '"%s"' "$(json_escape "$request_exit_code")"; else printf 'null'; fi),
+  "has_response": $has_response
+}
+EOF
   done
   printf '\n]\n'
 }
@@ -961,6 +1031,151 @@ prune_workers() {
   rm_worker "${prune_args[@]}" "${prune_ids[@]}"
 }
 
+debug_read_workers_json() {
+  FIREBREAK_WORKERS_DIR=$state_dir/workers python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+workers_dir = Path(os.environ["FIREBREAK_WORKERS_DIR"])
+items = []
+
+if workers_dir.is_dir():
+    for worker_dir in sorted(workers_dir.iterdir()):
+        metadata_path = worker_dir / "metadata.json"
+        if metadata_path.is_file():
+            try:
+                items.append(json.loads(metadata_path.read_text(encoding="utf-8")))
+                continue
+            except Exception:
+                pass
+
+        items.append(
+            {
+                "worker_id": worker_dir.name,
+                "authority": "host",
+                "backend": None,
+                "kind": None,
+                "status": "unknown",
+                "workspace": None,
+                "package_name": None,
+                "vm_mode": None,
+                "pid": None,
+                "stdout_path": None,
+                "stderr_path": None,
+                "worker_root": str(worker_dir),
+                "created_at": None,
+                "finished_at": None,
+                "exit_code": None,
+                "stop_requested": False,
+            }
+        )
+
+print(json.dumps(items))
+PY
+}
+
+debug_worker() {
+  debug_json=0
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --json)
+        debug_json=1
+        shift
+        ;;
+      *)
+        usage
+        ;;
+    esac
+  done
+
+  mkdir -p "$state_dir/workers"
+  workers_json=$(debug_read_workers_json)
+  worker_count=$(JSON_INPUT=$workers_json python3 - <<'PY'
+import json
+import os
+
+items = json.loads(os.environ["JSON_INPUT"])
+print(len(items))
+PY
+)
+  active_worker_count=$(JSON_INPUT=$workers_json python3 - <<'PY'
+import json
+import os
+
+items = json.loads(os.environ["JSON_INPUT"])
+count = 0
+for item in items:
+    if item.get("status") in {"active", "running", "stopping"}:
+        count += 1
+print(count)
+PY
+)
+
+  bridge_dir=${FIREBREAK_WORKER_BRIDGE_DIR:-}
+  requests_json='[]'
+  request_count=0
+  if [ -n "$bridge_dir" ] && [ -d "$bridge_dir/requests" ]; then
+    requests_json=$(debug_requests_json "$bridge_dir/requests")
+    request_count=$(JSON_INPUT=$requests_json python3 - <<'PY'
+import json
+import os
+
+items = json.loads(os.environ["JSON_INPUT"])
+print(len(items))
+PY
+)
+  fi
+
+  if [ "$debug_json" = "1" ]; then
+    cat <<EOF
+{
+  "authority": "host",
+  "state_dir": "$(json_escape "$state_dir")",
+  "worker_count": $worker_count,
+  "active_worker_count": $active_worker_count,
+  "bridge_dir": $([ -n "$bridge_dir" ] && printf '"%s"' "$(json_escape "$bridge_dir")" || printf 'null'),
+  "request_count": $request_count,
+  "workers": $workers_json,
+  "requests": $requests_json
+}
+EOF
+    exit 0
+  fi
+
+  printf '%s\n' 'Firebreak worker broker'
+  printf 'state_dir: %s\n' "$state_dir"
+  if [ -n "$bridge_dir" ]; then
+    printf 'bridge_dir: %s\n' "$bridge_dir"
+  fi
+  printf 'worker_count: %s\n' "$worker_count"
+  printf 'active_worker_count: %s\n' "$active_worker_count"
+  if [ "$worker_count" -gt 0 ]; then
+    printf '\n%s\n' 'Workers'
+    print_ps_table "$workers_json"
+  fi
+  if [ "$request_count" -gt 0 ]; then
+    printf '\n%s\n' 'Requests'
+    REQUESTS_JSON=$requests_json python3 - <<'PY'
+import json
+import os
+
+for item in json.loads(os.environ["REQUESTS_JSON"]):
+    print(f"- {item['request_id']}")
+    request_json = item.get("request_json")
+    if request_json:
+        print(f"  request.json: {request_json}")
+    trace_tail = item.get("trace_tail")
+    if trace_tail:
+        print("  trace_tail:")
+        for line in trace_tail.splitlines():
+            print(f"    {line}")
+    if item.get("has_response"):
+        print(f"  response_exit_code: {item.get('response_exit_code')}")
+PY
+  fi
+}
+
 case "$command" in
   run)
     shift
@@ -977,6 +1192,10 @@ case "$command" in
   logs)
     shift
     logs_worker "$@"
+    ;;
+  debug)
+    shift
+    debug_worker "$@"
     ;;
   stop)
     shift

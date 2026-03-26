@@ -86,6 +86,7 @@ Firebreak exposes a public `worker` surface for orchestrator-style sandboxes:
 firebreak worker run --kind codex --workspace "$PWD" -- --version
 firebreak worker ps
 firebreak worker inspect codex-1234abcd
+firebreak worker debug --json
 firebreak worker stop codex-1234abcd
 firebreak worker rm codex-1234abcd
 ```

@@ -202,6 +202,23 @@ if ! printf '%s\n' "$ps_output" | grep -F -q "$firebreak_worker_id"; then
   exit 1
 fi
 
+debug_output=$(
+  FIREBREAK_WORKER_STATE_DIR="$state_dir" \
+    @AGENT_BIN@ debug --json
+)
+
+if ! printf '%s\n' "$debug_output" | grep -F -q "\"state_dir\": \"$state_dir\""; then
+  printf '%s\n' "$debug_output" >&2
+  echo "worker smoke debug did not report the worker state dir" >&2
+  exit 1
+fi
+
+if ! printf '%s\n' "$debug_output" | grep -F -q "\"worker_id\": \"$firebreak_worker_id\""; then
+  printf '%s\n' "$debug_output" >&2
+  echo "worker smoke debug did not include the firebreak worker" >&2
+  exit 1
+fi
+
 rm_output=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
     @AGENT_BIN@ rm "$process_worker_id"

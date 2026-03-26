@@ -12,6 +12,10 @@ guest_script=$workspace_dir/guest-bridge-check.sh
 cat >"$guest_script" <<'EOF'
 set -eu
 
+stale_lock_dir=/var/lib/dev/.local/state/firebreak/worker-local/spawn-locks/bridge-process.lock
+mkdir -p "$stale_lock_dir"
+printf '%s\n' 999999 >"$stale_lock_dir/pid"
+
 spawn_output=$(firebreak worker run --kind bridge-process --workspace "$PWD" --json)
 printf '__BRIDGE_SPAWN__%s\n' "$spawn_output"
 

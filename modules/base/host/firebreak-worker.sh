@@ -298,20 +298,23 @@ stop_child() {
 trap stop_child INT TERM
 
 cd "\$workspace"
-if [ "\$attach_mode" = "1" ]; then
-  exec > >(tee -a "\$stdout_path")
-  exec 2> >(tee -a "\$stderr_path" >&2)
-else
+if [ "\$attach_mode" != "1" ]; then
   exec 1>"\$stdout_path"
   exec 2>"\$stderr_path"
 fi
 
 set +e
-$quoted_command &
-child_pid=\$!
-printf '%s\n' "\$child_pid" >"\$child_pid_path"
-wait "\$child_pid"
-command_status=\$?
+if [ "\$attach_mode" = "1" ]; then
+  printf '%s\n' "$$" >"\$child_pid_path"
+  $quoted_command
+  command_status=\$?
+else
+  $quoted_command &
+  child_pid=\$!
+  printf '%s\n' "\$child_pid" >"\$child_pid_path"
+  wait "\$child_pid"
+  command_status=\$?
+fi
 set -e
 
 finish "\$command_status"
@@ -384,20 +387,23 @@ trap stop_child INT TERM
 
 mkdir -p "\$instance_dir"
 cd "\$workspace"
-if [ "\$attach_mode" = "1" ]; then
-  exec > >(tee -a "\$stdout_path")
-  exec 2> >(tee -a "\$stderr_path" >&2)
-else
+if [ "\$attach_mode" != "1" ]; then
   exec 1>"\$stdout_path"
   exec 2>"\$stderr_path"
 fi
 
 set +e
-env FIREBREAK_INSTANCE_DIR="\$instance_dir" FIREBREAK_VM_MODE="\$vm_mode" $nix_command$quoted_args &
-child_pid=\$!
-printf '%s\n' "\$child_pid" >"\$child_pid_path"
-wait "\$child_pid"
-command_status=\$?
+if [ "\$attach_mode" = "1" ]; then
+  printf '%s\n' "$$" >"\$child_pid_path"
+  env FIREBREAK_INSTANCE_DIR="\$instance_dir" FIREBREAK_VM_MODE="\$vm_mode" $nix_command$quoted_args
+  command_status=\$?
+else
+  env FIREBREAK_INSTANCE_DIR="\$instance_dir" FIREBREAK_VM_MODE="\$vm_mode" $nix_command$quoted_args &
+  child_pid=\$!
+  printf '%s\n' "\$child_pid" >"\$child_pid_path"
+  wait "\$child_pid"
+  command_status=\$?
+fi
 set -e
 
 finish "\$command_status"

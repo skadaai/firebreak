@@ -360,13 +360,30 @@ acquire_kind_spawn_lock() {
   kind_spawn_lock_dir=$lock_root/$kind_name.lock
 
   mkdir -p "$lock_root"
-  while ! mkdir "$kind_spawn_lock_dir" 2>/dev/null; do
+  while :; do
+    if mkdir "$kind_spawn_lock_dir" 2>/dev/null; then
+      printf '%s\n' "$$" >"$kind_spawn_lock_dir/pid"
+      date +%s >"$kind_spawn_lock_dir/acquired-at"
+      return 0
+    fi
+
+    stale_lock_pid=""
+    if [ -r "$kind_spawn_lock_dir/pid" ]; then
+      IFS= read -r stale_lock_pid <"$kind_spawn_lock_dir/pid" || stale_lock_pid=""
+    fi
+
+    if [ -n "$stale_lock_pid" ] && ! kill -0 "$stale_lock_pid" 2>/dev/null; then
+      rm -rf "$kind_spawn_lock_dir"
+      continue
+    fi
+
     sleep 0.1
   done
 }
 
 release_kind_spawn_lock() {
   if [ -n "${kind_spawn_lock_dir:-}" ]; then
+    rm -f "$kind_spawn_lock_dir/pid" "$kind_spawn_lock_dir/acquired-at"
     rmdir "$kind_spawn_lock_dir" 2>/dev/null || true
     kind_spawn_lock_dir=""
   fi

@@ -8,7 +8,7 @@ command=${1:-}
 usage() {
   cat <<'EOF' >&2
 usage:
-  firebreak worker run --backend BACKEND --kind KIND [--workspace PATH] [--package NAME] [--vm-mode MODE] [--json] [--] COMMAND...
+  firebreak worker run --backend BACKEND --kind KIND [--workspace PATH] [--package NAME] [--vm-mode MODE] [--attach] [--json] [--] COMMAND...
   firebreak worker ps [-a|--all] [--json]
   firebreak worker inspect WORKER_ID
   firebreak worker logs [--stdout|--stderr] [-f|--follow] WORKER_ID
@@ -238,7 +238,8 @@ quote_arg() {
 
 write_process_launch_script() {
   launch_script=$1
-  shift
+  attach_mode=$2
+  shift 2
 
   quoted_workspace=$(quote_arg "$workspace")
   quoted_stdout=$(quote_arg "$stdout_path")
@@ -260,6 +261,7 @@ stderr_path=$quoted_stderr
 exit_code_path=$quoted_exit_code
 finished_at_path=$quoted_finished_at
 child_pid_path=$quoted_child_pid
+attach_mode=$attach_mode
 
 finish() {
   status=\$1
@@ -279,8 +281,13 @@ stop_child() {
 trap stop_child INT TERM
 
 cd "\$workspace"
-exec 1>"\$stdout_path"
-exec 2>"\$stderr_path"
+if [ "\$attach_mode" = "1" ]; then
+  exec > >(tee -a "\$stdout_path")
+  exec 2> >(tee -a "\$stderr_path" >&2)
+else
+  exec 1>"\$stdout_path"
+  exec 2>"\$stderr_path"
+fi
 
 set +e
 $quoted_command &
@@ -297,7 +304,8 @@ EOF
 
 write_firebreak_launch_script() {
   launch_script=$1
-  shift
+  attach_mode=$2
+  shift 2
 
   if [ -z "${FIREBREAK_FLAKE_REF:-}" ]; then
     echo "FIREBREAK_FLAKE_REF is required for firebreak worker backend" >&2
@@ -338,6 +346,7 @@ finished_at_path=$quoted_finished_at
 child_pid_path=$quoted_child_pid
 instance_dir=$quoted_instance_dir
 vm_mode=$quoted_vm_mode
+attach_mode=$attach_mode
 
 finish() {
   status=\$1
@@ -358,8 +367,13 @@ trap stop_child INT TERM
 
 mkdir -p "\$instance_dir"
 cd "\$workspace"
-exec 1>"\$stdout_path"
-exec 2>"\$stderr_path"
+if [ "\$attach_mode" = "1" ]; then
+  exec > >(tee -a "\$stdout_path")
+  exec 2> >(tee -a "\$stderr_path" >&2)
+else
+  exec 1>"\$stdout_path"
+  exec 2>"\$stderr_path"
+fi
 
 set +e
 env FIREBREAK_INSTANCE_DIR="\$instance_dir" FIREBREAK_VM_MODE="\$vm_mode" $nix_command$quoted_args &
@@ -375,6 +389,7 @@ EOF
 }
 
 spawn_worker() {
+  attach_mode=0
   run_json=0
   backend=""
   kind=""
@@ -408,6 +423,10 @@ spawn_worker() {
         run_json=1
         shift
         ;;
+      --attach)
+        attach_mode=1
+        shift
+        ;;
       --)
         shift
         break
@@ -423,6 +442,10 @@ spawn_worker() {
 
   if [ -z "$backend" ] || [ -z "$kind" ]; then
     usage
+  fi
+  if [ "$attach_mode" = "1" ] && [ "$run_json" = "1" ]; then
+    echo "firebreak worker run does not support --attach with --json" >&2
+    exit 1
   fi
   validate_token "$kind" "worker kind"
   require_absolute_dir "$state_dir" "worker state dir"
@@ -478,13 +501,19 @@ spawn_worker() {
   launch_script=$worker_root/launch.sh
   case "$backend" in
     process)
-      write_process_launch_script "$launch_script" "$@"
+      write_process_launch_script "$launch_script" "$attach_mode" "$@"
       ;;
     firebreak)
       mkdir -p "$worker_root/instance"
-      write_firebreak_launch_script "$launch_script" "$@"
+      write_firebreak_launch_script "$launch_script" "$attach_mode" "$@"
       ;;
   esac
+
+  if [ "$attach_mode" = "1" ]; then
+    pid=$$
+    write_metadata
+    exec bash "$launch_script"
+  fi
 
   nohup bash "$launch_script" >/dev/null 2>&1 &
   pid=$!

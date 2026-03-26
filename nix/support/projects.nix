@@ -15,43 +15,7 @@
       fi
 
       workspace=$PWD
-      run_output=$(firebreak worker run --kind ${lib.escapeShellArg kind} --workspace "$workspace" --json -- "$@")
-      printf '%s\n' "$run_output"
-
-      worker_id=$(RUN_OUTPUT="$run_output" node -e 'process.stdout.write(JSON.parse(process.env.RUN_OUTPUT).worker_id)')
-      if [ -z "$worker_id" ]; then
-        echo "failed to extract Firebreak worker id from run output" >&2
-        exit 1
-      fi
-
-      cleanup() {
-        firebreak worker stop "$worker_id" >/dev/null 2>&1 || true
-      }
-
-      trap cleanup INT TERM
-
-      last_status=""
-      for _ in $(seq 1 3600); do
-        inspect_output=$(firebreak worker inspect "$worker_id")
-        status=$(INSPECT_OUTPUT="$inspect_output" node -e 'const data = JSON.parse(process.env.INSPECT_OUTPUT); process.stdout.write(String(data.status ?? ""));')
-
-        if [ "$status" != "$last_status" ]; then
-          printf '%s\n' "firebreak worker $worker_id status: $status"
-          last_status=$status
-        fi
-
-        case "$status" in
-          exited|stopped)
-            exit_code=$(INSPECT_OUTPUT="$inspect_output" node -e 'const data = JSON.parse(process.env.INSPECT_OUTPUT); const value = data.exit_code; process.stdout.write(value === null || value === undefined ? "" : String(value));')
-            exit "''${exit_code:-0}"
-            ;;
-        esac
-
-        sleep 1
-      done
-
-      echo "timed out waiting for Firebreak worker $worker_id to finish" >&2
-      exit 124
+      exec firebreak worker run --kind ${lib.escapeShellArg kind} --workspace "$workspace" --attach -- "$@"
     '';
 
   mkWorkspaceProjectArtifacts = {

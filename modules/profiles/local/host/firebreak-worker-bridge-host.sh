@@ -24,7 +24,9 @@ process_request() {
   python3 - <<'PY'
 import json
 import os
+import pty
 import subprocess
+import threading
 
 request_path = os.environ["REQUEST_PATH"]
 worker_script = os.environ["WORKER_SCRIPT"]
@@ -39,16 +41,73 @@ try:
     if not isinstance(argv, list) or not argv:
         raise ValueError("request argv must be a non-empty list")
     argv = [str(item) for item in argv]
-    result = subprocess.run(
-        ["bash", worker_script, *argv],
-        capture_output=True,
-        text=True,
-        env=os.environ.copy(),
-        check=False,
-    )
-    stdout = result.stdout
-    stderr = result.stderr
-    exit_code = result.returncode
+    if request.get("attach") is True:
+        stdin_fifo = request.get("stdin_fifo")
+        stdout_fifo = request.get("stdout_fifo")
+        if not isinstance(stdin_fifo, str) or not isinstance(stdout_fifo, str):
+            raise ValueError("attach requests must provide stdin_fifo and stdout_fifo")
+
+        master_fd, slave_fd = pty.openpty()
+        proc = subprocess.Popen(
+            ["bash", worker_script, *argv],
+            stdin=slave_fd,
+            stdout=slave_fd,
+            stderr=slave_fd,
+            env=os.environ.copy(),
+            close_fds=True,
+        )
+        os.close(slave_fd)
+
+        def pump_stdin():
+            try:
+                with open(stdin_fifo, "rb", buffering=0) as source:
+                    while True:
+                        chunk = source.read(4096)
+                        if not chunk:
+                            break
+                        os.write(master_fd, chunk)
+            except OSError:
+                pass
+
+        def pump_stdout():
+            try:
+                with open(stdout_fifo, "wb", buffering=0) as sink:
+                    while True:
+                        try:
+                            chunk = os.read(master_fd, 4096)
+                        except OSError:
+                            break
+                        if not chunk:
+                            break
+                        sink.write(chunk)
+                        sink.flush()
+            except OSError:
+                pass
+
+        stdin_thread = threading.Thread(target=pump_stdin, daemon=True)
+        stdout_thread = threading.Thread(target=pump_stdout, daemon=True)
+        stdin_thread.start()
+        stdout_thread.start()
+        exit_code = proc.wait()
+        try:
+            os.close(master_fd)
+        except OSError:
+            pass
+        stdin_thread.join(timeout=1)
+        stdout_thread.join(timeout=1)
+        stdout = ""
+        stderr = ""
+    else:
+        result = subprocess.run(
+            ["bash", worker_script, *argv],
+            capture_output=True,
+            text=True,
+            env=os.environ.copy(),
+            check=False,
+        )
+        stdout = result.stdout
+        stderr = result.stderr
+        exit_code = result.returncode
 except Exception as error:
     stdout = ""
     stderr = f"firebreak worker bridge request failed: {error}\n"

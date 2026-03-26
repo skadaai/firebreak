@@ -76,6 +76,16 @@ if ! printf '%s\n' "$process_logs_output" | grep -F -q 'worker-ok'; then
   exit 1
 fi
 
+attach_process_output=$(
+  FIREBREAK_WORKER_STATE_DIR="$state_dir" \
+    @AGENT_BIN@ run --attach --backend process --kind smoke-attach-process --workspace "$workspace_dir" -- sh -c 'printf attached-ok'
+)
+if ! printf '%s\n' "$attach_process_output" | grep -F -q 'attached-ok'; then
+  printf '%s\n' "$attach_process_output" >&2
+  echo "worker smoke did not expose attached process output" >&2
+  exit 1
+fi
+
 spawn_firebreak_output=$(
   PATH="$fake_bin_dir:$PATH" \
     FIREBREAK_WORKER_STATE_DIR="$state_dir" \

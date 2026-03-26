@@ -9,7 +9,7 @@ command=${1:-}
 usage() {
   cat <<'EOF' >&2
 usage:
-  firebreak worker run --kind KIND [--workspace PATH] [--backend BACKEND] [--package NAME] [--vm-mode MODE] [--json] [--] COMMAND...
+  firebreak worker run --kind KIND [--workspace PATH] [--backend BACKEND] [--package NAME] [--vm-mode MODE] [--attach] [--json] [--] COMMAND...
   firebreak worker ps [-a|--all] [--json]
   firebreak worker inspect WORKER_ID
   firebreak worker logs [--stdout|--stderr] [-f|--follow] WORKER_ID
@@ -62,6 +62,97 @@ PY
   fi
 
   IFS= read -r bridge_exit_code < "$request_dir/response.exit-code" || bridge_exit_code=1
+  case "$bridge_exit_code" in
+    ''|*[!0-9]*)
+      echo "invalid Firebreak worker bridge exit code: $bridge_exit_code" >&2
+      exit 1
+      ;;
+  esac
+  return "$bridge_exit_code"
+}
+
+bridge_request_attach() {
+  if ! [ -d "$bridge_dir" ]; then
+    echo "Firebreak worker bridge is unavailable at $bridge_dir" >&2
+    exit 1
+  fi
+
+  requests_dir=$bridge_dir/requests
+  mkdir -p "$requests_dir"
+  request_dir=$(mktemp -d "$requests_dir/request.XXXXXX")
+  request_tmp_path=$request_dir/request.json.tmp
+  stdin_fifo=$request_dir/stdin.pipe
+  stdout_fifo=$request_dir/stdout.pipe
+
+  mkfifo "$stdin_fifo" "$stdout_fifo"
+
+  REQUEST_PATH=$request_tmp_path STDIN_FIFO=$stdin_fifo STDOUT_FIFO=$stdout_fifo python3 - "$@" <<'PY'
+import json
+import os
+import sys
+
+request_path = os.environ["REQUEST_PATH"]
+with open(request_path, "w", encoding="utf-8") as handle:
+    json.dump(
+        {
+            "argv": sys.argv[1:],
+            "attach": True,
+            "stdin_fifo": os.environ["STDIN_FIFO"],
+            "stdout_fifo": os.environ["STDOUT_FIFO"],
+        },
+        handle,
+    )
+PY
+
+  tty_state=""
+  if [ -t 0 ] && [ -t 1 ]; then
+    tty_state=$(stty -g)
+    stty raw -echo
+  fi
+
+  restore_tty() {
+    if [ -n "$tty_state" ]; then
+      stty "$tty_state" 2>/dev/null || true
+    fi
+  }
+
+  cleanup_attach() {
+    restore_tty
+    if [ -n "${stdin_forward_pid:-}" ]; then
+      kill "$stdin_forward_pid" 2>/dev/null || true
+    fi
+    if [ -n "${stdout_forward_pid:-}" ]; then
+      kill "$stdout_forward_pid" 2>/dev/null || true
+    fi
+  }
+
+  trap cleanup_attach EXIT INT TERM
+
+  cat <"$stdout_fifo" &
+  stdout_forward_pid=$!
+
+  cat >"$stdin_fifo" &
+  stdin_forward_pid=$!
+
+  mv "$request_tmp_path" "$request_dir/request.json"
+
+  for _ in $(seq 1 36000); do
+    if [ -f "$request_dir/response.exit-code" ]; then
+      break
+    fi
+    sleep 0.1
+  done
+
+  cleanup_attach
+  trap - EXIT INT TERM
+
+  if ! [ -f "$request_dir/response.exit-code" ]; then
+    echo "timed out waiting for Firebreak worker attach response" >&2
+    exit 1
+  fi
+
+  IFS= read -r bridge_exit_code < "$request_dir/response.exit-code" || bridge_exit_code=1
+  restore_tty
   case "$bridge_exit_code" in
     ''|*[!0-9]*)
       echo "invalid Firebreak worker bridge exit code: $bridge_exit_code" >&2
@@ -322,6 +413,7 @@ subcommand=${1:-}
 case "$subcommand" in
   run)
     shift
+    attach_mode=0
     backend=""
     kind=""
     workspace=$PWD
@@ -355,6 +447,10 @@ case "$subcommand" in
           run_json=1
           shift
           ;;
+        --attach)
+          attach_mode=1
+          shift
+          ;;
         --)
           shift
           break
@@ -375,6 +471,11 @@ case "$subcommand" in
       backend=$(resolve_kind_field "$kind_json" "backend")
     fi
 
+    if [ "$attach_mode" = "1" ] && [ "$run_json" = "1" ]; then
+      echo "firebreak worker run does not support --attach with --json" >&2
+      exit 1
+    fi
+
     acquire_kind_spawn_lock "$kind"
     trap release_kind_spawn_lock EXIT INT TERM
     enforce_kind_limit "$kind_json" "$kind"
@@ -384,7 +485,7 @@ case "$subcommand" in
         if [ "$#" -eq 0 ]; then
           default_command_json=$(resolve_kind_field "$kind_json" "command")
           if [ -n "$default_command_json" ]; then
-            KIND_JSON=$kind_json WORKER_LOCAL_HELPER=$local_helper WORKER_KIND=$kind WORKER_WORKSPACE=$workspace WORKER_RUN_JSON=$run_json python3 - <<'PY'
+            KIND_JSON=$kind_json WORKER_LOCAL_HELPER=$local_helper WORKER_KIND=$kind WORKER_WORKSPACE=$workspace WORKER_RUN_JSON=$run_json WORKER_ATTACH_MODE=$attach_mode python3 - <<'PY'
 import json
 import os
 import subprocess
@@ -405,6 +506,8 @@ argv = [
     "--workspace",
     os.environ["WORKER_WORKSPACE"],
 ]
+if os.environ.get("WORKER_ATTACH_MODE") == "1":
+    argv.append("--attach")
 if os.environ["WORKER_RUN_JSON"] == "1":
     argv.append("--json")
 argv.extend(["--", *[str(item) for item in command]])
@@ -417,7 +520,9 @@ PY
             exit "$run_status"
           fi
         fi
-        if [ "$run_json" = "1" ]; then
+        if [ "$attach_mode" = "1" ]; then
+          "$local_helper" run --backend process --kind "$kind" --workspace "$workspace" --attach -- "$@"
+        elif [ "$run_json" = "1" ]; then
           "$local_helper" run --backend process --kind "$kind" --workspace "$workspace" --json -- "$@"
         else
           "$local_helper" run --backend process --kind "$kind" --workspace "$workspace" -- "$@"
@@ -437,7 +542,9 @@ PY
         if [ -z "$vm_mode" ]; then
           vm_mode=run
         fi
-        if [ "$run_json" = "1" ]; then
+        if [ "$attach_mode" = "1" ]; then
+          bridge_request_attach run --backend firebreak --kind "$kind" --workspace "$workspace" --package "$package_name" --vm-mode "$vm_mode" --attach -- "$@"
+        elif [ "$run_json" = "1" ]; then
           bridge_request run --backend firebreak --kind "$kind" --workspace "$workspace" --package "$package_name" --vm-mode "$vm_mode" --json -- "$@"
         else
           bridge_request run --backend firebreak --kind "$kind" --workspace "$workspace" --package "$package_name" --vm-mode "$vm_mode" -- "$@"

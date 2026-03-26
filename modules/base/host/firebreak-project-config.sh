@@ -17,7 +17,7 @@ firebreak_reset_project_config_state() {
 
 firebreak_project_config_key_allowed() {
   case "$1" in
-    AGENT_CONFIG|AGENT_CONFIG_HOST_PATH|FIREBREAK_VM_MODE|CODEX_CONFIG|CODEX_CONFIG_HOST_PATH|CLAUDE_CONFIG|CLAUDE_CONFIG_HOST_PATH)
+    AGENT_CONFIG|AGENT_CONFIG_HOST_PATH|FIREBREAK_VM_MODE|CODEX_CONFIG|CLAUDE_CONFIG)
       return 0
       ;;
     *)

@@ -3,8 +3,10 @@ let
   cfg = config.agentVm;
   devHome = "/var/lib/${cfg.devUser}";
   localBin = "${devHome}/.local/bin";
-  multiAgentConfigEnvFile = "${cfg.hostMetaMount}/firebreak-multi-agent.env";
-  multiAgentWrapperPackages = lib.mapAttrsToList
+  sharedAgentConfigEnvFile = "${cfg.hostMetaMount}/firebreak-shared-agent.env";
+  resolveAgentConfigScript = pkgs.writeShellScript "firebreak-resolve-agent-config"
+    (builtins.readFile ./guest/resolve-agent-config.sh);
+  sharedAgentWrapperPackages = lib.mapAttrsToList
     (wrapperName: wrapper:
       pkgs.writeShellScriptBin wrapperName
         (renderTemplate {
@@ -12,24 +14,25 @@ let
           "@WRAPPER_DISPLAY_NAME@" = wrapper.displayName;
           "@REAL_BIN@" = "${localBin}/${wrapper.realBinName}";
           "@SPECIFIC_CONFIG_VAR@" = "${wrapper.selectorPrefix}_CONFIG";
-          "@SPECIFIC_HOST_PATH_VAR@" = "${wrapper.selectorPrefix}_CONFIG_HOST_PATH";
           "@CONFIG_SUBDIR@" = wrapper.configSubdir;
+          "@WORKSPACE_DIR_NAME@" = ".firebreak/${wrapper.configSubdir}";
           "@CONFIG_ENV_EXPORTS@" = wrapper.configEnvExports;
-        } ./guest/multi-agent-wrapper.sh))
-    cfg.multiAgentConfig.agents;
-  multiAgentWrapperPackage =
-    if multiAgentWrapperPackages == [ ] then
+          "@RESOLVE_AGENT_CONFIG_BIN@" = "${resolveAgentConfigScript}";
+        } ./guest/shared-agent-wrapper.sh))
+    cfg.sharedAgentConfig.agents;
+  sharedAgentWrapperPackage =
+    if sharedAgentWrapperPackages == [ ] then
       null
     else
       pkgs.symlinkJoin {
-        name = "${cfg.name}-multi-agent-wrappers";
-        paths = multiAgentWrapperPackages;
+        name = "${cfg.name}-shared-agent-wrappers";
+        paths = sharedAgentWrapperPackages;
       };
-  multiAgentWrapperBinDir =
-    if multiAgentWrapperPackage == null then
+  sharedAgentWrapperBinDir =
+    if sharedAgentWrapperPackage == null then
       ""
     else
-      "${multiAgentWrapperPackage}/bin";
+      "${sharedAgentWrapperPackage}/bin";
 
   scriptVars = {
     "@DEV_HOME@" = devHome;
@@ -38,16 +41,17 @@ let
     "@AGENT_CONFIG_DIR_NAME@" = cfg.agentConfigDirName;
     "@START_DIR_FILE@" = cfg.startDirFile;
     "@WORKSPACE_MOUNT@" = cfg.workspaceMount;
-    "@MULTI_AGENT_CONFIG_ENV_EXPORTS@" = lib.optionalString cfg.multiAgentConfig.enable ''
-      export FIREBREAK_MULTI_AGENT_CONFIG_ENABLED=1
-      export FIREBREAK_MULTI_AGENT_CONFIG_HOST_MOUNT=${lib.escapeShellArg cfg.multiAgentConfig.hostMount}
-      export FIREBREAK_MULTI_AGENT_CONFIG_VM_ROOT=${lib.escapeShellArg cfg.multiAgentConfig.vmRoot}
-      export FIREBREAK_MULTI_AGENT_CONFIG_FRESH_ROOT=${lib.escapeShellArg cfg.multiAgentConfig.freshRoot}
-      export FIREBREAK_MULTI_AGENT_CONFIG_ENV_FILE=${lib.escapeShellArg multiAgentConfigEnvFile}
-      export FIREBREAK_MULTI_AGENT_CONFIG_HOST_MOUNTED_FLAG=${lib.escapeShellArg cfg.multiAgentConfig.mountedFlag}
+    "@SHARED_AGENT_CONFIG_ENV_EXPORTS@" = lib.optionalString cfg.sharedAgentConfig.enable ''
+      export FIREBREAK_SHARED_AGENT_CONFIG_ENABLED=1
+      export FIREBREAK_SHARED_AGENT_CONFIG_HOST_MOUNT=${lib.escapeShellArg cfg.sharedAgentConfig.hostMount}
+      export FIREBREAK_SHARED_AGENT_CONFIG_VM_ROOT=${lib.escapeShellArg cfg.sharedAgentConfig.vmRoot}
+      export FIREBREAK_SHARED_AGENT_CONFIG_FRESH_ROOT=${lib.escapeShellArg cfg.sharedAgentConfig.freshRoot}
+      export FIREBREAK_SHARED_AGENT_CONFIG_ENV_FILE=${lib.escapeShellArg sharedAgentConfigEnvFile}
+      export FIREBREAK_SHARED_AGENT_CONFIG_HOST_MOUNTED_FLAG=${lib.escapeShellArg cfg.sharedAgentConfig.mountedFlag}
+      export FIREBREAK_RESOLVE_AGENT_CONFIG_BIN=${lib.escapeShellArg "${resolveAgentConfigScript}"}
     '';
-    "@MULTI_AGENT_WRAPPER_ENV_EXPORTS@" = lib.optionalString (multiAgentWrapperBinDir != "") ''
-      export FIREBREAK_MULTI_AGENT_WRAPPER_BIN_DIR=${lib.escapeShellArg multiAgentWrapperBinDir}
+    "@SHARED_AGENT_WRAPPER_ENV_EXPORTS@" = lib.optionalString (sharedAgentWrapperBinDir != "") ''
+      export FIREBREAK_SHARED_AGENT_WRAPPER_BIN_DIR=${lib.escapeShellArg sharedAgentWrapperBinDir}
     '';
   };
 
@@ -109,22 +113,16 @@ in {
       description = "Directory name used for workspace/vm agent config resolution.";
     };
 
-    agentConfigHostMount = mkOption {
+    agentConfigSubdir = mkOption {
       type = types.str;
-      default = "/run/agent-config-host";
-      description = "Guest path used for an optional host-provided agent config share.";
+      default = "agent";
+      description = "Stable subdirectory name used under the unified host config root.";
     };
 
     agentConfigDirFile = mkOption {
       type = types.str;
       default = "/run/agent-config-dir";
       description = "World-readable file containing the resolved agent config directory for the current session.";
-    };
-
-    agentConfigFreshDir = mkOption {
-      type = types.str;
-      default = "/run/agent-config-fresh";
-      description = "Guest path used for fresh ephemeral agent config sessions.";
     };
 
     agentSessionModeFile = mkOption {
@@ -163,39 +161,39 @@ in {
       description = "World-readable file containing the initial prompt for non-interactive agent execution.";
     };
 
-    multiAgentConfig = mkOption {
+    sharedAgentConfig = mkOption {
       default = { };
-      description = "Shared multi-agent config contract for sandboxes that host more than one agent CLI.";
+      description = "Shared agent config-root contract for sandboxes and dedicated workloads.";
       type = types.submodule ({ ... }: {
         options = {
           enable = mkOption {
             type = types.bool;
             default = false;
-            description = "Whether the VM exposes the shared multi-agent config contract.";
+            description = "Whether the VM exposes the shared agent config-root contract.";
           };
 
           hostMount = mkOption {
             type = types.str;
             default = "/run/agent-config-host-root";
-            description = "Guest path used for the shared host-backed multi-agent config root.";
+            description = "Guest path used for the shared host-backed agent config root.";
           };
 
           vmRoot = mkOption {
             type = types.str;
             default = "${devHome}/.firebreak";
-            description = "Guest root used for persistent VM-local multi-agent config directories.";
+            description = "Guest root used for persistent VM-local agent config directories.";
           };
 
           freshRoot = mkOption {
             type = types.str;
             default = "/run/firebreak-agent-config-fresh";
-            description = "Guest root used for fresh ephemeral multi-agent config directories.";
+            description = "Guest root used for fresh ephemeral agent config directories.";
           };
 
           mountedFlag = mkOption {
             type = types.str;
-            default = "/run/firebreak-multi-agent-host-mounted";
-            description = "Guest file used to indicate that the multi-agent host config root is mounted.";
+            default = "/run/firebreak-shared-agent-config-host-mounted";
+            description = "Guest file used to indicate that the shared host config root is mounted.";
           };
 
           agents = mkOption {
@@ -220,7 +218,7 @@ in {
 
                 configSubdir = mkOption {
                   type = types.str;
-                  description = "Stable subdirectory name inside the resolved multi-agent config root.";
+                  description = "Stable subdirectory name inside the resolved shared agent config root.";
                 };
 
                 configEnvExports = mkOption {
@@ -230,7 +228,7 @@ in {
               };
             }));
             default = { };
-            description = "Wrapper commands generated for multi-agent sandboxes.";
+            description = "Wrapper commands generated for workloads that expose agent CLIs through the shared config-root contract.";
           };
         };
       });
@@ -320,7 +318,7 @@ in {
 
     environment.systemPackages =
       cfg.extraSystemPackages
-      ++ lib.optional (multiAgentWrapperPackage != null) multiAgentWrapperPackage;
+      ++ lib.optional (sharedAgentWrapperPackage != null) sharedAgentWrapperPackage;
 
     programs.bash.interactiveShellInit = ''
       ${baseShellInit}

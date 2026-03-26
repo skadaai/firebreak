@@ -54,11 +54,16 @@ let
     runner,
     controlSocketName,
     defaultAgentCommand ? "",
-    agentConfigDirName,
+    agentConfigSubdir ? "agent",
     defaultAgentConfigHostDir,
+    workspaceBootstrapConfigHostDir ? "",
+    hostConfigAdoptionEnabled ? false,
     agentEnvPrefix ? "AGENT",
-    multiAgentConfig ? { },
+    sharedAgentConfig ? { },
   }:
+    let
+      agentConfigDirName = ".firebreak/${agentConfigSubdir}";
+    in
     pkgs.writeShellApplication {
       inherit name;
       runtimeInputs = with pkgs; [ coreutils git virtiofsd ];
@@ -67,9 +72,12 @@ let
         "@DEFAULT_AGENT_COMMAND@" = defaultAgentCommand;
         "@RUNNER@" = "${runner}/bin/microvm-run";
         "@AGENT_CONFIG_DIR_NAME@" = agentConfigDirName;
+        "@AGENT_CONFIG_SUBDIR@" = agentConfigSubdir;
         "@DEFAULT_AGENT_CONFIG_HOST_DIR@" = defaultAgentConfigHostDir;
+        "@WORKSPACE_BOOTSTRAP_CONFIG_HOST_DIR@" = workspaceBootstrapConfigHostDir;
+        "@HOST_CONFIG_ADOPTION_ENABLED@" = if hostConfigAdoptionEnabled then "1" else "0";
         "@AGENT_ENV_PREFIX@" = agentEnvPrefix;
-        "@MULTI_AGENT_CONFIG_ENABLED@" = if (multiAgentConfig.enable or false) then "1" else "0";
+        "@SHARED_AGENT_CONFIG_ENABLED@" = if (sharedAgentConfig.enable or false) then "1" else "0";
         "@FIREBREAK_PROJECT_CONFIG_LIB@" = builtins.readFile ../../modules/base/host/firebreak-project-config.sh;
       } ../../modules/profiles/local/host/run-wrapper.sh;
     };
@@ -79,20 +87,24 @@ let
     runnerPackage,
     controlSocketName ? name,
     defaultAgentCommand ? "",
-    agentConfigDirName ? ".firebreak",
-    defaultAgentConfigHostDir ? "$HOME/.firebreak/${name}",
+    agentConfigSubdir ? "agent",
+    defaultAgentConfigHostDir ? "$HOME/.firebreak",
+    workspaceBootstrapConfigHostDir ? "",
+    hostConfigAdoptionEnabled ? false,
     agentEnvPrefix ? "AGENT",
-    multiAgentConfig ? { },
+    sharedAgentConfig ? { },
   }:
     mkAgentPackage {
       inherit
         name
         controlSocketName
         defaultAgentCommand
-        agentConfigDirName
+        agentConfigSubdir
         defaultAgentConfigHostDir
+        workspaceBootstrapConfigHostDir
+        hostConfigAdoptionEnabled
         agentEnvPrefix
-        multiAgentConfig;
+        sharedAgentConfig;
       runner = runnerPackage;
     };
 
@@ -102,10 +114,12 @@ let
     profileModules ? [ self.nixosModules.firebreak-local-profile ],
     controlSocketName ? name,
     defaultAgentCommand ? "",
-    agentConfigDirName ? ".firebreak",
-    defaultAgentConfigHostDir ? "$HOME/.firebreak/${name}",
+    agentConfigSubdir ? "agent",
+    defaultAgentConfigHostDir ? "$HOME/.firebreak",
+    workspaceBootstrapConfigHostDir ? "",
+    hostConfigAdoptionEnabled ? false,
     agentEnvPrefix ? "AGENT",
-    multiAgentConfig ? { },
+    sharedAgentConfig ? { },
   }:
     let
       nixosConfiguration = mkAgentVm {
@@ -118,10 +132,12 @@ let
           runnerPackage
           controlSocketName
           defaultAgentCommand
-          agentConfigDirName
+          agentConfigSubdir
           defaultAgentConfigHostDir
+          workspaceBootstrapConfigHostDir
+          hostConfigAdoptionEnabled
           agentEnvPrefix
-          multiAgentConfig;
+          sharedAgentConfig;
       };
     in {
       inherit nixosConfiguration package runnerPackage;

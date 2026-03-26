@@ -1,9 +1,9 @@
 @spec-014
-Feature: Multi-agent host config share
+Feature: Shared agent config root
 
   Scenario: generic selector defaults both wrappers
     Given a Firebreak sandbox that exposes both Codex and Claude Code
-    And the sandbox enables the multi-agent host config share contract
+    And the sandbox enables the shared agent config-root contract
     And the operator sets "AGENT_CONFIG=workspace"
     When the operator launches the Firebreak Codex wrapper
     Then Firebreak resolves the Codex config directory under the workspace contract
@@ -15,14 +15,14 @@ Feature: Multi-agent host config share
     And the operator sets "AGENT_CONFIG=vm"
     And the operator sets "CODEX_CONFIG=host"
     When the operator launches the Firebreak Codex wrapper
-    Then Firebreak resolves Codex config from the host-backed multi-agent share
+    Then Firebreak resolves Codex config from the host-backed shared config root
     And the generic selector does not override that Codex-specific choice
     When the operator launches the Firebreak Claude Code wrapper
     Then Firebreak resolves Claude Code config from the generic `vm` selector
 
   Scenario: host mode resolves stable per-agent subdirectories
     Given a Firebreak sandbox that exposes both Codex and Claude Code
-    And the sandbox enables the multi-agent host config share contract
+    And the sandbox enables the shared agent config-root contract
     And the operator enables `host` mode for both tools
     When the operator launches the Firebreak Codex wrapper
     Then Firebreak resolves a Codex-specific subdirectory within the mounted host config root

@@ -178,11 +178,11 @@ is_managed_shared_path() {
   changed_path=$1
 
   case "$changed_path" in
-    .codex|.codex/*)
-      managed_root=$worktree_shared_root/.codex
+    .firebreak/codex|.firebreak/codex/*)
+      managed_root=$worktree_shared_root/.firebreak/codex
       ;;
-    .claude|.claude/*)
-      managed_root=$worktree_shared_root/.claude
+    .firebreak/claude|.firebreak/claude/*)
+      managed_root=$worktree_shared_root/.firebreak/claude
       ;;
     .direnv|.direnv/*)
       managed_root=$worktree_shared_root/.direnv
@@ -307,7 +307,7 @@ run_review() {
   {
     git -C "$worktree_path" diff --name-only
     git -C "$worktree_path" ls-files --others --exclude-standard
-    for managed_dir in .codex .claude .direnv; do
+    for managed_dir in .firebreak/codex .firebreak/claude .direnv; do
       if [ -e "$worktree_path/$managed_dir" ]; then
         find -L "$worktree_path/$managed_dir" -mindepth 1 -type f -printf '%P\n' | sed "s#^#$managed_dir/#"
       fi

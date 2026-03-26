@@ -19,9 +19,7 @@ unset AGENT_CONFIG_HOST_PATH
 unset FIREBREAK_PROJECT_CONFIG_FILE
 unset FIREBREAK_VM_MODE
 unset CODEX_CONFIG
-unset CODEX_CONFIG_HOST_PATH
 unset CLAUDE_CONFIG
-unset CLAUDE_CONFIG_HOST_PATH
 
 firebreak_cmd() {
   (
@@ -43,12 +41,12 @@ require_pattern() {
 }
 
 init_template_stdout=$(firebreak_cmd init --non-interactive --stdout)
-require_pattern "$init_template_stdout" "AGENT_CONFIG=workspace" "default AGENT_CONFIG template entry"
+require_pattern "$init_template_stdout" "AGENT_CONFIG=host" "default AGENT_CONFIG template entry"
 require_pattern "$init_template_stdout" "# FIREBREAK_VM_MODE=run" "default FIREBREAK_VM_MODE template entry"
 
 set +e
 interactive_init_output=$(
-  printf '1\n1\nn\nn\ny\n' | firebreak_cmd init 2>&1
+  printf '3\n1\n~/.firebreak\nn\nn\ny\n' | firebreak_cmd init 2>&1
 )
 interactive_init_status=$?
 set -e
@@ -65,7 +63,7 @@ if ! [ -f "$project_dir/.firebreak.env" ]; then
 fi
 
 interactive_init_file=$(cat "$project_dir/.firebreak.env")
-require_pattern "$interactive_init_file" "AGENT_CONFIG=workspace" "interactive init AGENT_CONFIG entry"
+require_pattern "$interactive_init_file" "AGENT_CONFIG=host" "interactive init AGENT_CONFIG entry"
 require_pattern "$interactive_init_file" "FIREBREAK_VM_MODE=run" "interactive init FIREBREAK_VM_MODE entry"
 
 cat >"$project_dir/.firebreak.env" <<EOF
@@ -77,9 +75,9 @@ EOF
 
 doctor_output=$(AGENT_CONFIG=vm firebreak_cmd doctor)
 require_pattern "$doctor_output" "codex_config" "doctor codex summary"
-require_pattern "$doctor_output" "workspace ($project_dir/.codex)" "Codex-specific config precedence"
+require_pattern "$doctor_output" "workspace ($project_dir/.firebreak/codex)" "Codex-specific config precedence"
 require_pattern "$doctor_output" "claude_config" "doctor claude summary"
-require_pattern "$doctor_output" "vm (/var/lib/dev/.claude)" "environment overrides project file for generic agent mode"
+require_pattern "$doctor_output" "vm (/var/lib/dev/.firebreak/claude)" "environment overrides project file for generic agent mode"
 require_pattern "$doctor_output" "Remove unsupported keys from .firebreak.env" "doctor unsupported-key guidance"
 require_pattern "$doctor_output" "cwd_whitespace" "doctor cwd compatibility reporting"
 
@@ -100,7 +98,7 @@ project_dir = os.environ["PROJECT_DIR"]
 assert obj["project_config_source"] == "project-default"
 assert "FIREBREAK_TASK_STATE_DIR" in obj["ignored_config_keys"]
 assert obj["agents"]["codex"]["mode"] == "workspace"
-assert obj["agents"]["codex"]["path"] == f"{project_dir}/.codex"
+assert obj["agents"]["codex"]["path"] == f"{project_dir}/.firebreak/codex"
 assert obj["agents"]["claude-code"]["mode"] == "vm"
 assert obj["vm_mode"] == "run"
 PY

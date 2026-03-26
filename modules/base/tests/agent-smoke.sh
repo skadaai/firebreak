@@ -12,28 +12,20 @@ timeout_seconds=${FIREBREAK_SMOKE_TIMEOUT:-${CODEX_VM_SMOKE_TIMEOUT:-900}}
 firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
 mkdir -p "$firebreak_tmp_root"
 host_config_dir=$(mktemp -d "$firebreak_tmp_root/agent-smoke-config.XXXXXX")
-workspace_config_host_path=""
+host_config_root=$(mktemp -d "$firebreak_tmp_root/agent-smoke-root.XXXXXX")
 expected_workspace_config_dir=""
 
 cleanup() {
   rm -rf "$host_config_dir"
+  rm -rf "$host_config_root"
 }
 trap cleanup EXIT INT TERM
 
 printf '%s\n' "host-smoke-marker" > "$host_config_dir/marker.txt"
+mkdir -p "$host_config_root/@AGENT_CONFIG_SUBDIR@"
+cp "$host_config_dir/marker.txt" "$host_config_root/@AGENT_CONFIG_SUBDIR@/marker.txt"
 
-workspace_config_host_path=$repo_root/@AGENT_CONFIG_DIR_NAME@
 expected_workspace_config_dir=$repo_root/@AGENT_CONFIG_DIR_NAME@
-if [ -L "$workspace_config_host_path" ]; then
-  workspace_config_target=$(realpath -m "$workspace_config_host_path")
-  case "$workspace_config_target" in
-    "$repo_root"|"$repo_root"/*)
-      ;;
-    *)
-      expected_workspace_config_dir="/run/agent-config-host"
-      ;;
-  esac
-fi
 
 smoke_probe_command=$(cat <<'EOF'
 printf '__SMOKE_PWD__%s\n' "$PWD"
@@ -45,7 +37,7 @@ printf '__SMOKE_FLAKE__ok\n'
 test -d "$AGENT_CONFIG_DIR"
 test -w "$AGENT_CONFIG_DIR"
 printf '__SMOKE_CONFIG_OK__ok\n'
-if [ "$AGENT_CONFIG_DIR" = "/run/agent-config-host" ]; then
+if [ "$AGENT_CONFIG_DIR" = "/run/agent-config-host-root/@AGENT_CONFIG_SUBDIR@" ]; then
   test -f "$AGENT_CONFIG_DIR/marker.txt"
   printf '__SMOKE_HOST_CONFIG__ok\n'
 fi
@@ -133,7 +125,7 @@ run_scenario() {
 
   require_line "$output" '__SMOKE_FLAKE__' 'workspace contents' >/dev/null
   require_line "$output" '__SMOKE_CONFIG_OK__' 'agent config usability' >/dev/null
-  if [ "$expected_config_dir" = "/run/agent-config-host" ]; then
+  if [ "$expected_config_dir" = "/run/agent-config-host-root/@AGENT_CONFIG_SUBDIR@" ]; then
     require_line "$output" '__SMOKE_HOST_CONFIG__' 'host config marker' >/dev/null
   fi
   require_line "$output" '__SMOKE_AGENT__' '@AGENT_DISPLAY_NAME@ CLI' >/dev/null
@@ -179,6 +171,6 @@ run_agent_exec_scenario() {
 run_agent_exec_scenario workspace "default agent entry runs @AGENT_BIN@ --version as a one-shot command" "--version"
 run_scenario @AGENT_PACKAGE@ workspace "$expected_workspace_config_dir" "shell override uses workspace config"
 run_scenario @AGENT_PACKAGE@ vm "/var/lib/dev/@AGENT_CONFIG_DIR_NAME@" "shell override uses vm config"
-run_scenario @AGENT_PACKAGE@ host "/run/agent-config-host" "shell override uses host config" "$host_config_dir"
+run_scenario @AGENT_PACKAGE@ host "/run/agent-config-host-root/@AGENT_CONFIG_SUBDIR@" "shell override uses host config" "$host_config_root"
 
 printf '%s\n' "Firebreak smoke test passed"

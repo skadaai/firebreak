@@ -64,17 +64,17 @@ if [ "$start_dir" != "@WORKSPACE_MOUNT@" ]; then
   fi
 fi
 
-if [ "@MULTI_AGENT_CONFIG_ENABLED@" = "1" ]; then
-  mkdir -p @MULTI_AGENT_CONFIG_HOST_MOUNT@ @MULTI_AGENT_CONFIG_FRESH_ROOT@
-  chown @DEV_USER@:@DEV_USER@ @MULTI_AGENT_CONFIG_FRESH_ROOT@
-  rm -f @MULTI_AGENT_CONFIG_MOUNTED_FLAG@
+if [ "@SHARED_AGENT_CONFIG_ENABLED@" = "1" ]; then
+  mkdir -p @SHARED_AGENT_CONFIG_HOST_MOUNT@ @SHARED_AGENT_CONFIG_FRESH_ROOT@
+  chown @DEV_USER@:@DEV_USER@ @SHARED_AGENT_CONFIG_FRESH_ROOT@
+  rm -f @SHARED_AGENT_CONFIG_MOUNTED_FLAG@
 
-  if mountpoint -q @MULTI_AGENT_CONFIG_HOST_MOUNT@; then
-    touch @MULTI_AGENT_CONFIG_MOUNTED_FLAG@
-  elif mount_output=$(mount -t virtiofs hostmultiagentconfig @MULTI_AGENT_CONFIG_HOST_MOUNT@ 2>&1); then
-    touch @MULTI_AGENT_CONFIG_MOUNTED_FLAG@
+  if mountpoint -q @SHARED_AGENT_CONFIG_HOST_MOUNT@; then
+    touch @SHARED_AGENT_CONFIG_MOUNTED_FLAG@
+  elif mount_output=$(mount -t virtiofs hostagentconfigroot @SHARED_AGENT_CONFIG_HOST_MOUNT@ 2>&1); then
+    touch @SHARED_AGENT_CONFIG_MOUNTED_FLAG@
   else
-    printf '%s\n' "Firebreak multi-agent host config share not available; continuing without host-backed multi-agent config: $mount_output"
+    printf '%s\n' "Firebreak shared agent config root is not available; continuing without host-backed config: $mount_output"
   fi
 fi
 
@@ -92,16 +92,12 @@ fi
 
 case "$mode" in
   host)
-    mkdir -p @AGENT_CONFIG_HOST_MOUNT@
-    if ! mountpoint -q @AGENT_CONFIG_HOST_MOUNT@; then
-      if ! mount -t virtiofs hostagentconfig @AGENT_CONFIG_HOST_MOUNT@; then
-        echo "failed to mount host agent config share; falling back to vm config" >&2
-        mode=vm
-      fi
-    fi
-
-    if [ "$mode" = "host" ]; then
-      resolved_dir=@AGENT_CONFIG_HOST_MOUNT@
+    if ! [ -e @SHARED_AGENT_CONFIG_MOUNTED_FLAG@ ]; then
+      echo "failed to mount host agent config share; falling back to vm config" >&2
+      mode=vm
+    else
+      resolved_dir=@SHARED_AGENT_CONFIG_HOST_MOUNT@/@AGENT_CONFIG_SUBDIR@
+      @RUNUSER@ -u @DEV_USER@ -- @MKDIR@ -p "$resolved_dir"
     fi
     ;;
   workspace)
@@ -111,13 +107,19 @@ case "$mode" in
         link_target=$(readlink "$resolved_dir")
         case "$link_target" in
           /*)
-            resolved_target=$link_target
+            if [ -e @SHARED_AGENT_CONFIG_MOUNTED_FLAG@ ]; then
+              resolved_dir=@SHARED_AGENT_CONFIG_HOST_MOUNT@/@AGENT_CONFIG_SUBDIR@
+              @RUNUSER@ -u @DEV_USER@ -- @MKDIR@ -p "$resolved_dir"
+            else
+              echo "host-backed config share is unavailable for external workspace config path: $resolved_dir" >&2
+              exit 1
+            fi
             ;;
           *)
             resolved_target=$(dirname "$resolved_dir")/$link_target
+            @RUNUSER@ -u @DEV_USER@ -- @MKDIR@ -p "$resolved_target"
             ;;
         esac
-        @RUNUSER@ -u @DEV_USER@ -- @MKDIR@ -p "$resolved_target"
       elif [ -e "$resolved_dir" ]; then
         echo "workspace agent config path exists but is not a directory: $resolved_dir" >&2
         exit 1
@@ -131,7 +133,7 @@ case "$mode" in
     chown @DEV_USER@:@DEV_USER@ "$resolved_dir"
     ;;
   fresh)
-    resolved_dir=@AGENT_CONFIG_FRESH_DIR@
+    resolved_dir=@SHARED_AGENT_CONFIG_FRESH_ROOT@/@AGENT_CONFIG_SUBDIR@
     rm -rf "$resolved_dir"
     mkdir -p "$resolved_dir"
     chown @DEV_USER@:@DEV_USER@ "$resolved_dir"

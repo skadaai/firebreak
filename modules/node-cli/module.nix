@@ -13,7 +13,7 @@
   memoryMiB ? 3072,
   extraSystemPackages ? [ ],
   extraBootstrapPackages ? [ ],
-  multiAgentConfig ? { },
+  sharedAgentConfig ? { },
   extraShellInit ? "",
 }:
 moduleArgs@{
@@ -112,7 +112,7 @@ in {
     agentVm = {
       brandingTagline = tagline;
       agentConfigEnabled = false;
-      multiAgentConfig = multiAgentConfig;
+      sharedAgentConfig = sharedAgentConfig;
       memoryMiB = lib.mkDefault memoryMiB;
       extraSystemPackages = with pkgs; [
         nodejs_20

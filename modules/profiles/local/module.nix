@@ -22,9 +22,8 @@ let
     "@DEV_USER@" = cfg.devUser;
     "@AGENT_CONFIG_DIR_FILE@" = cfg.agentConfigDirFile;
     "@AGENT_CONFIG_DIR_NAME@" = cfg.agentConfigDirName;
+    "@AGENT_CONFIG_SUBDIR@" = cfg.agentConfigSubdir;
     "@AGENT_CONFIG_ENABLED@" = if cfg.agentConfigEnabled then "1" else "0";
-    "@AGENT_CONFIG_FRESH_DIR@" = cfg.agentConfigFreshDir;
-    "@AGENT_CONFIG_HOST_MOUNT@" = cfg.agentConfigHostMount;
     "@AGENT_CONFIG_VM_DIR@" = "${devHome}/${cfg.agentConfigDirName}";
     "@AGENT_COMMAND@" = if cfg.agentCommand == null then "" else cfg.agentCommand;
     "@AGENT_COMMAND_FILE@" = cfg.agentCommandFile;
@@ -34,10 +33,10 @@ let
     "@ID@" = "${pkgs.coreutils}/bin/id";
     "@GROUPMOD@" = "${pkgs.shadow}/bin/groupmod";
     "@MKDIR@" = "${pkgs.coreutils}/bin/mkdir";
-    "@MULTI_AGENT_CONFIG_ENABLED@" = if cfg.multiAgentConfig.enable then "1" else "0";
-    "@MULTI_AGENT_CONFIG_FRESH_ROOT@" = cfg.multiAgentConfig.freshRoot;
-    "@MULTI_AGENT_CONFIG_HOST_MOUNT@" = cfg.multiAgentConfig.hostMount;
-    "@MULTI_AGENT_CONFIG_MOUNTED_FLAG@" = cfg.multiAgentConfig.mountedFlag;
+    "@SHARED_AGENT_CONFIG_ENABLED@" = if cfg.sharedAgentConfig.enable then "1" else "0";
+    "@SHARED_AGENT_CONFIG_FRESH_ROOT@" = cfg.sharedAgentConfig.freshRoot;
+    "@SHARED_AGENT_CONFIG_HOST_MOUNT@" = cfg.sharedAgentConfig.hostMount;
+    "@SHARED_AGENT_CONFIG_MOUNTED_FLAG@" = cfg.sharedAgentConfig.mountedFlag;
     "@START_DIR_FILE@" = cfg.startDirFile;
     "@RUNUSER@" = "${pkgs.util-linux}/bin/runuser";
     "@USERMOD@" = "${pkgs.shadow}/bin/usermod";

@@ -71,7 +71,7 @@
           mkdir -p "$ao_web_dir/node_modules/@composio"
           ln -sfn "$ao_core_dir" "$ao_web_dir/node_modules/@composio/ao-core"
         '';
-        multiAgentConfig = {
+        sharedAgentConfig = {
           enable = true;
           agents = {
             codex = {

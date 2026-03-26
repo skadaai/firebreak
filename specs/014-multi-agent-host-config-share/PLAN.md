@@ -7,18 +7,19 @@ last_updated: 2026-03-25
 
 ## Implementation slices
 
-1. Define the durable multi-agent host config root contract and the stable per-agent subdirectory naming or override rules.
-2. Land the shared runtime shape: one `agentVm.multiAgentConfig` subtree, one guest env file, and one shared wrapper implementation.
-3. Add guest-visible wrapper commands for shipped agents such as Codex and Claude Code that resolve Firebreak selectors and export agent-native config env vars.
-4. Consume the shared contract from a packaged external recipe without recipe-local mount hacks.
-5. Add acceptance coverage for generic-vs-agent-specific precedence, per-agent host subdirectory resolution, and wrapper env export behavior.
-6. Update docs and external recipe examples to describe the multi-agent host config share model.
+1. Define the durable shared host config root contract and the stable per-agent subdirectory naming rules across dedicated and shared-sandbox workloads.
+2. Land the shared runtime shape: one `agentVm.sharedAgentConfig` subtree, one guest env file, and one shared wrapper implementation.
+3. Migrate dedicated Codex and Claude Code local packages to the same host-root-plus-subdirectory contract.
+4. Add guest-visible wrapper commands for shipped agents such as Codex and Claude Code that resolve Firebreak selectors and export agent-native config env vars.
+5. Consume the shared contract from a packaged external recipe without recipe-local mount hacks.
+6. Add acceptance coverage for generic-vs-agent-specific precedence, per-agent host subdirectory resolution, wrapper env export behavior, and project-local workspace isolation.
+7. Update docs and external recipe examples to describe the shared host-root model.
 
 ## Validation approach
 
 - run acceptance coverage for Codex wrapper resolution in `workspace`, `vm`, `fresh`, and `host` modes
 - run acceptance coverage for Claude Code wrapper resolution in `workspace`, `vm`, `fresh`, and `host` modes
-- run smoke coverage for one external multi-agent sandbox recipe that installs both agent CLIs
+- run smoke coverage for one external shared-sandbox recipe that installs both agent CLIs
 - run `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' flake check`
 
 ## Dependencies
@@ -30,10 +31,10 @@ last_updated: 2026-03-25
 
 ## Current status
 
-In progress. The first implementation slice now uses a smaller shared contract: one `agentVm.multiAgentConfig` subtree, one host-backed root transport in the local profile, one guest env file for selector defaults, and one shared wrapper implementation in the base runtime. Broader validation coverage and documentation still remain open.
+In progress. The shared host-root contract now covers the external shared sandbox and the dedicated Codex and Claude Code local packages. Broader validation coverage and documentation still remain open.
 
 ## Open questions
 
-- what the stable per-agent subdirectory names should be for shipped agents and future external recipes
+- what the stable per-agent subdirectory names should be for future shipped agents and external recipes beyond Codex and Claude Code
 - whether Firebreak should generate wrappers only for shipped agent CLIs or provide a generic wrapper family for external recipes
 - whether per-agent host-path overrides belong in a later extension or should stay out of the public contract entirely

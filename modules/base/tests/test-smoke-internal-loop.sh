@@ -141,9 +141,10 @@ shared_escape_output=$(firebreak_cmd internal task create --task-id shared-escap
 shared_escape_worktree=$(extract_json_field "$shared_escape_output" worktree_path)
 shared_escape_root=$loop_tmp_dir/shared-escape-root
 mkdir -p "$shared_escape_root/probe"
-rm "$shared_escape_worktree/.codex"
-ln -s "$shared_escape_root" "$shared_escape_worktree/.codex"
-printf '%s\n' 'escape' >"$shared_escape_worktree/.codex/probe/escape.txt"
+mkdir -p "$shared_escape_worktree/.firebreak"
+rm -rf "$shared_escape_worktree/.firebreak/codex"
+ln -s "$shared_escape_root" "$shared_escape_worktree/.firebreak/codex"
+printf '%s\n' 'escape' >"$shared_escape_worktree/.firebreak/codex/probe/escape.txt"
 set +e
 shared_escape_summary=$(
   firebreak_cmd internal loop run \
@@ -163,7 +164,7 @@ if [ "$shared_escape_status" -eq 0 ] || ! printf '%s\n' "$shared_escape_summary"
 fi
 shared_escape_audit_root=$(extract_json_field "$shared_escape_summary" audit_root)
 shared_escape_plan_path=$(extract_json_field "$shared_escape_summary" plan_path)
-if ! [ -f "$shared_escape_plan_path" ] || ! [ -f "$shared_escape_audit_root/review/write-scope.log" ] || ! grep -q '^.codex' "$shared_escape_audit_root/review/write-scope.log"; then
+if ! [ -f "$shared_escape_plan_path" ] || ! [ -f "$shared_escape_audit_root/review/write-scope.log" ] || ! grep -q '^.firebreak/codex' "$shared_escape_audit_root/review/write-scope.log"; then
   printf '%s\n' "$shared_escape_summary" >&2
   echo "loop smoke shared-escape scenario did not preserve write-scope evidence" >&2
   exit 1

@@ -250,7 +250,7 @@
     memoryMiB ? 3072,
     runtimePackages ? [ ],
     bootstrapPackages ? null,
-    multiAgentConfig ? { },
+    sharedAgentConfig ? { },
     extraShellInit ? "",
     extraModules ? [ ],
   }:
@@ -275,7 +275,7 @@
     mkLocalVmArtifacts {
       inherit name;
       defaultAgentCommand = launchCommandName;
-      multiAgentConfig = multiAgentConfig;
+      sharedAgentConfig = sharedAgentConfig;
       extraModules = [
         (import ../../modules/node-cli/module.nix {
           inherit
@@ -290,7 +290,7 @@
             postInstallScript
             readyCommandName
             memoryMiB
-            multiAgentConfig
+            sharedAgentConfig
             extraShellInit
             ;
           vmName = name;

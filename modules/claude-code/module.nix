@@ -5,7 +5,8 @@ moduleArgs@{ pkgs, ... }:
   binName = "claude";
   packageSpec = "@anthropic-ai/claude-code@latest";
   promptCommand = ''claude -p "$FIREBREAK_AGENT_PROMPT"'';
-  configDirName = ".claude";
+  configSelectorPrefix = "CLAUDE";
+  configSubdir = "claude";
   configExports = ''
     export CLAUDE_CONFIG_DIR="$agent_config_dir"
   '';

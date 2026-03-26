@@ -6,8 +6,8 @@ export XDG_STATE_HOME="@XDG_STATE_HOME@"
 export TMPDIR="@TMPDIR@"
 export npm_config_cache="@NPM_CACHE_DIR@"
 export npm_config_prefix="@DEV_HOME@/.local"
-if [ -n "${FIREBREAK_MULTI_AGENT_WRAPPER_BIN_DIR:-}" ]; then
-  export PATH="$FIREBREAK_MULTI_AGENT_WRAPPER_BIN_DIR:$LOCAL_BIN:$PATH"
+if [ -n "${FIREBREAK_SHARED_AGENT_WRAPPER_BIN_DIR:-}" ]; then
+  export PATH="$FIREBREAK_SHARED_AGENT_WRAPPER_BIN_DIR:$LOCAL_BIN:$PATH"
 else
   export PATH="$LOCAL_BIN:$PATH"
 fi

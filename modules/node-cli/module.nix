@@ -35,6 +35,14 @@ let
   installPrefix = "${devHome}/.local";
   packageNodeModules = "${installPrefix}/lib/node_modules/${packageSpec}";
   bootstrapReadyMarker = "${devHome}/.cache/firebreak-tools/${vmName}/bootstrap-ready";
+  installStateId = builtins.hashString "sha256" (builtins.toJSON {
+    inherit
+      binName
+      installBinScripts
+      packageSpec
+      postInstallScript
+      ;
+  });
   installBinScriptSnippet =
     lib.concatStringsSep "\n"
       (lib.mapAttrsToList
@@ -150,6 +158,7 @@ let
     "@DISPLAY_NAME@" = displayName;
     "@EXTRA_SHELL_INIT@" = extraShellInit;
     "@INSTALL_BIN_SCRIPTS@" = installBinScriptSnippet;
+    "@INSTALL_STATE_ID@" = installStateId;
     "@LAUNCH_COMMAND_NAME@" = launchCommandName;
     "@LAUNCH_ENV_EXPORTS@" = launchEnvironmentExports;
     "@LOCAL_BIN@" = localBin;

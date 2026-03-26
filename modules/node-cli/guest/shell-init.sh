@@ -10,10 +10,21 @@ export PATH="$LOCAL_BIN:$PATH"
 @LAUNCH_ENV_EXPORTS@
 
 firebreak_refresh_cli() {
-  sudo rm -f "@DEV_HOME@/.cache/firebreak-tools/@NAME@/package-spec"
+  printf "Refreshing @NAME@ CLI...\n"
+
+  printf "Removing install state...\n"
+  sudo rm -f "@DEV_HOME@/.cache/firebreak-tools/@NAME@/install-state"
+
+  printf "Removing bootstrap ready marker...\n"
   sudo rm -f "@BOOTSTRAP_READY_MARKER@"
+
+  printf "Removing node modules and npm cache...\n"
   sudo rm -rf "@PACKAGE_NODE_MODULES@" "@NPM_CACHE_DIR@"
+
+  printf "Removing local binary...\n"
   sudo rm -f "@LOCAL_BIN@/@BIN_NAME@"
+
+  printf "Restarting dev-bootstrap service...\n"
   sudo systemctl restart dev-bootstrap.service && @READY_COMMAND_NAME@
 }
 

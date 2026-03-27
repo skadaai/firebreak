@@ -360,6 +360,7 @@ write_firebreak_launch_script() {
   launch_script=$1
   attach_mode=$2
   shift 2
+  forwarded_arg_count=$#
 
   if [ -z "${FIREBREAK_FLAKE_REF:-}" ]; then
     echo "FIREBREAK_FLAKE_REF is required for firebreak worker backend" >&2
@@ -435,17 +436,30 @@ if [ "\$attach_mode" = "1" ]; then
   printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "attach-foreground-start" >>"\$trace_path"
   printf '%s\n' "$$" >"\$child_pid_path"
   printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "firebreak-command-start" >>"\$trace_path"
-  env \
-    -u AGENT_CONFIG \
-    -u AGENT_CONFIG_HOST_PATH \
-    -u CODEX_CONFIG \
-    -u CODEX_CONFIG_HOST_PATH \
-    -u CLAUDE_CONFIG \
-    -u CLAUDE_CONFIG_HOST_PATH \
-    FIREBREAK_INSTANCE_DIR="\$instance_dir" \
-    FIREBREAK_VM_MODE="\$vm_mode" \
-    FIREBREAK_AGENT_SESSION_MODE_OVERRIDE="agent-attach-exec" \
-    $nix_command$quoted_args
+  if [ "$forwarded_arg_count" -eq 0 ]; then
+    env \
+      -u AGENT_CONFIG \
+      -u AGENT_CONFIG_HOST_PATH \
+      -u CODEX_CONFIG \
+      -u CODEX_CONFIG_HOST_PATH \
+      -u CLAUDE_CONFIG \
+      -u CLAUDE_CONFIG_HOST_PATH \
+      FIREBREAK_INSTANCE_DIR="\$instance_dir" \
+      FIREBREAK_VM_MODE="\$vm_mode" \
+      FIREBREAK_AGENT_SESSION_MODE_OVERRIDE="agent-attach-exec" \
+      $nix_command$quoted_args
+  else
+    env \
+      -u AGENT_CONFIG \
+      -u AGENT_CONFIG_HOST_PATH \
+      -u CODEX_CONFIG \
+      -u CODEX_CONFIG_HOST_PATH \
+      -u CLAUDE_CONFIG \
+      -u CLAUDE_CONFIG_HOST_PATH \
+      FIREBREAK_INSTANCE_DIR="\$instance_dir" \
+      FIREBREAK_VM_MODE="\$vm_mode" \
+      $nix_command$quoted_args
+  fi
   command_status=\$?
 else
   printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "detached-background-start" >>"\$trace_path"

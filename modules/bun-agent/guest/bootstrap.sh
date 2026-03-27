@@ -12,8 +12,15 @@ export BUN_TMPDIR="$TMPDIR"
 export BUN_INSTALL_CACHE_DIR="$XDG_CACHE_HOME/bun/install/cache"
 export BUN_RUNTIME_TRANSPILER_CACHE_PATH="$XDG_CACHE_HOME/bun/transpiler"
 export PATH="$LOCAL_BIN:$BUN_INSTALL/bin:$PATH"
+export AGENT_SPEC_MARKER_DIR="$XDG_STATE_HOME/firebreak-bun-agent"
+export AGENT_SPEC_MARKER_PATH="$AGENT_SPEC_MARKER_DIR/@AGENT_BIN@.spec"
+export AGENT_GLOBAL_BIN="$BUN_INSTALL/bin/@AGENT_BIN@"
 
-echo "Preparing persistent @AGENT_DISPLAY_NAME@ tools..."
+log_phase() {
+  printf '[firebreak-bootstrap] %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1"
+}
+
+log_phase "toolchain-prepare-start @AGENT_DISPLAY_NAME@"
 
 mkdir -p \
   "$BUN_INSTALL/bin" \
@@ -23,18 +30,38 @@ mkdir -p \
   "$BUN_RUNTIME_TRANSPILER_CACHE_PATH" \
   "$XDG_CONFIG_HOME" \
   "$XDG_CACHE_HOME" \
-  "$XDG_STATE_HOME"
+  "$XDG_STATE_HOME" \
+  "$AGENT_SPEC_MARKER_DIR"
 chown -R @DEV_USER@:@DEV_USER@ "$DEV_HOME"
 
 cat > "$LOCAL_BIN/@AGENT_BIN@" <<'EOF'
 #!/bin/sh
 set -eu
-exec bunx --silent --package @AGENT_PACKAGE_SPEC@ @AGENT_BIN@ "$@"
+agent_bin="${BUN_INSTALL:-$HOME/.bun}/bin/@AGENT_BIN@"
+if [ ! -x "$agent_bin" ]; then
+  echo "@AGENT_DISPLAY_NAME@ is not installed in $agent_bin" >&2
+  echo "Restart dev-bootstrap.service to reinstall it." >&2
+  exit 1
+fi
+exec "$agent_bin" "$@"
 EOF
 chmod 0755 "$LOCAL_BIN/@AGENT_BIN@"
+log_phase "wrapper-written @AGENT_BIN@"
 
-rm -f "$BUN_INSTALL/bin/@AGENT_BIN@"
+installed_spec=""
+if [ -r "$AGENT_SPEC_MARKER_PATH" ]; then
+  installed_spec=$(cat "$AGENT_SPEC_MARKER_PATH")
+fi
 
-echo "Prepared Bun-managed @AGENT_DISPLAY_NAME@ wrapper."
+if [ ! -x "$AGENT_GLOBAL_BIN" ] || [ "$installed_spec" != "@AGENT_PACKAGE_SPEC@" ]; then
+  log_phase "toolchain-install-start @AGENT_PACKAGE_SPEC@"
+  bun install --global "@AGENT_PACKAGE_SPEC@"
+  printf '%s\n' '@AGENT_PACKAGE_SPEC@' > "$AGENT_SPEC_MARKER_PATH"
+  log_phase "toolchain-install-done @AGENT_PACKAGE_SPEC@"
+else
+  log_phase "toolchain-cache-hit @AGENT_PACKAGE_SPEC@"
+fi
+
+log_phase "wrapper-ready @AGENT_BIN@"
 
 chown -R @DEV_USER@:@DEV_USER@ "$DEV_HOME"

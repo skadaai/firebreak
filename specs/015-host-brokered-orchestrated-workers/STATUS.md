@@ -34,6 +34,7 @@ Reopened for attached `firebreak` worker hardening and guest lifecycle observabi
 - `firebreak worker debug` now surfaces machine-readable guest bootstrap and command state when packaged-cli workers publish them through the exec-output mount
 - direct packaged-cli readiness smokes now preserve reviewable runtime evidence long enough to assert guest lifecycle artifacts instead of relying only on terminal output
 - the direct packaged-cli readiness path now waits for guest bootstrap readiness before one-shot agent commands execute, so `--version` probes no longer race bootstrap
+- attached worker traces are now being hardened so request-level bridge events and response exit codes can survive request-directory cleanup, and so post-`command-start` output can be distinguished from earlier boot noise
 
 ## What remains open
 

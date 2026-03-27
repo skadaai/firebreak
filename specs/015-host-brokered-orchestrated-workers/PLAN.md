@@ -22,6 +22,7 @@ last_updated: 2026-03-27
 13. Add a machine-readable guest lifecycle contract for packaged-cli bootstrap and command handoff, and surface it through `firebreak worker debug`.
 14. Add direct readiness smokes that assert guest lifecycle artifacts and preserve runtime evidence automatically on failure.
 15. Record the lifecycle-state contract and validation flow in the spec so future runtime and test changes cannot drift silently.
+16. Persist attached worker bridge traces and separate post-bootstrap command-output markers so reviewable diagnostics survive request cleanup.
 
 ## Validation approach
 

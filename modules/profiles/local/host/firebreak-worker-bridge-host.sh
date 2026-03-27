@@ -27,6 +27,7 @@ process_request() {
 import json
 import os
 import pty
+import shutil
 import subprocess
 import threading
 import time
@@ -40,10 +41,53 @@ stdout_path = os.environ["STDOUT_PATH"]
 stderr_path = os.environ["STDERR_PATH"]
 exit_code_path = os.environ["EXIT_CODE_PATH"]
 trace_path = os.environ["TRACE_PATH"]
+request_dir = os.path.dirname(request_path)
+worker_root_path = os.path.join(request_dir, "worker-root")
+worker_root_cache = None
+trace_mirrored = False
+
+
+def resolve_worker_root():
+    global worker_root_cache, trace_mirrored
+    if worker_root_cache and os.path.isdir(worker_root_cache):
+        return worker_root_cache
+    try:
+        candidate = open(worker_root_path, "r", encoding="utf-8").read().strip()
+    except OSError:
+        return None
+    if not candidate or not os.path.isdir(candidate):
+        return None
+    worker_root_cache = candidate
+    if not trace_mirrored and os.path.exists(trace_path):
+        try:
+            shutil.copyfile(trace_path, os.path.join(candidate, "bridge-request-trace.log"))
+            trace_mirrored = True
+        except OSError:
+            pass
+    return worker_root_cache
+
+
+def persist_response_exit_code(code: int) -> None:
+    worker_root = resolve_worker_root()
+    if not worker_root:
+        return
+    try:
+        with open(os.path.join(worker_root, "bridge-request-response-exit-code"), "w", encoding="utf-8") as handle:
+            handle.write(f"{code}\n")
+    except OSError:
+        pass
 
 def trace(message: str) -> None:
     with open(trace_path, "a", encoding="utf-8") as handle:
         handle.write(message + "\n")
+    worker_root = resolve_worker_root()
+    if not worker_root:
+        return
+    try:
+        with open(os.path.join(worker_root, "bridge-request-trace.log"), "a", encoding="utf-8") as handle:
+            handle.write(message + "\n")
+    except OSError:
+        pass
 
 try:
     trace("request-loaded")
@@ -57,7 +101,6 @@ try:
     request_columns = str(request.get("columns") or "")
     request_lines = str(request.get("lines") or "")
     if request.get("attach") is True and request.get("interactive") is True:
-        request_dir = os.path.dirname(request_path)
         stdin_stream = os.path.join(request_dir, "stdin.stream")
         stdout_stream = os.path.join(request_dir, "stdout.stream")
         stdin_eof_path = os.path.join(request_dir, "stdin.eof")
@@ -193,6 +236,7 @@ with open(stderr_path, "w", encoding="utf-8") as handle:
     handle.write(stderr)
 with open(exit_code_path, "w", encoding="utf-8") as handle:
     handle.write(f"{exit_code}\n")
+persist_response_exit_code(exit_code)
 trace("response-written")
 PY
 }

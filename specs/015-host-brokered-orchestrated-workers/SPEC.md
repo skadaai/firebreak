@@ -78,6 +78,7 @@ The intended landing shape is:
 - The system shall provide focused validation and reviewable diagnostics for attached `firebreak` worker execution.
 - The system shall publish machine-readable guest lifecycle state for attached `firebreak` workers, covering at least guest bootstrap progress and guest command progress.
 - The system shall surface that machine-readable guest lifecycle state through `firebreak worker debug --json` so host-side diagnosis does not depend on truncated terminal logs.
+- The system shall preserve reviewable attach trace events that distinguish first sibling-runner output from first post-`command-start` command output, even after the live bridge request directory is cleaned up.
 - The system shall preserve reviewable runtime artifacts for direct packaged-cli readiness probes when those probes fail.
 - The system shall define how orchestrated workers resolve workspace access so the worker can act on the intended project state.
 - The system shall define how orchestrated workers resolve Firebreak config modes and agent-specific config where those differ from the orchestrator VM.

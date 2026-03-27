@@ -248,6 +248,23 @@ refresh_worker_status() {
     return 0
   fi
 
+  if [ -f "$worker_root/bridge-request-response-exit-code" ]; then
+    exit_code=$(cat "$worker_root/bridge-request-response-exit-code")
+    if [ -f "$worker_root/finished-at" ]; then
+      finished_at=$(cat "$worker_root/finished-at")
+    fi
+    if [ -z "$finished_at" ]; then
+      finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    fi
+    if [ "$stop_requested" = "1" ]; then
+      status="stopped"
+    else
+      status="exited"
+    fi
+    write_metadata
+    return 0
+  fi
+
   if process_is_alive "$pid"; then
     if [ "$stop_requested" = "1" ] && [ "$status" != "stopping" ]; then
       status="stopping"
@@ -595,6 +612,9 @@ spawn_worker() {
   stop_requested=0
   bridge_request_dir=${FIREBREAK_WORKER_BRIDGE_REQUEST_DIR:-}
   bridge_request_trace_path=${FIREBREAK_WORKER_BRIDGE_TRACE_PATH:-}
+  if [ -n "$bridge_request_dir" ] && [ -d "$bridge_request_dir" ]; then
+    printf '%s\n' "$worker_root" >"$bridge_request_dir/worker-root" || true
+  fi
   : >"$stdout_path"
   : >"$stderr_path"
   : >"$trace_path"
@@ -1217,25 +1237,47 @@ def nested_runtime_snapshot(worker_dir: Path):
     return snapshot
 
 
-def bridge_request_snapshot(request_dir_str: Optional[str], trace_path_str: Optional[str]):
-    if not request_dir_str:
-        return None
-    request_dir = Path(request_dir_str)
-    if not request_dir.is_dir():
+def bridge_request_snapshot(
+    request_dir_str: Optional[str],
+    trace_path_str: Optional[str],
+    worker_root: Optional[Path] = None,
+):
+    request_dir = Path(request_dir_str) if request_dir_str else None
+    persisted_trace_path = (worker_root / "bridge-request-trace.log") if worker_root else None
+    persisted_response_exit_path = (worker_root / "bridge-request-response-exit-code") if worker_root else None
+
+    request_id = request_dir.name if request_dir is not None else None
+    trace_path = None
+    if request_dir is not None and request_dir.is_dir():
+        candidate_trace = Path(trace_path_str) if trace_path_str else request_dir / "trace.log"
+        if candidate_trace.exists():
+            trace_path = candidate_trace
+    if trace_path is None and persisted_trace_path is not None and persisted_trace_path.exists():
+        trace_path = persisted_trace_path
+
+    if request_dir is None and trace_path is None and not (
+        persisted_response_exit_path is not None and persisted_response_exit_path.exists()
+    ):
         return None
 
-    trace_path = Path(trace_path_str) if trace_path_str else request_dir / "trace.log"
     snapshot = {
-        "request_dir": str(request_dir),
-        "request_id": request_dir.name,
-        "trace_path": str(trace_path),
-        "trace_size": file_size(str(trace_path)),
+        "request_dir": str(request_dir) if request_dir is not None else None,
+        "request_id": request_id,
+        "trace_path": str(trace_path) if trace_path is not None else None,
+        "trace_size": file_size(str(trace_path)) if trace_path is not None else None,
     }
-    trace_tail = tail_text(trace_path)
-    if trace_tail:
-        snapshot["trace_tail"] = trace_tail
-        snapshot["last_trace_event"] = last_trace_event(trace_tail)
-    response_exit_code = read_text(request_dir / "response.exit-code")
+    if trace_path is not None:
+        trace_tail = tail_text(trace_path)
+        if trace_tail:
+            snapshot["trace_tail"] = trace_tail
+            snapshot["last_trace_event"] = last_trace_event(trace_tail)
+        if persisted_trace_path is not None and trace_path == persisted_trace_path:
+            snapshot["trace_persisted"] = True
+    response_exit_code = None
+    if request_dir is not None and request_dir.is_dir():
+        response_exit_code = read_text(request_dir / "response.exit-code")
+    if not response_exit_code and persisted_response_exit_path is not None:
+        response_exit_code = read_text(persisted_response_exit_path)
     if response_exit_code:
         snapshot["response_exit_code"] = response_exit_code
     return snapshot
@@ -1340,6 +1382,7 @@ if workers_dir.is_dir():
                 item["bridge_request"] = bridge_request_snapshot(
                     item.get("bridge_request_dir"),
                     item.get("bridge_request_trace_path"),
+                    worker_dir,
                 )
                 item["process_tree"] = process_tree(item.get("pid"))
                 items.append(item)
@@ -1381,6 +1424,7 @@ if workers_dir.is_dir():
                 "bridge_request": bridge_request_snapshot(
                     read_text(worker_dir / "bridge-request-dir"),
                     read_text(worker_dir / "bridge-request-trace-path"),
+                    worker_dir,
                 ),
                 "process_tree": [],
             }

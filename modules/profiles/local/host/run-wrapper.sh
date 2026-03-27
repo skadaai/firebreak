@@ -394,8 +394,27 @@ from datetime import datetime, timezone
 stdout_log_path = os.environ["FIREBREAK_ATTACH_STDOUT_LOG"]
 bridge_trace_path = os.environ.get("FIREBREAK_WORKER_BRIDGE_TRACE_PATH", "")
 wrapper_trace_log = os.environ.get("FIREBREAK_WRAPPER_TRACE_LOG", "")
+attach_stage_path = os.environ.get("FIREBREAK_ATTACH_STAGE_PATH", "")
 
 first_chunk = True
+command_output_chunk_seen = False
+
+
+def trace_event(target_path: str, message: str) -> None:
+    if not target_path:
+        return
+    with open(target_path, "a", encoding="utf-8") as handle:
+        handle.write(message + "\n")
+
+
+def current_attach_stage() -> str:
+    if not attach_stage_path:
+        return ""
+    try:
+        return open(attach_stage_path, "r", encoding="utf-8").read().strip()
+    except OSError:
+        return ""
+
 with open(stdout_log_path, "ab", buffering=0) as log_handle:
     while True:
         chunk = sys.stdin.buffer.read(4096)
@@ -404,11 +423,21 @@ with open(stdout_log_path, "ab", buffering=0) as log_handle:
         if first_chunk:
             first_chunk = False
             if wrapper_trace_log:
-                with open(wrapper_trace_log, "a", encoding="utf-8") as handle:
-                    handle.write(f"{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')} runner-stdout-first-byte\n")
+                trace_event(
+                    wrapper_trace_log,
+                    f"{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')} runner-stdout-first-byte",
+                )
             if bridge_trace_path:
-                with open(bridge_trace_path, "a", encoding="utf-8") as handle:
-                    handle.write("nested-runner-first-byte\n")
+                trace_event(bridge_trace_path, "nested-runner-first-byte")
+        if not command_output_chunk_seen and current_attach_stage() == "command-start":
+            command_output_chunk_seen = True
+            if wrapper_trace_log:
+                trace_event(
+                    wrapper_trace_log,
+                    f"{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')} command-stdout-first-byte",
+                )
+            if bridge_trace_path:
+                trace_event(bridge_trace_path, "nested-command-first-byte")
         log_handle.write(chunk)
         sys.stdout.buffer.write(chunk)
         sys.stdout.buffer.flush()
@@ -419,6 +448,7 @@ EOF
   rm -f "$attach_pipe_status_file"
   export FIREBREAK_ATTACH_STDOUT_LOG="$runner_stdout_log"
   export FIREBREAK_WRAPPER_TRACE_LOG="$wrapper_trace_log"
+  export FIREBREAK_ATTACH_STAGE_PATH="$host_exec_output_dir/attach_stage"
   bash -o pipefail -c '
     script -qefc "$1" /dev/null | python3 "$2"
     printf "%s\n" "$?" >"$3"

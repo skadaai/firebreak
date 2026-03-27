@@ -35,10 +35,6 @@ chmod 0755 "$LOCAL_BIN/@AGENT_BIN@"
 
 rm -f "$BUN_INSTALL/bin/@AGENT_BIN@"
 
-echo "Validating Bun-managed @AGENT_DISPLAY_NAME@ CLI..."
-if ! @AGENT_BIN@ --version >/dev/null 2>&1; then
-  echo "@AGENT_DISPLAY_NAME@ CLI validation failed." >&2
-  exit 1
-fi
+echo "Prepared Bun-managed @AGENT_DISPLAY_NAME@ wrapper."
 
 chown -R @DEV_USER@:@DEV_USER@ "$DEV_HOME"

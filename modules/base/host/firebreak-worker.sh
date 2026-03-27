@@ -1207,6 +1207,11 @@ def nested_runtime_snapshot(worker_dir: Path):
                 text = tail_text(path, line_count=20)
                 if text:
                     agent_exec[f"{name}_tail"] = text
+        for name in ["bootstrap-state.json", "command-state.json"]:
+            path = agent_exec_dir / name
+            value = maybe_load_json(path)
+            if value is not None:
+                agent_exec[name.replace("-", "_").replace(".json", "")] = value
         if agent_exec:
             snapshot["agent_exec_output"] = agent_exec
     return snapshot
@@ -1503,6 +1508,21 @@ for item in json.loads(os.environ["WORKERS_JSON"]):
                 print(f"    {line}")
         agent_exec_output = nested_runtime.get("agent_exec_output") or {}
         for key, value in agent_exec_output.items():
+            if key in {"bootstrap_state", "command_state"} and isinstance(value, dict):
+                phase = value.get("phase")
+                status = value.get("status")
+                detail = value.get("detail")
+                updated_at = value.get("updated_at")
+                prefix = f"guest_{key}"
+                if phase:
+                    print(f"  {prefix}_phase: {phase}")
+                if status:
+                    print(f"  {prefix}_status: {status}")
+                if detail:
+                    print(f"  {prefix}_detail: {detail}")
+                if updated_at:
+                    print(f"  {prefix}_updated_at: {updated_at}")
+                continue
             if key.endswith("_tail"):
                 print(f"  agent_exec_{key}:")
                 for line in str(value).splitlines():

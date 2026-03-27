@@ -30,6 +30,9 @@ Run these from the repository root.
 Purpose: catch shell-level regressions in the shared worker runtime, packaged-node bootstrap readiness helper, and recipe-owned smoke scripts before booting VMs.
 
 ```sh
+bash -n modules/bun-agent/guest/bootstrap.sh
+bash -n modules/profiles/local/guest/prepare-agent-session.sh
+bash -n modules/profiles/local/guest/dev-console-start.sh
 bash -n modules/node-cli/guest/bootstrap.sh
 bash -n modules/profiles/local/guest/firebreak-worker-cli.sh
 bash -n modules/base/tests/test-smoke-worker-guest-bridge.sh
@@ -41,7 +44,23 @@ Expected result:
 
 - all commands exit `0`
 
-### 2. Validate the host-broker worker engine
+### 2. Validate direct packaged-cli readiness and guest lifecycle artifacts
+
+Purpose: prove a direct packaged-cli VM run publishes reviewable machine-readable guest lifecycle state and preserves runtime evidence long enough for the smoke to assert it.
+
+```sh
+nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run "path:$PWD#firebreak-test-smoke-codex-version"
+```
+
+Expected result:
+
+- the smoke exits `0`
+- the output includes a recognizable Codex version string
+- the smoke verifies `bootstrap-state.json` reached `wrapper-ready`
+- the smoke verifies `command-state.json` reached `command-exit`
+- on failure, the smoke prints the preserved runtime directory instead of deleting it immediately
+
+### 3. Validate the host-broker worker engine
 
 Purpose: prove the host-side `firebreak worker` broker still creates, lists, inspects, stops, and cleans up workers after the worker-kind and readiness changes.
 
@@ -54,7 +73,7 @@ Expected result:
 - the smoke exits `0`
 - the output includes `Firebreak worker smoke test passed`
 
-### 3. Validate the public Firebreak CLI route
+### 4. Validate the public Firebreak CLI route
 
 Purpose: prove the public `firebreak` CLI still exposes the worker noun correctly after the orchestration-layer changes.
 
@@ -67,7 +86,7 @@ Expected result:
 - the smoke exits `0`
 - the output includes the worker route coverage from the CLI surface smoke
 
-### 4. Validate the guest bridge and per-kind concurrency limit
+### 5. Validate the guest bridge and per-kind concurrency limit
 
 Purpose: prove a bridge-enabled guest can call `firebreak worker`, observe machine-readable metadata, clean up workers, and hit a declared `max_instances` limit.
 
@@ -80,7 +99,7 @@ Expected result:
 - the smoke exits `0`
 - the output includes `Firebreak worker guest bridge smoke test passed`
 
-### 5. Validate minimal attached `firebreak` worker execution
+### 6. Validate minimal attached `firebreak` worker execution
 
 Purpose: prove the worker runtime can attach to a sibling Firebreak VM without the external orchestrator recipe in the way.
 
@@ -93,8 +112,10 @@ Expected result:
 - the smoke exits `0`
 - the output includes `Firebreak attached firebreak worker smoke test passed`
 - the attached run returns command output from the sibling worker instead of hanging after worker creation
+- `firebreak worker debug --json` reports request-level bridge traces and nested runtime state for the attached worker
+- when the sibling worker is a packaged CLI, the debug output includes machine-readable guest bootstrap and command phases
 
-### 6. Evaluate the external recipe outputs
+### 7. Evaluate the external recipe outputs
 
 Purpose: prove the external orchestrator recipe exports the expected packages and checks, including recipe-owned worker smoke outputs.
 
@@ -109,7 +130,7 @@ Expected result:
   - `firebreak-test-smoke-agent-orchestrator-worker-proxy`
   - `firebreak-test-smoke-agent-orchestrator-worker-spawn`
 
-### 7. Validate the external recipe bootstrap and worker-proxy wrapper
+### 8. Validate the external recipe bootstrap and worker-proxy wrapper
 
 Purpose: prove the external recipe can wait for bootstrap, resolve the packaged `ao` CLI, and expose the `codex` worker-proxy wrapper without modifying Firebreak core.
 
@@ -122,7 +143,7 @@ Expected result:
 - the smoke exits `0`
 - the output includes `Agent Orchestrator worker proxy smoke test passed`
 
-### 8. Validate real declared-worker creation from the external recipe
+### 9. Validate real declared-worker creation from the external recipe
 
 Purpose: prove the first external orchestrator recipe can spawn a declared `firebreak` worker kind through the guest-visible `firebreak worker` surface.
 
@@ -179,6 +200,7 @@ Check:
 - `inspect` reports backend `firebreak`
 - `inspect` reports reviewable metadata and a sensible status transition
 - `debug --json` reports the host bridge request and worker state without host-side `pgrep` or manual path inspection
+- `debug --json` reports guest lifecycle state for packaged-cli bootstrap and command execution when those states exist
 - `rm` removes the stopped worker cleanly
 
 ### 3. Verify host-owned runtime state for a `firebreak` worker

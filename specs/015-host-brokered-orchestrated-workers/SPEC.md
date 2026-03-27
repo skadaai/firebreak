@@ -1,6 +1,6 @@
 ---
 status: in_progress
-last_updated: 2026-03-26
+last_updated: 2026-03-27
 ---
 
 # 015 Host-Brokered Orchestrated Workers
@@ -76,6 +76,9 @@ The intended landing shape is:
 - The system shall support attached worker execution for both the `process` and `firebreak` backends.
 - When an attached `firebreak` worker runs through the host broker, the system shall preserve a real terminal path to the sibling worker instead of degrading it into a detached log-only job.
 - The system shall provide focused validation and reviewable diagnostics for attached `firebreak` worker execution.
+- The system shall publish machine-readable guest lifecycle state for attached `firebreak` workers, covering at least guest bootstrap progress and guest command progress.
+- The system shall surface that machine-readable guest lifecycle state through `firebreak worker debug --json` so host-side diagnosis does not depend on truncated terminal logs.
+- The system shall preserve reviewable runtime artifacts for direct packaged-cli readiness probes when those probes fail.
 - The system shall define how orchestrated workers resolve workspace access so the worker can act on the intended project state.
 - The system shall define how orchestrated workers resolve Firebreak config modes and agent-specific config where those differ from the orchestrator VM.
 - The system shall allow existing Firebreak single-agent packages to remain usable outside the orchestration layer.
@@ -87,6 +90,7 @@ The intended landing shape is:
 - A guest-visible control surface exists for worker lifecycle operations without exposing raw host runner internals.
 - External recipe authors have a defined way to register worker kinds, worker backends, and concurrency limits.
 - Attached `firebreak` workers can be validated through a focused runtime path that proves interactive sibling-worker execution instead of only detached worker creation.
+- Attached `firebreak` workers expose reviewable machine-readable guest lifecycle state that identifies the last bootstrap and command phases reached.
 - External packaged-cli recipes have a defined bootstrap-readiness contract and can install recipe-owned worker-proxy wrappers without modifying Firebreak core.
 - Worker identity, lifecycle state, and host-owned runtime paths are explicit and reviewable.
 - The first integration path can target an external orchestrator recipe such as [external/agent-orchestrator/flake.nix](../../external/agent-orchestrator/flake.nix) without changing the public names of existing single-agent packages.

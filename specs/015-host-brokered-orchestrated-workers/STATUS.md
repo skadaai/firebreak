@@ -1,13 +1,13 @@
 ---
 status: in_progress
-last_updated: 2026-03-26
+last_updated: 2026-03-27
 ---
 
 # 015 Status
 
 ## Current phase
 
-Reopened for attached `firebreak` worker hardening.
+Reopened for attached `firebreak` worker hardening and guest lifecycle observability.
 
 ## What has landed
 
@@ -29,12 +29,15 @@ Reopened for attached `firebreak` worker hardening.
 - a recipe-owned smoke path in [external/agent-orchestrator/flake.nix](../../external/agent-orchestrator/flake.nix) for validating bootstrap readiness and worker-proxy wrapper installation without moving orchestrator logic into Firebreak core
 - a recipe-owned smoke path in [external/agent-orchestrator/flake.nix](../../external/agent-orchestrator/flake.nix) for real declared-worker creation through the guest-visible `firebreak worker` surface
 - the attached execution contract has been identified as the remaining weak spot inside the `firebreak` backend rather than in worker-kind declaration or detached worker lifecycle plumbing
+- attached sibling-worker transport now exposes request-level bridge traces, live nested runtime traces, and streamed boot output back into the orchestrator guest
+- packaged Bun-agent bootstrap now emits explicit machine-readable bootstrap phases and avoids recursive ownership fixups during startup
+- `firebreak worker debug` now surfaces machine-readable guest bootstrap and command state when packaged-cli workers publish them through the exec-output mount
+- direct packaged-cli readiness smokes now preserve reviewable runtime evidence long enough to assert guest lifecycle artifacts instead of relying only on terminal output
+- the direct packaged-cli readiness path now waits for guest bootstrap readiness before one-shot agent commands execute, so `--version` probes no longer race bootstrap
 
 ## What remains open
 
-- a minimal attached `firebreak` worker smoke that proves sibling-worker execution without routing through the external orchestrator recipe first
-- focused diagnostics for request publication, bridge processing, worker launch, and attached worker completion
-- a validated attached `codex` proxy path through the external orchestrator recipe after the minimal attached `firebreak` path is proven
+- a validated attached `codex` proxy path through the external orchestrator recipe after the nested guest bootstrap path is fully reviewable
 - richer lifecycle behavior such as worker reuse, log filtering, and cleanup policy refinements
 - possible transport hardening beyond the first file-share bridge, such as a mounted Unix-socket protocol
 - broader recipe adoption and validation beyond the first external orchestrator recipe
@@ -56,3 +59,4 @@ Reopened for attached `firebreak` worker hardening.
 - 2026-03-26: Reworked the public worker CLI around `run`, `ps`, `inspect`, `logs`, `stop`, `rm`, and `prune`, made default listing concise, and added worker cleanup semantics.
 - 2026-03-26: Confirmed the first external orchestrator recipe manually in a real runtime: guest-visible worker execution, host-owned worker state, concise listing, cleanup, and bounded concurrency all behaved as specified.
 - 2026-03-26: Reopened the spec after confirming that attached sibling-worker execution for interactive `firebreak` workers is still incomplete even though detached lifecycle behavior and manual detached validation already passed.
+- 2026-03-27: Added bridge-level attach diagnostics, streamed nested runner output, guest-visible attach progress, and packaged Bun-agent bootstrap phase markers so attached-worker failures can be diagnosed without raw host-side process archaeology.

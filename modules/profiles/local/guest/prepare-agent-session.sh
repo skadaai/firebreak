@@ -6,6 +6,21 @@ session_command_file=@HOST_META_MOUNT@/agent-command
 session_mode_file=@HOST_META_MOUNT@/agent-session-mode
 start_dir=@WORKSPACE_MOUNT@
 worker_bridge_enabled=@WORKER_BRIDGE_ENABLED@
+guest_state_dir=/run/firebreak-agent
+bootstrap_state_local=$guest_state_dir/bootstrap-state.json
+command_state_local=$guest_state_dir/command-state.json
+
+sync_guest_state_files() {
+  if ! [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
+    return 0
+  fi
+  if [ -f "$bootstrap_state_local" ]; then
+    cp "$bootstrap_state_local" @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json
+  fi
+  if [ -f "$command_state_local" ]; then
+    cp "$command_state_local" @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
+  fi
+}
 
 for _ in $(seq 1 50); do
   if [ -d @WORKSPACE_MOUNT@ ] && [ -r "$metadata" ]; then
@@ -41,6 +56,7 @@ if [ "$session_mode" = "agent-exec" ] || [ "$session_mode" = "agent-attach-exec"
       exit 1
     fi
   fi
+  sync_guest_state_files
   printf '%s\n' "prepare-agent-session-mounted-exec-output" > @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
 fi
 
@@ -57,6 +73,7 @@ fi
 if [ -r "$session_command_file" ]; then
   cat "$session_command_file" > @AGENT_COMMAND_FILE@
   chmod 0644 @AGENT_COMMAND_FILE@
+  sync_guest_state_files
   if [ "$session_mode" = "agent-attach-exec" ]; then
     printf '%s\n' "prepare-agent-session-command-ready" > @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
   fi

@@ -1,6 +1,6 @@
 ---
 status: in_progress
-last_updated: 2026-03-26
+last_updated: 2026-03-27
 ---
 
 # 015 Plan
@@ -19,6 +19,9 @@ last_updated: 2026-03-26
 10. Isolate attached `firebreak` worker execution with a minimal smoke that does not depend on the external orchestrator recipe.
 11. Add focused attach diagnostics so request publication, bridge execution, worker launch, and worker completion are reviewable when attached sibling-worker runs fail.
 12. Re-validate the external `codex` proxy path only after the minimal attached `firebreak` worker path is proven.
+13. Add a machine-readable guest lifecycle contract for packaged-cli bootstrap and command handoff, and surface it through `firebreak worker debug`.
+14. Add direct readiness smokes that assert guest lifecycle artifacts and preserve runtime evidence automatically on failure.
+15. Record the lifecycle-state contract and validation flow in the spec so future runtime and test changes cannot drift silently.
 
 ## Validation approach
 
@@ -26,6 +29,7 @@ last_updated: 2026-03-26
 - run focused smoke coverage for guest bridge requests and machine-readable worker status
 - run focused smoke coverage for `process` versus `firebreak` backend selection
 - run focused smoke coverage for attached `firebreak` worker execution without the external orchestrator layer
+- run direct packaged-cli readiness smokes that assert guest lifecycle state files instead of only human-visible console output
 - run manual validation against an external orchestrator recipe such as [external/agent-orchestrator/flake.nix](../../external/agent-orchestrator/flake.nix)
 - run `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' flake check`
 
@@ -39,7 +43,7 @@ last_updated: 2026-03-26
 
 ## Current status
 
-Reopened for attached `firebreak` worker hardening. Detached flows, guest-local `process` flows, worker-kind declarations, bounded concurrency, packaged node-cli bootstrap readiness, the worker-proxy helper, and the first recipe-owned detached worker lifecycle validation path have landed. The remaining open slice is focused attached sibling-worker execution for interactive CLIs such as `codex`.
+Reopened for attached `firebreak` worker hardening. Detached flows, guest-local `process` flows, worker-kind declarations, bounded concurrency, packaged node-cli bootstrap readiness, the worker-proxy helper, the first recipe-owned detached worker lifecycle validation path, and the first machine-readable guest lifecycle diagnostics have landed. The current open slice is the remaining nested `codex` startup behavior inside the attached sibling-worker path.
 
 ## Open questions
 
@@ -47,3 +51,4 @@ Reopened for attached `firebreak` worker hardening. Detached flows, guest-local 
 - whether the first `firebreak` worker backend should always create fresh workers or permit bounded worker reuse
 - how much worker log streaming belongs in the first landing versus a follow-up
 - whether attached worker logging should remain PTY-only in the first landing or grow a separate PTY recording path in a follow-up
+- whether the guest lifecycle contract should remain file-based under the exec-output mount or later converge on a mounted service endpoint

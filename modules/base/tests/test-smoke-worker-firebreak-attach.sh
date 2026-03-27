@@ -15,7 +15,11 @@ workspace_dir=$smoke_tmp_dir/workspace
 mkdir -p "$state_dir" "$workspace_dir"
 
 attach_output=$(
-  env -u CODEX_CONFIG AGENT_CONFIG=outer-leak AGENT_CONFIG_HOST_PATH=/tmp/firebreak-worker-attach-leak \
+  env \
+    AGENT_CONFIG=outer-leak \
+    AGENT_CONFIG_HOST_PATH=/tmp/firebreak-worker-attach-leak \
+    CODEX_CONFIG=outer-leak \
+    CODEX_CONFIG_HOST_PATH=/tmp/firebreak-worker-codex-attach-leak \
     FIREBREAK_WORKER_STATE_DIR="$state_dir" \
     FIREBREAK_FLAKE_REF="path:@REPO_ROOT@" \
     FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG=1 \

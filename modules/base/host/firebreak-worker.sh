@@ -114,6 +114,16 @@ write_metadata() {
   printf '%s\n' "$stdout_path" >"$worker_root/stdout-path"
   printf '%s\n' "$stderr_path" >"$worker_root/stderr-path"
   printf '%s\n' "$trace_path" >"$worker_root/trace-path"
+  if [ -n "${bridge_request_dir:-}" ]; then
+    printf '%s\n' "$bridge_request_dir" >"$worker_root/bridge-request-dir"
+  else
+    rm -f "$worker_root/bridge-request-dir"
+  fi
+  if [ -n "${bridge_request_trace_path:-}" ]; then
+    printf '%s\n' "$bridge_request_trace_path" >"$worker_root/bridge-request-trace-path"
+  else
+    rm -f "$worker_root/bridge-request-trace-path"
+  fi
   if [ -n "$package_name" ]; then
     printf '%s\n' "$package_name" >"$worker_root/package-name"
   else
@@ -154,6 +164,8 @@ write_metadata() {
   "stdout_path": "$(json_escape "$stdout_path")",
   "stderr_path": "$(json_escape "$stderr_path")",
   "trace_path": "$(json_escape "$trace_path")",
+  "bridge_request_dir": $(if [ -n "${bridge_request_dir:-}" ]; then printf '"%s"' "$(json_escape "$bridge_request_dir")"; else printf 'null'; fi),
+  "bridge_request_trace_path": $(if [ -n "${bridge_request_trace_path:-}" ]; then printf '"%s"' "$(json_escape "$bridge_request_trace_path")"; else printf 'null'; fi),
   "worker_root": "$(json_escape "$worker_root")",
   "created_at": "$(json_escape "$created_at")",
   "finished_at": $(if [ -n "$finished_at" ]; then printf '"%s"' "$(json_escape "$finished_at")"; else printf 'null'; fi),
@@ -185,6 +197,8 @@ load_worker() {
   if [ -f "$worker_root/trace-path" ]; then
     trace_path=$(cat "$worker_root/trace-path")
   fi
+  bridge_request_dir=""
+  bridge_request_trace_path=""
   package_name=""
   vm_mode=""
   finished_at=""
@@ -192,6 +206,12 @@ load_worker() {
   stop_requested=0
   if [ -f "$worker_root/package-name" ]; then
     package_name=$(cat "$worker_root/package-name")
+  fi
+  if [ -f "$worker_root/bridge-request-dir" ]; then
+    bridge_request_dir=$(cat "$worker_root/bridge-request-dir")
+  fi
+  if [ -f "$worker_root/bridge-request-trace-path" ]; then
+    bridge_request_trace_path=$(cat "$worker_root/bridge-request-trace-path")
   fi
   if [ -f "$worker_root/vm-mode" ]; then
     vm_mode=$(cat "$worker_root/vm-mode")
@@ -547,6 +567,8 @@ spawn_worker() {
   finished_at=""
   exit_code=""
   stop_requested=0
+  bridge_request_dir=${FIREBREAK_WORKER_BRIDGE_REQUEST_DIR:-}
+  bridge_request_trace_path=${FIREBREAK_WORKER_BRIDGE_TRACE_PATH:-}
   : >"$stdout_path"
   : >"$stderr_path"
   : >"$trace_path"
@@ -1164,6 +1186,30 @@ def nested_runtime_snapshot(worker_dir: Path):
     return snapshot
 
 
+def bridge_request_snapshot(request_dir_str: Optional[str], trace_path_str: Optional[str]):
+    if not request_dir_str:
+        return None
+    request_dir = Path(request_dir_str)
+    if not request_dir.is_dir():
+        return None
+
+    trace_path = Path(trace_path_str) if trace_path_str else request_dir / "trace.log"
+    snapshot = {
+        "request_dir": str(request_dir),
+        "request_id": request_dir.name,
+        "trace_path": str(trace_path),
+        "trace_size": file_size(str(trace_path)),
+    }
+    trace_tail = tail_text(trace_path)
+    if trace_tail:
+        snapshot["trace_tail"] = trace_tail
+        snapshot["last_trace_event"] = last_trace_event(trace_tail)
+    response_exit_code = read_text(request_dir / "response.exit-code")
+    if response_exit_code:
+        snapshot["response_exit_code"] = response_exit_code
+    return snapshot
+
+
 def pid_alive(pid: Optional[int]) -> Optional[bool]:
     if pid is None:
         return None
@@ -1253,11 +1299,17 @@ if workers_dir.is_dir():
                 item["trace_size"] = file_size(str(trace_path))
                 item["trace_tail"] = trace_tail
                 item["last_trace_event"] = last_trace_event(trace_tail)
+                item["bridge_request_dir"] = item.get("bridge_request_dir")
+                item["bridge_request_trace_path"] = item.get("bridge_request_trace_path")
                 item["pid_alive"] = pid_alive(item.get("pid"))
                 item["child_pid"] = child_pid
                 item["child_pid_alive"] = pid_alive(child_pid)
                 item["instance_dir"] = str(worker_dir / "instance") if (worker_dir / "instance").is_dir() else None
                 item["nested_runtime"] = nested_runtime_snapshot(worker_dir)
+                item["bridge_request"] = bridge_request_snapshot(
+                    item.get("bridge_request_dir"),
+                    item.get("bridge_request_trace_path"),
+                )
                 item["process_tree"] = process_tree(item.get("pid"))
                 items.append(item)
                 continue
@@ -1288,11 +1340,17 @@ if workers_dir.is_dir():
                 "trace_size": None,
                 "trace_tail": tail_text(worker_dir / "trace.log"),
                 "last_trace_event": last_trace_event(tail_text(worker_dir / "trace.log")),
+                "bridge_request_dir": read_text(worker_dir / "bridge-request-dir"),
+                "bridge_request_trace_path": read_text(worker_dir / "bridge-request-trace-path"),
                 "pid_alive": None,
                 "child_pid": None,
                 "child_pid_alive": None,
                 "instance_dir": str(worker_dir / "instance") if (worker_dir / "instance").is_dir() else None,
                 "nested_runtime": nested_runtime_snapshot(worker_dir),
+                "bridge_request": bridge_request_snapshot(
+                    read_text(worker_dir / "bridge-request-dir"),
+                    read_text(worker_dir / "bridge-request-trace-path"),
+                ),
                 "process_tree": [],
             }
         )
@@ -1430,6 +1488,25 @@ for item in json.loads(os.environ["WORKERS_JSON"]):
         print("  trace_tail:")
         for line in trace_tail.splitlines():
             print(f"    {line}")
+    bridge_request = item.get("bridge_request")
+    if isinstance(bridge_request, dict):
+        request_id = bridge_request.get("request_id")
+        if request_id:
+            print(f"  bridge_request_id: {request_id}")
+        trace_size = bridge_request.get("trace_size")
+        if trace_size is not None:
+            print(f"  bridge_request_trace_size: {trace_size}")
+        last_event = bridge_request.get("last_trace_event")
+        if last_event:
+            print(f"  bridge_request_last_event: {last_event}")
+        response_exit_code = bridge_request.get("response_exit_code")
+        if response_exit_code is not None:
+            print(f"  bridge_request_response_exit_code: {response_exit_code}")
+        bridge_trace_tail = bridge_request.get("trace_tail")
+        if bridge_trace_tail:
+            print("  bridge_request_trace_tail:")
+            for line in bridge_trace_tail.splitlines():
+                print(f"    {line}")
     process_tree = item.get("process_tree") or []
     if process_tree:
         print("  process_tree:")

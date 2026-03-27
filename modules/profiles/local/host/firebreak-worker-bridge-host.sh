@@ -29,6 +29,7 @@ import os
 import pty
 import subprocess
 import threading
+import time
 import fcntl
 import struct
 import termios
@@ -57,15 +58,18 @@ try:
     request_lines = str(request.get("lines") or "")
     if request.get("attach") is True and request.get("interactive") is True:
         request_dir = os.path.dirname(request_path)
-        stdin_fifo = os.path.join(request_dir, "stdin.pipe")
-        stdout_fifo = os.path.join(request_dir, "stdout.pipe")
-        if not os.path.exists(stdin_fifo) or not os.path.exists(stdout_fifo):
-            raise ValueError("attach requests must create stdin.pipe and stdout.pipe in the request directory")
+        stdin_stream = os.path.join(request_dir, "stdin.stream")
+        stdout_stream = os.path.join(request_dir, "stdout.stream")
+        stdin_eof_path = os.path.join(request_dir, "stdin.eof")
+        if not os.path.exists(stdin_stream) or not os.path.exists(stdout_stream):
+            raise ValueError("attach requests must create stdin.stream and stdout.stream in the request directory")
 
         trace("attach-pty-open")
         child_pid, master_fd = pty.fork()
         if child_pid == 0:
             child_env = os.environ.copy()
+            child_env["FIREBREAK_WORKER_BRIDGE_REQUEST_DIR"] = request_dir
+            child_env["FIREBREAK_WORKER_BRIDGE_TRACE_PATH"] = trace_path
             if request_term:
                 child_env["TERM"] = request_term
             if request_columns:
@@ -82,26 +86,40 @@ try:
         trace("attach-worker-started")
 
         def pump_stdin():
+            offset = 0
             try:
-                with open(stdin_fifo, "rb", buffering=0) as source:
-                    while True:
+                trace("attach-stdin-stream-opened")
+                while True:
+                    with open(stdin_stream, "rb") as source:
+                        source.seek(offset)
                         chunk = source.read(4096)
-                        if not chunk:
-                            break
+                    if chunk:
+                        offset += len(chunk)
                         os.write(master_fd, chunk)
+                        continue
+                    if os.path.exists(stdin_eof_path):
+                        trace("attach-stdin-eof")
+                        break
+                    time.sleep(0.1)
             except OSError:
                 pass
 
         def pump_stdout():
+            saw_output = False
             try:
-                with open(stdout_fifo, "wb", buffering=0) as sink:
+                trace("attach-stdout-stream-opened")
+                with open(stdout_stream, "ab", buffering=0) as sink:
                     while True:
                         try:
                             chunk = os.read(master_fd, 4096)
                         except OSError:
                             break
                         if not chunk:
+                            trace("attach-stdout-eof")
                             break
+                        if not saw_output:
+                            trace("attach-stdout-first-byte")
+                            saw_output = True
                         sink.write(chunk)
                         sink.flush()
             except OSError:
@@ -112,6 +130,7 @@ try:
         stdin_thread.start()
         stdout_thread.start()
         _, wait_status = os.waitpid(child_pid, 0)
+        trace("attach-waitpid-returned")
         if os.WIFEXITED(wait_status):
             exit_code = os.WEXITSTATUS(wait_status)
         elif os.WIFSIGNALED(wait_status):
@@ -134,7 +153,11 @@ try:
             ["bash", worker_script, *argv],
             capture_output=True,
             text=True,
-            env=os.environ.copy(),
+            env={
+                **os.environ.copy(),
+                "FIREBREAK_WORKER_BRIDGE_REQUEST_DIR": os.path.dirname(request_path),
+                "FIREBREAK_WORKER_BRIDGE_TRACE_PATH": trace_path,
+            },
             check=False,
         )
         stdout = result.stdout
@@ -147,7 +170,11 @@ try:
             ["bash", worker_script, *argv],
             capture_output=True,
             text=True,
-            env=os.environ.copy(),
+            env={
+                **os.environ.copy(),
+                "FIREBREAK_WORKER_BRIDGE_REQUEST_DIR": os.path.dirname(request_path),
+                "FIREBREAK_WORKER_BRIDGE_TRACE_PATH": trace_path,
+            },
             check=False,
         )
         stdout = result.stdout
@@ -166,6 +193,7 @@ with open(stderr_path, "w", encoding="utf-8") as handle:
     handle.write(stderr)
 with open(exit_code_path, "w", encoding="utf-8") as handle:
     handle.write(f"{exit_code}\n")
+trace("response-written")
 PY
 }
 

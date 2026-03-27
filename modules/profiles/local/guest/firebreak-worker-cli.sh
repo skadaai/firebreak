@@ -88,9 +88,10 @@ bridge_request_attach() {
   fi
 
   if [ "$interactive_mode" = "1" ]; then
-    stdin_fifo=$request_dir/stdin.pipe
-    stdout_fifo=$request_dir/stdout.pipe
-    mkfifo "$stdin_fifo" "$stdout_fifo"
+    stdin_stream=$request_dir/stdin.stream
+    stdout_stream=$request_dir/stdout.stream
+    : >"$stdin_stream"
+    : >"$stdout_stream"
   fi
 
   request_term=${TERM:-}
@@ -110,12 +111,13 @@ import os
 import sys
 
 request_path = os.environ["REQUEST_PATH"]
+interactive = os.environ["INTERACTIVE_MODE"] == "1"
 with open(request_path, "w", encoding="utf-8") as handle:
     json.dump(
         {
             "argv": sys.argv[1:],
             "attach": True,
-            "interactive": os.environ["INTERACTIVE_MODE"] == "1",
+            "interactive": interactive,
             "term": os.environ.get("REQUEST_TERM", ""),
             "columns": os.environ.get("REQUEST_COLUMNS", ""),
             "lines": os.environ.get("REQUEST_LINES", ""),
@@ -174,7 +176,7 @@ PY
 
   mv "$request_tmp_path" "$request_dir/request.json"
   printf '%s\n' 'firebreak: starting worker' >&2
-  REQUEST_DIR=$request_dir STDIN_FIFO=$stdin_fifo STDOUT_FIFO=$stdout_fifo python3 - <<'PY'
+  REQUEST_DIR=$request_dir STDIN_STREAM=$stdin_stream STDOUT_STREAM=$stdout_stream python3 - <<'PY'
 import os
 import select
 import sys
@@ -182,19 +184,18 @@ import threading
 import time
 
 request_dir = os.environ["REQUEST_DIR"]
-stdin_fifo = os.environ["STDIN_FIFO"]
-stdout_fifo = os.environ["STDOUT_FIFO"]
+stdin_stream = os.environ["STDIN_STREAM"]
+stdout_stream = os.environ["STDOUT_STREAM"]
 exit_code_path = os.path.join(request_dir, "response.exit-code")
 trace_path = os.path.join(request_dir, "trace.log")
 stdin_fd = sys.stdin.fileno()
 stdout_fd = sys.stdout.fileno()
 stderr_fd = sys.stderr.fileno()
 
-stdin_pipe_fd = os.open(stdin_fifo, os.O_WRONLY)
-
 stdout_done = threading.Event()
 stdout_started = threading.Event()
 progress_done = threading.Event()
+stdin_done = threading.Event()
 printed_messages = set()
 
 
@@ -205,22 +206,44 @@ def print_progress(message: str) -> None:
     os.write(stderr_fd, (message + "\n").encode())
 
 def pump_stdout() -> None:
-    stdout_pipe_fd = None
+    offset = 0
     try:
-        stdout_pipe_fd = os.open(stdout_fifo, os.O_RDONLY)
         while True:
-            chunk = os.read(stdout_pipe_fd, 4096)
-            if not chunk:
+            if os.path.exists(stdout_stream):
+                with open(stdout_stream, "rb") as handle:
+                    handle.seek(offset)
+                    chunk = handle.read(4096)
+                if chunk:
+                    offset += len(chunk)
+                    stdout_started.set()
+                    os.write(stdout_fd, chunk)
+                    continue
+            if os.path.exists(exit_code_path):
                 break
-            stdout_started.set()
-            os.write(stdout_fd, chunk)
+            time.sleep(0.1)
     finally:
-        if stdout_pipe_fd is not None:
-            try:
-                os.close(stdout_pipe_fd)
-            except OSError:
-                pass
         stdout_done.set()
+
+
+def pump_stdin() -> None:
+    try:
+        with open(stdin_stream, "ab", buffering=0) as sink:
+            while True:
+                if os.path.exists(exit_code_path):
+                    break
+                readable, _, _ = select.select([stdin_fd], [], [], 0.1)
+                if stdin_fd not in readable:
+                    continue
+                chunk = os.read(stdin_fd, 4096)
+                if not chunk:
+                    break
+                sink.write(chunk)
+                sink.flush()
+        eof_marker = os.path.join(request_dir, "stdin.eof")
+        with open(eof_marker, "w", encoding="utf-8"):
+            pass
+    finally:
+        stdin_done.set()
 
 
 def pump_progress() -> None:
@@ -242,8 +265,16 @@ def pump_progress() -> None:
                         print_progress("firebreak: attaching terminal")
                     elif line == "attach-worker-started":
                         print_progress("firebreak: worker started, waiting for output")
+                    elif line == "attach-stdout-first-byte":
+                        print_progress("firebreak: worker produced terminal output")
+                    elif line == "attach-stdout-eof":
+                        print_progress("firebreak: worker terminal output closed")
+                    elif line == "attach-waitpid-returned":
+                        print_progress("firebreak: worker process exited")
                     elif line.startswith("attach-worker-exit:"):
                         print_progress(f"firebreak: worker exited ({line.split(':', 1)[1]})")
+                    elif line == "response-written":
+                        print_progress("firebreak: attach session completed")
                 seen_trace_lines = len(trace_lines)
         if stdout_started.is_set() or os.path.exists(exit_code_path):
             break
@@ -253,33 +284,20 @@ def pump_progress() -> None:
         time.sleep(0.2)
 
 stdout_thread = threading.Thread(target=pump_stdout, daemon=True)
+stdin_thread = threading.Thread(target=pump_stdin, daemon=True)
 progress_thread = threading.Thread(target=pump_progress, daemon=True)
 stdout_thread.start()
+stdin_thread.start()
 progress_thread.start()
-
-try:
-    while True:
-        if os.path.exists(exit_code_path):
-            break
-        readable, _, _ = select.select([stdin_fd], [], [], 0.1)
-        if stdin_fd not in readable:
-            continue
-        chunk = os.read(stdin_fd, 4096)
-        if not chunk:
-            break
-        os.write(stdin_pipe_fd, chunk)
-finally:
-    try:
-        os.close(stdin_pipe_fd)
-    except OSError:
-        pass
 
 while not os.path.exists(exit_code_path) and not stdout_done.is_set():
     stdout_thread.join(timeout=0.1)
 
 progress_done.set()
 stdout_done.set()
+stdin_done.set()
 stdout_thread.join(timeout=2)
+stdin_thread.join(timeout=1)
 progress_thread.join(timeout=1)
 
 try:

@@ -368,6 +368,7 @@ if [ "$agent_session_mode" = "agent-exec" ]; then
   ) >"$runner_stdout_log" 2>"$runner_stderr_log" || runner_status=$?
 elif [ "$agent_session_mode" = "agent-attach-exec" ]; then
   attach_runner_script=$host_runtime_dir/attached-runner.sh
+  attach_relay_script=$host_runtime_dir/attach-relay.py
   quoted_runner_args=""
   for arg in "$@"; do
     printf -v quoted_runner_arg '%q' "$arg"
@@ -385,7 +386,52 @@ export MICROVM_WORKER_BRIDGE_SOCKET='$(printf '%s' "$worker_bridge_socket_env" |
 exec @RUNNER@$quoted_runner_args
 EOF
   chmod 0555 "$attach_runner_script"
-  script -qefc "$(printf "%s" "$attach_runner_script")" "$runner_stdout_log" || runner_status=$?
+  cat >"$attach_relay_script" <<'EOF'
+import os
+import sys
+from datetime import datetime, timezone
+
+stdout_log_path = os.environ["FIREBREAK_ATTACH_STDOUT_LOG"]
+bridge_trace_path = os.environ.get("FIREBREAK_WORKER_BRIDGE_TRACE_PATH", "")
+wrapper_trace_log = os.environ.get("FIREBREAK_WRAPPER_TRACE_LOG", "")
+
+first_chunk = True
+with open(stdout_log_path, "ab", buffering=0) as log_handle:
+    while True:
+        chunk = sys.stdin.buffer.read(4096)
+        if not chunk:
+            break
+        if first_chunk:
+            first_chunk = False
+            if wrapper_trace_log:
+                with open(wrapper_trace_log, "a", encoding="utf-8") as handle:
+                    handle.write(f"{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')} runner-stdout-first-byte\n")
+            if bridge_trace_path:
+                with open(bridge_trace_path, "a", encoding="utf-8") as handle:
+                    handle.write("nested-runner-first-byte\n")
+        log_handle.write(chunk)
+        sys.stdout.buffer.write(chunk)
+        sys.stdout.buffer.flush()
+EOF
+  chmod 0555 "$attach_relay_script"
+  rm -f "$runner_stdout_log"
+  attach_pipe_status_file=$host_runtime_dir/attach-runner.status
+  rm -f "$attach_pipe_status_file"
+  export FIREBREAK_ATTACH_STDOUT_LOG="$runner_stdout_log"
+  export FIREBREAK_WRAPPER_TRACE_LOG="$wrapper_trace_log"
+  bash -o pipefail -c '
+    script -qefc "$1" /dev/null | python3 "$2"
+    printf "%s\n" "$?" >"$3"
+  ' _ "$attach_runner_script" "$attach_relay_script" "$attach_pipe_status_file" || runner_status=$?
+  if [ -f "$attach_pipe_status_file" ]; then
+    IFS= read -r attach_pipe_status < "$attach_pipe_status_file" || attach_pipe_status=$runner_status
+    case "$attach_pipe_status" in
+      ''|*[!0-9]*)
+        attach_pipe_status=$runner_status
+        ;;
+    esac
+    runner_status=$attach_pipe_status
+  fi
 else
   (
     cd "$runner_workdir"

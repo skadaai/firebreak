@@ -20,34 +20,17 @@ log_phase() {
   printf '[firebreak-bootstrap] %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1"
 }
 
-ensure_owned() {
-  chown @DEV_USER@:@DEV_USER@ "$@"
-}
-
 log_phase "toolchain-prepare-start @AGENT_DISPLAY_NAME@"
 
-mkdir -p \
+install -d -m 0755 -o @DEV_USER@ -g @DEV_USER@ \
   "$BUN_INSTALL/bin" \
   "$LOCAL_BIN" \
   "$TMPDIR" \
   "$BUN_INSTALL_CACHE_DIR" \
   "$BUN_RUNTIME_TRANSPILER_CACHE_PATH" \
   "$XDG_CONFIG_HOME" \
-  "$XDG_CACHE_HOME" \
-  "$XDG_STATE_HOME" \
   "$AGENT_SPEC_MARKER_DIR"
 log_phase "toolchain-directories-ready @AGENT_DISPLAY_NAME@"
-ensure_owned \
-  "$BUN_INSTALL" \
-  "$BUN_INSTALL/bin" \
-  "$LOCAL_BIN" \
-  "$TMPDIR" \
-  "$BUN_INSTALL_CACHE_DIR" \
-  "$BUN_RUNTIME_TRANSPILER_CACHE_PATH" \
-  "$XDG_CONFIG_HOME" \
-  "$XDG_CACHE_HOME" \
-  "$XDG_STATE_HOME" \
-  "$AGENT_SPEC_MARKER_DIR"
 log_phase "toolchain-ownership-ready @AGENT_DISPLAY_NAME@"
 
 cat > "$LOCAL_BIN/@AGENT_BIN@" <<'EOF'
@@ -62,7 +45,7 @@ fi
 exec "$agent_bin" "$@"
 EOF
 chmod 0755 "$LOCAL_BIN/@AGENT_BIN@"
-ensure_owned "$LOCAL_BIN/@AGENT_BIN@"
+chown @DEV_USER@:@DEV_USER@ "$LOCAL_BIN/@AGENT_BIN@"
 log_phase "wrapper-written @AGENT_BIN@"
 
 installed_spec=""
@@ -74,14 +57,14 @@ if [ ! -x "$AGENT_GLOBAL_BIN" ] || [ "$installed_spec" != "@AGENT_PACKAGE_SPEC@"
   log_phase "toolchain-install-start @AGENT_PACKAGE_SPEC@"
   bun install --global "@AGENT_PACKAGE_SPEC@"
   printf '%s\n' '@AGENT_PACKAGE_SPEC@' > "$AGENT_SPEC_MARKER_PATH"
-  ensure_owned "$AGENT_SPEC_MARKER_PATH"
+  chown @DEV_USER@:@DEV_USER@ "$AGENT_SPEC_MARKER_PATH"
   log_phase "toolchain-install-done @AGENT_PACKAGE_SPEC@"
 else
   log_phase "toolchain-cache-hit @AGENT_PACKAGE_SPEC@"
 fi
 
 if [ -e "$AGENT_GLOBAL_BIN" ]; then
-  ensure_owned "$AGENT_GLOBAL_BIN"
+  chown @DEV_USER@:@DEV_USER@ "$AGENT_GLOBAL_BIN"
 fi
 
 log_phase "wrapper-ready @AGENT_BIN@"

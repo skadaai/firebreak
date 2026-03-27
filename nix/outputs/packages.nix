@@ -18,6 +18,7 @@
   mkValidationPackage,
   mkValidationSmokePackage,
   mkWorkerFirebreakAttachSmokePackage,
+  mkWorkerGuestBridgeInteractiveSmokePackage,
   mkWorkerGuestBridgeSmokePackage,
   mkWorkerPackage,
   mkWorkerSmokePackage,
@@ -27,6 +28,7 @@
 
   firebreak-internal-runner-codex = mkRunnerPackage self.nixosConfigurations.firebreak-codex.config.microvm.declaredRunner;
   firebreak-internal-runner-claude-code = mkRunnerPackage self.nixosConfigurations.firebreak-claude-code.config.microvm.declaredRunner;
+  firebreak-internal-runner-interactive-echo = mkRunnerPackage self.nixosConfigurations.firebreak-interactive-echo.config.microvm.declaredRunner;
   firebreak-internal-runner-codex-cloud = mkRunnerPackage self.nixosConfigurations.firebreak-codex-cloud.config.microvm.declaredRunner;
   firebreak-internal-runner-claude-code-cloud = mkRunnerPackage self.nixosConfigurations.firebreak-claude-code-cloud.config.microvm.declaredRunner;
   firebreak-internal-runner-test-cloud = mkRunnerPackage self.nixosConfigurations.firebreak-cloud-smoke.config.microvm.declaredRunner;
@@ -71,6 +73,15 @@
     agentBin = "claude";
     agentDisplayName = "Claude Code";
     agentConfigDirName = ".claude";
+  };
+
+  firebreak-interactive-echo = mkAgentPackage {
+    name = "firebreak-interactive-echo";
+    runner = self.packages.${system}.firebreak-internal-runner-interactive-echo;
+    controlSocketName = "firebreak-interactive-echo";
+    defaultAgentCommand = "interactive-echo";
+    agentConfigDirName = ".firebreak";
+    defaultAgentConfigHostDir = "$HOME/.firebreak/firebreak-interactive-echo";
   };
 
   firebreak-internal-job-codex-cloud = mkCloudJobPackage {
@@ -141,6 +152,10 @@
 
   firebreak-test-smoke-worker-guest-bridge = mkWorkerGuestBridgeSmokePackage {
     name = "firebreak-test-smoke-worker-guest-bridge";
+  };
+
+  firebreak-test-smoke-worker-guest-bridge-interactive = mkWorkerGuestBridgeInteractiveSmokePackage {
+    name = "firebreak-test-smoke-worker-guest-bridge-interactive";
   };
 
   firebreak-internal-loop = mkLoopPackage {

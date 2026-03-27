@@ -1,5 +1,5 @@
 { self, system, pkgs, renderTemplate, mkLocalVmArtifacts }:
-{
+rec {
   mkSmokePackage = {
     name,
     agentPackage,
@@ -275,7 +275,7 @@
       } ../../modules/base/tests/test-smoke-worker-firebreak-attach.sh;
     };
 
-  mkWorkerGuestBridgeSmokePackage = { name }:
+  mkWorkerGuestBridgeArtifacts =
     let
       bridgeVm = mkLocalVmArtifacts {
         name = "firebreak-worker-guest-bridge-smoke-vm";
@@ -300,6 +300,11 @@
             package = "firebreak-codex";
             vm_mode = "run";
           };
+          bridge-interactive-firebreak = {
+            backend = "firebreak";
+            package = "firebreak-interactive-echo";
+            vm_mode = "run";
+          };
         };
         extraModules = [
           ({ pkgs, ... }: {
@@ -307,11 +312,18 @@
               gnugrep
               gnused
               python3
+              util-linux
             ];
             networking.firewall.enable = false;
           })
         ];
       };
+    in
+    bridgeVm;
+
+  mkWorkerGuestBridgeSmokePackage = { name }:
+    let
+      bridgeVm = mkWorkerGuestBridgeArtifacts;
     in
     pkgs.writeShellApplication {
       inherit name;
@@ -323,6 +335,21 @@
       text = renderTemplate {
         "@BRIDGE_VM_BIN@" = "${bridgeVm.package}/bin/firebreak-worker-guest-bridge-smoke-vm";
       } ../../modules/base/tests/test-smoke-worker-guest-bridge.sh;
+    };
+
+  mkWorkerGuestBridgeInteractiveSmokePackage = { name }:
+    let
+      bridgeVm = mkWorkerGuestBridgeArtifacts;
+    in
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        bash
+        coreutils
+      ];
+      text = renderTemplate {
+        "@BRIDGE_VM_BIN@" = "${bridgeVm.package}/bin/firebreak-worker-guest-bridge-smoke-vm";
+      } ../../modules/base/tests/test-smoke-worker-guest-bridge-interactive.sh;
     };
 
   mkLoopPackage = { name, taskPackage }:

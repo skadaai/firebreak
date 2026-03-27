@@ -169,6 +169,16 @@ if [ -n "$agent_session_mode_override" ]; then
   esac
 fi
 
+if [ -z "$agent_command_override" ]; then
+  case "$agent_session_mode" in
+    agent-exec|agent-attach-exec)
+      if [ -n "$default_agent_command" ]; then
+        agent_command_override=$default_agent_command
+      fi
+      ;;
+  esac
+fi
+
 case "$agent_config_mode" in
   host)
     agent_config_host_dir=$default_agent_config_host_dir

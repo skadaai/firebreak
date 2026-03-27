@@ -3,6 +3,8 @@
   firebreak-internal-runner-codex = self.packages.${system}.firebreak-internal-runner-codex;
   firebreak-codex-system = self.nixosConfigurations.firebreak-codex.config.system.build.toplevel;
   firebreak-test-smoke-codex = self.packages.${system}.firebreak-test-smoke-codex;
+  firebreak-internal-runner-interactive-echo = self.packages.${system}.firebreak-internal-runner-interactive-echo;
+  firebreak-interactive-echo-system = self.nixosConfigurations.firebreak-interactive-echo.config.system.build.toplevel;
   firebreak-internal-runner-codex-cloud = self.packages.${system}.firebreak-internal-runner-codex-cloud;
   firebreak-codex-cloud-system = self.nixosConfigurations.firebreak-codex-cloud.config.system.build.toplevel;
   firebreak-test-smoke-cloud-job = self.packages.${system}.firebreak-test-smoke-cloud-job;
@@ -15,6 +17,7 @@
   firebreak-test-smoke-worker = self.packages.${system}.firebreak-test-smoke-worker;
   firebreak-test-smoke-worker-firebreak-attach = self.packages.${system}.firebreak-test-smoke-worker-firebreak-attach;
   firebreak-test-smoke-worker-guest-bridge = self.packages.${system}.firebreak-test-smoke-worker-guest-bridge;
+  firebreak-test-smoke-worker-guest-bridge-interactive = self.packages.${system}.firebreak-test-smoke-worker-guest-bridge-interactive;
   firebreak-internal-runner-claude-code = self.packages.${system}.firebreak-internal-runner-claude-code;
   firebreak-claude-code-system = self.nixosConfigurations.firebreak-claude-code.config.system.build.toplevel;
   firebreak-test-smoke-claude-code = self.packages.${system}.firebreak-test-smoke-claude-code;

@@ -173,44 +173,89 @@ PY
   trap cleanup_attach EXIT INT TERM
 
   mv "$request_tmp_path" "$request_dir/request.json"
+  printf '%s\n' 'firebreak: starting worker' >&2
   REQUEST_DIR=$request_dir STDIN_FIFO=$stdin_fifo STDOUT_FIFO=$stdout_fifo python3 - <<'PY'
 import os
 import select
 import sys
 import threading
+import time
 
 request_dir = os.environ["REQUEST_DIR"]
 stdin_fifo = os.environ["STDIN_FIFO"]
 stdout_fifo = os.environ["STDOUT_FIFO"]
 exit_code_path = os.path.join(request_dir, "response.exit-code")
+trace_path = os.path.join(request_dir, "trace.log")
 stdin_fd = sys.stdin.fileno()
 stdout_fd = sys.stdout.fileno()
+stderr_fd = sys.stderr.fileno()
 
 stdin_pipe_fd = os.open(stdin_fifo, os.O_WRONLY)
-stdout_pipe_fd = os.open(stdout_fifo, os.O_RDONLY | os.O_NONBLOCK)
 
 stdout_done = threading.Event()
+stdout_started = threading.Event()
+progress_done = threading.Event()
+printed_messages = set()
+
+
+def print_progress(message: str) -> None:
+    if message in printed_messages:
+        return
+    printed_messages.add(message)
+    os.write(stderr_fd, (message + "\n").encode())
 
 def pump_stdout() -> None:
+    stdout_pipe_fd = None
     try:
+        stdout_pipe_fd = os.open(stdout_fifo, os.O_RDONLY)
         while True:
-            readable, _, _ = select.select([stdout_pipe_fd], [], [], 0.1)
-            if stdout_pipe_fd not in readable:
-                if stdout_done.is_set():
-                    break
-                continue
-            try:
-                chunk = os.read(stdout_pipe_fd, 4096)
-            except BlockingIOError:
-                continue
+            chunk = os.read(stdout_pipe_fd, 4096)
             if not chunk:
                 break
+            stdout_started.set()
             os.write(stdout_fd, chunk)
     finally:
+        if stdout_pipe_fd is not None:
+            try:
+                os.close(stdout_pipe_fd)
+            except OSError:
+                pass
         stdout_done.set()
 
+
+def pump_progress() -> None:
+    seen_trace_lines = 0
+    reminded = False
+    started_at = time.monotonic()
+    while not progress_done.is_set():
+        if os.path.exists(trace_path):
+            try:
+                with open(trace_path, "r", encoding="utf-8") as handle:
+                    trace_lines = [line.strip() for line in handle if line.strip()]
+            except OSError:
+                trace_lines = []
+            if seen_trace_lines < len(trace_lines):
+                for line in trace_lines[seen_trace_lines:]:
+                    if line == "request-loaded":
+                        print_progress("firebreak: request accepted")
+                    elif line == "attach-pty-open":
+                        print_progress("firebreak: attaching terminal")
+                    elif line == "attach-worker-started":
+                        print_progress("firebreak: worker started, waiting for output")
+                    elif line.startswith("attach-worker-exit:"):
+                        print_progress(f"firebreak: worker exited ({line.split(':', 1)[1]})")
+                seen_trace_lines = len(trace_lines)
+        if stdout_started.is_set() or os.path.exists(exit_code_path):
+            break
+        if not reminded and time.monotonic() - started_at >= 15:
+            print_progress("firebreak: still waiting for worker output")
+            reminded = True
+        time.sleep(0.2)
+
 stdout_thread = threading.Thread(target=pump_stdout, daemon=True)
+progress_thread = threading.Thread(target=pump_progress, daemon=True)
 stdout_thread.start()
+progress_thread.start()
 
 try:
     while True:
@@ -232,12 +277,14 @@ finally:
 while not os.path.exists(exit_code_path) and not stdout_done.is_set():
     stdout_thread.join(timeout=0.1)
 
+progress_done.set()
 stdout_done.set()
 stdout_thread.join(timeout=2)
+progress_thread.join(timeout=1)
 
 try:
-    os.close(stdout_pipe_fd)
-except OSError:
+    pass
+except Exception:
     pass
 PY
 

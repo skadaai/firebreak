@@ -10,6 +10,11 @@
     extraModules = [ self.nixosModules.firebreak-claude-code ];
   };
 
+  firebreak-interactive-echo = mkAgentVm {
+    name = "firebreak-interactive-echo";
+    extraModules = [ self.nixosModules.firebreak-interactive-echo ];
+  };
+
   firebreak-codex-cloud = mkAgentVm {
     name = "firebreak-codex-cloud";
     profileModules = [ self.nixosModules.firebreak-cloud-profile ];

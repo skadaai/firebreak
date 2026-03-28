@@ -1198,6 +1198,7 @@ def nested_runtime_snapshot(worker_dir: Path):
         "virtiofs_hostcwd_log",
         "virtiofs_agent_config_log",
         "virtiofs_agent_exec_log",
+        "virtiofs_agent_tools_log",
         "virtiofs_worker_bridge_log",
         "worker_bridge_server_log",
     ]
@@ -1220,13 +1221,14 @@ def nested_runtime_snapshot(worker_dir: Path):
     if agent_exec_output_dir:
         agent_exec_dir = Path(agent_exec_output_dir)
         agent_exec = {}
-        for name in ["attach_stage", "exit_code", "stdout", "stderr"]:
+        for name in ["attach_stage", "exit_code", "stdout", "stderr", "command-processes.txt", "interactive-echo.log"]:
             path = agent_exec_dir / name
             if path.exists():
-                agent_exec[f"{name}_size"] = file_size(str(path))
+                key_name = name.replace("-", "_").replace(".txt", "").replace(".log", "")
+                agent_exec[f"{key_name}_size"] = file_size(str(path))
                 text = tail_text(path, line_count=20)
                 if text:
-                    agent_exec[f"{name}_tail"] = text
+                    agent_exec[f"{key_name}_tail"] = text
         for name in ["bootstrap-state.json", "command-state.json"]:
             path = agent_exec_dir / name
             value = maybe_load_json(path)
@@ -1243,6 +1245,7 @@ def bridge_request_snapshot(
     worker_root: Optional[Path] = None,
 ):
     request_dir = Path(request_dir_str) if request_dir_str else None
+    request_path = (request_dir / "request.json") if request_dir is not None else None
     persisted_trace_path = (worker_root / "bridge-request-trace.log") if worker_root else None
     persisted_response_exit_path = (worker_root / "bridge-request-response-exit-code") if worker_root else None
 
@@ -1266,11 +1269,28 @@ def bridge_request_snapshot(
         "trace_path": str(trace_path) if trace_path is not None else None,
         "trace_size": file_size(str(trace_path)) if trace_path is not None else None,
     }
+    request_payload = maybe_load_json(request_path) if request_path is not None and request_path.exists() else None
+    if isinstance(request_payload, dict):
+        snapshot["term"] = request_payload.get("term")
+        snapshot["columns"] = request_payload.get("columns")
+        snapshot["lines"] = request_payload.get("lines")
+        snapshot["interactive"] = request_payload.get("interactive")
+        snapshot["attach"] = request_payload.get("attach")
     if trace_path is not None:
+        try:
+            trace_text = trace_path.read_text(encoding="utf-8")
+        except Exception:
+            trace_text = ""
         trace_tail = tail_text(trace_path)
         if trace_tail:
             snapshot["trace_tail"] = trace_tail
             snapshot["last_trace_event"] = last_trace_event(trace_tail)
+        if trace_text:
+            for line in trace_text.splitlines():
+                if line.startswith("attach-term-effective:"):
+                    snapshot["effective_term"] = line.split(":", 1)[1]
+                elif line.startswith("attach-size:"):
+                    snapshot["effective_size"] = line.split(":", 1)[1]
         if persisted_trace_path is not None and trace_path == persisted_trace_path:
             snapshot["trace_persisted"] = True
     response_exit_code = None
@@ -1564,6 +1584,12 @@ for item in json.loads(os.environ["WORKERS_JSON"]):
                     print(f"  {prefix}_status: {status}")
                 if detail:
                     print(f"  {prefix}_detail: {detail}")
+                command = value.get("command")
+                if command:
+                    print(f"  {prefix}_command: {command}")
+                exit_code = value.get("exit_code")
+                if exit_code is not None:
+                    print(f"  {prefix}_exit_code: {exit_code}")
                 if updated_at:
                     print(f"  {prefix}_updated_at: {updated_at}")
                 continue
@@ -1583,6 +1609,25 @@ for item in json.loads(os.environ["WORKERS_JSON"]):
         request_id = bridge_request.get("request_id")
         if request_id:
             print(f"  bridge_request_id: {request_id}")
+        request_term = bridge_request.get("term")
+        if request_term is not None:
+            print(f"  bridge_request_term: {request_term}")
+        effective_term = bridge_request.get("effective_term")
+        if effective_term is not None:
+            print(f"  bridge_request_effective_term: {effective_term}")
+        request_columns = bridge_request.get("columns")
+        if request_columns is not None:
+            print(f"  bridge_request_columns: {request_columns}")
+        request_lines = bridge_request.get("lines")
+        if request_lines is not None:
+            print(f"  bridge_request_lines: {request_lines}")
+        effective_size = bridge_request.get("effective_size")
+        if effective_size is not None:
+            print(f"  bridge_request_effective_size: {effective_size}")
+        if bridge_request.get("attach") is not None:
+            print(f"  bridge_request_attach: {bridge_request.get('attach')}")
+        if bridge_request.get("interactive") is not None:
+            print(f"  bridge_request_interactive: {bridge_request.get('interactive')}")
         trace_size = bridge_request.get("trace_size")
         if trace_size is not None:
             print(f"  bridge_request_trace_size: {trace_size}")

@@ -97,11 +97,35 @@ bridge_request_attach() {
   request_term=${TERM:-}
   request_columns=${COLUMNS:-}
   request_lines=${LINES:-}
+  case "$request_columns" in
+    ''|*[!0-9]*|0)
+      request_columns=""
+      ;;
+  esac
+  case "$request_lines" in
+    ''|*[!0-9]*|0)
+      request_lines=""
+      ;;
+  esac
   if [ "$interactive_mode" = "1" ]; then
     stty_size=$(stty size 2>/dev/null || true)
     if [ -n "$stty_size" ]; then
-      request_lines=${stty_size%% *}
-      request_columns=${stty_size##* }
+      stty_lines=${stty_size%% *}
+      stty_columns=${stty_size##* }
+      case "$stty_lines" in
+        ''|*[!0-9]*|0)
+          stty_lines=""
+          ;;
+      esac
+      case "$stty_columns" in
+        ''|*[!0-9]*|0)
+          stty_columns=""
+          ;;
+      esac
+      if [ -n "$stty_lines" ] && [ -n "$stty_columns" ]; then
+        request_lines=$stty_lines
+        request_columns=$stty_columns
+      fi
     fi
   fi
 
@@ -192,11 +216,26 @@ stdin_fd = sys.stdin.fileno()
 stdout_fd = sys.stdout.fileno()
 stderr_fd = sys.stderr.fileno()
 
+try:
+    os.set_blocking(stdin_fd, False)
+except (AttributeError, OSError):
+    pass
+input_fd = stdin_fd
+input_fd_is_tty = os.isatty(stdin_fd)
+
 stdout_done = threading.Event()
 stdout_started = threading.Event()
 progress_done = threading.Event()
 stdin_done = threading.Event()
 printed_messages = set()
+
+
+def trace(message: str) -> None:
+    try:
+        with open(trace_path, "a", encoding="utf-8") as handle:
+            handle.write(message + "\n")
+    except OSError:
+        pass
 
 
 def print_progress(message: str) -> None:
@@ -226,23 +265,40 @@ def pump_stdout() -> None:
 
 
 def pump_stdin() -> None:
+    saw_stdin_bytes = False
+    total_stdin_bytes = 0
     try:
+        trace(f"guest-stdin-source:{'tty' if input_fd_is_tty else 'stdin'}")
         with open(stdin_stream, "ab", buffering=0) as sink:
             while True:
                 if os.path.exists(exit_code_path):
                     break
-                readable, _, _ = select.select([stdin_fd], [], [], 0.1)
-                if stdin_fd not in readable:
+                readable, _, _ = select.select([input_fd], [], [], 0.1)
+                if input_fd not in readable:
                     continue
-                chunk = os.read(stdin_fd, 4096)
+                chunk = os.read(input_fd, 4096)
                 if not chunk:
-                    break
+                    if saw_stdin_bytes:
+                        trace("guest-stdin-eof-after-bytes")
+                        eof_marker = os.path.join(request_dir, "stdin.eof")
+                        with open(eof_marker, "w", encoding="utf-8"):
+                            pass
+                        break
+                    # Keep the attach session alive until the worker actually exits.
+                    # Some bridged terminals report a readable stdin with no payload
+                    # before the user has provided any input at all.
+                    trace("guest-stdin-empty-before-bytes")
+                    time.sleep(0.1)
+                    continue
+                if not saw_stdin_bytes:
+                    trace("guest-stdin-first-byte")
+                saw_stdin_bytes = True
+                total_stdin_bytes += len(chunk)
                 sink.write(chunk)
                 sink.flush()
-        eof_marker = os.path.join(request_dir, "stdin.eof")
-        with open(eof_marker, "w", encoding="utf-8"):
-            pass
     finally:
+        if saw_stdin_bytes:
+            trace(f"guest-stdin-total-bytes:{total_stdin_bytes}")
         stdin_done.set()
 
 

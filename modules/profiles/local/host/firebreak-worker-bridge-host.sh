@@ -89,6 +89,30 @@ def trace(message: str) -> None:
     except OSError:
         pass
 
+
+def parse_positive_dimension(value):
+    text = str(value or "").strip()
+    if not text.isdigit():
+        return None
+    parsed = int(text)
+    return parsed if parsed > 0 else None
+
+
+def normalize_term(value):
+    term = str(value or "").strip()
+    if not term:
+        return ""
+    legacy_terms = {
+        "ansi",
+        "dumb",
+        "vt100",
+        "vt102",
+        "vt220",
+    }
+    if term.lower() in legacy_terms:
+        return "xterm-256color"
+    return term
+
 try:
     trace("request-loaded")
     with open(request_path, "r", encoding="utf-8") as handle:
@@ -98,8 +122,9 @@ try:
         raise ValueError("request argv must be a non-empty list")
     argv = [str(item) for item in argv]
     request_term = str(request.get("term") or "")
-    request_columns = str(request.get("columns") or "")
-    request_lines = str(request.get("lines") or "")
+    effective_term = normalize_term(request_term)
+    request_columns = parse_positive_dimension(request.get("columns"))
+    request_lines = parse_positive_dimension(request.get("lines"))
     if request.get("attach") is True and request.get("interactive") is True:
         stdin_stream = os.path.join(request_dir, "stdin.stream")
         stdout_stream = os.path.join(request_dir, "stdout.stream")
@@ -107,21 +132,27 @@ try:
         if not os.path.exists(stdin_stream) or not os.path.exists(stdout_stream):
             raise ValueError("attach requests must create stdin.stream and stdout.stream in the request directory")
 
+        trace(f"attach-term-requested:{request_term or 'unset'}")
+        trace(f"attach-term-effective:{effective_term or 'unset'}")
+        if request_lines is not None and request_columns is not None:
+            trace(f"attach-size:{request_lines}x{request_columns}")
+        else:
+            trace("attach-size:unset")
         trace("attach-pty-open")
         child_pid, master_fd = pty.fork()
         if child_pid == 0:
             child_env = os.environ.copy()
             child_env["FIREBREAK_WORKER_BRIDGE_REQUEST_DIR"] = request_dir
             child_env["FIREBREAK_WORKER_BRIDGE_TRACE_PATH"] = trace_path
-            if request_term:
-                child_env["TERM"] = request_term
-            if request_columns:
-                child_env["COLUMNS"] = request_columns
-            if request_lines:
-                child_env["LINES"] = request_lines
+            if effective_term:
+                child_env["TERM"] = effective_term
+            if request_columns is not None:
+                child_env["COLUMNS"] = str(request_columns)
+            if request_lines is not None:
+                child_env["LINES"] = str(request_lines)
             os.execvpe("bash", ["bash", worker_script, *argv], child_env)
-        if request_columns.isdigit() and request_lines.isdigit():
-            winsize = struct.pack("HHHH", int(request_lines), int(request_columns), 0, 0)
+        if request_columns is not None and request_lines is not None:
+            winsize = struct.pack("HHHH", request_lines, request_columns, 0, 0)
             try:
                 fcntl.ioctl(master_fd, termios.TIOCSWINSZ, winsize)
             except OSError:
@@ -130,6 +161,8 @@ try:
 
         def pump_stdin():
             offset = 0
+            saw_input = False
+            total_input_bytes = 0
             try:
                 trace("attach-stdin-stream-opened")
                 while True:
@@ -138,6 +171,10 @@ try:
                         chunk = source.read(4096)
                     if chunk:
                         offset += len(chunk)
+                        total_input_bytes += len(chunk)
+                        if not saw_input:
+                            trace("attach-stdin-first-byte")
+                            saw_input = True
                         os.write(master_fd, chunk)
                         continue
                     if os.path.exists(stdin_eof_path):
@@ -146,6 +183,9 @@ try:
                     time.sleep(0.1)
             except OSError:
                 pass
+            finally:
+                if saw_input:
+                    trace(f"attach-stdin-total-bytes:{total_input_bytes}")
 
         def pump_stdout():
             saw_output = False

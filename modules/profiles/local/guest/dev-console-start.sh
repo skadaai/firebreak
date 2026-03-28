@@ -6,6 +6,11 @@ agent_command=@AGENT_COMMAND@
 guest_state_dir=/run/firebreak-agent
 command_state_local=$guest_state_dir/command-state.json
 command_state_shared=@AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
+command_process_local=$guest_state_dir/command-processes.txt
+command_process_shared=@AGENT_EXEC_OUTPUT_MOUNT@/command-processes.txt
+session_term_state_file=$guest_state_dir/session-term
+session_columns_state_file=$guest_state_dir/session-columns
+session_lines_state_file=$guest_state_dir/session-lines
 
 json_escape() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
@@ -44,6 +49,19 @@ fi
 
 if [ -r @AGENT_COMMAND_FILE@ ]; then
   agent_command=$(cat @AGENT_COMMAND_FILE@)
+fi
+
+if [ -r "$session_term_state_file" ]; then
+  TERM=$(cat "$session_term_state_file")
+  export TERM
+fi
+if [ -r "$session_columns_state_file" ]; then
+  COLUMNS=$(cat "$session_columns_state_file")
+  export COLUMNS
+fi
+if [ -r "$session_lines_state_file" ]; then
+  LINES=$(cat "$session_lines_state_file")
+  export LINES
 fi
 
 if [ ! -d "$target" ]; then
@@ -98,7 +116,9 @@ EOF
         }
         if command -v firebreak-bootstrap-wait >/dev/null 2>&1; then
           write_command_state bootstrap-wait running agent-exec 0
-          if ! firebreak-bootstrap-wait; then
+          if firebreak-bootstrap-wait; then
+            :
+          else
             status=$?
             write_command_state bootstrap-wait error agent-exec "$status"
             printf "%s\n" "$status" >"$exit_code_path"
@@ -124,6 +144,9 @@ EOF
         status=0
         stage_path=@AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
         exit_code_path=@AGENT_EXEC_OUTPUT_MOUNT@/exit_code
+        command_process_local="'"$command_process_local"'"
+        command_process_shared="'"$command_process_shared"'"
+        command_process_monitor_pid=""
         mkdir -p @AGENT_EXEC_OUTPUT_MOUNT@
         write_command_state() {
           command_phase=$1
@@ -147,9 +170,65 @@ EOF
             cp "'"$command_state_local"'" "'"$command_state_shared"'"
           fi
         }
+        write_command_process_snapshot() {
+          child_pids=$(cat /proc/$$/task/$$/children 2>/dev/null || true)
+          {
+            printf "%s\n" "shell_pid=$$"
+            printf "%s\n" "shell_tty=$(tty 2>/dev/null || true)"
+            printf "%s\n" "term=${TERM:-}"
+            printf "%s\n" "children=$child_pids"
+            tracked_pids="$$"
+            if [ -n "$child_pids" ]; then
+              tracked_pids="$tracked_pids $child_pids"
+            fi
+            if command -v ps >/dev/null 2>&1; then
+              ps -o pid=,ppid=,tty=,stat=,comm= -p $tracked_pids 2>/dev/null || true
+            fi
+            for tracked_pid in $tracked_pids; do
+              cmdline=$(tr "\0" " " </proc/$tracked_pid/cmdline 2>/dev/null || true)
+              if [ -n "$cmdline" ]; then
+                printf "%s\n" "pid=$tracked_pid cmdline=$cmdline"
+              fi
+              wchan=$(cat /proc/$tracked_pid/wchan 2>/dev/null || true)
+              if [ -n "$wchan" ]; then
+                printf "%s\n" "pid=$tracked_pid wchan=$wchan"
+              fi
+              for fd_num in 0 1 2; do
+                fd_target=$(readlink /proc/$tracked_pid/fd/$fd_num 2>/dev/null || true)
+                if [ -n "$fd_target" ]; then
+                  printf "%s\n" "pid=$tracked_pid fd$fd_num=$fd_target"
+                fi
+              done
+            done
+          } >"$command_process_local"
+          if [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
+            cp "$command_process_local" "$command_process_shared"
+          fi
+        }
+        start_command_process_monitor() {
+          (
+            while true; do
+              write_command_process_snapshot
+              if [ -f "$exit_code_path" ]; then
+                exit 0
+              fi
+              sleep 1
+            done
+          ) &
+          command_process_monitor_pid=$!
+        }
+        stop_command_process_monitor() {
+          if [ -n "$command_process_monitor_pid" ]; then
+            kill "$command_process_monitor_pid" 2>/dev/null || true
+            wait "$command_process_monitor_pid" 2>/dev/null || true
+            command_process_monitor_pid=""
+          fi
+        }
         if command -v firebreak-bootstrap-wait >/dev/null 2>&1; then
           write_command_state bootstrap-wait running agent-attach-exec 0
-          if ! firebreak-bootstrap-wait; then
+          if firebreak-bootstrap-wait; then
+            :
+          else
             status=$?
             write_command_state bootstrap-wait error agent-attach-exec "$status"
             printf "%s\n" "$status" >"$exit_code_path"
@@ -160,7 +239,11 @@ EOF
         fi
         write_command_state command-start running agent-attach-exec 0
         printf "%s\n" "command-start" >"$stage_path"
+        write_command_process_snapshot
+        start_command_process_monitor
         eval "$FIREBREAK_AGENT_COMMAND" || status=$?
+        stop_command_process_monitor
+        write_command_process_snapshot
         printf "%s\n" "$status" >"$exit_code_path"
         write_command_state command-exit completed agent-attach-exec "$status"
         printf "%s\n" "command-exit:$status" >"$stage_path"

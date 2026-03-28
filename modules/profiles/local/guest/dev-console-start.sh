@@ -142,6 +142,7 @@ EOF
     if [ -n "$agent_command" ]; then
       exec env FIREBREAK_AGENT_COMMAND="$agent_command" @BASH@ -ic '
         status=0
+        set +m
         stage_path=@AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
         exit_code_path=@AGENT_EXEC_OUTPUT_MOUNT@/exit_code
         command_process_local="'"$command_process_local"'"
@@ -185,18 +186,24 @@ EOF
               ps -o pid=,ppid=,tty=,stat=,comm= -p $tracked_pids 2>/dev/null || true
             fi
             for tracked_pid in $tracked_pids; do
-              cmdline=$(tr "\0" " " </proc/$tracked_pid/cmdline 2>/dev/null || true)
-              if [ -n "$cmdline" ]; then
-                printf "%s\n" "pid=$tracked_pid cmdline=$cmdline"
+              if [ -r "/proc/$tracked_pid/cmdline" ]; then
+                cmdline=$(tr "\0" " " </proc/$tracked_pid/cmdline 2>/dev/null || true)
+                if [ -n "$cmdline" ]; then
+                  printf "%s\n" "pid=$tracked_pid cmdline=$cmdline"
+                fi
               fi
-              wchan=$(cat /proc/$tracked_pid/wchan 2>/dev/null || true)
-              if [ -n "$wchan" ]; then
-                printf "%s\n" "pid=$tracked_pid wchan=$wchan"
+              if [ -r "/proc/$tracked_pid/wchan" ]; then
+                wchan=$(cat /proc/$tracked_pid/wchan 2>/dev/null || true)
+                if [ -n "$wchan" ]; then
+                  printf "%s\n" "pid=$tracked_pid wchan=$wchan"
+                fi
               fi
               for fd_num in 0 1 2; do
-                fd_target=$(readlink /proc/$tracked_pid/fd/$fd_num 2>/dev/null || true)
-                if [ -n "$fd_target" ]; then
-                  printf "%s\n" "pid=$tracked_pid fd$fd_num=$fd_target"
+                if [ -e "/proc/$tracked_pid/fd/$fd_num" ]; then
+                  fd_target=$(readlink /proc/$tracked_pid/fd/$fd_num 2>/dev/null || true)
+                  if [ -n "$fd_target" ]; then
+                    printf "%s\n" "pid=$tracked_pid fd$fd_num=$fd_target"
+                  fi
                 fi
               done
             done

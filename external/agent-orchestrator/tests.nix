@@ -1,6 +1,6 @@
-{ pkgs, project }:
+{ pkgs, project, testProject }:
 let
-  packageBin = "${project.package}/bin/firebreak-agent-orchestrator";
+  packageBin = "${testProject.package}/bin/firebreak-agent-orchestrator";
 
   workerProxySmoke = pkgs.writeShellApplication {
     name = "firebreak-test-smoke-agent-orchestrator-worker-proxy";

@@ -86,6 +86,7 @@ The intended landing shape is:
 - The system shall preserve reviewable runtime artifacts for direct packaged-cli readiness probes when those probes fail.
 - The system shall not require repeated network-backed package installation during the normal startup path for attached interactive workers once the packaged toolchain has been prepared successfully.
 - The system shall provide a deterministic packaged-tool delivery path for attached interactive workers, either by baking tools into the image or by reusing a prepared host-owned shared tools state outside the critical interactive boot path.
+- The system shall apply that deterministic packaged-tool delivery path to both Bun-managed and packaged node-cli worker images that participate in the orchestration flow.
 - The system shall validate packaged-tool reuse with focused smokes before relying on slower end-to-end orchestrator validation.
 - The system shall define how orchestrated workers resolve workspace access so the worker can act on the intended project state.
 - The system shall define how orchestrated workers resolve Firebreak config modes and agent-specific config where those differ from the orchestrator VM.
@@ -99,6 +100,7 @@ The intended landing shape is:
 - The current effort is therefore reframed as a deterministic packaged-tool delivery problem inside the still-valid host-brokered worker architecture, rather than as a generic attach-transport problem.
 - Attached worker relay stability now depends on a direct PTY driver rather than shelling through `script` as the primary transport primitive.
 - Focused interactive validation shall use an isolated synthetic worker and preserved runtime artifacts so attach regressions can be diagnosed without depending on the external orchestrator recipe.
+- External orchestrator recipe smokes should validate packaged worker behavior through a no-forward test variant whenever host port forwarding is not part of the behavior under test.
 
 ## Acceptance criteria
 

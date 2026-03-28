@@ -31,6 +31,7 @@ Purpose: catch shell-level regressions in the shared worker runtime, packaged-no
 
 ```sh
 bash -n modules/bun-agent/guest/bootstrap.sh
+bash -n modules/node-cli/guest/shell-init.sh
 bash -n modules/profiles/local/guest/prepare-agent-session.sh
 bash -n modules/profiles/local/guest/dev-console-start.sh
 bash -n modules/node-cli/guest/bootstrap.sh
@@ -163,6 +164,7 @@ Expected result:
 
 - the smoke exits `0`
 - the output includes `Agent Orchestrator worker proxy smoke test passed`
+- the smoke does not require the recipe test package to claim host forwarding ports that are unrelated to the worker-proxy behavior under test
 
 ### 10. Validate real declared-worker creation from the external recipe
 
@@ -176,6 +178,7 @@ Expected result:
 
 - the smoke exits `0`
 - the output includes `Agent Orchestrator worker run smoke test passed`
+- the smoke succeeds against the recipe's no-forward test package, so declared-worker validation remains independent of host port collisions
 
 ## Manual Tests
 

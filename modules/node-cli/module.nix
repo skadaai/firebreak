@@ -26,6 +26,7 @@ moduleArgs@{
 let
   cfg = config.agentVm;
   devHome = "/var/lib/${cfg.devUser}";
+  toolsMount = cfg.agentToolsMount;
   localBin = "${devHome}/.local/bin";
   xdgConfigHome = "${devHome}/.config";
   xdgCacheHome = "${devHome}/.cache";
@@ -34,7 +35,10 @@ let
   installTmp = "${xdgCacheHome}/tmp";
   installPrefix = "${devHome}/.local";
   packageNodeModules = "${installPrefix}/lib/node_modules/${packageSpec}";
-  bootstrapReadyMarker = "${devHome}/.cache/firebreak-tools/${vmName}/bootstrap-ready";
+  bootstrapReadyMarker =
+    if cfg.agentToolsEnabled
+    then "${toolsMount}/bootstrap-ready"
+    else "${devHome}/.cache/firebreak-tools/${vmName}/bootstrap-ready";
   installStateId = builtins.hashString "sha256" (builtins.toJSON {
     inherit
       binName
@@ -153,6 +157,7 @@ let
   };
   scriptVars = {
     "@BIN_NAME@" = binName;
+    "@AGENT_TOOLS_MOUNT@" = toolsMount;
     "@BOOTSTRAP_READY_MARKER@" = bootstrapReadyMarker;
     "@DEV_HOME@" = devHome;
     "@DEV_USER@" = cfg.devUser;
@@ -179,6 +184,7 @@ in {
     agentVm = {
       brandingTagline = tagline;
       agentConfigEnabled = false;
+      agentToolsEnabled = true;
       memoryMiB = lib.mkDefault memoryMiB;
       extraSystemPackages = with pkgs; [
         nodejs_20

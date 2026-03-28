@@ -43,12 +43,14 @@ Reopened for attached `firebreak` worker hardening and guest lifecycle observabi
 - the focused attached worker smoke now accepts either first-run install or seeded cache reuse, then still proves reuse on a later run
 - an isolated interactive guest-bridge smoke now proves end-to-end `READY` and `ECHO:ping` behavior for an attached sibling worker, with preserved runtime artifacts and host debug evidence on failure
 - guest session preparation now emits explicit phase breadcrumbs so long startup steps such as workspace and tools setup can be reviewed without manual VM archaeology
+- packaged node-cli workers now use the same host-owned shared tools model as Bun workers, instead of paying full bootstrap cost from per-VM state on every run
+- the external Agent Orchestrator smokes now validate through a no-forward test package so worker behavior tests are not blocked by unrelated host port collisions
 
 ## What remains open
 
 - a validated attached `codex` proxy path through the external orchestrator recipe after the prepared-tools path is fully deterministic
 - a deterministic packaged-tool delivery path that avoids both repeated install-time stalls and ad hoc fallback seeding from unrelated state roots
-- a first-class prewarm or baked-tool path for Bun-agent workers so prepared tools do not depend on opportunistic host-state copying
+- a first-class prewarm or baked-tool path for Bun-agent and packaged node-cli workers so prepared tools do not depend on opportunistic host-state copying
 - richer lifecycle behavior such as worker reuse, log filtering, and cleanup policy refinements
 - possible transport hardening beyond the first file-share bridge, such as a mounted Unix-socket protocol
 - broader recipe adoption and validation beyond the first external orchestrator recipe
@@ -80,3 +82,4 @@ Reopened for attached `firebreak` worker hardening and guest lifecycle observabi
 - 2026-03-27: Added bridge-level attach diagnostics, streamed nested runner output, guest-visible attach progress, and packaged Bun-agent bootstrap phase markers so attached-worker failures can be diagnosed without raw host-side process archaeology.
 - 2026-03-28: Recorded the strategic pivot explicitly. The branch will continue on the host-brokered sibling-worker architecture, but remaining work is now framed as deterministic packaged-tool delivery and reuse rather than generic attach transport debugging.
 - 2026-03-28: Replaced the unstable `script`-based attached relay with a direct PTY driver, proved the focused interactive sibling-worker path with an isolated synthetic worker smoke, and kept the remaining open risk centered on deterministic prepared-tools delivery rather than relay correctness.
+- 2026-03-28: Extended the shared prepared-tools model to packaged node-cli workers, moved the Agent Orchestrator recipe smokes onto a no-forward test variant, and validated both recipe-owned runtime smokes against the new path.

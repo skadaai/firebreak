@@ -30,6 +30,7 @@ last_updated: 2026-03-28
 21. Reposition AO end-to-end validation as the final gate after direct packaged-worker readiness and reuse smokes pass.
 22. Replace the unstable `script`-piped attached relay with a direct PTY driver and prove the change with a focused interactive sibling-worker smoke.
 23. Add guest session-preparation breadcrumbs so long-lived setup steps can be reviewed through preserved runtime artifacts instead of only truncated console output.
+24. Extend the prepared-tools contract to packaged node-cli recipes and move their focused smokes onto a no-forward test variant when port ownership is not under test.
 
 ## Near-term phased plan
 
@@ -37,8 +38,9 @@ last_updated: 2026-03-28
 
 1. Keep the direct PTY relay and the isolated interactive smoke green while packaged-tool work continues.
 2. Make the shared-tools or baked-tools path deterministic for Bun-agent workers.
-3. Remove or isolate any remaining boot-time step that can turn a successful install into a late bootstrap failure.
-4. Keep bootstrap state, ready-marker path, and reuse path visible through machine-readable state and host debug output.
+3. Extend the same deterministic shared-tools contract to packaged node-cli workers used by external recipes.
+4. Remove or isolate any remaining boot-time step that can turn a successful install into a late bootstrap failure.
+5. Keep bootstrap state, ready-marker path, and reuse path visible through machine-readable state and host debug output.
 
 ### Phase B: Prove reuse locally
 
@@ -57,8 +59,9 @@ last_updated: 2026-03-28
 ### Phase D: Revalidate AO end to end
 
 1. Re-run the plain attached `codex` proxy path from the AO VM only after Phases A through C are green.
-2. Treat AO as an integration gate, not as the main debugger for packaged startup.
-3. Document the final startup contract and validation flow once the AO path is stable.
+2. Keep recipe-owned smokes on a no-forward test variant unless the validation target is specifically host port exposure.
+3. Treat AO as an integration gate, not as the main debugger for packaged startup.
+4. Document the final startup contract and validation flow once the AO path is stable.
 
 ## Validation approach
 
@@ -81,7 +84,7 @@ last_updated: 2026-03-28
 
 ## Current status
 
-Reopened for attached `firebreak` worker hardening. Detached flows, guest-local `process` flows, worker-kind declarations, bounded concurrency, packaged node-cli bootstrap readiness, the worker-proxy helper, the first recipe-owned detached worker lifecycle validation path, the first machine-readable guest lifecycle diagnostics, the direct PTY relay, and the isolated interactive sibling-worker smoke have landed. The current open slice is no longer generic attach transport. It is the deterministic packaged-tool delivery and reuse path for attached interactive `codex` workers inside the still-valid sibling-worker architecture.
+Reopened for attached `firebreak` worker hardening. Detached flows, guest-local `process` flows, worker-kind declarations, bounded concurrency, packaged node-cli bootstrap readiness, the worker-proxy helper, the first recipe-owned detached worker lifecycle validation path, the first machine-readable guest lifecycle diagnostics, the direct PTY relay, the isolated interactive sibling-worker smoke, and the first shared-tools/no-forward validation path for packaged node-cli recipes have landed. The current open slice is no longer generic attach transport. It is the deterministic packaged-tool delivery and reuse path for attached interactive packaged workers inside the still-valid sibling-worker architecture.
 
 ## Open questions
 

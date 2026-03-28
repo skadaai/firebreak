@@ -1,11 +1,15 @@
 export FIREBREAK_EXTERNAL_PROJECT="@NAME@"
-export LOCAL_BIN="@LOCAL_BIN@"
-export XDG_CONFIG_HOME="@XDG_CONFIG_HOME@"
-export XDG_CACHE_HOME="@XDG_CACHE_HOME@"
-export XDG_STATE_HOME="@XDG_STATE_HOME@"
-export TMPDIR="@TMPDIR@"
-export npm_config_cache="@NPM_CACHE_DIR@"
-export npm_config_prefix="@DEV_HOME@/.local"
+tool_home="@DEV_HOME@"
+if [ -d @AGENT_TOOLS_MOUNT@ ]; then
+  tool_home=@AGENT_TOOLS_MOUNT@
+fi
+export LOCAL_BIN="$tool_home/.local/bin"
+export XDG_CONFIG_HOME="$tool_home/.config"
+export XDG_CACHE_HOME="$tool_home/.cache"
+export XDG_STATE_HOME="$tool_home/.local/state"
+export TMPDIR="$XDG_CACHE_HOME/tmp"
+export npm_config_cache="$XDG_CACHE_HOME/npm"
+export npm_config_prefix="$tool_home/.local"
 export PATH="$LOCAL_BIN:$PATH"
 @LAUNCH_ENV_EXPORTS@
 
@@ -13,16 +17,16 @@ firebreak_refresh_cli() {
   printf "Refreshing @NAME@ CLI...\n"
 
   printf "Removing install state...\n"
-  sudo rm -f "@DEV_HOME@/.cache/firebreak-tools/@NAME@/install-state"
+  sudo rm -f "$XDG_STATE_HOME/firebreak-node-cli/@NAME@/install-state"
 
   printf "Removing bootstrap ready marker...\n"
   sudo rm -f "@BOOTSTRAP_READY_MARKER@"
 
   printf "Removing node modules and npm cache...\n"
-  sudo rm -rf "@PACKAGE_NODE_MODULES@" "@NPM_CACHE_DIR@"
+  sudo rm -rf "$npm_config_prefix/lib/node_modules/@PACKAGE_SPEC@" "$npm_config_cache"
 
   printf "Removing local binary...\n"
-  sudo rm -f "@LOCAL_BIN@/@BIN_NAME@"
+  sudo rm -f "$LOCAL_BIN/@BIN_NAME@"
 
   printf "Restarting dev-bootstrap service...\n"
   sudo systemctl restart dev-bootstrap.service && @READY_COMMAND_NAME@

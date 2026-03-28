@@ -1130,11 +1130,22 @@ debug_read_workers_json() {
   FIREBREAK_WORKERS_DIR=$state_dir/workers python3 - <<'PY'
 import json
 import os
+import re
 from pathlib import Path
 from typing import Optional
 
 workers_dir = Path(os.environ["FIREBREAK_WORKERS_DIR"])
 items = []
+
+ANSI_TRANSCRIPT_ESCAPE_RE = re.compile(
+    r"\x1B(?:"
+    r"\[[0-?]*[ -/]*[@-~]"
+    r"|\][^\x1b\x07]*(?:\x07|\x1b\\)"
+    r"|P.*?\x1b\\"
+    r"|[@-Z\\-_]"
+    r")",
+    re.DOTALL,
+)
 
 
 def read_text(path: Path) -> Optional[str]:
@@ -1155,13 +1166,18 @@ def file_size(path_str: Optional[str]) -> Optional[int]:
         return None
 
 
+def sanitize_display_text(text: str) -> str:
+    text = ANSI_TRANSCRIPT_ESCAPE_RE.sub("", text)
+    return text.replace("\r", "")
+
+
 def tail_text(path: Path, line_count: int = 20) -> Optional[str]:
     if not path.is_file():
         return None
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     if not lines:
         return None
-    return "\n".join(lines[-line_count:])
+    return sanitize_display_text("\n".join(lines[-line_count:]))
 
 
 def last_trace_event(trace_tail: Optional[str]) -> Optional[str]:

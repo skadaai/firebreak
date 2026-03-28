@@ -200,9 +200,9 @@ PY
 
   mv "$request_tmp_path" "$request_dir/request.json"
   printf '%s\n' 'firebreak: starting worker' >&2
-  REQUEST_DIR=$request_dir STDIN_STREAM=$stdin_stream STDOUT_STREAM=$stdout_stream python3 - <<'PY'
+  attach_client_script=$request_dir/attach-client.py
+  cat >"$attach_client_script" <<'PY'
 import os
-import select
 import sys
 import threading
 import time
@@ -216,10 +216,6 @@ stdin_fd = sys.stdin.fileno()
 stdout_fd = sys.stdout.fileno()
 stderr_fd = sys.stderr.fileno()
 
-try:
-    os.set_blocking(stdin_fd, False)
-except (AttributeError, OSError):
-    pass
 input_fd = stdin_fd
 input_fd_is_tty = os.isatty(stdin_fd)
 
@@ -273,9 +269,6 @@ def pump_stdin() -> None:
             while True:
                 if os.path.exists(exit_code_path):
                     break
-                readable, _, _ = select.select([input_fd], [], [], 0.1)
-                if input_fd not in readable:
-                    continue
                 chunk = os.read(input_fd, 4096)
                 if not chunk:
                     if saw_stdin_bytes:
@@ -284,12 +277,8 @@ def pump_stdin() -> None:
                         with open(eof_marker, "w", encoding="utf-8"):
                             pass
                         break
-                    # Keep the attach session alive until the worker actually exits.
-                    # Some bridged terminals report a readable stdin with no payload
-                    # before the user has provided any input at all.
                     trace("guest-stdin-empty-before-bytes")
-                    time.sleep(0.1)
-                    continue
+                    break
                 if not saw_stdin_bytes:
                     trace("guest-stdin-first-byte")
                 saw_stdin_bytes = True
@@ -361,6 +350,8 @@ try:
 except Exception:
     pass
 PY
+  chmod 0555 "$attach_client_script"
+  REQUEST_DIR=$request_dir STDIN_STREAM=$stdin_stream STDOUT_STREAM=$stdout_stream python3 "$attach_client_script"
 
   cleanup_attach
   trap - EXIT INT TERM

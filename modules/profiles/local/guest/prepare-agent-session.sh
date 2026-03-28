@@ -18,6 +18,15 @@ session_term_state_file=$guest_state_dir/session-term
 session_columns_state_file=$guest_state_dir/session-columns
 session_lines_state_file=$guest_state_dir/session-lines
 
+log_phase() {
+  phase=$1
+  timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  printf '%s %s\n' "[firebreak-session]" "$timestamp $phase"
+  if [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
+    printf '%s\n' "$phase" > @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
+  fi
+}
+
 sync_guest_state_files() {
   if ! [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
     return 0
@@ -37,6 +46,7 @@ for _ in $(seq 1 50); do
   sleep 0.1
 done
 
+log_phase prepare-agent-session-metadata-ready
 if [ -d @WORKSPACE_MOUNT@ ] && [ -r "$metadata" ]; then
   candidate=$(cat "$metadata")
   if [ -n "$candidate" ]; then
@@ -57,6 +67,7 @@ printf '%s\n' "$session_mode" > @AGENT_SESSION_MODE_FILE@
 chmod 0644 @AGENT_SESSION_MODE_FILE@
 
 if [ "$session_mode" = "agent-exec" ] || [ "$session_mode" = "agent-attach-exec" ]; then
+  log_phase prepare-agent-session-mount-exec-output-start
   mkdir -p @AGENT_EXEC_OUTPUT_MOUNT@
   if ! mountpoint -q @AGENT_EXEC_OUTPUT_MOUNT@; then
     if ! mount -t virtiofs hostexecoutput @AGENT_EXEC_OUTPUT_MOUNT@; then
@@ -64,12 +75,15 @@ if [ "$session_mode" = "agent-exec" ] || [ "$session_mode" = "agent-attach-exec"
       exit 1
     fi
   fi
+  log_phase prepare-agent-session-mount-exec-output-done
   sync_guest_state_files
   printf '%s\n' "prepare-agent-session-mounted-exec-output" > @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
 fi
 
+log_phase prepare-agent-session-state-dir-start
 mkdir -p "$guest_state_dir"
 @CHOWN@ @DEV_USER@:@DEV_USER@ "$guest_state_dir"
+log_phase prepare-agent-session-state-dir-done
 if [ -r "$session_term_file" ]; then
   cat "$session_term_file" > "$session_term_state_file"
   chmod 0644 "$session_term_state_file"
@@ -84,6 +98,7 @@ if [ -r "$session_lines_file" ]; then
 fi
 
 if [ "$agent_tools_enabled" = "1" ]; then
+  log_phase prepare-agent-session-mount-agent-tools-start
   mkdir -p "$agent_tools_mount"
   if ! mountpoint -q "$agent_tools_mount"; then
     if ! mount -t virtiofs hostagenttools "$agent_tools_mount"; then
@@ -91,9 +106,11 @@ if [ "$agent_tools_enabled" = "1" ]; then
       exit 1
     fi
   fi
+  log_phase prepare-agent-session-mount-agent-tools-done
 fi
 
 if [ "$worker_bridge_enabled" = "1" ]; then
+  log_phase prepare-agent-session-mount-worker-bridge-start
   mkdir -p @WORKER_BRIDGE_MOUNT@
   if ! mountpoint -q @WORKER_BRIDGE_MOUNT@; then
     if ! mount -t virtiofs hostworkerbridge @WORKER_BRIDGE_MOUNT@; then
@@ -101,18 +118,22 @@ if [ "$worker_bridge_enabled" = "1" ]; then
       exit 1
     fi
   fi
+  log_phase prepare-agent-session-mount-worker-bridge-done
 fi
 
 if [ -r "$session_command_file" ]; then
+  log_phase prepare-agent-session-command-file-start
   cat "$session_command_file" > @AGENT_COMMAND_FILE@
   chmod 0644 @AGENT_COMMAND_FILE@
   sync_guest_state_files
   if [ "$session_mode" = "agent-attach-exec" ]; then
     printf '%s\n' "prepare-agent-session-command-ready" > @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
   fi
+  log_phase prepare-agent-session-command-file-done
 fi
 
 if [ "$start_dir" != "@WORKSPACE_MOUNT@" ]; then
+  log_phase prepare-agent-session-bind-workspace-start
   if [ -L "$start_dir" ]; then
     rm -f "$start_dir"
   fi
@@ -127,9 +148,11 @@ if [ "$start_dir" != "@WORKSPACE_MOUNT@" ]; then
       mount --bind @WORKSPACE_MOUNT@ "$start_dir"
     fi
   fi
+  log_phase prepare-agent-session-bind-workspace-done
 fi
 
 if [ "@AGENT_CONFIG_ENABLED@" != "1" ]; then
+  log_phase prepare-agent-session-done
   exit 0
 fi
 
@@ -143,6 +166,7 @@ fi
 
 case "$mode" in
   host)
+    log_phase prepare-agent-session-agent-config-host-start
     mkdir -p @AGENT_CONFIG_HOST_MOUNT@
     if ! mountpoint -q @AGENT_CONFIG_HOST_MOUNT@; then
       if ! mount -t virtiofs hostagentconfig @AGENT_CONFIG_HOST_MOUNT@; then
@@ -154,8 +178,10 @@ case "$mode" in
     if [ "$mode" = "host" ]; then
       resolved_dir=@AGENT_CONFIG_HOST_MOUNT@
     fi
+    log_phase prepare-agent-session-agent-config-host-done
     ;;
   workspace)
+    log_phase prepare-agent-session-agent-config-workspace-start
     resolved_dir=$start_dir/@AGENT_CONFIG_DIR_NAME@
     if ! [ -d "$resolved_dir" ]; then
       if [ -L "$resolved_dir" ]; then
@@ -176,23 +202,31 @@ case "$mode" in
         @RUNUSER@ -u @DEV_USER@ -- @MKDIR@ -p "$resolved_dir"
       fi
     fi
+    log_phase prepare-agent-session-agent-config-workspace-done
     ;;
   vm)
+    log_phase prepare-agent-session-agent-config-vm-start
     mkdir -p "$resolved_dir"
     chown @DEV_USER@:@DEV_USER@ "$resolved_dir"
+    log_phase prepare-agent-session-agent-config-vm-done
     ;;
   fresh)
+    log_phase prepare-agent-session-agent-config-fresh-start
     resolved_dir=@AGENT_CONFIG_FRESH_DIR@
     rm -rf "$resolved_dir"
     mkdir -p "$resolved_dir"
     chown @DEV_USER@:@DEV_USER@ "$resolved_dir"
+    log_phase prepare-agent-session-agent-config-fresh-done
     ;;
   *)
+    log_phase prepare-agent-session-agent-config-fallback-start
     echo "unsupported agent config mode '$mode'; falling back to vm" >&2
     mkdir -p "$resolved_dir"
     chown @DEV_USER@:@DEV_USER@ "$resolved_dir"
+    log_phase prepare-agent-session-agent-config-fallback-done
     ;;
 esac
 
 printf '%s\n' "$resolved_dir" > @AGENT_CONFIG_DIR_FILE@
 chmod 0644 @AGENT_CONFIG_DIR_FILE@
+log_phase prepare-agent-session-done

@@ -347,6 +347,7 @@ rec {
       runtimeInputs = with pkgs; [
         bash
         coreutils
+        self.packages.${system}.firebreak-interactive-echo
       ];
       text = renderTemplate {
         "@AGENT_BIN@" = "${self.packages.${system}.firebreak}/bin/firebreak";

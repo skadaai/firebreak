@@ -162,9 +162,10 @@ if ! [ -n "$latest_runner_stdout_log" ] || ! [ -f "$latest_runner_stdout_log" ];
   exit 1
 fi
 
-if ! grep -F -q 'toolchain-install-start @openai/codex@latest' "$first_runner_stdout_log"; then
+if ! grep -F -q 'toolchain-install-start @openai/codex@latest' "$first_runner_stdout_log" \
+  && ! grep -F -q 'toolchain-cache-hit @openai/codex@latest' "$first_runner_stdout_log"; then
   cat "$first_runner_stdout_log" >&2
-  echo "attached firebreak worker smoke expected the first worker to install Codex into the shared tool cache" >&2
+  echo "attached firebreak worker smoke expected the first worker to either install or reuse the shared Codex tool cache" >&2
   exit 1
 fi
 

@@ -8,6 +8,7 @@ host_gid=$(id -g)
 firebreak_load_project_config
 resolved_firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
 firebreak_state_root=${FIREBREAK_STATE_DIR:-${XDG_STATE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.local/state}/firebreak}
+default_firebreak_state_root=${XDG_STATE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.local/state}/firebreak
 agent_specific_config_var=@AGENT_ENV_PREFIX@_CONFIG
 agent_specific_host_path_var=@AGENT_ENV_PREFIX@_CONFIG_HOST_PATH
 agent_specific_config=${!agent_specific_config_var:-}
@@ -88,6 +89,7 @@ host_runtime_dir=$(mktemp -d "$firebreak_tmp_root/r.XXXXXX")
 host_meta_dir=$host_runtime_dir/m
 host_exec_output_dir=$host_runtime_dir/o
 host_agent_tools_dir=$firebreak_state_root/tools/${default_control_socket%.socket}
+default_host_agent_tools_dir=$default_firebreak_state_root/tools/${default_control_socket%.socket}
 host_instance_dir=$host_runtime_dir/instance
 runner_stdout_log=$host_runtime_dir/runner.out
 runner_stderr_log=$host_runtime_dir/runner.err
@@ -292,6 +294,13 @@ trap cleanup EXIT INT TERM
 mkdir -p "$host_meta_dir"
 mkdir -p "$host_exec_output_dir"
 mkdir -p "$host_agent_tools_dir"
+if [ "$host_agent_tools_dir" != "$default_host_agent_tools_dir" ] \
+  && ! [ -e "$host_agent_tools_dir/bootstrap-ready" ] \
+  && [ -e "$default_host_agent_tools_dir/bootstrap-ready" ]; then
+  mkdir -p "$host_agent_tools_dir"
+  cp -a "$default_host_agent_tools_dir"/. "$host_agent_tools_dir"/
+  trace_wrapper "agent-tools-seeded"
+fi
 mkdir -p "$worker_bridge_dir/requests"
 rm -f "$control_socket"
 : >"$wrapper_trace_log"
@@ -418,6 +427,7 @@ if [ "$agent_session_mode" = "agent-exec" ]; then
 elif [ "$agent_session_mode" = "agent-attach-exec" ]; then
   attach_runner_script=$host_runtime_dir/attached-runner.sh
   attach_relay_script=$host_runtime_dir/attach-relay.py
+  attach_driver_script=$host_runtime_dir/attach-driver.py
   quoted_runner_args=""
   for arg in "$@"; do
     printf -v quoted_runner_arg '%q' "$arg"
@@ -438,17 +448,12 @@ EOF
   chmod 0555 "$attach_runner_script"
   cat >"$attach_relay_script" <<'EOF'
 import os
-import sys
 from datetime import datetime, timezone
 
 stdout_log_path = os.environ["FIREBREAK_ATTACH_STDOUT_LOG"]
 bridge_trace_path = os.environ.get("FIREBREAK_WORKER_BRIDGE_TRACE_PATH", "")
 wrapper_trace_log = os.environ.get("FIREBREAK_WRAPPER_TRACE_LOG", "")
 attach_stage_path = os.environ.get("FIREBREAK_ATTACH_STAGE_PATH", "")
-
-first_chunk = True
-command_output_chunk_seen = False
-
 
 def trace_event(target_path: str, message: str) -> None:
     if not target_path:
@@ -464,45 +469,146 @@ def current_attach_stage() -> str:
         return open(attach_stage_path, "r", encoding="utf-8").read().strip()
     except OSError:
         return ""
-
-with open(stdout_log_path, "ab", buffering=0) as log_handle:
-    while True:
-        chunk = sys.stdin.buffer.read(4096)
-        if not chunk:
-            break
-        if first_chunk:
-            first_chunk = False
-            if wrapper_trace_log:
-                trace_event(
-                    wrapper_trace_log,
-                    f"{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')} runner-stdout-first-byte",
-                )
-            if bridge_trace_path:
-                trace_event(bridge_trace_path, "nested-runner-first-byte")
-        if not command_output_chunk_seen and current_attach_stage() == "command-start":
-            command_output_chunk_seen = True
-            if wrapper_trace_log:
-                trace_event(
-                    wrapper_trace_log,
-                    f"{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')} command-stdout-first-byte",
-                )
-            if bridge_trace_path:
-                trace_event(bridge_trace_path, "nested-command-first-byte")
-        log_handle.write(chunk)
-        sys.stdout.buffer.write(chunk)
-        sys.stdout.buffer.flush()
 EOF
   chmod 0555 "$attach_relay_script"
+  cat >"$attach_driver_script" <<'EOF'
+import importlib.util
+import os
+import pty
+import signal
+import sys
+import threading
+
+runner_script = os.environ["FIREBREAK_ATTACH_RUNNER_SCRIPT"]
+stdout_log_path = os.environ["FIREBREAK_ATTACH_STDOUT_LOG"]
+status_path = os.environ["FIREBREAK_ATTACH_STATUS_PATH"]
+relay_path = os.environ["FIREBREAK_ATTACH_RELAY_PATH"]
+
+relay_spec = importlib.util.spec_from_file_location("firebreak_attach_relay", relay_path)
+relay = importlib.util.module_from_spec(relay_spec)
+assert relay_spec.loader is not None
+relay_spec.loader.exec_module(relay)
+
+child_pid = None
+master_fd = None
+stdin_done = threading.Event()
+stdout_done = threading.Event()
+
+
+def pump_stdin() -> None:
+    try:
+        while True:
+            try:
+                chunk = os.read(sys.stdin.fileno(), 4096)
+            except OSError:
+                break
+            if not chunk:
+                try:
+                    os.close(master_fd)
+                except OSError:
+                    pass
+                break
+            try:
+                os.write(master_fd, chunk)
+            except OSError:
+                break
+    finally:
+        stdin_done.set()
+
+
+def pump_stdout() -> None:
+    first_chunk = True
+    command_output_chunk_seen = False
+    try:
+        with open(stdout_log_path, "ab", buffering=0) as log_handle:
+            while True:
+                try:
+                    chunk = os.read(master_fd, 4096)
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                if first_chunk:
+                    first_chunk = False
+                    if relay.wrapper_trace_log:
+                        relay.trace_event(
+                            relay.wrapper_trace_log,
+                            f"{relay.datetime.now(relay.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')} runner-stdout-first-byte",
+                        )
+                    if relay.bridge_trace_path:
+                        relay.trace_event(relay.bridge_trace_path, "nested-runner-first-byte")
+                if not command_output_chunk_seen and relay.current_attach_stage() == "command-start":
+                    command_output_chunk_seen = True
+                    if relay.wrapper_trace_log:
+                        relay.trace_event(
+                            relay.wrapper_trace_log,
+                            f"{relay.datetime.now(relay.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')} command-stdout-first-byte",
+                        )
+                    if relay.bridge_trace_path:
+                        relay.trace_event(relay.bridge_trace_path, "nested-command-first-byte")
+                log_handle.write(chunk)
+                try:
+                    os.write(sys.stdout.fileno(), chunk)
+                except OSError:
+                    break
+    finally:
+        stdout_done.set()
+
+
+def forward_signal(signum, _frame) -> None:
+    if child_pid is None:
+        return
+    try:
+        os.kill(child_pid, signum)
+    except OSError:
+        pass
+
+
+for signum in (signal.SIGINT, signal.SIGTERM):
+    signal.signal(signum, forward_signal)
+
+child_pid, master_fd = pty.fork()
+if child_pid == 0:
+    os.execvpe("bash", ["bash", runner_script], os.environ.copy())
+
+stdin_thread = threading.Thread(target=pump_stdin, daemon=True)
+stdout_thread = threading.Thread(target=pump_stdout, daemon=True)
+stdin_thread.start()
+stdout_thread.start()
+
+_, wait_status = os.waitpid(child_pid, 0)
+stdin_done.set()
+stdout_done.set()
+stdin_thread.join(timeout=1)
+stdout_thread.join(timeout=5)
+try:
+    os.close(master_fd)
+except OSError:
+    pass
+
+if os.WIFEXITED(wait_status):
+    exit_code = os.WEXITSTATUS(wait_status)
+elif os.WIFSIGNALED(wait_status):
+    exit_code = 128 + os.WTERMSIG(wait_status)
+else:
+    exit_code = 1
+
+with open(status_path, "w", encoding="utf-8") as handle:
+    handle.write(f"{exit_code}\n")
+
+raise SystemExit(exit_code)
+EOF
+  chmod 0555 "$attach_driver_script"
   rm -f "$runner_stdout_log"
   attach_pipe_status_file=$host_runtime_dir/attach-runner.status
   rm -f "$attach_pipe_status_file"
   export FIREBREAK_ATTACH_STDOUT_LOG="$runner_stdout_log"
   export FIREBREAK_WRAPPER_TRACE_LOG="$wrapper_trace_log"
   export FIREBREAK_ATTACH_STAGE_PATH="$host_exec_output_dir/attach_stage"
-  bash -o pipefail -c '
-    script -qefc "$1" /dev/null | python3 "$2"
-    printf "%s\n" "$?" >"$3"
-  ' _ "$attach_runner_script" "$attach_relay_script" "$attach_pipe_status_file" || runner_status=$?
+  export FIREBREAK_ATTACH_RUNNER_SCRIPT="$attach_runner_script"
+  export FIREBREAK_ATTACH_RELAY_PATH="$attach_relay_script"
+  export FIREBREAK_ATTACH_STATUS_PATH="$attach_pipe_status_file"
+  python3 "$attach_driver_script" || runner_status=$?
   if [ -f "$attach_pipe_status_file" ]; then
     IFS= read -r attach_pipe_status < "$attach_pipe_status_file" || attach_pipe_status=$runner_status
     case "$attach_pipe_status" in

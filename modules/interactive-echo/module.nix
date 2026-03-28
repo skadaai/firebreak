@@ -8,9 +8,19 @@ let
     ];
     text = ''
       set -eu
+      state_path=/run/firebreak-agent/interactive-echo.log
+      if [ -d /run/agent-exec-output ]; then
+        state_path=/run/agent-exec-output/interactive-echo.log
+      fi
+      mkdir -p "$(dirname "$state_path")"
+      printf '%s\n' 'ready-write-start' >>"$state_path"
       printf 'READY\n'
+      printf '%s\n' 'ready-write-done' >>"$state_path"
+      printf '%s\n' 'read-start' >>"$state_path"
       IFS= read -r line
+      printf '%s\n' "read-done:$line" >>"$state_path"
       printf 'ECHO:%s\n' "$line"
+      printf '%s\n' 'echo-write-done' >>"$state_path"
     '';
   };
 in {

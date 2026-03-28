@@ -35,7 +35,9 @@ bash -n modules/profiles/local/guest/prepare-agent-session.sh
 bash -n modules/profiles/local/guest/dev-console-start.sh
 bash -n modules/node-cli/guest/bootstrap.sh
 bash -n modules/profiles/local/guest/firebreak-worker-cli.sh
+bash -n modules/profiles/local/host/run-wrapper.sh
 bash -n modules/base/tests/test-smoke-worker-guest-bridge.sh
+bash -n modules/base/tests/test-smoke-worker-guest-bridge-interactive.sh
 bash -n external/agent-orchestrator/tests/test-smoke-worker-proxy.sh
 bash -n external/agent-orchestrator/tests/test-smoke-worker-spawn.sh
 ```
@@ -116,9 +118,25 @@ Expected result:
 - `firebreak worker debug --json` reports the requested attached-terminal metadata, including `TERM`, `LINES`, and `COLUMNS`
 - `firebreak worker debug --json` retains request-level attach trace evidence and any persisted bridge response exit code even after live request directories are removed
 - attached traces distinguish the first sibling-runner byte from the first post-`command-start` command byte when both occur
+- repeated attached packaged-worker runs against shared state prove either first-run install or seeded reuse, then later reuse through an explicit cache signal such as `toolchain-cache-hit`
 - when the sibling worker is a packaged CLI, the debug output includes machine-readable guest bootstrap and command phases
 
-### 7. Evaluate the external recipe outputs
+### 7. Validate isolated interactive sibling-worker relay behavior
+
+Purpose: prove the attached sibling-worker path can surface real command output and deliver live stdin through an isolated synthetic worker without depending on the external orchestrator recipe.
+
+```sh
+nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run "path:$PWD#firebreak-test-smoke-worker-guest-bridge-interactive"
+```
+
+Expected result:
+
+- the smoke exits `0`
+- the output includes `__BRIDGE_INTERACTIVE_OK__`
+- the attached session observes both `READY` and `ECHO:ping`
+- on failure, the smoke preserves its isolated state directory and prints `firebreak worker debug --json`
+
+### 8. Evaluate the external recipe outputs
 
 Purpose: prove the external orchestrator recipe exports the expected packages and checks, including recipe-owned worker smoke outputs.
 
@@ -133,7 +151,7 @@ Expected result:
   - `firebreak-test-smoke-agent-orchestrator-worker-proxy`
   - `firebreak-test-smoke-agent-orchestrator-worker-spawn`
 
-### 8. Validate the external recipe bootstrap and worker-proxy wrapper
+### 9. Validate the external recipe bootstrap and worker-proxy wrapper
 
 Purpose: prove the external recipe can wait for bootstrap, resolve the packaged `ao` CLI, and expose the `codex` worker-proxy wrapper without modifying Firebreak core.
 
@@ -146,7 +164,7 @@ Expected result:
 - the smoke exits `0`
 - the output includes `Agent Orchestrator worker proxy smoke test passed`
 
-### 9. Validate real declared-worker creation from the external recipe
+### 10. Validate real declared-worker creation from the external recipe
 
 Purpose: prove the first external orchestrator recipe can spawn a declared `firebreak` worker kind through the guest-visible `firebreak worker` surface.
 

@@ -1,6 +1,6 @@
 ---
 status: in_progress
-last_updated: 2026-03-27
+last_updated: 2026-03-28
 ---
 
 # 015 Host-Brokered Orchestrated Workers
@@ -97,6 +97,8 @@ The intended landing shape is:
 - The current slow path, where attached interactive workers may spend most of their startup budget in boot-time `bun install --global @openai/codex@latest`, is not accepted as the steady-state design.
 - AO end-to-end repros remain necessary as final integration checks, but they are no longer the primary debugging loop for attached packaged-worker startup. Focused direct readiness and reuse validation must lead.
 - The current effort is therefore reframed as a deterministic packaged-tool delivery problem inside the still-valid host-brokered worker architecture, rather than as a generic attach-transport problem.
+- Attached worker relay stability now depends on a direct PTY driver rather than shelling through `script` as the primary transport primitive.
+- Focused interactive validation shall use an isolated synthetic worker and preserved runtime artifacts so attach regressions can be diagnosed without depending on the external orchestrator recipe.
 
 ## Acceptance criteria
 

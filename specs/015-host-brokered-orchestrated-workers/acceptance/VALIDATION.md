@@ -113,6 +113,7 @@ Expected result:
 - the output includes `Firebreak attached firebreak worker smoke test passed`
 - the attached run returns command output from the sibling worker instead of hanging after worker creation
 - `firebreak worker debug --json` reports request-level bridge traces and nested runtime state for the attached worker
+- `firebreak worker debug --json` reports the requested attached-terminal metadata, including `TERM`, `LINES`, and `COLUMNS`
 - `firebreak worker debug --json` retains request-level attach trace evidence and any persisted bridge response exit code even after live request directories are removed
 - attached traces distinguish the first sibling-runner byte from the first post-`command-start` command byte when both occur
 - when the sibling worker is a packaged CLI, the debug output includes machine-readable guest bootstrap and command phases

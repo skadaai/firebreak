@@ -1,13 +1,13 @@
 ---
 status: in_progress
-last_updated: 2026-03-27
+last_updated: 2026-03-28
 ---
 
 # 015 Status
 
 ## Current phase
 
-Reopened for attached `firebreak` worker hardening and guest lifecycle observability.
+Reopened for attached `firebreak` worker hardening and guest lifecycle observability, with the current focus shifted from attach transport toward deterministic packaged-tool delivery and reuse for attached interactive workers.
 
 ## What has landed
 
@@ -35,13 +35,25 @@ Reopened for attached `firebreak` worker hardening and guest lifecycle observabi
 - direct packaged-cli readiness smokes now preserve reviewable runtime evidence long enough to assert guest lifecycle artifacts instead of relying only on terminal output
 - the direct packaged-cli readiness path now waits for guest bootstrap readiness before one-shot agent commands execute, so `--version` probes no longer race bootstrap
 - attached worker traces are now being hardened so request-level bridge events and response exit codes can survive request-directory cleanup, and so post-`command-start` output can be distinguished from earlier boot noise
+- attached worker request metadata is now reviewable in `firebreak worker debug`, and zero or malformed terminal geometry is dropped instead of being forced onto the sibling PTY
+- attached worker debugging now proves that the live nested `codex` process starts, receives a sane interactive tty contract, and can be inspected through machine-readable guest process snapshots
+- the branch now records an explicit strategic pivot: keep the host-brokered sibling-worker architecture, but stop accepting boot-time dynamic package installation as the normal attached-worker startup contract
 
 ## What remains open
 
 - a validated attached `codex` proxy path through the external orchestrator recipe after the nested guest bootstrap path is fully reviewable
+- a deterministic packaged-tool delivery path that avoids repeated install-time stalls and late bootstrap failures for attached Bun-agent workers
+- focused repeated-run validation that proves packaged-tool reuse before AO end-to-end validation is treated as authoritative
 - richer lifecycle behavior such as worker reuse, log filtering, and cleanup policy refinements
 - possible transport hardening beyond the first file-share bridge, such as a mounted Unix-socket protocol
 - broader recipe adoption and validation beyond the first external orchestrator recipe
+
+## Decision record
+
+- The host-brokered sibling-worker model is still the right architecture and remains in scope.
+- The investigation has already paid off enough to prove that broker creation, attach transport, terminal propagation, and nested command handoff are not the dominant remaining risks.
+- The main remaining risk is packaged-tool delivery inside the worker VM, especially the current boot-time Bun global-install path and its interaction with shared state.
+- End-to-end AO repros are now treated as integration gates, not as the primary debug loop. Focused direct packaged-worker readiness and reuse validation should lead.
 
 ## Current sources of truth
 
@@ -61,3 +73,4 @@ Reopened for attached `firebreak` worker hardening and guest lifecycle observabi
 - 2026-03-26: Confirmed the first external orchestrator recipe manually in a real runtime: guest-visible worker execution, host-owned worker state, concise listing, cleanup, and bounded concurrency all behaved as specified.
 - 2026-03-26: Reopened the spec after confirming that attached sibling-worker execution for interactive `firebreak` workers is still incomplete even though detached lifecycle behavior and manual detached validation already passed.
 - 2026-03-27: Added bridge-level attach diagnostics, streamed nested runner output, guest-visible attach progress, and packaged Bun-agent bootstrap phase markers so attached-worker failures can be diagnosed without raw host-side process archaeology.
+- 2026-03-28: Recorded the strategic pivot explicitly. The branch will continue on the host-brokered sibling-worker architecture, but remaining work is now framed as deterministic packaged-tool delivery and reuse rather than generic attach transport debugging.

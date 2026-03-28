@@ -36,6 +36,7 @@ Without an explicit orchestration layer, Firebreak cannot give external orchestr
 - make worker lifecycle, state ownership, and concurrency limits explicit
 - support both detached and attached worker execution semantics across the `process` and `firebreak` backends
 - preserve real terminal semantics for attached `firebreak` workers so interactive CLIs can use sibling workers directly
+- make packaged worker startup deterministic enough that attached interactive workers do not depend on ad hoc network installs during every boot
 
 ## Non-goals
 
@@ -44,6 +45,7 @@ Without an explicit orchestration layer, Firebreak cannot give external orchestr
 - unbounded autoscaling without operator-configured limits
 - redesigning existing single-agent packages such as `firebreak-codex` or `firebreak-claude-code`
 - defining every possible external orchestrator integration in the first changeset
+- treating repeated boot-time package installation as the steady-state product contract for attached interactive workers
 
 ## Morphology and scope of the changeset
 
@@ -79,10 +81,22 @@ The intended landing shape is:
 - The system shall publish machine-readable guest lifecycle state for attached `firebreak` workers, covering at least guest bootstrap progress and guest command progress.
 - The system shall surface that machine-readable guest lifecycle state through `firebreak worker debug --json` so host-side diagnosis does not depend on truncated terminal logs.
 - The system shall preserve reviewable attach trace events that distinguish first sibling-runner output from first post-`command-start` command output, even after the live bridge request directory is cleaned up.
+- The system shall forward attached-terminal metadata to sibling workers only when that metadata is well-formed, including forwarding `LINES` and `COLUMNS` only when both are positive integers.
+- The system shall surface the requested attached-terminal contract, including `TERM`, `LINES`, and `COLUMNS`, through `firebreak worker debug` for live review.
 - The system shall preserve reviewable runtime artifacts for direct packaged-cli readiness probes when those probes fail.
+- The system shall not require repeated network-backed package installation during the normal startup path for attached interactive workers once the packaged toolchain has been prepared successfully.
+- The system shall provide a deterministic packaged-tool delivery path for attached interactive workers, either by baking tools into the image or by reusing a prepared host-owned shared tools state outside the critical interactive boot path.
+- The system shall validate packaged-tool reuse with focused smokes before relying on slower end-to-end orchestrator validation.
 - The system shall define how orchestrated workers resolve workspace access so the worker can act on the intended project state.
 - The system shall define how orchestrated workers resolve Firebreak config modes and agent-specific config where those differ from the orchestrator VM.
 - The system shall allow existing Firebreak single-agent packages to remain usable outside the orchestration layer.
+
+## Recorded decisions
+
+- The host-brokered sibling-worker architecture remains the intended product direction. The evidence collected during attached `codex` debugging confirms that the broker contract, attach transport, and nested command handoff are viable and should be retained.
+- The current slow path, where attached interactive workers may spend most of their startup budget in boot-time `bun install --global @openai/codex@latest`, is not accepted as the steady-state design.
+- AO end-to-end repros remain necessary as final integration checks, but they are no longer the primary debugging loop for attached packaged-worker startup. Focused direct readiness and reuse validation must lead.
+- The current effort is therefore reframed as a deterministic packaged-tool delivery problem inside the still-valid host-brokered worker architecture, rather than as a generic attach-transport problem.
 
 ## Acceptance criteria
 

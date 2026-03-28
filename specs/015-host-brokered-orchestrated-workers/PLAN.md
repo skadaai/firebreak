@@ -1,6 +1,6 @@
 ---
 status: in_progress
-last_updated: 2026-03-27
+last_updated: 2026-03-28
 ---
 
 # 015 Plan
@@ -23,6 +23,37 @@ last_updated: 2026-03-27
 14. Add direct readiness smokes that assert guest lifecycle artifacts and preserve runtime evidence automatically on failure.
 15. Record the lifecycle-state contract and validation flow in the spec so future runtime and test changes cannot drift silently.
 16. Persist attached worker bridge traces and separate post-bootstrap command-output markers so reviewable diagnostics survive request cleanup.
+17. Record the strategic pivot explicitly: keep the host-brokered sibling-worker architecture, but stop treating boot-time dynamic package installation as the default attached-worker startup contract.
+18. Add a host-owned prepared-tools path for packaged Bun workers so attached worker VMs can reuse prepared toolchains across boots.
+19. Add focused validation that launches the same attached packaged worker more than once against shared state and asserts a cache hit or equivalent reuse signal on later runs.
+20. Expand guest command probes so attached worker debugging shows the actual live packaged child process, its tty contract, and blocking indicators without requiring manual VM archaeology.
+21. Reposition AO end-to-end validation as the final gate after direct packaged-worker readiness and reuse smokes pass.
+
+## Near-term phased plan
+
+### Phase A: Stabilize packaged-tool delivery
+
+1. Make the shared-tools or baked-tools path deterministic for Bun-agent workers.
+2. Remove or isolate any remaining boot-time step that can turn a successful install into a late bootstrap failure.
+3. Keep bootstrap state, ready-marker path, and reuse path visible through machine-readable state and host debug output.
+
+### Phase B: Prove reuse locally
+
+1. Run focused attached-worker smokes twice against the same Firebreak state root.
+2. Assert that the second run hits an explicit reuse signal such as `toolchain-cache-hit`.
+3. Preserve the runtime evidence for both runs automatically on failure.
+
+### Phase C: Tighten live command diagnosis
+
+1. Keep surfacing the actual guest command string.
+2. Surface the live packaged child process state, including tty contract and blocking hints.
+3. Only add more attach transport instrumentation if the direct packaged-worker probes stop explaining failures.
+
+### Phase D: Revalidate AO end to end
+
+1. Re-run the plain attached `codex` proxy path from the AO VM only after Phases A through C are green.
+2. Treat AO as an integration gate, not as the main debugger for packaged startup.
+3. Document the final startup contract and validation flow once the AO path is stable.
 
 ## Validation approach
 
@@ -31,6 +62,7 @@ last_updated: 2026-03-27
 - run focused smoke coverage for `process` versus `firebreak` backend selection
 - run focused smoke coverage for attached `firebreak` worker execution without the external orchestrator layer
 - run direct packaged-cli readiness smokes that assert guest lifecycle state files instead of only human-visible console output
+- run repeated attached packaged-worker smokes against shared state roots to prove cache reuse instead of paying a full install on every boot
 - run manual validation against an external orchestrator recipe such as [external/agent-orchestrator/flake.nix](../../external/agent-orchestrator/flake.nix)
 - run `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' flake check`
 
@@ -44,7 +76,7 @@ last_updated: 2026-03-27
 
 ## Current status
 
-Reopened for attached `firebreak` worker hardening. Detached flows, guest-local `process` flows, worker-kind declarations, bounded concurrency, packaged node-cli bootstrap readiness, the worker-proxy helper, the first recipe-owned detached worker lifecycle validation path, and the first machine-readable guest lifecycle diagnostics have landed. The current open slice is the remaining nested `codex` startup behavior inside the attached sibling-worker path.
+Reopened for attached `firebreak` worker hardening. Detached flows, guest-local `process` flows, worker-kind declarations, bounded concurrency, packaged node-cli bootstrap readiness, the worker-proxy helper, the first recipe-owned detached worker lifecycle validation path, and the first machine-readable guest lifecycle diagnostics have landed. The current open slice is no longer generic attach transport. It is the deterministic packaged-tool delivery and reuse path for attached interactive `codex` workers inside the still-valid sibling-worker architecture.
 
 ## Open questions
 
@@ -53,3 +85,4 @@ Reopened for attached `firebreak` worker hardening. Detached flows, guest-local 
 - how much worker log streaming belongs in the first landing versus a follow-up
 - whether attached worker logging should remain PTY-only in the first landing or grow a separate PTY recording path in a follow-up
 - whether the guest lifecycle contract should remain file-based under the exec-output mount or later converge on a mounted service endpoint
+- whether the fastest acceptable packaged-tool delivery path is a host-shared prepared-tools mount, a baked image payload, or a hybrid repair path that uses the shared mount only when the baked payload is absent or stale

@@ -31,6 +31,7 @@ last_updated: 2026-03-28
 22. Replace the unstable `script`-piped attached relay with a direct PTY driver and prove the change with a focused interactive sibling-worker smoke.
 23. Add guest session-preparation breadcrumbs so long-lived setup steps can be reviewed through preserved runtime artifacts instead of only truncated console output.
 24. Extend the prepared-tools contract to packaged node-cli recipes and move their focused smokes onto a no-forward test variant when port ownership is not under test.
+25. Capture the operational troubleshooting playbook for VM-spawned processes, including known failure modes, debugging order, and anti-patterns, so future incidents can start from a stable procedure.
 
 ## Near-term phased plan
 
@@ -94,3 +95,4 @@ Reopened for attached `firebreak` worker hardening. Detached flows, guest-local 
 - whether attached worker logging should remain PTY-only in the first landing or grow a separate PTY recording path in a follow-up
 - whether the guest lifecycle contract should remain file-based under the exec-output mount or later converge on a mounted service endpoint
 - whether the fastest acceptable packaged-tool delivery path is a host-shared prepared-tools mount, a baked image payload, or a hybrid repair path that uses the shared mount only when the baked payload is absent or stale
+- how much of the current transcript-noise cleanup should stay in debug-only views versus becoming part of future optional presentation filtering for live sessions

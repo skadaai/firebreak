@@ -101,6 +101,7 @@ The intended landing shape is:
 - Attached worker relay stability now depends on a direct PTY driver rather than shelling through `script` as the primary transport primitive.
 - Focused interactive validation shall use an isolated synthetic worker and preserved runtime artifacts so attach regressions can be diagnosed without depending on the external orchestrator recipe.
 - External orchestrator recipe smokes should validate packaged worker behavior through a no-forward test variant whenever host port forwarding is not part of the behavior under test.
+- Repeated VM-spawn troubleshooting shall follow a documented layered debugging order, starting with broker state and ending with transcript polish, so future incidents do not regress into guess-driven end-to-end debugging.
 
 ## Acceptance criteria
 
@@ -142,3 +143,4 @@ The intended landing shape is:
 - [AGENTS.md](../../AGENTS.md)
 - [README.md](../../README.md)
 - [UPSTREAM_REPOS.md](../../UPSTREAM_REPOS.md)
+- [TROUBLESHOOTING.md](./TROUBLESHOOTING.md)

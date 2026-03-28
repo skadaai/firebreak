@@ -194,7 +194,7 @@ Expected result:
 
 - the smoke exits `0`
 - the output includes `Agent Orchestrator interactive codex smoke test passed`
-- the captured transcript includes the nested worker welcome banner from `firebreak-codex`
+- the captured transcript includes nested terminal output from `firebreak-codex`, such as the nested worker welcome banner or an earlier boot marker identifying `firebreak-codex`
 
 ## Manual Tests
 

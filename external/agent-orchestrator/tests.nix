@@ -34,7 +34,7 @@ let
       bash
       coreutils
       gnugrep
-      util-linux
+      python3
     ];
     text = builtins.replaceStrings
       [ "@AGENT_ORCHESTRATOR_BIN@" ]

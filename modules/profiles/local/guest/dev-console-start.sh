@@ -213,6 +213,8 @@ EOF
           fi
         }
         start_command_process_monitor() {
+          exec 9>&2
+          exec 2>/dev/null
           (
             while true; do
               write_command_process_snapshot
@@ -221,8 +223,10 @@ EOF
               fi
               sleep 1
             done
-          ) &
+          ) </dev/null >/dev/null 2>&1 &
           command_process_monitor_pid=$!
+          exec 2>&9
+          exec 9>&-
         }
         stop_command_process_monitor() {
           if [ -n "$command_process_monitor_pid" ]; then

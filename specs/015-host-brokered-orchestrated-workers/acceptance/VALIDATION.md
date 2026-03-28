@@ -41,6 +41,7 @@ bash -n modules/base/tests/test-smoke-worker-guest-bridge.sh
 bash -n modules/base/tests/test-smoke-worker-guest-bridge-interactive.sh
 bash -n external/agent-orchestrator/tests/test-smoke-worker-proxy.sh
 bash -n external/agent-orchestrator/tests/test-smoke-worker-spawn.sh
+bash -n external/agent-orchestrator/tests/test-smoke-worker-interactive.sh
 ```
 
 Expected result:
@@ -151,6 +152,7 @@ Expected result:
 - the output includes:
   - `firebreak-test-smoke-agent-orchestrator-worker-proxy`
   - `firebreak-test-smoke-agent-orchestrator-worker-spawn`
+  - `firebreak-test-smoke-agent-orchestrator-worker-interactive`
 
 ### 9. Validate the external recipe bootstrap and worker-proxy wrapper
 
@@ -179,6 +181,20 @@ Expected result:
 - the smoke exits `0`
 - the output includes `Agent Orchestrator worker run smoke test passed`
 - the smoke succeeds against the recipe's no-forward test package, so declared-worker validation remains independent of host port collisions
+
+### 11. Validate plain interactive `codex` through the external recipe
+
+Purpose: prove the external recipe can bring up a real attached sibling `codex` session, surface the nested worker banner, and do so through the no-forward test package rather than the port-forwarding integration package.
+
+```sh
+nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run "path:$PWD/external/agent-orchestrator#firebreak-test-smoke-agent-orchestrator-worker-interactive" --override-input firebreak "path:$PWD"
+```
+
+Expected result:
+
+- the smoke exits `0`
+- the output includes `Agent Orchestrator interactive codex smoke test passed`
+- the captured transcript includes the nested worker welcome banner from `firebreak-codex`
 
 ## Manual Tests
 

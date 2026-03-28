@@ -45,6 +45,7 @@ Reopened for attached `firebreak` worker hardening and guest lifecycle observabi
 - guest session preparation now emits explicit phase breadcrumbs so long startup steps such as workspace and tools setup can be reviewed without manual VM archaeology
 - packaged node-cli workers now use the same host-owned shared tools model as Bun workers, instead of paying full bootstrap cost from per-VM state on every run
 - the external Agent Orchestrator smokes now validate through a no-forward test package so worker behavior tests are not blocked by unrelated host port collisions
+- the external Agent Orchestrator recipe now has a focused interactive `codex` smoke that exercises the attached sibling-worker path under a host PTY instead of relying on manual AO sessions
 
 ## What remains open
 
@@ -83,3 +84,4 @@ Reopened for attached `firebreak` worker hardening and guest lifecycle observabi
 - 2026-03-28: Recorded the strategic pivot explicitly. The branch will continue on the host-brokered sibling-worker architecture, but remaining work is now framed as deterministic packaged-tool delivery and reuse rather than generic attach transport debugging.
 - 2026-03-28: Replaced the unstable `script`-based attached relay with a direct PTY driver, proved the focused interactive sibling-worker path with an isolated synthetic worker smoke, and kept the remaining open risk centered on deterministic prepared-tools delivery rather than relay correctness.
 - 2026-03-28: Extended the shared prepared-tools model to packaged node-cli workers, moved the Agent Orchestrator recipe smokes onto a no-forward test variant, and validated both recipe-owned runtime smokes against the new path.
+- 2026-03-28: Added a recipe-owned interactive Agent Orchestrator smoke for plain attached `codex`, so the AO path now has automated PTY-backed coverage beyond `--version` and detached worker lifecycle checks.

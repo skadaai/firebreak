@@ -1,12 +1,16 @@
 set -eu
 
 export DEV_HOME=@DEV_HOME@
+tool_home=$DEV_HOME
+if [ -d @AGENT_TOOLS_MOUNT@ ]; then
+  tool_home=@AGENT_TOOLS_MOUNT@
+fi
 export HOME="$DEV_HOME"
-export BUN_INSTALL="$DEV_HOME/.bun"
-export LOCAL_BIN="$DEV_HOME/.local/bin"
-export XDG_CONFIG_HOME="$DEV_HOME/.config"
-export XDG_CACHE_HOME="$DEV_HOME/.cache"
-export XDG_STATE_HOME="$DEV_HOME/.local/state"
+export BUN_INSTALL="$tool_home/.bun"
+export LOCAL_BIN="$tool_home/.local/bin"
+export XDG_CONFIG_HOME="$tool_home/.config"
+export XDG_CACHE_HOME="$tool_home/.cache"
+export XDG_STATE_HOME="$tool_home/.local/state"
 export TMPDIR="$XDG_CACHE_HOME/tmp"
 export BUN_TMPDIR="$TMPDIR"
 export BUN_INSTALL_CACHE_DIR="$XDG_CACHE_HOME/bun/install/cache"
@@ -19,6 +23,11 @@ export FIREBREAK_GUEST_STATE_DIR=/run/firebreak-agent
 export FIREBREAK_BOOTSTRAP_STATE_PATH="$FIREBREAK_GUEST_STATE_DIR/bootstrap-state.json"
 export FIREBREAK_SHARED_BOOTSTRAP_STATE_PATH="@AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json"
 export FIREBREAK_BOOTSTRAP_READY_MARKER="@BOOTSTRAP_READY_MARKER@"
+shared_tool_home=0
+if [ "$tool_home" != "$DEV_HOME" ]; then
+  shared_tool_home=1
+fi
+agent_wrapper_path="$LOCAL_BIN/@AGENT_BIN@"
 
 log_phase() {
   printf '[firebreak-bootstrap] %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1"
@@ -45,8 +54,32 @@ write_bootstrap_state() {
 }
 EOF
   if [ -d "@AGENT_EXEC_OUTPUT_MOUNT@" ]; then
-    cp "$FIREBREAK_BOOTSTRAP_STATE_PATH" "$FIREBREAK_SHARED_BOOTSTRAP_STATE_PATH"
+    if ! cp "$FIREBREAK_BOOTSTRAP_STATE_PATH" "$FIREBREAK_SHARED_BOOTSTRAP_STATE_PATH" 2>/dev/null; then
+      log_phase "bootstrap-state-sync-skip $FIREBREAK_SHARED_BOOTSTRAP_STATE_PATH"
+    fi
   fi
+}
+
+maybe_chown_dev() {
+  target_path=$1
+  if [ "$(id -u)" -ne 0 ]; then
+    return 0
+  fi
+  if chown @DEV_USER@:@DEV_USER@ "$target_path" 2>/dev/null; then
+    return 0
+  fi
+  if [ "$shared_tool_home" = "1" ]; then
+    log_phase "ownership-skip $target_path"
+    return 0
+  fi
+  echo "failed to chown bootstrap-managed path: $target_path" >&2
+  return 1
+}
+
+ensure_bootstrap_dir() {
+  target_path=$1
+  mkdir -p "$target_path"
+  chmod 0755 "$target_path" 2>/dev/null || true
 }
 
 current_bootstrap_phase=init
@@ -61,20 +94,43 @@ bootstrap_trap() {
 trap bootstrap_trap EXIT
 
 log_phase "toolchain-prepare-start @AGENT_DISPLAY_NAME@"
-install -d -m 0755 -o @DEV_USER@ -g @DEV_USER@ "$FIREBREAK_GUEST_STATE_DIR"
-install -d -m 0755 "$(dirname "$FIREBREAK_BOOTSTRAP_READY_MARKER")"
-rm -f "$FIREBREAK_BOOTSTRAP_READY_MARKER"
+log_phase "tool-home $tool_home"
+log_phase "tool-ready-marker $FIREBREAK_BOOTSTRAP_READY_MARKER"
+ensure_bootstrap_dir "$FIREBREAK_GUEST_STATE_DIR"
+ensure_bootstrap_dir "$(dirname "$FIREBREAK_BOOTSTRAP_READY_MARKER")"
 current_bootstrap_phase=toolchain-prepare-start
 write_bootstrap_state "$current_bootstrap_phase" "running" "@AGENT_DISPLAY_NAME@"
 
-install -d -m 0755 -o @DEV_USER@ -g @DEV_USER@ \
+installed_spec=""
+if [ -r "$AGENT_SPEC_MARKER_PATH" ]; then
+  installed_spec=$(cat "$AGENT_SPEC_MARKER_PATH")
+fi
+
+if [ -x "$AGENT_GLOBAL_BIN" ] \
+  && [ -x "$agent_wrapper_path" ] \
+  && [ "$installed_spec" = "@AGENT_PACKAGE_SPEC@" ] \
+  && [ -r "$FIREBREAK_BOOTSTRAP_READY_MARKER" ]; then
+  log_phase "toolchain-cache-hit @AGENT_PACKAGE_SPEC@"
+  current_bootstrap_phase=toolchain-cache-hit
+  write_bootstrap_state "$current_bootstrap_phase" "running" "@AGENT_PACKAGE_SPEC@"
+  log_phase "wrapper-ready @AGENT_BIN@"
+  current_bootstrap_phase=wrapper-ready
+  write_bootstrap_state "$current_bootstrap_phase" "ready" "@AGENT_BIN@"
+  exit 0
+fi
+
+rm -f "$FIREBREAK_BOOTSTRAP_READY_MARKER"
+
+for bootstrap_dir in \
   "$BUN_INSTALL/bin" \
   "$LOCAL_BIN" \
   "$TMPDIR" \
   "$BUN_INSTALL_CACHE_DIR" \
   "$BUN_RUNTIME_TRANSPILER_CACHE_PATH" \
   "$XDG_CONFIG_HOME" \
-  "$AGENT_SPEC_MARKER_DIR"
+  "$AGENT_SPEC_MARKER_DIR"; do
+  ensure_bootstrap_dir "$bootstrap_dir"
+done
 log_phase "toolchain-directories-ready @AGENT_DISPLAY_NAME@"
 current_bootstrap_phase=toolchain-directories-ready
 write_bootstrap_state "$current_bootstrap_phase" "running" "@AGENT_DISPLAY_NAME@"
@@ -94,15 +150,10 @@ fi
 exec "$agent_bin" "$@"
 EOF
 chmod 0755 "$LOCAL_BIN/@AGENT_BIN@"
-chown @DEV_USER@:@DEV_USER@ "$LOCAL_BIN/@AGENT_BIN@"
+maybe_chown_dev "$LOCAL_BIN/@AGENT_BIN@"
 log_phase "wrapper-written @AGENT_BIN@"
 current_bootstrap_phase=wrapper-written
 write_bootstrap_state "$current_bootstrap_phase" "running" "@AGENT_BIN@"
-
-installed_spec=""
-if [ -r "$AGENT_SPEC_MARKER_PATH" ]; then
-  installed_spec=$(cat "$AGENT_SPEC_MARKER_PATH")
-fi
 
 if [ ! -x "$AGENT_GLOBAL_BIN" ] || [ "$installed_spec" != "@AGENT_PACKAGE_SPEC@" ]; then
   log_phase "toolchain-install-start @AGENT_PACKAGE_SPEC@"
@@ -110,7 +161,7 @@ if [ ! -x "$AGENT_GLOBAL_BIN" ] || [ "$installed_spec" != "@AGENT_PACKAGE_SPEC@"
   write_bootstrap_state "$current_bootstrap_phase" "running" "@AGENT_PACKAGE_SPEC@"
   bun install --global "@AGENT_PACKAGE_SPEC@"
   printf '%s\n' '@AGENT_PACKAGE_SPEC@' > "$AGENT_SPEC_MARKER_PATH"
-  chown @DEV_USER@:@DEV_USER@ "$AGENT_SPEC_MARKER_PATH"
+  maybe_chown_dev "$AGENT_SPEC_MARKER_PATH"
   log_phase "toolchain-install-done @AGENT_PACKAGE_SPEC@"
   current_bootstrap_phase=toolchain-install-done
   write_bootstrap_state "$current_bootstrap_phase" "running" "@AGENT_PACKAGE_SPEC@"
@@ -121,11 +172,11 @@ else
 fi
 
 if [ -e "$AGENT_GLOBAL_BIN" ]; then
-  chown @DEV_USER@:@DEV_USER@ "$AGENT_GLOBAL_BIN"
+  maybe_chown_dev "$AGENT_GLOBAL_BIN"
 fi
 
+printf '%s\n' '@AGENT_PACKAGE_SPEC@' >"$FIREBREAK_BOOTSTRAP_READY_MARKER"
+maybe_chown_dev "$FIREBREAK_BOOTSTRAP_READY_MARKER"
 log_phase "wrapper-ready @AGENT_BIN@"
 current_bootstrap_phase=wrapper-ready
 write_bootstrap_state "$current_bootstrap_phase" "ready" "@AGENT_BIN@"
-printf '%s\n' '@AGENT_PACKAGE_SPEC@' >"$FIREBREAK_BOOTSTRAP_READY_MARKER"
-chown @DEV_USER@:@DEV_USER@ "$FIREBREAK_BOOTSTRAP_READY_MARKER"

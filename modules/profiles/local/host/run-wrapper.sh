@@ -38,6 +38,30 @@ reject_whitespace_path() {
   esac
 }
 
+normalize_term_name() {
+  term_name=$1
+  case "$term_name" in
+    ansi|dumb|vt100|vt102|vt220)
+      printf '%s\n' "xterm-256color"
+      ;;
+    *)
+      printf '%s\n' "$term_name"
+      ;;
+  esac
+}
+
+sanitize_positive_dimension() {
+  dimension=$1
+  case "$dimension" in
+    ''|*[!0-9]*|0)
+      printf '%s\n' ""
+      ;;
+    *)
+      printf '%s\n' "$dimension"
+      ;;
+  esac
+}
+
 resolve_host_dir() {
   path=$1
   if [ "$path" = "~" ]; then
@@ -63,16 +87,19 @@ mkdir -p "$firebreak_tmp_root"
 host_runtime_dir=$(mktemp -d "$firebreak_tmp_root/r.XXXXXX")
 host_meta_dir=$host_runtime_dir/m
 host_exec_output_dir=$host_runtime_dir/o
+host_agent_tools_dir=$firebreak_state_root/tools/${default_control_socket%.socket}
 host_instance_dir=$host_runtime_dir/instance
 runner_stdout_log=$host_runtime_dir/runner.out
 runner_stderr_log=$host_runtime_dir/runner.err
 virtiofsd_hostcwd_log=$host_runtime_dir/v-cwd.log
 virtiofsd_agent_config_log=$host_runtime_dir/v-cfg.log
 virtiofsd_agent_exec_log=$host_runtime_dir/v-out.log
+virtiofsd_agent_tools_log=$host_runtime_dir/v-tools.log
 virtiofsd_worker_bridge_log=$host_runtime_dir/v-worker.log
 hostcwd_socket=$host_runtime_dir/cwd.sock
 agent_config_socket=$host_runtime_dir/cfg.sock
 agent_exec_output_socket=$host_runtime_dir/out.sock
+agent_tools_socket=$host_runtime_dir/tools.sock
 worker_bridge_dir=$host_runtime_dir/w
 worker_bridge_socket=$host_runtime_dir/worker.sock
 worker_bridge_socket_env=""
@@ -81,6 +108,9 @@ worker_bridge_server_script=$host_runtime_dir/firebreak-worker-bridge-host.sh
 worker_helper_script=$host_runtime_dir/firebreak-worker.sh
 worker_bridge_enabled=@WORKER_BRIDGE_ENABLED@
 wrapper_trace_log=$host_runtime_dir/wrapper-trace.log
+agent_term=$(normalize_term_name "${TERM:-}")
+agent_columns=$(sanitize_positive_dimension "${COLUMNS:-}")
+agent_lines=$(sanitize_positive_dimension "${LINES:-}")
 
 trace_wrapper() {
   printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >>"$wrapper_trace_log"
@@ -238,6 +268,10 @@ cleanup() {
     kill "$agent_exec_output_virtiofsd_pid" 2>/dev/null || true
     wait "$agent_exec_output_virtiofsd_pid" 2>/dev/null || true
   fi
+  if [ -n "${agent_tools_virtiofsd_pid:-}" ]; then
+    kill "$agent_tools_virtiofsd_pid" 2>/dev/null || true
+    wait "$agent_tools_virtiofsd_pid" 2>/dev/null || true
+  fi
   if [ -n "${worker_bridge_virtiofsd_pid:-}" ]; then
     kill "$worker_bridge_virtiofsd_pid" 2>/dev/null || true
     wait "$worker_bridge_virtiofsd_pid" 2>/dev/null || true
@@ -257,6 +291,7 @@ trap cleanup EXIT INT TERM
 
 mkdir -p "$host_meta_dir"
 mkdir -p "$host_exec_output_dir"
+mkdir -p "$host_agent_tools_dir"
 mkdir -p "$worker_bridge_dir/requests"
 rm -f "$control_socket"
 : >"$wrapper_trace_log"
@@ -274,6 +309,7 @@ cat >"$runtime_debug_file" <<EOF
   "virtiofs_hostcwd_log": "$(printf '%s' "$virtiofsd_hostcwd_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_agent_config_log": "$(printf '%s' "$virtiofsd_agent_config_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_agent_exec_log": "$(printf '%s' "$virtiofsd_agent_exec_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "virtiofs_agent_tools_log": "$(printf '%s' "$virtiofsd_agent_tools_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_worker_bridge_log": "$(printf '%s' "$virtiofsd_worker_bridge_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "worker_bridge_server_log": "$(printf '%s' "$worker_bridge_server_log" | sed 's/\\/\\\\/g; s/"/\\"/g')"
 }
@@ -320,6 +356,15 @@ printf '%s\n' "$host_uid" > "$host_meta_dir/host-uid"
 printf '%s\n' "$host_gid" > "$host_meta_dir/host-gid"
 printf '%s\n' "$agent_config_mode" > "$host_meta_dir/agent-config-mode"
 printf '%s\n' "$agent_session_mode" > "$host_meta_dir/agent-session-mode"
+if [ -n "$agent_term" ]; then
+  printf '%s\n' "$agent_term" > "$host_meta_dir/agent-term"
+fi
+if [ -n "$agent_columns" ]; then
+  printf '%s\n' "$agent_columns" > "$host_meta_dir/agent-columns"
+fi
+if [ -n "$agent_lines" ]; then
+  printf '%s\n' "$agent_lines" > "$host_meta_dir/agent-lines"
+fi
 if [ -n "$agent_command_override" ]; then
   printf '%s\n' "$agent_command_override" > "$host_meta_dir/agent-command"
 fi
@@ -338,6 +383,9 @@ if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-
   agent_exec_output_virtiofsd_pid=$started_virtiofsd_pid
   trace_wrapper "virtiofs-agent-exec-ready"
 fi
+start_virtiofsd "$host_agent_tools_dir" "$agent_tools_socket" "$virtiofsd_agent_tools_log"
+agent_tools_virtiofsd_pid=$started_virtiofsd_pid
+trace_wrapper "virtiofs-agent-tools-ready"
 if [ "$worker_bridge_enabled" = "1" ]; then
   start_virtiofsd "$worker_bridge_dir" "$worker_bridge_socket" "$virtiofsd_worker_bridge_log"
   worker_bridge_virtiofsd_pid=$started_virtiofsd_pid
@@ -363,6 +411,7 @@ if [ "$agent_session_mode" = "agent-exec" ]; then
       MICROVM_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
       MICROVM_AGENT_CONFIG_HOST_SOCKET="$agent_config_socket" \
       MICROVM_AGENT_EXEC_OUTPUT_SOCKET="$agent_exec_output_socket" \
+      MICROVM_AGENT_TOOLS_SOCKET="$agent_tools_socket" \
       MICROVM_WORKER_BRIDGE_SOCKET="$worker_bridge_socket_env" \
       @RUNNER@ "$@"
   ) >"$runner_stdout_log" 2>"$runner_stderr_log" || runner_status=$?
@@ -382,6 +431,7 @@ export MICROVM_HOST_CWD_SOCKET='$(printf '%s' "$hostcwd_socket" | sed "s/'/'\\\\
 export MICROVM_AGENT_CONFIG_HOST_DIR='$(printf '%s' "$agent_config_host_dir" | sed "s/'/'\\\\''/g")'
 export MICROVM_AGENT_CONFIG_HOST_SOCKET='$(printf '%s' "$agent_config_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_AGENT_EXEC_OUTPUT_SOCKET='$(printf '%s' "$agent_exec_output_socket" | sed "s/'/'\\\\''/g")'
+export MICROVM_AGENT_TOOLS_SOCKET='$(printf '%s' "$agent_tools_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_WORKER_BRIDGE_SOCKET='$(printf '%s' "$worker_bridge_socket_env" | sed "s/'/'\\\\''/g")'
 exec @RUNNER@$quoted_runner_args
 EOF
@@ -470,6 +520,7 @@ else
       MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
       MICROVM_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
       MICROVM_AGENT_CONFIG_HOST_SOCKET="$agent_config_socket" \
+      MICROVM_AGENT_TOOLS_SOCKET="$agent_tools_socket" \
       MICROVM_WORKER_BRIDGE_SOCKET="$worker_bridge_socket_env" \
       @RUNNER@ "$@"
   ) || runner_status=$?

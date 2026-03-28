@@ -14,7 +14,11 @@ let
   inherit (moduleArgs) config lib pkgs renderTemplate;
   cfg = config.agentVm;
   devHome = "/var/lib/${cfg.devUser}";
-  bootstrapReadyMarker = "${devHome}/.cache/firebreak-tools/${vmName}/bootstrap-ready";
+  toolsMount = cfg.agentToolsMount;
+  bootstrapReadyMarker =
+    if cfg.agentToolsEnabled
+    then "${toolsMount}/bootstrap-ready"
+    else "${devHome}/.cache/firebreak-tools/${vmName}/bootstrap-ready";
   bootstrapWaitScript = pkgs.writeShellApplication {
     name = "firebreak-bootstrap-wait";
     runtimeInputs = with pkgs; [ coreutils gnugrep ];
@@ -66,6 +70,7 @@ let
     "@AGENT_DISPLAY_NAME@" = displayName;
     "@AGENT_EXEC_OUTPUT_MOUNT@" = cfg.agentExecOutputMount;
     "@AGENT_PACKAGE_SPEC@" = packageSpec;
+    "@AGENT_TOOLS_MOUNT@" = toolsMount;
     "@BOOTSTRAP_READY_MARKER@" = bootstrapReadyMarker;
   };
 in {
@@ -73,6 +78,7 @@ in {
     agentVm = {
       name = lib.mkDefault vmName;
       agentConfigEnabled = true;
+      agentToolsEnabled = true;
       agentConfigDirName = configDirName;
       agentCommand = binName;
       agentPromptCommand = promptCommand;

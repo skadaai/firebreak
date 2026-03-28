@@ -109,6 +109,18 @@ in {
       description = "Guest path for a host-shared directory used to persist one-shot command stdout, stderr, and exit code.";
     };
 
+    agentToolsEnabled = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Whether the VM mounts a host-shared persistent tools directory for bootstrap-managed agent runtimes.";
+    };
+
+    agentToolsMount = mkOption {
+      type = types.str;
+      default = "/run/agent-tools-host";
+      description = "Guest path for an optional host-shared directory used to persist bootstrap-managed agent tools across VM launches.";
+    };
+
     agentCommand = mkOption {
       type = types.nullOr types.str;
       default = null;

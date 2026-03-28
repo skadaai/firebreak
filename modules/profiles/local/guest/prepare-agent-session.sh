@@ -4,11 +4,19 @@ metadata=@HOST_META_MOUNT@/mount-path
 session_mode=agent
 session_command_file=@HOST_META_MOUNT@/agent-command
 session_mode_file=@HOST_META_MOUNT@/agent-session-mode
+session_term_file=@HOST_META_MOUNT@/agent-term
+session_columns_file=@HOST_META_MOUNT@/agent-columns
+session_lines_file=@HOST_META_MOUNT@/agent-lines
+agent_tools_enabled=@AGENT_TOOLS_ENABLED@
+agent_tools_mount=@AGENT_TOOLS_MOUNT@
 start_dir=@WORKSPACE_MOUNT@
 worker_bridge_enabled=@WORKER_BRIDGE_ENABLED@
 guest_state_dir=/run/firebreak-agent
 bootstrap_state_local=$guest_state_dir/bootstrap-state.json
 command_state_local=$guest_state_dir/command-state.json
+session_term_state_file=$guest_state_dir/session-term
+session_columns_state_file=$guest_state_dir/session-columns
+session_lines_state_file=$guest_state_dir/session-lines
 
 sync_guest_state_files() {
   if ! [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
@@ -58,6 +66,31 @@ if [ "$session_mode" = "agent-exec" ] || [ "$session_mode" = "agent-attach-exec"
   fi
   sync_guest_state_files
   printf '%s\n' "prepare-agent-session-mounted-exec-output" > @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
+fi
+
+mkdir -p "$guest_state_dir"
+@CHOWN@ @DEV_USER@:@DEV_USER@ "$guest_state_dir"
+if [ -r "$session_term_file" ]; then
+  cat "$session_term_file" > "$session_term_state_file"
+  chmod 0644 "$session_term_state_file"
+fi
+if [ -r "$session_columns_file" ]; then
+  cat "$session_columns_file" > "$session_columns_state_file"
+  chmod 0644 "$session_columns_state_file"
+fi
+if [ -r "$session_lines_file" ]; then
+  cat "$session_lines_file" > "$session_lines_state_file"
+  chmod 0644 "$session_lines_state_file"
+fi
+
+if [ "$agent_tools_enabled" = "1" ]; then
+  mkdir -p "$agent_tools_mount"
+  if ! mountpoint -q "$agent_tools_mount"; then
+    if ! mount -t virtiofs hostagenttools "$agent_tools_mount"; then
+      echo "failed to mount host agent tools share" >&2
+      exit 1
+    fi
+  fi
 fi
 
 if [ "$worker_bridge_enabled" = "1" ]; then

@@ -29,6 +29,8 @@ let
     "@AGENT_COMMAND@" = if cfg.agentCommand == null then "" else cfg.agentCommand;
     "@AGENT_COMMAND_FILE@" = cfg.agentCommandFile;
     "@AGENT_EXEC_OUTPUT_MOUNT@" = cfg.agentExecOutputMount;
+    "@AGENT_TOOLS_ENABLED@" = if cfg.agentToolsEnabled then "1" else "0";
+    "@AGENT_TOOLS_MOUNT@" = cfg.agentToolsMount;
     "@AGENT_SESSION_MODE_FILE@" = cfg.agentSessionModeFile;
     "@HOST_META_MOUNT@" = cfg.hostMetaMount;
     "@ID@" = "${pkgs.coreutils}/bin/id";
@@ -129,6 +131,11 @@ in {
         StandardOutput = "journal+console";
         StandardError = "journal+console";
       };
+    };
+
+    systemd.services.dev-bootstrap = lib.mkIf bootstrapEnabled {
+      after = [ "prepare-agent-session.service" ];
+      requires = [ "prepare-agent-session.service" ];
     };
 
     systemd.services."serial-getty@ttyS0".enable = false;

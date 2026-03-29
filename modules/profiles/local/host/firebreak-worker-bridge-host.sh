@@ -144,6 +144,22 @@ try:
             child_env = os.environ.copy()
             child_env["FIREBREAK_WORKER_BRIDGE_REQUEST_DIR"] = request_dir
             child_env["FIREBREAK_WORKER_BRIDGE_TRACE_PATH"] = trace_path
+            try:
+                tty_attr = termios.tcgetattr(0)
+                tty_attr[6][termios.VMIN] = 1
+                tty_attr[6][termios.VTIME] = 0
+                tty_attr[3] &= ~(
+                    termios.ICANON
+                    |
+                    termios.ECHO
+                    | getattr(termios, "ECHOE", 0)
+                    | getattr(termios, "ECHOK", 0)
+                    | getattr(termios, "ECHONL", 0)
+                    | getattr(termios, "ECHOCTL", 0)
+                )
+                termios.tcsetattr(0, termios.TCSANOW, tty_attr)
+            except OSError:
+                pass
             if effective_term:
                 child_env["TERM"] = effective_term
             if request_columns is not None:
@@ -158,11 +174,226 @@ try:
             except OSError:
                 pass
         trace("attach-worker-started")
+        terminal_rows = request_lines if request_lines is not None else 24
+        terminal_columns = request_columns if request_columns is not None else 80
+        terminal_state = {"row": 1, "column": 1}
+        terminal_query_buffer = bytearray()
+        terminal_queries = [
+            (b"\x1b[6n", "cursor"),
+            (b"\x1b[?u", "kitty-kbd-query"),
+            (b"\x1b[c", "da1"),
+            (b"\x1b]10;?\x1b\\", "osc10"),
+            (b"\x1b]10;?\x07", "osc10"),
+            (b"\x1b]11;?\x1b\\", "osc11"),
+            (b"\x1b]11;?\x07", "osc11"),
+        ]
+
+        def longest_query_prefix(data):
+            longest = 0
+            for pattern, _ in terminal_queries:
+                max_prefix = min(len(pattern) - 1, len(data))
+                while max_prefix > longest:
+                    if data.endswith(pattern[:max_prefix]):
+                        longest = max_prefix
+                        break
+                    max_prefix -= 1
+            return longest
+
+        def write_terminal_reply(response):
+            saved_attr = None
+            quiet_attr = None
+            try:
+                current_attr = termios.tcgetattr(master_fd)
+                saved_attr = list(current_attr)
+                saved_attr[6] = list(current_attr[6])
+                quiet_attr = list(current_attr)
+                quiet_attr[6] = list(current_attr[6])
+                quiet_attr[3] &= ~(
+                    termios.ECHO
+                    | getattr(termios, "ECHOE", 0)
+                    | getattr(termios, "ECHOK", 0)
+                    | getattr(termios, "ECHONL", 0)
+                    | getattr(termios, "ECHOCTL", 0)
+                )
+                termios.tcsetattr(master_fd, termios.TCSANOW, quiet_attr)
+            except OSError:
+                saved_attr = None
+            try:
+                os.write(master_fd, response)
+            finally:
+                if saved_attr is not None:
+                    try:
+                        termios.tcsetattr(master_fd, termios.TCSANOW, saved_attr)
+                    except OSError:
+                        pass
+
+        def clamp_cursor():
+            terminal_state["row"] = max(1, min(terminal_state["row"], terminal_rows))
+            terminal_state["column"] = max(1, min(terminal_state["column"], terminal_columns))
+
+        def parse_cursor_params(raw_params):
+            params = []
+            for item in raw_params.split(";"):
+                if item == "":
+                    params.append(None)
+                    continue
+                digits = "".join(ch for ch in item if ch.isdigit())
+                params.append(int(digits) if digits else None)
+            return params
+
+        def update_terminal_cursor(data):
+            index = 0
+            data_length = len(data)
+            while index < data_length:
+                byte = data[index]
+                if byte == 0x0D:
+                    terminal_state["column"] = 1
+                    index += 1
+                    continue
+                if byte == 0x0A:
+                    terminal_state["row"] += 1
+                    clamp_cursor()
+                    index += 1
+                    continue
+                if byte == 0x08:
+                    terminal_state["column"] = max(1, terminal_state["column"] - 1)
+                    index += 1
+                    continue
+                if byte == 0x1B and index + 1 < data_length:
+                    next_byte = data[index + 1]
+                    if next_byte == 0x63:
+                        terminal_state["row"] = 1
+                        terminal_state["column"] = 1
+                        index += 2
+                        continue
+                    if next_byte == 0x5B:
+                        seq_end = index + 2
+                        while seq_end < data_length and not (0x40 <= data[seq_end] <= 0x7E):
+                            seq_end += 1
+                        if seq_end >= data_length:
+                            break
+                        final = chr(data[seq_end])
+                        raw_params = data[index + 2:seq_end].decode("ascii", "ignore")
+                        params = parse_cursor_params(raw_params)
+                        first = params[0] if params else None
+                        second = params[1] if len(params) > 1 else None
+                        amount = first if first is not None else 1
+                        if final in ("H", "f"):
+                            terminal_state["row"] = first if first is not None else 1
+                            terminal_state["column"] = second if second is not None else 1
+                            clamp_cursor()
+                        elif final == "A":
+                            terminal_state["row"] -= amount
+                            clamp_cursor()
+                        elif final == "B":
+                            terminal_state["row"] += amount
+                            clamp_cursor()
+                        elif final == "C":
+                            terminal_state["column"] += amount
+                            clamp_cursor()
+                        elif final == "D":
+                            terminal_state["column"] -= amount
+                            clamp_cursor()
+                        elif final == "E":
+                            terminal_state["row"] += amount
+                            terminal_state["column"] = 1
+                            clamp_cursor()
+                        elif final == "F":
+                            terminal_state["row"] -= amount
+                            terminal_state["column"] = 1
+                            clamp_cursor()
+                        elif final == "G":
+                            terminal_state["column"] = first if first is not None else 1
+                            clamp_cursor()
+                        elif final == "d":
+                            terminal_state["row"] = first if first is not None else 1
+                            clamp_cursor()
+                        index = seq_end + 1
+                        continue
+                    if next_byte == 0x5D:
+                        osc_end = data.find(b"\x07", index + 2)
+                        st_end = data.find(b"\x1b\\", index + 2)
+                        candidates = [end for end in (osc_end, st_end) if end >= 0]
+                        if not candidates:
+                            break
+                        end_index = min(candidates)
+                        index = end_index + (1 if end_index == osc_end else 2)
+                        continue
+                    if next_byte == 0x50:
+                        dcs_end = data.find(b"\x1b\\", index + 2)
+                        if dcs_end < 0:
+                            break
+                        index = dcs_end + 2
+                        continue
+                if 0x20 <= byte <= 0x7E:
+                    if terminal_state["column"] < terminal_columns:
+                        terminal_state["column"] += 1
+                    else:
+                        terminal_state["column"] = terminal_columns
+                index += 1
+
+        def build_terminal_reply(query_name):
+            if query_name == "cursor":
+                clamp_cursor()
+                return f"\x1b[{terminal_state['row']};{terminal_state['column']}R".encode("ascii")
+            if query_name == "kitty-kbd-query":
+                return b"\x1b[?0u"
+            if query_name == "da1":
+                return b"\x1b[?62;1;2;6;22c"
+            if query_name == "osc10":
+                return b"\x1b]10;rgb:ffff/ffff/ffff\x1b\\"
+            if query_name == "osc11":
+                return b"\x1b]11;rgb:0000/0000/0000\x1b\\"
+            return b""
+
+        def handle_terminal_queries(chunk):
+            terminal_query_buffer.extend(chunk)
+            data = bytes(terminal_query_buffer)
+            forwarded = bytearray()
+            index = 0
+
+            while True:
+                next_match = None
+                for pattern, query_name in terminal_queries:
+                    match_index = data.find(pattern, index)
+                    if match_index < 0:
+                        continue
+                    if next_match is None or match_index < next_match[0]:
+                        next_match = (match_index, pattern, query_name)
+                if next_match is None:
+                    break
+                match_index, pattern, query_name = next_match
+                segment = data[index:match_index]
+                forwarded.extend(segment)
+                update_terminal_cursor(segment)
+                trace(f"attach-term-query:{query_name}")
+                response = build_terminal_reply(query_name)
+                try:
+                    write_terminal_reply(response)
+                    trace(f"attach-term-reply:{query_name}:{response.hex()}")
+                except OSError:
+                    pass
+                index = match_index + len(pattern)
+
+            remainder = data[index:]
+            keep = longest_query_prefix(remainder)
+            if keep > 0:
+                visible = remainder[:-keep]
+                forwarded.extend(visible)
+                update_terminal_cursor(visible)
+                terminal_query_buffer[:] = remainder[-keep:]
+            else:
+                forwarded.extend(remainder)
+                update_terminal_cursor(remainder)
+                terminal_query_buffer.clear()
+
+            return bytes(forwarded)
 
         def pump_stdin():
             offset = 0
             saw_input = False
             total_input_bytes = 0
+            sample_budget = 64
             try:
                 trace("attach-stdin-stream-opened")
                 while True:
@@ -174,7 +405,12 @@ try:
                         total_input_bytes += len(chunk)
                         if not saw_input:
                             trace("attach-stdin-first-byte")
+                            trace(f"attach-stdin-first-chunk-hex:{chunk[:32].hex()}")
                             saw_input = True
+                        if sample_budget > 0:
+                            sample = chunk[:sample_budget]
+                            trace(f"attach-stdin-sample-hex:{sample.hex()}")
+                            sample_budget -= len(sample)
                         os.write(master_fd, chunk)
                         continue
                     if os.path.exists(stdin_eof_path):
@@ -203,8 +439,14 @@ try:
                         if not saw_output:
                             trace("attach-stdout-first-byte")
                             saw_output = True
-                        sink.write(chunk)
-                        sink.flush()
+                        forwarded = handle_terminal_queries(chunk)
+                        if forwarded:
+                            sink.write(forwarded)
+                            sink.flush()
+                if terminal_query_buffer:
+                    sink.write(bytes(terminal_query_buffer))
+                    sink.flush()
+                    terminal_query_buffer.clear()
             except OSError:
                 pass
 

@@ -5,8 +5,27 @@ if [ -d /cache ] && [ -w /cache ]; then
   default_firebreak_tmpdir=/cache/firebreak
 fi
 
-firebreak_tmp_root=${FIREBREAK_TMPDIR:-$default_firebreak_tmpdir}/firebreak/tmp
-mkdir -p "$firebreak_tmp_root"
+choose_tmp_root() {
+  if [ -n "${FIREBREAK_TEST_TMPDIR:-}" ]; then
+    printf '%s\n' "$FIREBREAK_TEST_TMPDIR"
+    return
+  fi
+
+  for candidate in \
+    "${XDG_CACHE_HOME:-${HOME:-/tmp}/.cache}/firebreak-test/tmp" \
+    "${FIREBREAK_TMPDIR:-$default_firebreak_tmpdir}/firebreak/tmp" \
+    "/tmp/firebreak/tmp"
+  do
+    if mkdir -p "$candidate" 2>/dev/null; then
+      printf '%s\n' "$candidate"
+      return
+    fi
+  done
+
+  printf '%s\n' "/tmp"
+}
+
+firebreak_tmp_root=$(choose_tmp_root)
 smoke_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-worker-firebreak-attach.XXXXXX")
 
 cleanup() {

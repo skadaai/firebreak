@@ -21,13 +21,13 @@ choose_tmp_root() {
 }
 
 firebreak_tmp_root=$(choose_tmp_root)
-smoke_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-agent-orchestrator-worker-interactive.XXXXXX")
+smoke_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-agent-orchestrator-worker-interactive-claude.XXXXXX")
 
 cleanup() {
   if [ "$status" -eq 0 ]; then
     rm -rf "$smoke_tmp_dir"
   else
-    printf '%s\n' "preserved interactive AO smoke artifacts: $smoke_tmp_dir" >&2
+    printf '%s\n' "preserved interactive AO Claude smoke artifacts: $smoke_tmp_dir" >&2
   fi
   exit "$status"
 }
@@ -97,14 +97,9 @@ with open(log_path, "wb") as log_file:
     os.close(slave_fd)
 
     outer_marker = "[ vm: firebreak-agent-orchestrator | mode: shell | workspace:"
-    inner_boot_marker = "hostname=firebreak-codex"
+    inner_boot_marker = "hostname=firebreak-claude-code"
     worker_output_marker = "firebreak: worker produced terminal output"
-    codex_welcome_marker = "Welcome to Codex"
-    codex_auth_marker = "Sign in with ChatGPT"
-    codex_continue_marker = "Press Enter to continue"
-    codex_welcome_compact = "welcometocodex"
-    codex_auth_compact = "signinwithchatgpt"
-    codex_continue_compact = "pressentertocontinue"
+    claude_ui_marker = "MonokaiExtended"
     control_sequence_pattern = re.compile(
         r"\x1b(?:\][^\x07\x1b]*(?:\x07|\x1b\\)|P.*?\x1b\\|[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])",
         re.DOTALL,
@@ -118,15 +113,12 @@ with open(log_path, "wb") as log_file:
         text = re.sub(r"\n+", "\n", text)
         return text
 
-    def compact(text: str) -> str:
-        return re.sub(r"\s+", "", text).lower()
-
     transcript = bytearray()
-    sent_codex = False
+    sent_claude = False
     sent_interrupt = False
     saw_worker_output = False
     saw_inner = False
-    saw_codex_auth = False
+    saw_claude_ui = False
     interrupt_deadline = None
     terminate_deadline = None
     deadline = time.time() + 420
@@ -155,11 +147,9 @@ with open(log_path, "wb") as log_file:
                     normalized_log_file.flush()
                     last_normalized = normalized
 
-                compact_normalized = compact(normalized)
-
-                if not sent_codex and outer_marker in normalized:
-                    os.write(master_fd, b"codex\r")
-                    sent_codex = True
+                if not sent_claude and outer_marker in normalized:
+                    os.write(master_fd, b"claude\r")
+                    sent_claude = True
                     deadline = max(deadline, time.time() + 300)
 
                 if not saw_worker_output and worker_output_marker in normalized:
@@ -169,26 +159,12 @@ with open(log_path, "wb") as log_file:
                     saw_inner = True
                     deadline = max(deadline, time.time() + 180)
 
-                if (
-                    not saw_codex_auth
-                    and (
-                        (
-                            codex_welcome_marker in normalized
-                            and codex_auth_marker in normalized
-                            and codex_continue_marker in normalized
-                        )
-                        or (
-                            codex_welcome_compact in compact_normalized
-                            and codex_auth_compact in compact_normalized
-                            and codex_continue_compact in compact_normalized
-                        )
-                    )
-                ):
-                    saw_codex_auth = True
+                if not saw_claude_ui and claude_ui_marker in normalized:
+                    saw_claude_ui = True
                     interrupt_deadline = time.time() + 2
 
             now = time.time()
-            if saw_inner and interrupt_deadline is not None and now >= interrupt_deadline and not sent_interrupt:
+            if saw_claude_ui and interrupt_deadline is not None and now >= interrupt_deadline and not sent_interrupt:
                 os.write(master_fd, b"\x03")
                 sent_interrupt = True
                 interrupt_deadline = None
@@ -207,7 +183,7 @@ with open(log_path, "wb") as log_file:
                 break
 
         else:
-            print("interactive Agent Orchestrator smoke timed out waiting for attached codex startup", file=sys.stderr)
+            print("interactive Agent Orchestrator smoke timed out waiting for attached claude startup", file=sys.stderr)
             proc.terminate()
             try:
                 proc.wait(timeout=10)
@@ -226,21 +202,21 @@ with open(log_path, "wb") as log_file:
     sys.stdout.buffer.write(transcript)
     sys.stdout.write(f"\n__STATUS__:{status}\n")
 
-    if not sent_codex:
-        print("interactive Agent Orchestrator smoke never reached the AO shell banner", file=sys.stderr)
+    if not sent_claude:
+        print("interactive Agent Orchestrator Claude smoke never reached the AO shell banner", file=sys.stderr)
         raise SystemExit(1)
 
     if not saw_inner:
-        print("interactive Agent Orchestrator smoke did not surface nested firebreak-codex terminal output", file=sys.stderr)
+        print("interactive Agent Orchestrator Claude smoke did not surface nested firebreak-claude-code terminal output", file=sys.stderr)
         raise SystemExit(1)
 
     if not saw_worker_output:
-        print("interactive Agent Orchestrator smoke did not report attached worker output", file=sys.stderr)
+        print("interactive Agent Orchestrator Claude smoke did not report attached worker output", file=sys.stderr)
         raise SystemExit(1)
 
-    if not saw_codex_auth:
-        print("interactive Agent Orchestrator smoke did not surface the Codex sign-in screen", file=sys.stderr)
+    if not saw_claude_ui:
+        print("interactive Agent Orchestrator Claude smoke did not surface the Claude theme selection UI", file=sys.stderr)
         raise SystemExit(1)
 PY
 
-printf '%s\n' "Agent Orchestrator interactive codex smoke test passed"
+printf '%s\n' "Agent Orchestrator interactive Claude smoke test passed"

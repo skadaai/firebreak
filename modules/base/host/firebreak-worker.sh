@@ -298,6 +298,53 @@ quote_arg() {
   printf '%q' "$1"
 }
 
+resolve_firebreak_worker_exec() {
+  installable=$1
+  package_name=$2
+
+  if [ "${FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG:-}" = "1" ] \
+    && [ -n "${FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES:-}" ]; then
+    build_output=$(
+      nix --accept-flake-config \
+        --extra-experimental-features "$FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES" \
+        build --no-link --print-out-paths "$installable"
+    )
+  elif [ "${FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG:-}" = "1" ]; then
+    build_output=$(
+      nix --accept-flake-config \
+        build --no-link --print-out-paths "$installable"
+    )
+  elif [ -n "${FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES:-}" ]; then
+    build_output=$(
+      nix --extra-experimental-features "$FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES" \
+        build --no-link --print-out-paths "$installable"
+    )
+  else
+    build_output=$(nix build --no-link --print-out-paths "$installable")
+  fi
+
+  resolved_out=$(printf '%s\n' "$build_output" | tail -n 1)
+  if [ -z "$resolved_out" ] || ! [ -d "$resolved_out" ]; then
+    echo "failed to resolve worker package output for $installable" >&2
+    exit 1
+  fi
+
+  resolved_exec=$resolved_out/bin/$package_name
+  if [ -x "$resolved_exec" ]; then
+    printf '%s\n' "$resolved_exec"
+    return 0
+  fi
+
+  resolved_exec=$(find "$resolved_out/bin" -maxdepth 1 -type f -perm -u+x 2>/dev/null | sort | head -n 1)
+  if [ -n "$resolved_exec" ] && [ -x "$resolved_exec" ]; then
+    printf '%s\n' "$resolved_exec"
+    return 0
+  fi
+
+  echo "failed to resolve worker executable under $resolved_out/bin" >&2
+  exit 1
+}
+
 write_process_launch_script() {
   launch_script=$1
   attach_mode=$2
@@ -393,16 +440,8 @@ write_firebreak_launch_script() {
   quoted_child_pid=$(quote_arg "$worker_root/child-pid")
   quoted_instance_dir=$(quote_arg "$worker_root/instance")
   quoted_vm_mode=$(quote_arg "$vm_mode")
-  quoted_installable=$(quote_arg "$FIREBREAK_FLAKE_REF#$package_name")
-
-  nix_command="nix"
-  if [ "${FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG:-}" = "1" ]; then
-    nix_command="$nix_command --accept-flake-config"
-  fi
-  if [ -n "${FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES:-}" ]; then
-    nix_command="$nix_command --extra-experimental-features $(quote_arg "$FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES")"
-  fi
-  nix_command="$nix_command run $quoted_installable --"
+  resolved_exec=$(resolve_firebreak_worker_exec "$FIREBREAK_FLAKE_REF#$package_name" "$package_name")
+  quoted_resolved_exec=$(quote_arg "$resolved_exec")
 
   quoted_args=""
   for arg in "$@"; do
@@ -464,7 +503,7 @@ if [ "\$attach_mode" = "1" ]; then
       FIREBREAK_INSTANCE_DIR="\$instance_dir" \
       FIREBREAK_VM_MODE="\$vm_mode" \
       FIREBREAK_AGENT_SESSION_MODE_OVERRIDE="agent-attach-exec" \
-      $nix_command$quoted_args
+      $quoted_resolved_exec
   else
     env \
       -u AGENT_CONFIG \
@@ -475,7 +514,7 @@ if [ "\$attach_mode" = "1" ]; then
       -u CLAUDE_CONFIG_HOST_PATH \
       FIREBREAK_INSTANCE_DIR="\$instance_dir" \
       FIREBREAK_VM_MODE="\$vm_mode" \
-      $nix_command$quoted_args
+      $quoted_resolved_exec$quoted_args
   fi
   command_status=\$?
 else
@@ -489,7 +528,7 @@ else
     -u CLAUDE_CONFIG_HOST_PATH \
     FIREBREAK_INSTANCE_DIR="\$instance_dir" \
     FIREBREAK_VM_MODE="\$vm_mode" \
-    $nix_command$quoted_args &
+    $quoted_resolved_exec$quoted_args &
   child_pid=\$!
   printf '%s\n' "\$child_pid" >"\$child_pid_path"
   wait "\$child_pid"

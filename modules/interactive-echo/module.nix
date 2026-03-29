@@ -13,6 +13,14 @@ let
         state_path=/run/agent-exec-output/interactive-echo.log
       fi
       mkdir -p "$(dirname "$state_path")"
+      printf '%s\n' 'cursor-query-start' >>"$state_path"
+      printf '\033[6n'
+      cursor_reply=""
+      if IFS= read -r -d R -t 2 cursor_reply; then
+        cursor_reply="''${cursor_reply}R"
+      fi
+      cursor_reply_hex=$(printf '%s' "$cursor_reply" | od -An -tx1 | tr -d ' \n')
+      printf '%s\n' "cursor-reply-hex:''${cursor_reply_hex:-missing}" >>"$state_path"
       printf '%s\n' 'ready-write-start' >>"$state_path"
       printf 'READY\n'
       printf '%s\n' 'ready-write-done' >>"$state_path"

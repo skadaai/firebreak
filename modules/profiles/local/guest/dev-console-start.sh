@@ -11,6 +11,7 @@ command_process_shared=@AGENT_EXEC_OUTPUT_MOUNT@/command-processes.txt
 session_term_state_file=$guest_state_dir/session-term
 session_columns_state_file=$guest_state_dir/session-columns
 session_lines_state_file=$guest_state_dir/session-lines
+attach_shell_flag=-ic
 
 json_escape() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
@@ -50,6 +51,15 @@ fi
 if [ -r @AGENT_COMMAND_FILE@ ]; then
   agent_command=$(cat @AGENT_COMMAND_FILE@)
 fi
+
+case "$session_mode:$agent_command" in
+  agent-attach-exec:codex|agent:codex)
+    if [ -x /run/agent-tools-host/.bun/bin/codex ]; then
+      agent_command="/run/agent-tools-host/.bun/bin/codex"
+    fi
+    attach_shell_flag=-lc
+    ;;
+esac
 
 if [ -r "$session_term_state_file" ]; then
   TERM=$(cat "$session_term_state_file")
@@ -140,7 +150,7 @@ EOF
     mkdir -p @AGENT_EXEC_OUTPUT_MOUNT@
     printf '%s\n' "dev-console-start" > @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
     if [ -n "$agent_command" ]; then
-      exec env FIREBREAK_AGENT_COMMAND="$agent_command" @BASH@ -ic '
+      exec env FIREBREAK_AGENT_COMMAND="$agent_command" @BASH@ "$attach_shell_flag" '
         status=0
         set +m
         stage_path=@AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
@@ -148,6 +158,7 @@ EOF
         command_process_local="'"$command_process_local"'"
         command_process_shared="'"$command_process_shared"'"
         command_process_monitor_pid=""
+        command_tty_state=""
         mkdir -p @AGENT_EXEC_OUTPUT_MOUNT@
         write_command_state() {
           command_phase=$1
@@ -183,7 +194,10 @@ EOF
               tracked_pids="$tracked_pids $child_pids"
             fi
             if command -v ps >/dev/null 2>&1; then
-              ps -o pid=,ppid=,tty=,stat=,comm= -p $tracked_pids 2>/dev/null || true
+              ps -o pid=,ppid=,pgid=,sess=,tpgid=,tty=,stat=,comm= -p $tracked_pids 2>/dev/null || true
+            fi
+            if tty >/dev/null 2>&1 && command -v stty >/dev/null 2>&1; then
+              printf "%s\n" "stty=$(stty -a 2>/dev/null || true)"
             fi
             for tracked_pid in $tracked_pids; do
               if [ -r "/proc/$tracked_pid/cmdline" ]; then
@@ -235,6 +249,19 @@ EOF
             command_process_monitor_pid=""
           fi
         }
+        configure_command_tty() {
+          if tty >/dev/null 2>&1 && command -v stty >/dev/null 2>&1; then
+            command_tty_state=$(stty -g 2>/dev/null || true)
+            stty raw -echo min 1 time 0 2>/dev/null || true
+          fi
+        }
+        restore_command_tty() {
+          if [ -n "$command_tty_state" ]; then
+            stty "$command_tty_state" 2>/dev/null || true
+            command_tty_state=""
+          fi
+        }
+        trap restore_command_tty EXIT INT TERM
         if command -v firebreak-bootstrap-wait >/dev/null 2>&1; then
           write_command_state bootstrap-wait running agent-attach-exec 0
           if firebreak-bootstrap-wait; then
@@ -250,11 +277,13 @@ EOF
         fi
         write_command_state command-start running agent-attach-exec 0
         printf "%s\n" "command-start" >"$stage_path"
+        configure_command_tty
         write_command_process_snapshot
         start_command_process_monitor
         eval "$FIREBREAK_AGENT_COMMAND" || status=$?
         stop_command_process_monitor
         write_command_process_snapshot
+        restore_command_tty
         printf "%s\n" "$status" >"$exit_code_path"
         write_command_state command-exit completed agent-attach-exec "$status"
         printf "%s\n" "command-exit:$status" >"$stage_path"

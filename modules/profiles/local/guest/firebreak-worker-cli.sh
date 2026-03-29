@@ -263,6 +263,7 @@ def pump_stdout() -> None:
 def pump_stdin() -> None:
     saw_stdin_bytes = False
     total_stdin_bytes = 0
+    sample_budget = 64
     try:
         trace(f"guest-stdin-source:{'tty' if input_fd_is_tty else 'stdin'}")
         with open(stdin_stream, "ab", buffering=0) as sink:
@@ -281,8 +282,13 @@ def pump_stdin() -> None:
                     break
                 if not saw_stdin_bytes:
                     trace("guest-stdin-first-byte")
+                    trace(f"guest-stdin-first-chunk-hex:{chunk[:32].hex()}")
                 saw_stdin_bytes = True
                 total_stdin_bytes += len(chunk)
+                if sample_budget > 0:
+                    sample = chunk[:sample_budget]
+                    trace(f"guest-stdin-sample-hex:{sample.hex()}")
+                    sample_budget -= len(sample)
                 sink.write(chunk)
                 sink.flush()
     finally:

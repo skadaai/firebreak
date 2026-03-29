@@ -4,7 +4,7 @@ set +e
 output=$(
   FIREBREAK_INSTANCE_EPHEMERAL=1 \
     FIREBREAK_VM_MODE=shell \
-    AGENT_VM_COMMAND='FIREBREAK_BOOTSTRAP_WAIT_TIMEOUT_SECONDS=60 firebreak-bootstrap-wait && command -v firebreak-bootstrap-wait && command -v ao && command -v codex && codex --version' \
+    AGENT_VM_COMMAND='FIREBREAK_BOOTSTRAP_WAIT_TIMEOUT_SECONDS=60 firebreak-bootstrap-wait && command -v firebreak-bootstrap-wait && command -v ao && command -v codex && codex --version && command -v claude && claude --version' \
     @AGENT_ORCHESTRATOR_BIN@ 2>&1
 )
 status=$?
@@ -31,6 +31,12 @@ fi
 if ! printf '%s\n' "$output" | grep -F -q "codex firebreak-worker wrapper"; then
   printf '%s\n' "$output" >&2
   echo "agent-orchestrator smoke did not expose the Firebreak worker proxy wrapper" >&2
+  exit 1
+fi
+
+if ! printf '%s\n' "$output" | grep -F -q "claude firebreak-worker wrapper"; then
+  printf '%s\n' "$output" >&2
+  echo "agent-orchestrator smoke did not expose the Claude Firebreak worker proxy wrapper" >&2
   exit 1
 fi
 

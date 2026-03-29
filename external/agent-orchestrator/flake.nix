@@ -61,6 +61,10 @@
               kind = "codex";
               versionOutput = "codex firebreak-worker wrapper";
             };
+            claude = firebreak.lib.${system}.mkWorkerProxyScript {
+              kind = "claude-code";
+              versionOutput = "claude firebreak-worker wrapper";
+            };
           };
           launchCommand = "ao start .";
           extraShellInit = ''
@@ -93,6 +97,7 @@
       testProject = mkProject [ ];
       tests = import ./tests.nix {
         inherit pkgs project testProject;
+        firebreakBin = "${firebreak.packages.${system}.default}/bin/firebreak";
       };
     in {
       nixosConfigurations.firebreak-agent-orchestrator = project.nixosConfiguration;

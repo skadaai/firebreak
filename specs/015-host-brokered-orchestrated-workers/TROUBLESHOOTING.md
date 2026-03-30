@@ -1,6 +1,6 @@
 ---
 status: living
-last_updated: 2026-03-28
+last_updated: 2026-03-30
 ---
 
 # 015 Troubleshooting Playbook
@@ -25,6 +25,18 @@ The key architectural decision remains:
 - the orchestrator VM is a control plane
 - sibling workers are host-brokered
 - guest-launched nested VM spawning is not the product contract
+
+## Terminal lessons worth preserving
+
+These lessons were expensive to learn and should be reused directly next time.
+
+- Visible output is not the same thing as a usable TUI. We had several phases where the nested CLI clearly started, emitted terminal bytes, and still was not actually usable because terminal negotiation or input semantics were wrong.
+- A worker stdin stream can contain both real user intent and automatic terminal-emulator replies. Cursor-position reports such as `ESC[17;115R` and `ESC[51;114R` are not user keystrokes and should not be allowed to leak through the same path as ordinary typing.
+- Terminal mode is multidimensional. Echo, canonical buffering, raw mode, foreground process-group ownership, and feature negotiation are separate concerns. Flipping one knob can easily fix one symptom while breaking another.
+- File-backed PTY relays are sensitive to polling cadence. Interactive TUIs can feel broken or sluggish even when they are technically correct if relay polling is too coarse.
+- Synthetic interactive workers are mandatory. The `interactive-echo` worker made it possible to determine whether the terminal path itself was broken before involving a heavyweight CLI.
+- Different CLIs make good canaries for different failure classes. `codex` was useful for proving startup and attached-output visibility, while `claude` surfaced terminal-negotiation bugs more clearly because it rendered a visible onboarding menu that reacted to arrow keys but exposed remaining activation issues.
+- Full-screen TUIs are part of the product contract now. If Firebreak claims attached interactive packaged workers are supported, then cursor queries, focus tracking, alternate-screen behavior, and basic tty readiness are no longer optional debugging trivia.
 
 ## Durable decisions
 
@@ -140,6 +152,40 @@ What fixed it:
 - sanitize control-sequence noise in debug transcript tails only
 - keep the live PTY stream raw so interactive terminal behavior still works
 
+### 7. Terminal replies leaking back as user input
+
+Symptoms:
+
+- a nested TUI visibly started but rendered in the wrong place
+- arrow-key or onboarding menus partly worked and partly did not
+- traces showed stdin chunks shaped like terminal replies rather than human keystrokes
+
+Root causes:
+
+- automatic terminal replies such as cursor-position reports were being forwarded through the ordinary attached stdin path
+- test harnesses and bridge code both tried to emulate terminal behavior, which made the input contract harder to reason about
+
+What fixed it:
+
+- make the host PTY edge the authoritative place for terminal-query handling
+- trace terminal replies distinctly from normal stdin
+- filter automatic terminal replies out of the ordinary stdin stream before they reach the nested command
+
+### 8. Startup proof was weaker than usability proof
+
+Symptoms:
+
+- the smoke proved `nested-command-first-byte`
+- the nested CLI banner or onboarding screen became visible
+- the session still was not actually usable
+
+What we learned:
+
+- proving startup is necessary but not sufficient
+- for terminal apps, focused acceptance needs at least one meaningful post-input state transition, not just "a process started and emitted bytes"
+
+This is why `claude` became the better canary late in the slice: it gave a visible onboarding menu that made incorrect terminal behavior obvious.
+
 ## What worked well
 
 - Narrow machine-readable phase files were much better than reading console fragments.
@@ -148,6 +194,8 @@ What fixed it:
 - Synthetic interactive workers were extremely valuable.
 - A no-forward recipe variant was the right way to isolate worker behavior from host port collisions.
 - A host PTY harness for recipe-owned interactive smokes was much more faithful than feeding `script` from a pipe.
+- Splitting terminal-query handling from ordinary stdin handling made the remaining bugs much easier to reason about.
+- Using more than one packaged CLI as a canary prevented us from overfitting all conclusions to `codex`.
 
 ## What did not work well
 
@@ -156,6 +204,8 @@ What fixed it:
 - Accepting dynamic package install as part of normal attached-worker startup.
 - Bundling too many unrelated uncertainties into one repro.
 - Treating long-running interactive exec sessions as reliable evidence collectors inside every automation environment.
+- Assuming that "output visible" implied "terminal contract correct".
+- Letting test-only terminal emulation drift away from the real product relay behavior.
 
 ## Repeatable debugging order
 
@@ -253,6 +303,28 @@ Good signals:
 - `phase: command-start`
 - live packaged child process, for example `node .../codex`
 
+### Layer 5.5: terminal-contract sanity
+
+Questions:
+
+- is the nested CLI using the tty as a real TUI rather than as a plain stdout sink?
+- are terminal-emulator replies being answered at the PTY edge instead of leaking through stdin?
+- are focus tracking, cursor queries, and simple device queries being handled once rather than multiple times?
+
+Check:
+
+- `bridge_request_trace_tail`
+- stdin byte samples and normalization traces
+- live process tty ownership and file-descriptor targets in `agent_exec_command_processes_tail`
+
+Good signals:
+
+- `attach-stdin-first-byte` followed by human-sized input samples
+- terminal-reply-specific trace events rather than CPR bytes appearing as ordinary user input
+- live packaged child `fd0`, `fd1`, and `fd2` all on the guest tty
+
+If this layer is wrong, the session may look half-alive: startup banners appear, but menus are misplaced, sluggish, or non-interactive.
+
 ### Layer 6: packaged-tool delivery
 
 Questions:
@@ -291,6 +363,13 @@ When the attached path is healthy, the following cluster is expected:
 - live packaged child process in `agent_exec_command_processes_tail`
 - nested worker welcome banner visible in transcript
 
+For full-screen packaged CLIs, the stronger healthy cluster is:
+
+- terminal query replies are traced distinctly from user input
+- no repeated CPR reply bytes appear as ordinary stdin samples
+- at least one meaningful post-input UI change is observable
+- the session remains readable without relying on debug-tail sanitization
+
 For recipe-owned AO coverage, the smoke only needs to prove:
 
 - outer AO shell banner
@@ -309,7 +388,8 @@ Use this order unless there is a strong reason not to.
 4. isolated synthetic interactive smoke
 5. recipe-owned detached/proxy smokes
 6. recipe-owned interactive smoke
-7. one manual AO integration check
+7. recipe-owned interactive usability smoke that proves a post-input state transition
+8. one manual AO integration check
 
 ## Commands worth keeping
 
@@ -342,6 +422,14 @@ nix --accept-flake-config --extra-experimental-features 'nix-command flakes' \
   --override-input firebreak .
 ```
 
+### Recipe-owned interactive AO smoke for Claude
+
+```sh
+nix --accept-flake-config --extra-experimental-features 'nix-command flakes' \
+  run ./external/agent-orchestrator#firebreak-test-smoke-agent-orchestrator-worker-interactive-claude \
+  --override-input firebreak .
+```
+
 ## Anti-patterns to avoid next time
 
 - Do not jump straight to manual AO sessions as the primary debugger.
@@ -350,6 +438,8 @@ nix --accept-flake-config --extra-experimental-features 'nix-command flakes' \
 - Do not accept “it probably hangs before output” without bridge traces proving it.
 - Do not optimize the live PTY path by stripping control bytes unless you are prepared to risk real terminal regressions.
 - Do not leave the troubleshooting contract undocumented inside only commit history.
+- Do not treat automatic terminal replies as if they were user keystrokes.
+- Do not declare success for a terminal app until at least one post-input state transition is proven.
 
 ## Current conclusion
 
@@ -357,5 +447,31 @@ As of the end of this slice:
 
 - host-brokered sibling-worker spawning is viable
 - attached interactive `codex` works through the AO recipe
+- attached interactive `claude` is the better canary for ongoing terminal-usability work because it visibly exposes onboarding interaction defects
 - deterministic prepared-tools reuse is the right startup model
-- the next likely improvements are UX polish and cleanup policy, not architectural rescue
+- the remaining hard problems are terminal-contract polish, responsiveness, and onboarding-grade usability, not architectural rescue
+
+## Terminal contract we ended up needing
+
+For attached sibling-worker TUIs, the minimum viable contract is now understood to include:
+
+- a real PTY path end to end
+- well-formed `TERM`, `LINES`, and `COLUMNS`
+- machine-readable bootstrap and command lifecycle state
+- PTY-edge handling for at least:
+  - cursor-position query / CPR
+  - basic device query
+  - the terminal features actually emitted by the current target CLI set
+- filtering of automatic terminal replies out of ordinary stdin delivery
+- low-latency relay polling so selection movement feels responsive
+- preserved runtime evidence on failure
+
+## Current open boundary
+
+The remaining product boundary is no longer "can Firebreak spawn and attach a sibling worker VM?" That has been proven.
+
+The remaining boundary is:
+
+- can a full-screen packaged CLI inside that worker behave like a normal interactive terminal app from the parent orchestrator's perspective?
+
+That should remain the framing for the next debugging loop.

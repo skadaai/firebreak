@@ -1,6 +1,6 @@
 ---
 status: in_progress
-last_updated: 2026-03-28
+last_updated: 2026-03-30
 ---
 
 # 015 Host-Brokered Orchestrated Workers
@@ -36,6 +36,7 @@ Without an explicit orchestration layer, Firebreak cannot give external orchestr
 - make worker lifecycle, state ownership, and concurrency limits explicit
 - support both detached and attached worker execution semantics across the `process` and `firebreak` backends
 - preserve real terminal semantics for attached `firebreak` workers so interactive CLIs can use sibling workers directly
+- preserve usable TUI semantics for attached packaged CLIs, not merely visible startup bytes
 - make packaged worker startup deterministic enough that attached interactive workers do not depend on ad hoc network installs during every boot
 
 ## Non-goals
@@ -83,11 +84,15 @@ The intended landing shape is:
 - The system shall preserve reviewable attach trace events that distinguish first sibling-runner output from first post-`command-start` command output, even after the live bridge request directory is cleaned up.
 - The system shall forward attached-terminal metadata to sibling workers only when that metadata is well-formed, including forwarding `LINES` and `COLUMNS` only when both are positive integers.
 - The system shall surface the requested attached-terminal contract, including `TERM`, `LINES`, and `COLUMNS`, through `firebreak worker debug` for live review.
+- The system shall keep automatic terminal-emulator replies distinct from ordinary user-input delivery for attached interactive workers, so cursor reports and similar control replies do not leak through the same path as typed keystrokes.
+- The system shall implement the minimum attached-terminal reply contract required by the packaged interactive CLIs currently in scope, at the PTY edge rather than ad hoc inside multiple unrelated layers.
+- The system shall make attached interactive relay cadence low-latency enough that menu navigation and onboarding flows remain observably responsive.
 - The system shall preserve reviewable runtime artifacts for direct packaged-cli readiness probes when those probes fail.
 - The system shall not require repeated network-backed package installation during the normal startup path for attached interactive workers once the packaged toolchain has been prepared successfully.
 - The system shall provide a deterministic packaged-tool delivery path for attached interactive workers, either by baking tools into the image or by reusing a prepared host-owned shared tools state outside the critical interactive boot path.
 - The system shall apply that deterministic packaged-tool delivery path to both Bun-managed and packaged node-cli worker images that participate in the orchestration flow.
 - The system shall validate packaged-tool reuse with focused smokes before relying on slower end-to-end orchestrator validation.
+- The system shall validate at least one meaningful post-input state transition for focused interactive packaged-cli acceptance, rather than treating process start plus first output as sufficient proof of usability.
 - The system shall define how orchestrated workers resolve workspace access so the worker can act on the intended project state.
 - The system shall define how orchestrated workers resolve Firebreak config modes and agent-specific config where those differ from the orchestrator VM.
 - The system shall allow existing Firebreak single-agent packages to remain usable outside the orchestration layer.
@@ -102,6 +107,9 @@ The intended landing shape is:
 - Focused interactive validation shall use an isolated synthetic worker and preserved runtime artifacts so attach regressions can be diagnosed without depending on the external orchestrator recipe.
 - External orchestrator recipe smokes should validate packaged worker behavior through a no-forward test variant whenever host port forwarding is not part of the behavior under test.
 - Repeated VM-spawn troubleshooting shall follow a documented layered debugging order, starting with broker state and ending with transcript polish, so future incidents do not regress into guess-driven end-to-end debugging.
+- Terminal-emulator duties for attached packaged CLIs belong at the host PTY edge. Query handling, reply generation, and reply filtering should not be duplicated across unrelated harnesses or hidden inside recipe-specific glue.
+- `claude` is the better TUI canary for this slice than `codex` when the debugging target is terminal usability rather than basic worker startup, because it exposes visible onboarding UI state changes more clearly.
+- Product acceptance for attached interactive workers now requires usable interaction, not merely visible startup output. "The CLI started and produced bytes" is not sufficient acceptance for a terminal app.
 
 ## Acceptance criteria
 
@@ -114,6 +122,7 @@ The intended landing shape is:
 - External packaged-cli recipes have a defined bootstrap-readiness contract and can install recipe-owned worker-proxy wrappers without modifying Firebreak core.
 - Worker identity, lifecycle state, and host-owned runtime paths are explicit and reviewable.
 - The first integration path can target an external orchestrator recipe such as [external/agent-orchestrator/flake.nix](../../external/agent-orchestrator/flake.nix) without changing the public names of existing single-agent packages.
+- At least one attached packaged CLI can prove a meaningful post-input interactive state transition through the external orchestrator recipe path, so the system demonstrates usable TUI behavior instead of only startup visibility.
 
 ## Dependencies and risks
 

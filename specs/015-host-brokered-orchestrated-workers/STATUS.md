@@ -1,13 +1,13 @@
 ---
 status: in_progress
-last_updated: 2026-03-28
+last_updated: 2026-03-30
 ---
 
 # 015 Status
 
 ## Current phase
 
-Reopened for attached `firebreak` worker hardening and guest lifecycle observability. The current attached relay path is now locally stable under focused smokes, and the next focus is deterministic packaged-tool delivery and reuse for attached interactive workers.
+Interactive TUI usability hardening after startup success. The current attached relay path is stable enough to boot sibling workers, surface nested CLI output, and support focused interactive smokes. The open work is now the usability layer: terminal-contract fidelity, responsiveness, and onboarding-grade interaction for packaged full-screen CLIs.
 
 ## What has landed
 
@@ -49,12 +49,22 @@ Reopened for attached `firebreak` worker hardening and guest lifecycle observabi
 - attached interactive `codex` through the external Agent Orchestrator recipe is now validated on the current head through the focused recipe-owned PTY smoke
 - `firebreak worker debug` now sanitizes transcript-tail control chatter so operational review focuses on meaningful worker output instead of raw terminal negotiation noise
 - this slice now has a dedicated troubleshooting playbook for VM-spawned process failures in [TROUBLESHOOTING.md](./TROUBLESHOOTING.md)
+- worker exec resolution for attached sibling workers is now explicit and reviewable through `firebreak worker debug`, so diagnosis does not depend on guessing which wrapped command actually launched
+- the attached relay now handles terminal queries at the PTY edge and traces query/reply traffic distinctly from ordinary stdin delivery
+- attached interactive stdin handling now normalizes ordinary activation input and filters automatic terminal replies out of the ordinary user-input stream
+- focused synthetic interactive coverage now proves that an attached sibling-worker TTY can deliver meaningful input and output transitions end to end
+- the external Agent Orchestrator recipe now exposes a `claude` worker proxy that launches the `claude-code` Firebreak worker kind from inside AO
+- the external Agent Orchestrator recipe now has a focused interactive `claude` smoke so full-screen TUI behavior can be validated through a second packaged CLI canary rather than relying only on `codex`
+- the current head can surface the Codex auth screen and the Claude onboarding/theme UI through AO, which retired the architecture risk and moved the remaining risk squarely into terminal-usability behavior
+- lower-latency relay polling is now part of the attached interactive path so menu navigation and first-screen interaction are no longer dominated by coarse bridge sleeps
 
 ## What remains open
 
-- a validated attached `codex` proxy path through the external orchestrator recipe after the prepared-tools path is fully deterministic
-- a deterministic packaged-tool delivery path that avoids both repeated install-time stalls and ad hoc fallback seeding from unrelated state roots
-- a first-class prewarm or baked-tool path for Bun-agent and packaged node-cli workers so prepared tools do not depend on opportunistic host-state copying
+- prove a reliable post-input transition for `claude` onboarding after theme selection, so the focused Claude smoke graduates from "startup visible" to "interaction usable"
+- confirm that attached full-screen CLIs are responsive enough in practice, not only correct in traces
+- settle the final minimum terminal contract for attached packaged CLIs, including which queries must be answered at the PTY edge and which should remain unsupported
+- reduce remaining user-visible terminal-noise and layout rough edges without regressing real PTY semantics
+- continue improving deterministic packaged-tool delivery so first-run startup cost is low enough for daily use
 - richer lifecycle behavior such as worker reuse, log filtering, and cleanup policy refinements
 - possible transport hardening beyond the first file-share bridge, such as a mounted Unix-socket protocol
 - broader recipe adoption and validation beyond the first external orchestrator recipe
@@ -63,8 +73,10 @@ Reopened for attached `firebreak` worker hardening and guest lifecycle observabi
 
 - The host-brokered sibling-worker model is still the right architecture and remains in scope.
 - The investigation has already paid off enough to prove that broker creation, attach transport, terminal propagation, and nested command handoff are not the dominant remaining risks.
-- The main remaining risk is packaged-tool delivery inside the worker VM, especially the current Bun global-install and prepared-tools path and its interaction with shared state.
+- The major open risk has shifted from spawn architecture to interactive terminal usability for full-screen packaged CLIs.
+- `claude` is now treated as the clearer TUI canary for remaining terminal-contract bugs, while `codex` remains an important product target and integration gate.
 - End-to-end AO repros are now treated as integration gates, not as the primary debug loop. Focused direct packaged-worker readiness and reuse validation should lead.
+- Acceptance must now include meaningful post-input TUI behavior, not just "process started and emitted output".
 
 ## Current sources of truth
 
@@ -90,3 +102,5 @@ Reopened for attached `firebreak` worker hardening and guest lifecycle observabi
 - 2026-03-28: Extended the shared prepared-tools model to packaged node-cli workers, moved the Agent Orchestrator recipe smokes onto a no-forward test variant, and validated both recipe-owned runtime smokes against the new path.
 - 2026-03-28: Added a recipe-owned interactive Agent Orchestrator smoke for plain attached `codex`, so the AO path now has automated PTY-backed coverage beyond `--version` and detached worker lifecycle checks.
 - 2026-03-28: Confirmed the current head can surface an attached interactive `codex` session through the Agent Orchestrator recipe, sanitized debug transcript tails for attached workers, and recorded the full troubleshooting playbook for future VM-spawn debugging.
+- 2026-03-29: Stabilized attached interactive TUI workers in AO further by moving query handling to the PTY edge, adding stronger interactive smokes, and exposing `claude` as a second packaged CLI canary through the Agent Orchestrator recipe.
+- 2026-03-30: Recorded the deeper terminal lessons from the Codex and Claude investigations. The remaining boundary is now explicitly framed as interactive usability, responsiveness, and terminal-contract polish rather than worker-spawn architecture.

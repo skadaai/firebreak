@@ -1,11 +1,11 @@
 ---
 status: living
-last_updated: 2026-03-30
+last_updated: 2026-03-31
 ---
 
 # 015 Troubleshooting Playbook
 
-This document records the operational lessons from debugging host-brokered worker spawning through Firebreak, especially the attached `codex` path reached through a parent orchestrator VM.
+This document records the operational lessons from debugging host-brokered worker spawning through Firebreak, especially the attached `codex` and `claude` paths reached through a parent orchestrator VM.
 
 The goal is simple: next time a process launched from inside a VM appears stuck, use this playbook instead of re-deriving the same boundaries from scratch.
 
@@ -33,10 +33,12 @@ These lessons were expensive to learn and should be reused directly next time.
 - Visible output is not the same thing as a usable TUI. We had several phases where the nested CLI clearly started, emitted terminal bytes, and still was not actually usable because terminal negotiation or input semantics were wrong.
 - A worker stdin stream can contain both real user intent and automatic terminal-emulator replies. Cursor-position reports such as `ESC[17;115R` and `ESC[51;114R` are not user keystrokes and should not be allowed to leak through the same path as ordinary typing.
 - Terminal mode is multidimensional. Echo, canonical buffering, raw mode, foreground process-group ownership, and feature negotiation are separate concerns. Flipping one knob can easily fix one symptom while breaking another.
+- PTY-edge handling cannot stop at handoff. If the direct attached path continues filtering and replying to terminal control flows after `command-start`, then the AO bridge path must do the same. Disabling PTY-edge handling exactly when the nested command takes over is enough to leave a healthy TUI process visually blank.
 - File-backed PTY relays are sensitive to polling cadence. Interactive TUIs can feel broken or sluggish even when they are technically correct if relay polling is too coarse.
 - Synthetic interactive workers are mandatory. The `interactive-echo` worker made it possible to determine whether the terminal path itself was broken before involving a heavyweight CLI.
 - Different CLIs make good canaries for different failure classes. `codex` was useful for proving startup and attached-output visibility, while `claude` surfaced terminal-negotiation bugs more clearly because it rendered a visible onboarding menu that reacted to arrow keys but exposed remaining activation issues.
 - Full-screen TUIs are part of the product contract now. If Firebreak claims attached interactive packaged workers are supported, then cursor queries, focus tracking, alternate-screen behavior, and basic tty readiness are no longer optional debugging trivia.
+- A second canary stays useful even after the first one works. `claude` reaching a usable onboarding flow through AO did not automatically imply that `codex` would also render a visible first screen on the same worktree.
 
 ## Durable decisions
 
@@ -186,6 +188,110 @@ What we learned:
 
 This is why `claude` became the better canary late in the slice: it gave a visible onboarding menu that made incorrect terminal behavior obvious.
 
+### 9. Inner worker green, outer orchestrator still wrong
+
+Symptoms:
+
+- the same packaged CLI behaved differently as a direct attached worker and from inside AO
+- the direct worker path proved a real post-input transition
+- the AO path still looked slower, misplaced, or non-interactive
+
+What we learned:
+
+- once the direct attached worker smoke passes, the guest worker tty/session setup is no longer the primary suspect
+- at that point the remaining live surface is:
+  - the outer host bridge
+  - the AO-side attach client
+  - the interaction between those two layers
+
+This split mattered. It stopped us from continuing to churn the inner worker VM after the direct `claude` canary had already shown that `Enter` and onboarding progression worked there.
+
+### 10. Nested TUI exit can still kill the parent orchestrator VM
+
+Symptoms:
+
+- `claude` started correctly from inside AO
+- onboarding and login selection rendered correctly
+- exiting the nested TUI from AO either terminated the whole AO VM or left it hanging instead of returning control cleanly
+
+What this means:
+
+- startup and interaction can be correct while teardown semantics are still wrong
+- signal ownership and nested-session shutdown are part of the terminal contract
+- the parent orchestrator VM must survive nested worker exit unless the user explicitly exits the orchestrator itself, and it must regain a usable prompt instead of hanging after the nested session is gone
+
+### 11. One TUI can work while another still renders black
+
+Symptoms:
+
+- `claude` starts through AO, renders a first screen, and accepts `Enter`
+- `codex` starts through the same worker path and remains alive
+- `worker debug` shows `command-start`, a live child process, and post-command terminal traffic
+- the user still sees a black or effectively empty screen for `codex`
+
+What this means:
+
+- the generic worker architecture is good enough
+- the remaining bug is deeper in terminal screen semantics than simple worker spawn or stdin delivery
+- a live attached process is still not the same thing as a visible usable UI
+
+What to do next:
+
+- inspect preserved PTY traces after `command-start`
+- compare direct-worker and AO-worker behavior for the same CLI
+- look specifically for mode toggles, screen-clearing behavior, synchronized-output usage, and other control flows that may leave a terminal visually blank even while the process is healthy
+- confirm whether basic terminal replies have already been restored before assuming the next gap is "missing CPR" or "missing DA1"
+
+### 12. Terminal filtering can regress differently in direct and bridged paths
+
+Symptoms:
+
+- a direct attached worker can still show the expected UI
+- the same packaged CLI through AO reaches `command-start` and stays alive
+- the AO transcript stays black or nearly blank even though post-command terminal traffic is visible
+
+Root cause we uncovered:
+
+- the direct PTY path kept applying terminal-query handling and synchronized-output filtering after the nested command started
+- the AO bridge path stopped doing that once it considered terminal emulation to have been handed off to the nested command
+- this mismatch let advanced control flows such as synchronized-output mode reach AO unfiltered, which was enough to blank the visible session even while the nested CLI stayed healthy
+
+What fixed it:
+
+- keep the PTY edge authoritative for terminal filtering and terminal-query replies for the full attached session, not just the pre-command phase
+- treat `command-start` as a stream boundary for state tracking, not as permission to stop handling terminal-control sequences
+
+### 13. Richer terminal replies may still not be sufficient for every TUI
+
+Symptoms:
+
+- traces show the nested CLI receiving CPR, DA1, kitty-keyboard, OSC color, and focus replies
+- the process stays alive
+- the screen still stays black or effectively blank
+
+What this means:
+
+- the remaining bug is no longer "we forgot to answer the obvious terminal queries"
+- once those replies are present, the next boundary moves to deeper rendering semantics or a different control-flow assumption inside the client
+- at that point, keep instrumenting what the app emits after the replies rather than repeatedly re-adding the same reply handlers
+
+This became the current Codex boundary late in the slice: richer generic replies were necessary, but they were not by themselves sufficient to guarantee a visible auth screen.
+
+### 14. Nested TUI exit prompts can still hang after the second control byte
+
+Symptoms:
+
+- the app reaches a shutdown confirmation prompt such as `Press Ctrl-C again to exit`
+- the second `Ctrl-C` byte reaches the nested worker
+- the nested process remains alive in `do_epoll_wait`
+- the parent orchestrator VM does not recover cleanly and may either hang or terminate unexpectedly
+
+What this means:
+
+- the remaining failure is not "the second key never arrived"
+- startup, rendering, and ordinary interaction can all be correct while final teardown semantics are still wrong
+- once this happens, the next boundary is deeper tty/signal semantics in the outer attach path, not basic stdin delivery
+
 ## What worked well
 
 - Narrow machine-readable phase files were much better than reading console fragments.
@@ -196,6 +302,7 @@ This is why `claude` became the better canary late in the slice: it gave a visib
 - A host PTY harness for recipe-owned interactive smokes was much more faithful than feeding `script` from a pipe.
 - Splitting terminal-query handling from ordinary stdin handling made the remaining bugs much easier to reason about.
 - Using more than one packaged CLI as a canary prevented us from overfitting all conclusions to `codex`.
+- Using a direct attached-worker canary and an AO-level canary together made it possible to isolate whether a remaining bug belonged to the inner worker VM or the outer orchestrator relay.
 
 ## What did not work well
 
@@ -265,6 +372,20 @@ Key signals:
 
 If these are absent, the problem is transport.
 
+### Layer 3.5: direct attached TUI canary
+
+Questions:
+
+- does the packaged CLI advance after a real post-input action when launched as a direct attached worker?
+- is the guest worker tty/session already good before AO is involved?
+
+Check:
+
+- `firebreak-test-smoke-worker-interactive-codex-direct`
+- `firebreak-test-smoke-worker-interactive-claude-direct`
+
+If the direct canary passes and AO still fails, stop editing the inner worker VM and move outward to the bridge and orchestrator attach client.
+
 ### Layer 4: guest bootstrap
 
 Questions:
@@ -324,6 +445,20 @@ Good signals:
 - live packaged child `fd0`, `fd1`, and `fd2` all on the guest tty
 
 If this layer is wrong, the session may look half-alive: startup banners appear, but menus are misplaced, sluggish, or non-interactive.
+
+### Layer 5.6: post-input transition
+
+Questions:
+
+- does the nested CLI only start, or does it actually react correctly to one meaningful action?
+- is the remaining bug in startup, interaction, or teardown?
+
+Check:
+
+- Codex auth screen appears
+- Claude theme picker advances into login selection
+
+This was the layer that retired the “Claude startup only” uncertainty. Once both the direct and AO `claude` smokes advanced past the theme picker, the remaining open bug moved to nested-session teardown.
 
 ### Layer 6: packaged-tool delivery
 
@@ -440,16 +575,18 @@ nix --accept-flake-config --extra-experimental-features 'nix-command flakes' \
 - Do not leave the troubleshooting contract undocumented inside only commit history.
 - Do not treat automatic terminal replies as if they were user keystrokes.
 - Do not declare success for a terminal app until at least one post-input state transition is proven.
+- Do not keep editing the inner worker VM once a direct attached canary has already passed.
+- Do not declare success for nested TUIs if exiting them still kills the parent orchestrator VM.
 
 ## Current conclusion
 
 As of the end of this slice:
 
 - host-brokered sibling-worker spawning is viable
-- attached interactive `codex` works through the AO recipe
-- attached interactive `claude` is the better canary for ongoing terminal-usability work because it visibly exposes onboarding interaction defects
+- attached interactive `claude` now works through both the direct worker path and the AO recipe and remains the better canary for remaining terminal lifecycle work
+- `codex` still needs a reliable visible first screen on the current worktree
 - deterministic prepared-tools reuse is the right startup model
-- the remaining hard problems are terminal-contract polish, responsiveness, and onboarding-grade usability, not architectural rescue
+- the remaining hard problems are Codex visibility, terminal-contract polish, responsiveness, and nested-session teardown semantics, not architectural rescue
 
 ## Terminal contract we ended up needing
 
@@ -473,5 +610,6 @@ The remaining product boundary is no longer "can Firebreak spawn and attach a si
 The remaining boundary is:
 
 - can a full-screen packaged CLI inside that worker behave like a normal interactive terminal app from the parent orchestrator's perspective?
+- can that nested CLI also exit cleanly without terminating the parent orchestrator VM?
 
 That should remain the framing for the next debugging loop.

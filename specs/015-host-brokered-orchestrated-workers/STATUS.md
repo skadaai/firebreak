@@ -1,13 +1,13 @@
 ---
 status: in_progress
-last_updated: 2026-03-30
+last_updated: 2026-03-31
 ---
 
 # 015 Status
 
 ## Current phase
 
-Interactive TUI usability hardening after startup success. The current attached relay path is stable enough to boot sibling workers, surface nested CLI output, and support focused interactive smokes. The open work is now the usability layer: terminal-contract fidelity, responsiveness, and onboarding-grade interaction for packaged full-screen CLIs.
+Interactive TUI hardening after the first full end-to-end success. The current attached relay path is now strong enough to boot sibling workers, surface nested CLI output, and drive real onboarding transitions for `claude` through focused smokes and manual AO validation. The open work has narrowed to lifecycle edges and Codex-specific visibility behavior, especially shutdown semantics when a nested TUI exits from inside an orchestrator VM and the remaining gap where `codex` can start but still fail to present a usable visible UI inside AO.
 
 ## What has landed
 
@@ -55,12 +55,19 @@ Interactive TUI usability hardening after startup success. The current attached 
 - focused synthetic interactive coverage now proves that an attached sibling-worker TTY can deliver meaningful input and output transitions end to end
 - the external Agent Orchestrator recipe now exposes a `claude` worker proxy that launches the `claude-code` Firebreak worker kind from inside AO
 - the external Agent Orchestrator recipe now has a focused interactive `claude` smoke so full-screen TUI behavior can be validated through a second packaged CLI canary rather than relying only on `codex`
-- the current head can surface the Codex auth screen and the Claude onboarding/theme UI through AO, which retired the architecture risk and moved the remaining risk squarely into terminal-usability behavior
+- the current head can surface the Claude onboarding/theme UI through AO, which retired the architecture risk and moved the remaining risk squarely into terminal-usability behavior
 - lower-latency relay polling is now part of the attached interactive path so menu navigation and first-screen interaction are no longer dominated by coarse bridge sleeps
+- the direct attached `claude` smoke now proves a real post-input transition from theme selection into login selection, which means the inner worker PTY and guest tty/session semantics are no longer the dominant remaining risk
+- the Agent Orchestrator interactive `claude` smoke now passes end to end, including a post-input transition past the theme screen
+- manual AO validation now confirms that `claude` can be launched interactively and that `Enter` works inside the nested worker session on the current head
+- manual AO validation now confirms that `claude` can advance into its login flow, while also revealing a teardown bug where exiting the nested Claude session can still hang or terminate the parent AO VM instead of returning control cleanly
+- current manual AO validation for `codex` shows the nested worker starts and remains alive, and the remaining visibility bug has narrowed further from "missing basic terminal replies" to "Codex still renders blank even after richer PTY-edge replies and filtering are restored"
+- current manual AO validation for `claude` shows startup and interaction work, but exiting the nested session from AO still leaves the worker hanging after the `Press Ctrl-C again to exit` prompt
 
 ## What remains open
 
-- prove a reliable post-input transition for `claude` onboarding after theme selection, so the focused Claude smoke graduates from "startup visible" to "interaction usable"
+- fix nested-TUI shutdown semantics so exiting `claude` or similar workers from inside AO returns control cleanly instead of hanging or tearing down the parent orchestrator VM
+- restore a reliable visible first screen for `codex` inside AO on the current worktree, not just a live attached process with terminal traffic
 - confirm that attached full-screen CLIs are responsive enough in practice, not only correct in traces
 - settle the final minimum terminal contract for attached packaged CLIs, including which queries must be answered at the PTY edge and which should remain unsupported
 - reduce remaining user-visible terminal-noise and layout rough edges without regressing real PTY semantics
@@ -73,10 +80,11 @@ Interactive TUI usability hardening after startup success. The current attached 
 
 - The host-brokered sibling-worker model is still the right architecture and remains in scope.
 - The investigation has already paid off enough to prove that broker creation, attach transport, terminal propagation, and nested command handoff are not the dominant remaining risks.
-- The major open risk has shifted from spawn architecture to interactive terminal usability for full-screen packaged CLIs.
-- `claude` is now treated as the clearer TUI canary for remaining terminal-contract bugs, while `codex` remains an important product target and integration gate.
+- The major open risk has shifted from spawn architecture to interactive terminal lifecycle and UX behavior for full-screen packaged CLIs.
+- `claude` is now treated as the clearer TUI canary for remaining terminal-contract bugs, while `codex` remains an important product target and the current regression gate.
 - End-to-end AO repros are now treated as integration gates, not as the primary debug loop. Focused direct packaged-worker readiness and reuse validation should lead.
 - Acceptance must now include meaningful post-input TUI behavior, not just "process started and emitted output".
+- Acceptance must also include correct nested-session teardown behavior. A working nested TUI is not sufficient if exiting it kills the orchestrator VM.
 
 ## Current sources of truth
 
@@ -104,3 +112,6 @@ Interactive TUI usability hardening after startup success. The current attached 
 - 2026-03-28: Confirmed the current head can surface an attached interactive `codex` session through the Agent Orchestrator recipe, sanitized debug transcript tails for attached workers, and recorded the full troubleshooting playbook for future VM-spawn debugging.
 - 2026-03-29: Stabilized attached interactive TUI workers in AO further by moving query handling to the PTY edge, adding stronger interactive smokes, and exposing `claude` as a second packaged CLI canary through the Agent Orchestrator recipe.
 - 2026-03-30: Recorded the deeper terminal lessons from the Codex and Claude investigations. The remaining boundary is now explicitly framed as interactive usability, responsiveness, and terminal-contract polish rather than worker-spawn architecture.
+- 2026-03-31: Proved a real post-input transition for direct and AO `claude` smokes, confirmed manual AO `Enter` behavior, and narrowed the open bugs to nested-TUI shutdown behavior that currently terminates the parent AO VM when `claude` exits plus a remaining Codex visibility gap where the worker starts but the UI may stay black.
+- 2026-03-31: Narrowed the remaining Codex black-screen bug further by identifying an AO-bridge mismatch: the direct PTY path kept handling terminal-control flows after `command-start`, while the AO bridge path stopped at that boundary. The current fix keeps PTY-edge handling active for the full attached session.
+- 2026-03-31: Restored richer PTY-edge replies for attached sessions (`CSI 6n`, DA1, kitty keyboard query, OSC 10/11, focus-in) and confirmed that Codex now receives those replies on the direct canary, but a visible auth screen is still not guaranteed. The remaining Claude bug also narrowed: AO can reach the second-exit prompt, yet the nested `claude` process can still remain alive instead of returning control cleanly.

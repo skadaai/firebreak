@@ -63,6 +63,7 @@ Interactive TUI hardening after the first full end-to-end success. The current a
 - manual AO validation now confirms that `claude` can advance into its login flow, while also revealing a teardown bug where exiting the nested Claude session can still hang or terminate the parent AO VM instead of returning control cleanly
 - current manual AO validation for `codex` shows the nested worker starts and remains alive, and the remaining visibility bug has narrowed further from "missing basic terminal replies" to "Codex still renders blank even after richer PTY-edge replies and filtering are restored"
 - current manual AO validation for `claude` shows startup and interaction work, but exiting the nested session from AO still leaves the worker hanging after the `Press Ctrl-C again to exit` prompt
+- the external `vibe-kanban` recipe now exposes the same `codex` and `claude` sibling-worker proxy commands as AO, so the remaining TUI bugs can be compared against a second VM recipe canary
 
 ## What remains open
 
@@ -75,6 +76,7 @@ Interactive TUI hardening after the first full end-to-end success. The current a
 - richer lifecycle behavior such as worker reuse, log filtering, and cleanup policy refinements
 - possible transport hardening beyond the first file-share bridge, such as a mounted Unix-socket protocol
 - broader recipe adoption and validation beyond the first external orchestrator recipe
+- a higher-level recipe-authoring abstraction for sibling-worker command exposure, so recipes do not need to wire both `workerKinds` and installed proxy scripts manually in the common case
 
 ## Decision record
 
@@ -85,6 +87,7 @@ Interactive TUI hardening after the first full end-to-end success. The current a
 - End-to-end AO repros are now treated as integration gates, not as the primary debug loop. Focused direct packaged-worker readiness and reuse validation should lead.
 - Acceptance must now include meaningful post-input TUI behavior, not just "process started and emitted output".
 - Acceptance must also include correct nested-session teardown behavior. A working nested TUI is not sufficient if exiting it kills the orchestrator VM.
+- The current recipe-authoring UX is functionally correct but too low-level in the common case. Firebreak should converge on a single higher-level declaration for sibling-worker command exposure while preserving the lower-level fields internally for advanced recipes.
 
 ## Current sources of truth
 
@@ -115,3 +118,4 @@ Interactive TUI hardening after the first full end-to-end success. The current a
 - 2026-03-31: Proved a real post-input transition for direct and AO `claude` smokes, confirmed manual AO `Enter` behavior, and narrowed the open bugs to nested-TUI shutdown behavior that currently terminates the parent AO VM when `claude` exits plus a remaining Codex visibility gap where the worker starts but the UI may stay black.
 - 2026-03-31: Narrowed the remaining Codex black-screen bug further by identifying an AO-bridge mismatch: the direct PTY path kept handling terminal-control flows after `command-start`, while the AO bridge path stopped at that boundary. The current fix keeps PTY-edge handling active for the full attached session.
 - 2026-03-31: Restored richer PTY-edge replies for attached sessions (`CSI 6n`, DA1, kitty keyboard query, OSC 10/11, focus-in) and confirmed that Codex now receives those replies on the direct canary, but a visible auth screen is still not guaranteed. The remaining Claude bug also narrowed: AO can reach the second-exit prompt, yet the nested `claude` process can still remain alive instead of returning control cleanly.
+- 2026-03-31: Exposed `codex` and `claude` through the external `vibe-kanban` recipe as a second orchestrator-style VM canary and recorded the follow-up authoring-UX decision to collapse the common recipe path into a higher-level `workerProxies` abstraction in a future slice.

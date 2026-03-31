@@ -32,6 +32,7 @@ last_updated: 2026-03-28
 23. Add guest session-preparation breadcrumbs so long-lived setup steps can be reviewed through preserved runtime artifacts instead of only truncated console output.
 24. Extend the prepared-tools contract to packaged node-cli recipes and move their focused smokes onto a no-forward test variant when port ownership is not under test.
 25. Capture the operational troubleshooting playbook for VM-spawned processes, including known failure modes, debugging order, and anti-patterns, so future incidents can start from a stable procedure.
+26. Collapse the current recipe-authoring split between `workerKinds` and installed worker-proxy scripts into a higher-level `workerProxies` declaration that can derive both from one source of truth for common cases.
 
 ## Near-term phased plan
 
@@ -63,6 +64,13 @@ last_updated: 2026-03-28
 2. Keep recipe-owned smokes on a no-forward test variant unless the validation target is specifically host port exposure.
 3. Treat AO as an integration gate, not as the main debugger for packaged startup.
 4. Document the final startup contract and validation flow once the AO path is stable.
+
+### Phase E: Simplify recipe authoring UX
+
+1. Design a high-level `workerProxies` recipe field for the common case where a packaged CLI wants selected command names to launch sibling Firebreak workers.
+2. Make that field derive both the guest-visible worker-kind registry and the installed proxy commands automatically.
+3. Preserve the lower-level `workerKinds` and explicit proxy-script hooks for advanced or unusual recipes.
+4. Migrate the current external recipes once the higher-level path is stable enough to replace duplicated wiring.
 
 ## Validation approach
 
@@ -96,3 +104,4 @@ Reopened for attached `firebreak` worker hardening. Detached flows, guest-local 
 - whether the guest lifecycle contract should remain file-based under the exec-output mount or later converge on a mounted service endpoint
 - whether the fastest acceptable packaged-tool delivery path is a host-shared prepared-tools mount, a baked image payload, or a hybrid repair path that uses the shared mount only when the baked payload is absent or stale
 - how much of the current transcript-noise cleanup should stay in debug-only views versus becoming part of future optional presentation filtering for live sessions
+- when to introduce the higher-level `workerProxies` authoring abstraction relative to the remaining TUI product bugs, since the UX direction is clear but the current priority remains interactive correctness

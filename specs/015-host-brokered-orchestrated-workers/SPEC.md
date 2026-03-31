@@ -110,6 +110,9 @@ The intended landing shape is:
 - Terminal-emulator duties for attached packaged CLIs belong at the host PTY edge. Query handling, reply generation, and reply filtering should not be duplicated across unrelated harnesses or hidden inside recipe-specific glue.
 - `claude` is the better TUI canary for this slice than `codex` when the debugging target is terminal usability rather than basic worker startup, because it exposes visible onboarding UI state changes more clearly.
 - Product acceptance for attached interactive workers now requires usable interaction, not merely visible startup output. "The CLI started and produced bytes" is not sufficient acceptance for a terminal app.
+- Recipe authors currently need both `workerKinds` and installed worker-proxy commands to expose sibling-worker CLIs cleanly, but this is a low-level authoring burden rather than the intended product UX.
+- Firebreak should grow a higher-level recipe declaration for sibling-worker command exposure, tentatively `workerProxies`, that derives both the guest-visible worker-kind registry and the installed proxy commands from one source of truth.
+- The lower-level split between worker-kind registration and installed command wrappers should remain available internally for advanced cases, but the common recipe-authoring path should not require wiring both fields manually.
 
 ## Acceptance criteria
 
@@ -123,6 +126,7 @@ The intended landing shape is:
 - Worker identity, lifecycle state, and host-owned runtime paths are explicit and reviewable.
 - The first integration path can target an external orchestrator recipe such as [external/agent-orchestrator/flake.nix](../../external/agent-orchestrator/flake.nix) without changing the public names of existing single-agent packages.
 - At least one attached packaged CLI can prove a meaningful post-input interactive state transition through the external orchestrator recipe path, so the system demonstrates usable TUI behavior instead of only startup visibility.
+- The recipe-authoring UX for exposing sibling-worker commands should be documented and converging toward a single higher-level declaration rather than permanently requiring recipe authors to configure both worker-kind registration and shell-facing proxy installation by hand.
 
 ## Dependencies and risks
 

@@ -7,7 +7,7 @@ last_updated: 2026-03-31
 
 ## Current phase
 
-Interactive TUI hardening after the first full end-to-end success. The current attached relay path is now strong enough to boot sibling workers, surface nested CLI output, and drive real onboarding transitions for `claude` through focused smokes and manual AO validation. The open work has narrowed to lifecycle edges and Codex-specific visibility behavior, especially shutdown semantics when a nested TUI exits from inside an orchestrator VM and the remaining gap where `codex` can start but still fail to present a usable visible UI inside AO.
+Interactive TUI hardening after the first full end-to-end success. The current attached relay path is now strong enough to boot sibling workers, surface nested CLI output, and drive real onboarding transitions for both `claude` and `codex` through focused smokes and manual AO/VK validation. The open work has narrowed further: `codex` is now the protected working path, and the active product bug is the shared `claude` exit-handback behavior after the nested worker already exits cleanly.
 
 ## What has landed
 
@@ -64,11 +64,14 @@ Interactive TUI hardening after the first full end-to-end success. The current a
 - current manual AO validation for `codex` shows the nested worker starts and remains alive, and the remaining visibility bug has narrowed further from "missing basic terminal replies" to "Codex still renders blank even after richer PTY-edge replies and filtering are restored"
 - current manual AO validation for `claude` shows startup and interaction work, but exiting the nested session from AO still leaves the worker hanging after the `Press Ctrl-C again to exit` prompt
 - the external `vibe-kanban` recipe now exposes the same `codex` and `claude` sibling-worker proxy commands as AO, so the remaining TUI bugs can be compared against a second VM recipe canary
+- a committed `vibe-kanban` interactive Codex smoke now protects the working Codex path against regressions while shared TUI lifecycle work continues
+- the same current worktree now reproduces the `claude` exit-limbo behavior in both AO and `vibe-kanban`, which retired recipe-specific suspicion and isolated the bug in the shared attached-worker lifecycle
+- a direct shared-layer `claude` exit smoke now reproduces the same raw-mode repeated-`Ctrl-C` behavior without AO or `vibe-kanban`, so the shared worker layer has a fast acceptance gate for this bug
+- the shared attached-worker path now tracks a foreground command job/pgid and can distinguish a first raw `Ctrl-C` from a repeated one, which is the basis for fixing nested-TUI exit without regressing normal interactive input
 
 ## What remains open
 
-- fix nested-TUI shutdown semantics so exiting `claude` or similar workers from inside AO returns control cleanly instead of hanging or tearing down the parent orchestrator VM
-- restore a reliable visible first screen for `codex` inside AO on the current worktree, not just a live attached process with terminal traffic
+- finish the outer-shell handback after a nested `claude` worker exits cleanly, so AO and `vibe-kanban` regain a visibly usable prompt without an extra manual nudge
 - confirm that attached full-screen CLIs are responsive enough in practice, not only correct in traces
 - settle the final minimum terminal contract for attached packaged CLIs, including which queries must be answered at the PTY edge and which should remain unsupported
 - reduce remaining user-visible terminal-noise and layout rough edges without regressing real PTY semantics
@@ -119,3 +122,5 @@ Interactive TUI hardening after the first full end-to-end success. The current a
 - 2026-03-31: Narrowed the remaining Codex black-screen bug further by identifying an AO-bridge mismatch: the direct PTY path kept handling terminal-control flows after `command-start`, while the AO bridge path stopped at that boundary. The current fix keeps PTY-edge handling active for the full attached session.
 - 2026-03-31: Restored richer PTY-edge replies for attached sessions (`CSI 6n`, DA1, kitty keyboard query, OSC 10/11, focus-in) and confirmed that Codex now receives those replies on the direct canary, but a visible auth screen is still not guaranteed. The remaining Claude bug also narrowed: AO can reach the second-exit prompt, yet the nested `claude` process can still remain alive instead of returning control cleanly.
 - 2026-03-31: Exposed `codex` and `claude` through the external `vibe-kanban` recipe as a second orchestrator-style VM canary and recorded the follow-up authoring-UX decision to collapse the common recipe path into a higher-level `workerProxies` abstraction in a future slice.
+- 2026-03-31: Confirmed that `codex` now works inside both AO and `vibe-kanban`, committed a `vibe-kanban` interactive Codex smoke as a regression guard, and reprioritized the remaining work around the shared `claude` exit-handback bug.
+- 2026-03-31: Added a direct shared-layer `claude` exit smoke, proved that the nested worker can now exit cleanly on the repeated-interrupt path, and narrowed the remaining open issue to the outer prompt/terminal handback after the worker is already gone.

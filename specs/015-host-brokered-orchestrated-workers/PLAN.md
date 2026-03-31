@@ -1,6 +1,6 @@
 ---
 status: in_progress
-last_updated: 2026-03-28
+last_updated: 2026-03-31
 ---
 
 # 015 Plan
@@ -72,6 +72,14 @@ last_updated: 2026-03-28
 3. Preserve the lower-level `workerKinds` and explicit proxy-script hooks for advanced or unusual recipes.
 4. Migrate the current external recipes once the higher-level path is stable enough to replace duplicated wiring.
 
+## Current execution order
+
+1. Keep `codex` green in both AO and `vibe-kanban` and treat those smokes as regression gates for any shared worker change.
+2. Fix the shared attached-worker `claude` exit-limbo bug in the common worker path, not in AO- or `vibe-kanban`-specific code.
+3. Use the direct shared-layer `claude` exit smoke as the first acceptance gate for that fix.
+4. Confirm the same fix through AO and `vibe-kanban` only after the direct shared-layer smoke is green.
+5. Leave `workerProxies` as the next design slice after the shared TUI lifecycle bug is closed.
+
 ## Validation approach
 
 - run focused smoke coverage for host-broker lifecycle operations
@@ -93,7 +101,7 @@ last_updated: 2026-03-28
 
 ## Current status
 
-Reopened for attached `firebreak` worker hardening. Detached flows, guest-local `process` flows, worker-kind declarations, bounded concurrency, packaged node-cli bootstrap readiness, the worker-proxy helper, the first recipe-owned detached worker lifecycle validation path, the first machine-readable guest lifecycle diagnostics, the direct PTY relay, the isolated interactive sibling-worker smoke, and the first shared-tools/no-forward validation path for packaged node-cli recipes have landed. The current open slice is no longer generic attach transport. It is the deterministic packaged-tool delivery and reuse path for attached interactive packaged workers inside the still-valid sibling-worker architecture.
+Reopened for shared interactive lifecycle hardening. Detached flows, guest-local `process` flows, worker-kind declarations, bounded concurrency, packaged node-cli bootstrap readiness, the worker-proxy helper, the first recipe-owned detached worker lifecycle validation path, the first machine-readable guest lifecycle diagnostics, the direct PTY relay, the isolated interactive sibling-worker smoke, and the first shared-tools/no-forward validation path for packaged node-cli recipes have landed. `codex` is now a protected working path in both AO and `vibe-kanban`. The current open slice is the shared attached-worker exit handback bug surfaced by `claude`, not generic attach transport or recipe-specific worker spawn.
 
 ## Open questions
 

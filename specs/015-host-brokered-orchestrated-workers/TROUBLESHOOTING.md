@@ -220,6 +220,30 @@ What this means:
 - signal ownership and nested-session shutdown are part of the terminal contract
 - the parent orchestrator VM must survive nested worker exit unless the user explicitly exits the orchestrator itself, and it must regain a usable prompt instead of hanging after the nested session is gone
 
+### 13. Inner worker exit can be fixed while outer prompt handback is still wrong
+
+Symptoms:
+
+- the nested worker reaches `command-exit:0`
+- the host bridge reaches `attach-worker-exit:0` and `response-written`
+- the guest attach client reaches `guest-attach-client-main-loop-exit`
+- the user still does not immediately see a usable prompt back in the parent shell
+
+What this means:
+
+- the remaining bug is no longer "worker did not exit"
+- it is now terminal handback or prompt-visibility behavior in the parent shell after a clean attach completion
+- this is a different problem class from the earlier `claude` limbo, where the nested CLI itself was still alive
+
+What to do next:
+
+- inspect the request-level trace for all three boundaries:
+  - `attach-worker-exit`
+  - `response-written`
+  - `guest-attach-client-main-loop-exit`
+- if all three are present, stop debugging worker teardown and focus on guest attach-client tty restoration and visible prompt handback
+- prefer a direct shared-layer exit smoke for this work before using AO or other recipe VMs as confirmation layers
+
 ### 11. One TUI can work while another still renders black
 
 Symptoms:

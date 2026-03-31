@@ -298,6 +298,21 @@ quote_arg() {
   printf '%q' "$1"
 }
 
+configure_attach_tty() {
+  attach_tty_state=""
+  if [ -t 0 ] && [ -t 1 ] && command -v stty >/dev/null 2>&1; then
+    attach_tty_state=$(stty -g 2>/dev/null || true)
+    stty raw -echo min 1 time 0 2>/dev/null || true
+  fi
+}
+
+restore_attach_tty() {
+  if [ -n "${attach_tty_state:-}" ]; then
+    stty "$attach_tty_state" 2>/dev/null || true
+    attach_tty_state=""
+  fi
+}
+
 resolve_firebreak_worker_exec() {
   installable=$1
   package_name=$2
@@ -492,6 +507,28 @@ if [ "\$attach_mode" = "1" ]; then
   printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "attach-foreground-start" >>"\$trace_path"
   printf '%s\n' "$$" >"\$child_pid_path"
   printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "firebreak-command-start" >>"\$trace_path"
+  forwarded_term=\${TERM:-}
+  forwarded_columns=\${COLUMNS:-}
+  forwarded_lines=\${LINES:-}
+  if command -v stty >/dev/null 2>&1; then
+    if [ -z "\$forwarded_columns" ] || [ -z "\$forwarded_lines" ]; then
+      stty_size=\$(stty size 2>/dev/null || true)
+      stty_lines=\${stty_size%% *}
+      stty_columns=\${stty_size##* }
+      case "\$stty_lines" in
+        ''|*[!0-9]*|0) stty_lines="" ;;
+      esac
+      case "\$stty_columns" in
+        ''|*[!0-9]*|0) stty_columns="" ;;
+      esac
+      if [ -z "\$forwarded_lines" ] && [ -n "\$stty_lines" ]; then
+        forwarded_lines=\$stty_lines
+      fi
+      if [ -z "\$forwarded_columns" ] && [ -n "\$stty_columns" ]; then
+        forwarded_columns=\$stty_columns
+      fi
+    fi
+  fi
   if [ "$forwarded_arg_count" -eq 0 ]; then
     env \
       -u AGENT_CONFIG \
@@ -500,6 +537,9 @@ if [ "\$attach_mode" = "1" ]; then
       -u CODEX_CONFIG_HOST_PATH \
       -u CLAUDE_CONFIG \
       -u CLAUDE_CONFIG_HOST_PATH \
+      \${forwarded_term:+TERM="\$forwarded_term"} \
+      \${forwarded_columns:+COLUMNS="\$forwarded_columns"} \
+      \${forwarded_lines:+LINES="\$forwarded_lines"} \
       FIREBREAK_INSTANCE_DIR="\$instance_dir" \
       FIREBREAK_VM_MODE="\$vm_mode" \
       FIREBREAK_AGENT_SESSION_MODE_OVERRIDE="agent-attach-exec" \
@@ -512,6 +552,9 @@ if [ "\$attach_mode" = "1" ]; then
       -u CODEX_CONFIG_HOST_PATH \
       -u CLAUDE_CONFIG \
       -u CLAUDE_CONFIG_HOST_PATH \
+      \${forwarded_term:+TERM="\$forwarded_term"} \
+      \${forwarded_columns:+COLUMNS="\$forwarded_columns"} \
+      \${forwarded_lines:+LINES="\$forwarded_lines"} \
       FIREBREAK_INSTANCE_DIR="\$instance_dir" \
       FIREBREAK_VM_MODE="\$vm_mode" \
       $quoted_resolved_exec$quoted_args
@@ -672,7 +715,14 @@ spawn_worker() {
   if [ "$attach_mode" = "1" ]; then
     pid=$$
     write_metadata
-    exec bash "$launch_script"
+    configure_attach_tty
+    trap restore_attach_tty EXIT INT TERM
+    set +e
+    bash "$launch_script"
+    attach_status=$?
+    set -e
+    restore_attach_tty
+    exit "$attach_status"
   fi
 
   nohup bash "$launch_script" >/dev/null 2>&1 &
@@ -1248,6 +1298,7 @@ def nested_runtime_snapshot(worker_dir: Path):
 
     log_keys = [
         "wrapper_trace_log",
+        "attach_pty_log",
         "runner_stdout_log",
         "runner_stderr_log",
         "virtiofs_hostcwd_log",
@@ -1276,7 +1327,7 @@ def nested_runtime_snapshot(worker_dir: Path):
     if agent_exec_output_dir:
         agent_exec_dir = Path(agent_exec_output_dir)
         agent_exec = {}
-        for name in ["attach_stage", "exit_code", "stdout", "stderr", "command-processes.txt", "interactive-echo.log"]:
+        for name in ["attach_stage", "exit_code", "stdout", "stderr", "command-processes.txt", "command-tty.txt", "interactive-echo.log"]:
             path = agent_exec_dir / name
             if path.exists():
                 key_name = name.replace("-", "_").replace(".txt", "").replace(".log", "")

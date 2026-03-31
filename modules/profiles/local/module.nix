@@ -36,6 +36,7 @@ let
     "@ID@" = "${pkgs.coreutils}/bin/id";
     "@GROUPMOD@" = "${pkgs.shadow}/bin/groupmod";
     "@MKDIR@" = "${pkgs.coreutils}/bin/mkdir";
+    "@PYTHON3@" = "${pkgs.python3}/bin/python3";
     "@START_DIR_FILE@" = cfg.startDirFile;
     "@RUNUSER@" = "${pkgs.util-linux}/bin/runuser";
     "@USERMOD@" = "${pkgs.shadow}/bin/usermod";

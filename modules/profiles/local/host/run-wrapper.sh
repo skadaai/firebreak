@@ -110,9 +110,24 @@ worker_bridge_server_script=$host_runtime_dir/firebreak-worker-bridge-host.sh
 worker_helper_script=$host_runtime_dir/firebreak-worker.sh
 worker_bridge_enabled=@WORKER_BRIDGE_ENABLED@
 wrapper_trace_log=$host_runtime_dir/wrapper-trace.log
+attach_pty_log=$host_runtime_dir/attach-pty.log
 agent_term=$(normalize_term_name "${TERM:-}")
 agent_columns=$(sanitize_positive_dimension "${COLUMNS:-}")
 agent_lines=$(sanitize_positive_dimension "${LINES:-}")
+
+if { [ -z "$agent_columns" ] || [ -z "$agent_lines" ]; } && command -v stty >/dev/null 2>&1; then
+  stty_size=$(stty size 2>/dev/null || true)
+  stty_lines=${stty_size%% *}
+  stty_columns=${stty_size##* }
+  stty_lines=$(sanitize_positive_dimension "$stty_lines")
+  stty_columns=$(sanitize_positive_dimension "$stty_columns")
+  if [ -z "$agent_lines" ] && [ -n "$stty_lines" ]; then
+    agent_lines=$stty_lines
+  fi
+  if [ -z "$agent_columns" ] && [ -n "$stty_columns" ]; then
+    agent_columns=$stty_columns
+  fi
+fi
 
 trace_wrapper() {
   printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >>"$wrapper_trace_log"
@@ -304,6 +319,7 @@ fi
 mkdir -p "$worker_bridge_dir/requests"
 rm -f "$control_socket"
 : >"$wrapper_trace_log"
+: >"$attach_pty_log"
 
 cat >"$runtime_debug_file" <<EOF
 {
@@ -313,6 +329,7 @@ cat >"$runtime_debug_file" <<EOF
   "control_socket": "$(printf '%s' "$control_socket" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "agent_exec_output_dir": "$(printf '%s' "$host_exec_output_dir" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "wrapper_trace_log": "$(printf '%s' "$wrapper_trace_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "attach_pty_log": "$(printf '%s' "$attach_pty_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "runner_stdout_log": "$(printf '%s' "$runner_stdout_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "runner_stderr_log": "$(printf '%s' "$runner_stderr_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_hostcwd_log": "$(printf '%s' "$virtiofsd_hostcwd_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
@@ -454,6 +471,7 @@ stdout_log_path = os.environ["FIREBREAK_ATTACH_STDOUT_LOG"]
 bridge_trace_path = os.environ.get("FIREBREAK_WORKER_BRIDGE_TRACE_PATH", "")
 wrapper_trace_log = os.environ.get("FIREBREAK_WRAPPER_TRACE_LOG", "")
 attach_stage_path = os.environ.get("FIREBREAK_ATTACH_STAGE_PATH", "")
+command_signal_stream_path = os.environ.get("FIREBREAK_ATTACH_COMMAND_SIGNAL_STREAM", "")
 
 def trace_event(target_path: str, message: str) -> None:
     if not target_path:
@@ -469,20 +487,36 @@ def current_attach_stage() -> str:
         return open(attach_stage_path, "r", encoding="utf-8").read().strip()
     except OSError:
         return ""
+
+
+def append_command_signal(signal_name: str) -> None:
+    if not command_signal_stream_path:
+        return
+    try:
+        with open(command_signal_stream_path, "a", encoding="utf-8") as handle:
+            handle.write(signal_name + "\n")
+    except OSError:
+        pass
 EOF
   chmod 0555 "$attach_relay_script"
   cat >"$attach_driver_script" <<'EOF'
 import importlib.util
+import fcntl
 import os
 import pty
 import signal
+import struct
 import sys
+import termios
 import threading
+import time
+from datetime import datetime, timezone
 
 runner_script = os.environ["FIREBREAK_ATTACH_RUNNER_SCRIPT"]
 stdout_log_path = os.environ["FIREBREAK_ATTACH_STDOUT_LOG"]
 status_path = os.environ["FIREBREAK_ATTACH_STATUS_PATH"]
 relay_path = os.environ["FIREBREAK_ATTACH_RELAY_PATH"]
+attach_trace_log = os.environ.get("FIREBREAK_ATTACH_TRACE_LOG", "")
 
 relay_spec = importlib.util.spec_from_file_location("firebreak_attach_relay", relay_path)
 relay = importlib.util.module_from_spec(relay_spec)
@@ -493,9 +527,606 @@ child_pid = None
 master_fd = None
 stdin_done = threading.Event()
 stdout_done = threading.Event()
+terminal_rows = 24
+terminal_columns = 80
+focus_tracking_enabled = False
+focus_in_sent = False
+kitty_keyboard_flags = 0
+kitty_keyboard_stack = []
+terminal_state = {"row": 1, "column": 1}
+terminal_query_buffer = bytearray()
+stdin_reply_buffer = bytearray()
+command_start_marker_seen = False
+repeated_interrupt_state = {"last_at": None}
+terminal_queries = [
+    (b"\x1b[6n", "cursor"),
+    (b"\x1b[5n", "status"),
+    (b"\x1b[?u", "kitty-kbd-query"),
+    (b"\x1b[c", "da1"),
+    (b"\x1b]10;?\x1b\\", "osc10"),
+    (b"\x1b]10;?\x07", "osc10"),
+    (b"\x1b]11;?\x1b\\", "osc11"),
+    (b"\x1b]11;?\x07", "osc11"),
+]
+sync_output_dcs_sequences = {
+    b"\x1bP=1s\x1b\\": "sync-output-begin",
+    b"\x1bP=2s\x1b\\": "sync-output-end",
+}
+command_exit_grace_started_at = None
+runner_term_sent_at = None
+runner_kill_sent = False
+
+
+def query_terminal_size():
+    for fd in (sys.stdin.fileno(), sys.stdout.fileno()):
+        try:
+            size = os.get_terminal_size(fd)
+            if size.lines > 0 and size.columns > 0:
+                return size.lines, size.columns
+        except OSError:
+            continue
+    return 24, 80
+
+
+def apply_terminal_size() -> None:
+    global terminal_rows, terminal_columns
+    terminal_rows, terminal_columns = query_terminal_size()
+    if master_fd is None or master_fd < 0:
+        return
+    winsize = struct.pack("HHHH", terminal_rows, terminal_columns, 0, 0)
+    try:
+        fcntl.ioctl(master_fd, termios.TIOCSWINSZ, winsize)
+    except (OSError, ValueError):
+        pass
+
+
+def longest_query_prefix(data: bytes) -> int:
+    longest = 0
+    for pattern, _ in terminal_queries:
+        max_prefix = min(len(pattern) - 1, len(data))
+        while max_prefix > longest:
+            if data.endswith(pattern[:max_prefix]):
+                longest = max_prefix
+                break
+            max_prefix -= 1
+    return longest
+
+
+def consume_terminal_sequence(data: bytes, index: int):
+    if data[index] != 0x1B:
+        return None, index + 1, None
+    if index + 1 >= len(data):
+        return None, index, "incomplete"
+
+    next_byte = data[index + 1]
+    if next_byte == 0x5B:
+        seq_end = index + 2
+        while seq_end < len(data) and not (0x40 <= data[seq_end] <= 0x7E):
+            seq_end += 1
+        if seq_end >= len(data):
+            return None, index, "incomplete"
+        return bytes(data[index:seq_end + 1]), seq_end + 1, "csi"
+    if next_byte == 0x5D:
+        osc_end_bel = data.find(b"\x07", index + 2)
+        osc_end_st = data.find(b"\x1b\\", index + 2)
+        end_candidates = [end for end in (osc_end_bel, osc_end_st) if end >= 0]
+        if not end_candidates:
+            return None, index, "incomplete"
+        end_index = min(end_candidates)
+        if end_index == osc_end_bel:
+            return bytes(data[index:end_index + 1]), end_index + 1, "osc"
+        return bytes(data[index:end_index + 2]), end_index + 2, "osc"
+    if next_byte == 0x50:
+        dcs_end = data.find(b"\x1b\\", index + 2)
+        if dcs_end < 0:
+            return None, index, "incomplete"
+        return bytes(data[index:dcs_end + 2]), dcs_end + 2, "dcs"
+    if next_byte == 0x1B:
+        return None, index + 1, "escaped-esc"
+    return bytes(data[index:index + 2]), index + 2, "esc"
+
+
+def clamp_cursor() -> None:
+    terminal_state["row"] = max(1, min(terminal_state["row"], terminal_rows))
+    terminal_state["column"] = max(1, min(terminal_state["column"], terminal_columns))
+
+
+def parse_cursor_params(raw_params: str):
+    params = []
+    for item in raw_params.split(";"):
+        if item == "":
+            params.append(None)
+            continue
+        digits = "".join(ch for ch in item if ch.isdigit())
+        params.append(int(digits) if digits else None)
+    return params
+
+
+def trace_debug(message: str) -> None:
+    if attach_trace_log:
+        relay.trace_event(
+            attach_trace_log,
+            f"{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')} {message}",
+        )
+    if relay.bridge_trace_path:
+        relay.trace_event(relay.bridge_trace_path, message)
+
+
+def handle_command_start_marker() -> None:
+    global focus_in_sent, command_start_marker_seen, focus_tracking_enabled, kitty_keyboard_flags
+    command_start_marker_seen = True
+    stdin_reply_buffer.clear()
+    terminal_query_buffer.clear()
+    repeated_interrupt_state["last_at"] = None
+    kitty_keyboard_stack.clear()
+    kitty_keyboard_flags = 0
+    terminal_state["row"] = 1
+    terminal_state["column"] = 1
+    focus_tracking_enabled = False
+    focus_in_sent = False
+    trace_debug("command-stream-marker")
+
+
+def command_stage_active() -> bool:
+    return command_start_marker_seen or relay.current_attach_stage() == "command-start"
+
+
+def maybe_escalate_repeated_interrupt(chunk: bytes) -> None:
+    if not command_stage_active():
+        return
+    now = time.monotonic()
+    for byte in chunk:
+        if byte != 0x03:
+            continue
+        previous = repeated_interrupt_state["last_at"]
+        repeated_interrupt_state["last_at"] = now
+        if previous is None or now - previous > 8.0:
+            continue
+        relay.append_command_signal("INT")
+        trace_debug("stdin-signal-request:INT")
+
+
+def parse_optional_int(raw_value: str, default: int = 0) -> int:
+    digits = "".join(ch for ch in raw_value if ch.isdigit())
+    if not digits:
+        return default
+    return int(digits)
+
+
+def apply_kitty_keyboard_mode(raw_params: str) -> None:
+    global kitty_keyboard_flags
+    flags_raw, sep, mode_raw = raw_params.partition(";")
+    flags = parse_optional_int(flags_raw, default=0)
+    mode = parse_optional_int(mode_raw, default=1) if sep else 1
+    previous_flags = kitty_keyboard_flags
+    if mode == 1:
+        kitty_keyboard_flags = flags
+    elif mode == 2:
+        kitty_keyboard_flags |= flags
+    elif mode == 3:
+        kitty_keyboard_flags &= ~flags
+    trace_debug(
+        f"kitty-kbd-set:flags={flags}:mode={mode}:previous={previous_flags}:current={kitty_keyboard_flags}"
+    )
+
+
+def push_kitty_keyboard_flags(raw_value: str) -> None:
+    global kitty_keyboard_flags
+    flags = parse_optional_int(raw_value, default=0)
+    kitty_keyboard_stack.append(kitty_keyboard_flags)
+    kitty_keyboard_flags = flags
+    trace_debug(
+        f"kitty-kbd-push:requested={flags}:stack-depth={len(kitty_keyboard_stack)}:current={kitty_keyboard_flags}"
+    )
+
+
+def pop_kitty_keyboard_flags(raw_value: str) -> None:
+    global kitty_keyboard_flags
+    pop_count = parse_optional_int(raw_value, default=1)
+    if pop_count < 1:
+        pop_count = 1
+    for _ in range(pop_count):
+        if kitty_keyboard_stack:
+            kitty_keyboard_flags = kitty_keyboard_stack.pop()
+        else:
+            kitty_keyboard_flags = 0
+            break
+    trace_debug(
+        f"kitty-kbd-pop:count={pop_count}:stack-depth={len(kitty_keyboard_stack)}:current={kitty_keyboard_flags}"
+    )
+
+
+def update_terminal_cursor(data: bytes) -> None:
+    global focus_tracking_enabled, focus_in_sent
+    index = 0
+    data_length = len(data)
+    while index < data_length:
+        byte = data[index]
+        if byte == 0x0D:
+            terminal_state["column"] = 1
+            index += 1
+            continue
+        if byte == 0x0A:
+            terminal_state["row"] += 1
+            clamp_cursor()
+            index += 1
+            continue
+        if byte == 0x08:
+            terminal_state["column"] = max(1, terminal_state["column"] - 1)
+            index += 1
+            continue
+        if byte != 0x1B:
+            terminal_state["column"] += 1
+            if terminal_state["column"] > terminal_columns:
+                terminal_state["column"] = 1
+                terminal_state["row"] += 1
+            clamp_cursor()
+            index += 1
+            continue
+        if index + 1 >= data_length:
+            break
+        next_byte = data[index + 1]
+        if next_byte == 0x5B:
+            seq_end = index + 2
+            while seq_end < data_length and not (0x40 <= data[seq_end] <= 0x7E):
+                seq_end += 1
+            if seq_end >= data_length:
+                break
+            params = data[index + 2:seq_end].decode("ascii", "ignore")
+            final = chr(data[seq_end])
+            raw_params = params
+            params = parse_cursor_params(raw_params)
+            first = params[0] if params else None
+            second = params[1] if len(params) > 1 else None
+            if final in {"H", "f"}:
+                terminal_state["row"] = first if first is not None else 1
+                terminal_state["column"] = second if second is not None else 1
+                clamp_cursor()
+            elif final == "A":
+                terminal_state["row"] -= first if first is not None else 1
+                clamp_cursor()
+            elif final == "B":
+                terminal_state["row"] += first if first is not None else 1
+                clamp_cursor()
+            elif final == "C":
+                terminal_state["column"] += first if first is not None else 1
+                clamp_cursor()
+            elif final == "D":
+                terminal_state["column"] -= first if first is not None else 1
+                clamp_cursor()
+            elif final == "E":
+                terminal_state["row"] += first if first is not None else 1
+                terminal_state["column"] = 1
+                clamp_cursor()
+            elif final == "F":
+                terminal_state["row"] -= first if first is not None else 1
+                terminal_state["column"] = 1
+                clamp_cursor()
+            elif final == "G":
+                terminal_state["column"] = first if first is not None else 1
+                clamp_cursor()
+            elif final == "d":
+                terminal_state["row"] = first if first is not None else 1
+                clamp_cursor()
+            elif final == "h" and raw_params == "?1004":
+                focus_tracking_enabled = True
+                focus_in_sent = False
+                trace_debug("mode-set:?1004")
+            elif final == "l" and raw_params == "?1004":
+                focus_tracking_enabled = False
+                focus_in_sent = False
+                trace_debug("mode-reset:?1004")
+            elif final == "h":
+                trace_debug(f"mode-set:{raw_params or 'default'}")
+            elif final == "l":
+                trace_debug(f"mode-reset:{raw_params or 'default'}")
+            elif final in {"n", "c"}:
+                trace_debug(f"unhandled-csi:{raw_params}{final}")
+            index = seq_end + 1
+            continue
+        if next_byte == 0x5D:
+            osc_end_bel = data.find(b"\x07", index + 2)
+            osc_end_st = data.find(b"\x1b\\", index + 2)
+            end_candidates = [end for end in (osc_end_bel, osc_end_st) if end >= 0]
+            if not end_candidates:
+                break
+            end_index = min(end_candidates)
+            if end_index == osc_end_bel:
+                index = end_index + 1
+            else:
+                index = end_index + 2
+            continue
+        if next_byte == 0x63:
+            terminal_state["row"] = 1
+            terminal_state["column"] = 1
+            index += 2
+            continue
+        index += 2
+
+
+def build_terminal_reply(query_name: str) -> bytes:
+    if query_name == "cursor":
+        clamp_cursor()
+        reply = f"\x1b[{terminal_state['row']};{terminal_state['column']}R".encode("ascii")
+        trace_debug(f"cursor-reply:{terminal_state['row']};{terminal_state['column']}")
+        return reply
+    if query_name == "status":
+        return b"\x1b[0n"
+    if query_name == "kitty-kbd-query":
+        return b"\x1b[?0u"
+    if query_name == "da1":
+        return b"\x1b[?62;1;2;6;22c"
+    if query_name == "osc10":
+        return b"\x1b]10;rgb:ffff/ffff/ffff\x1b\\"
+    if query_name == "osc11":
+        return b"\x1b]11;rgb:0000/0000/0000\x1b\\"
+    return b""
+
+
+def build_xtgettcap_reply(sequence: bytes) -> bytes:
+    if not (sequence.startswith(b"\x1bP+q") and sequence.endswith(b"\x1b\\")):
+        return b""
+
+    payload = sequence[4:-2]
+    items = payload.split(b";")
+    response_items = []
+    term_name = os.environ.get("TERM", "xterm-256color").encode("ascii", "ignore") or b"xterm-256color"
+
+    for item in items:
+        if not item:
+            continue
+        try:
+            decoded = bytes.fromhex(item.decode("ascii")).decode("ascii").lower()
+        except ValueError:
+            return b"\x1bP0+r" + payload + b"\x1b\\"
+
+        if decoded in {"name", "tn"}:
+            response_items.append(item + b"=" + term_name.hex().encode("ascii"))
+            continue
+        if decoded in {"colors", "co"}:
+            response_items.append(item + b"=" + b"323536")
+            continue
+        return b"\x1bP0+r" + payload + b"\x1b\\"
+
+    if not response_items:
+        return b"\x1bP0+r" + payload + b"\x1b\\"
+
+    return b"\x1bP1+r" + b";".join(response_items) + b"\x1b\\"
+
+
+def send_focus_in_event() -> None:
+    global focus_in_sent
+    if not focus_tracking_enabled or focus_in_sent:
+        return
+    try:
+        os.write(master_fd, b"\x1b[I")
+        trace_debug("attach-term-reply:focus-in")
+        focus_in_sent = True
+    except OSError:
+        pass
+
+
+def classify_csi_reply(sequence: bytes):
+    if not sequence.startswith(b"\x1b[") or len(sequence) < 3:
+        return None
+    final = sequence[-1:]
+    payload = sequence[2:-1].decode("ascii", "ignore")
+    if final == b"R":
+        parts = payload.split(";")
+        if len(parts) == 2 and all(part.isdigit() for part in parts):
+            return "cursor"
+    if payload.startswith("?") and final == b"u":
+        reply_body = payload[1:]
+        if reply_body and all(ch.isdigit() or ch in ";:" for ch in reply_body):
+            return "kitty-kbd-reply"
+    if payload.startswith("?") and final == b"c":
+        reply_body = payload[1:]
+        if reply_body and all(ch.isdigit() or ch in ";:" for ch in reply_body):
+            return "da1-reply"
+    return None
+
+
+def classify_osc_reply(sequence: bytes):
+    if sequence.startswith(b"\x1b]10;"):
+        return "osc10-reply"
+    if sequence.startswith(b"\x1b]11;"):
+        return "osc11-reply"
+    return None
+
+
+def is_partial_reply(data: bytes) -> bool:
+    if not data:
+        return False
+    if data == b"\x1b":
+        return True
+    if data.startswith(b"\x1b]"):
+        return data.startswith((b"\x1b]10;", b"\x1b]11;"))
+    if not data.startswith(b"\x1b["):
+        return False
+    if len(data) == 2:
+        return True
+    payload = data[2:]
+    return all(byte in b"0123456789;:?" for byte in payload)
+
+
+def strip_terminal_replies(chunk: bytes) -> bytes:
+    stdin_reply_buffer.extend(chunk)
+    data = bytes(stdin_reply_buffer)
+    forwarded = bytearray()
+    index = 0
+
+    while index < len(data):
+        byte = data[index]
+        if byte != 0x1B:
+            forwarded.append(byte)
+            index += 1
+            continue
+
+        if index + 1 >= len(data):
+            break
+
+        next_byte = data[index + 1]
+        if next_byte == 0x5B:
+            seq_end = index + 2
+            while seq_end < len(data) and not (0x40 <= data[seq_end] <= 0x7E):
+                seq_end += 1
+            if seq_end >= len(data):
+                break
+            sequence = data[index:seq_end + 1]
+            reply_name = classify_csi_reply(sequence)
+            if reply_name is not None:
+                trace_debug(f"stdin-term-reply:{reply_name}:{sequence.hex()}")
+                index = seq_end + 1
+                continue
+            forwarded.extend(sequence)
+            index = seq_end + 1
+            continue
+
+        if next_byte == 0x5D:
+            osc_end_bel = data.find(b"\x07", index + 2)
+            osc_end_st = data.find(b"\x1b\\", index + 2)
+            end_candidates = [end for end in (osc_end_bel, osc_end_st) if end >= 0]
+            if not end_candidates:
+                break
+            end_index = min(end_candidates)
+            if end_index == osc_end_bel:
+                sequence = data[index:end_index + 1]
+                advance = end_index + 1
+            else:
+                sequence = data[index:end_index + 2]
+                advance = end_index + 2
+            reply_name = classify_osc_reply(sequence)
+            if reply_name is not None:
+                trace_debug(f"stdin-term-reply:{reply_name}:{sequence.hex()}")
+                index = advance
+                continue
+            forwarded.extend(sequence)
+            index = advance
+            continue
+
+        forwarded.append(byte)
+        index += 1
+
+    remainder = data[index:]
+    if remainder and not is_partial_reply(remainder):
+        forwarded.extend(remainder)
+        stdin_reply_buffer.clear()
+    else:
+        stdin_reply_buffer[:] = remainder
+
+    return bytes(forwarded)
+
+
+def split_terminal_output(chunk: bytes) -> bytes:
+    if not chunk:
+        return b""
+    terminal_query_buffer.extend(chunk)
+    data = bytes(terminal_query_buffer)
+    forwarded = bytearray()
+    index = 0
+
+    while index < len(data):
+        if data[index] == 0x1B:
+            sequence, next_index, sequence_type = consume_terminal_sequence(data, index)
+            if sequence_type == "incomplete":
+                break
+            if sequence_type == "escaped-esc":
+                index = next_index
+                continue
+            if sequence_type == "dcs" and sequence in sync_output_dcs_sequences:
+                trace_debug(sync_output_dcs_sequences[sequence])
+                index = next_index
+                continue
+            if sequence_type == "dcs" and sequence is not None and sequence.startswith(b"\x1bP+q"):
+                response = build_xtgettcap_reply(sequence)
+                if response:
+                    try:
+                        os.write(master_fd, response)
+                        trace_debug("attach-term-reply:xtgettcap")
+                    except OSError:
+                        pass
+                index = next_index
+                continue
+            if sequence_type == "csi" and sequence is not None and sequence.endswith(b"u"):
+                raw_params = sequence[2:-1].decode("ascii", "ignore")
+                if raw_params.startswith(">"):
+                    push_kitty_keyboard_flags(raw_params[1:])
+                    index = next_index
+                    continue
+                if raw_params.startswith("<"):
+                    pop_kitty_keyboard_flags(raw_params[1:])
+                    index = next_index
+                    continue
+                if raw_params.startswith("="):
+                    apply_kitty_keyboard_mode(raw_params[1:])
+                    index = next_index
+                    continue
+            if sequence_type == "csi" and sequence is not None:
+                raw_params = sequence[2:-1].decode("ascii", "ignore")
+                final = chr(sequence[-1])
+                if raw_params == "?2026" and final == "h":
+                    trace_debug("mode-set:?2026")
+                    index = next_index
+                    continue
+                if raw_params == "?2026" and final == "l":
+                    trace_debug("mode-reset:?2026")
+                    index = next_index
+                    continue
+
+            matched_query = False
+            if sequence is not None:
+                for pattern, query_name in terminal_queries:
+                    if sequence != pattern:
+                        continue
+                    response = build_terminal_reply(query_name)
+                    if response:
+                        try:
+                            os.write(master_fd, response)
+                            trace_debug(f"attach-term-reply:{query_name}")
+                        except OSError:
+                            pass
+                    index = next_index
+                    matched_query = True
+                    break
+            if matched_query:
+                continue
+
+            if sequence is not None:
+                forwarded.extend(sequence)
+                index = next_index
+                continue
+
+        matched_query = False
+        for pattern, query_name in terminal_queries:
+            if data.startswith(pattern, index):
+                response = build_terminal_reply(query_name)
+                if response:
+                    try:
+                        os.write(master_fd, response)
+                        trace_debug(f"attach-term-reply:{query_name}")
+                    except OSError:
+                        pass
+                index += len(pattern)
+                matched_query = True
+                break
+        if matched_query:
+            continue
+        forwarded.append(data[index])
+        index += 1
+
+    remainder = data[index:]
+    terminal_query_buffer[:] = remainder
+    if remainder and (command_start_marker_seen or relay.current_attach_stage() == "command-start"):
+        trace_debug(f"command-output-remainder:{remainder[:32].hex()}")
+    forwarded_bytes = bytes(forwarded)
+    if forwarded_bytes:
+        update_terminal_cursor(forwarded_bytes)
+    return forwarded_bytes
 
 
 def pump_stdin() -> None:
+    global master_fd
+    first_input = True
     try:
         while True:
             try:
@@ -507,7 +1138,17 @@ def pump_stdin() -> None:
                     os.close(master_fd)
                 except OSError:
                     pass
+                master_fd = -1
                 break
+            chunk = strip_terminal_replies(chunk)
+            if not chunk:
+                continue
+            if first_input:
+                first_input = False
+                trace_debug(f"stdin-first-chunk:{chunk[:32].hex()}")
+            else:
+                trace_debug(f"stdin-sample:{chunk[:16].hex()}")
+            maybe_escalate_repeated_interrupt(chunk)
             try:
                 os.write(master_fd, chunk)
             except OSError:
@@ -519,6 +1160,12 @@ def pump_stdin() -> None:
 def pump_stdout() -> None:
     first_chunk = True
     command_output_chunk_seen = False
+    command_stage_initialized = False
+    raw_sample_count = 0
+    filtered_empty_sample_count = 0
+    command_raw_sample_count = 0
+    command_filtered_empty_sample_count = 0
+    command_forwarded_sample_count = 0
     try:
         with open(stdout_log_path, "ab", buffering=0) as log_handle:
             while True:
@@ -528,6 +1175,27 @@ def pump_stdout() -> None:
                     break
                 if not chunk:
                     break
+                raw_chunk = chunk
+                if raw_sample_count < 8:
+                    trace_debug(f"stdout-raw-sample:{raw_chunk[:64].hex()}")
+                    raw_sample_count += 1
+                if relay.current_attach_stage() == "command-start" and not command_start_marker_seen:
+                    handle_command_start_marker()
+                if (command_start_marker_seen or relay.current_attach_stage() == "command-start") and command_raw_sample_count < 8:
+                    trace_debug(f"command-stdout-raw-sample:{raw_chunk[:64].hex()}")
+                    command_raw_sample_count += 1
+                chunk = split_terminal_output(raw_chunk)
+                if (command_start_marker_seen or relay.current_attach_stage() == "command-start") and not command_stage_initialized:
+                    command_stage_initialized = True
+                send_focus_in_event()
+                if not chunk:
+                    if filtered_empty_sample_count < 8:
+                        trace_debug("stdout-filtered-empty")
+                        filtered_empty_sample_count += 1
+                    if (command_start_marker_seen or relay.current_attach_stage() == "command-start") and command_filtered_empty_sample_count < 8:
+                        trace_debug("command-stdout-filtered-empty")
+                        command_filtered_empty_sample_count += 1
+                    continue
                 if first_chunk:
                     first_chunk = False
                     if relay.wrapper_trace_log:
@@ -537,7 +1205,7 @@ def pump_stdout() -> None:
                         )
                     if relay.bridge_trace_path:
                         relay.trace_event(relay.bridge_trace_path, "nested-runner-first-byte")
-                if not command_output_chunk_seen and relay.current_attach_stage() == "command-start":
+                if not command_output_chunk_seen and (command_start_marker_seen or relay.current_attach_stage() == "command-start"):
                     command_output_chunk_seen = True
                     if relay.wrapper_trace_log:
                         relay.trace_event(
@@ -546,6 +1214,12 @@ def pump_stdout() -> None:
                         )
                     if relay.bridge_trace_path:
                         relay.trace_event(relay.bridge_trace_path, "nested-command-first-byte")
+                if (
+                    (command_start_marker_seen or relay.current_attach_stage() == "command-start")
+                    and command_forwarded_sample_count < 16
+                ):
+                    trace_debug(f"command-stdout-forwarded-sample:{chunk[:64].hex()}")
+                    command_forwarded_sample_count += 1
                 log_handle.write(chunk)
                 try:
                     os.write(sys.stdout.fileno(), chunk)
@@ -567,16 +1241,62 @@ def forward_signal(signum, _frame) -> None:
 for signum in (signal.SIGINT, signal.SIGTERM):
     signal.signal(signum, forward_signal)
 
+
+def handle_sigwinch(_signum, _frame) -> None:
+    apply_terminal_size()
+
+
+signal.signal(signal.SIGWINCH, handle_sigwinch)
+
+
+def wait_for_child_exit():
+    global command_exit_grace_started_at, runner_term_sent_at, runner_kill_sent
+    while True:
+        try:
+            waited_pid, wait_status = os.waitpid(child_pid, os.WNOHANG)
+        except ChildProcessError:
+            return 1
+        if waited_pid == child_pid:
+            return wait_status
+
+        stage = relay.current_attach_stage()
+        if stage.startswith("command-exit:"):
+            now = time.monotonic()
+            if command_exit_grace_started_at is None:
+                command_exit_grace_started_at = now
+                trace_debug(f"runner-command-exit-seen:{stage}")
+            elif runner_term_sent_at is None and now - command_exit_grace_started_at >= 3.0:
+                try:
+                    os.kill(child_pid, signal.SIGTERM)
+                    runner_term_sent_at = now
+                    trace_debug("runner-signal:TERM-after-command-exit")
+                except OSError:
+                    pass
+            elif (
+                runner_term_sent_at is not None
+                and not runner_kill_sent
+                and now - runner_term_sent_at >= 5.0
+            ):
+                try:
+                    os.kill(child_pid, signal.SIGKILL)
+                    runner_kill_sent = True
+                    trace_debug("runner-signal:KILL-after-command-exit")
+                except OSError:
+                    pass
+        time.sleep(0.1)
+
 child_pid, master_fd = pty.fork()
 if child_pid == 0:
     os.execvpe("bash", ["bash", runner_script], os.environ.copy())
+
+apply_terminal_size()
 
 stdin_thread = threading.Thread(target=pump_stdin, daemon=True)
 stdout_thread = threading.Thread(target=pump_stdout, daemon=True)
 stdin_thread.start()
 stdout_thread.start()
 
-_, wait_status = os.waitpid(child_pid, 0)
+wait_status = wait_for_child_exit()
 stdin_done.set()
 stdout_done.set()
 stdin_thread.join(timeout=1)
@@ -585,6 +1305,7 @@ try:
     os.close(master_fd)
 except OSError:
     pass
+master_fd = -1
 
 if os.WIFEXITED(wait_status):
     exit_code = os.WEXITSTATUS(wait_status)
@@ -603,8 +1324,10 @@ EOF
   attach_pipe_status_file=$host_runtime_dir/attach-runner.status
   rm -f "$attach_pipe_status_file"
   export FIREBREAK_ATTACH_STDOUT_LOG="$runner_stdout_log"
+  export FIREBREAK_ATTACH_TRACE_LOG="$attach_pty_log"
   export FIREBREAK_WRAPPER_TRACE_LOG="$wrapper_trace_log"
   export FIREBREAK_ATTACH_STAGE_PATH="$host_exec_output_dir/attach_stage"
+  export FIREBREAK_ATTACH_COMMAND_SIGNAL_STREAM="$host_exec_output_dir/command-signals.stream"
   export FIREBREAK_ATTACH_RUNNER_SCRIPT="$attach_runner_script"
   export FIREBREAK_ATTACH_RELAY_PATH="$attach_relay_script"
   export FIREBREAK_ATTACH_STATUS_PATH="$attach_pipe_status_file"

@@ -276,6 +276,48 @@ rec {
       } ../../modules/base/tests/test-smoke-worker-firebreak-attach.sh;
     };
 
+  mkWorkerInteractiveClaudeDirectSmokePackage = { name, firebreakPackage }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        bash
+        coreutils
+        python3
+      ];
+      text = renderTemplate {
+        "@FIREBREAK_BIN@" = "${self.packages.${system}.${firebreakPackage}}/bin/${firebreakPackage}";
+        "@REPO_ROOT@" = builtins.toString ../../.;
+      } ../../modules/base/tests/test-smoke-worker-interactive-claude-direct.sh;
+    };
+
+  mkWorkerInteractiveClaudeDirectExitSmokePackage = { name, firebreakPackage }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        bash
+        coreutils
+        python3
+      ];
+      text = renderTemplate {
+        "@FIREBREAK_BIN@" = "${self.packages.${system}.${firebreakPackage}}/bin/${firebreakPackage}";
+        "@REPO_ROOT@" = builtins.toString ../../.;
+      } ../../modules/base/tests/test-smoke-worker-interactive-claude-exit-direct.sh;
+    };
+
+  mkWorkerInteractiveCodexDirectSmokePackage = { name, firebreakPackage }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        bash
+        coreutils
+        python3
+      ];
+      text = renderTemplate {
+        "@FIREBREAK_BIN@" = "${self.packages.${system}.${firebreakPackage}}/bin/${firebreakPackage}";
+        "@REPO_ROOT@" = builtins.toString ../../.;
+      } ../../modules/base/tests/test-smoke-worker-interactive-codex-direct.sh;
+    };
+
   mkWorkerGuestBridgeArtifacts =
     let
       bridgeVm = mkLocalVmArtifacts {

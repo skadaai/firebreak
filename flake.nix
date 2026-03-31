@@ -59,9 +59,12 @@
           mkTaskSmokePackage
           mkValidationPackage
           mkValidationSmokePackage
+          mkWorkerInteractiveClaudeDirectSmokePackage
+          mkWorkerInteractiveCodexDirectSmokePackage
           mkWorkerGuestBridgeInteractiveSmokePackage
           mkWorkerGuestBridgeSmokePackage
           mkWorkerFirebreakAttachSmokePackage
+          mkWorkerInteractiveClaudeDirectExitSmokePackage
           mkWorkerPackage
           mkWorkerSmokePackage
           ;

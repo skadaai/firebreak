@@ -18,6 +18,9 @@
   mkValidationPackage,
   mkValidationSmokePackage,
   mkWorkerFirebreakAttachSmokePackage,
+  mkWorkerInteractiveClaudeDirectExitSmokePackage,
+  mkWorkerInteractiveClaudeDirectSmokePackage,
+  mkWorkerInteractiveCodexDirectSmokePackage,
   mkWorkerGuestBridgeInteractiveSmokePackage,
   mkWorkerGuestBridgeSmokePackage,
   mkWorkerPackage,
@@ -148,6 +151,21 @@
   firebreak-test-smoke-worker-firebreak-attach = mkWorkerFirebreakAttachSmokePackage {
     name = "firebreak-test-smoke-worker-firebreak-attach";
     workerPackage = "firebreak-worker";
+  };
+
+  firebreak-test-smoke-worker-interactive-claude-direct = mkWorkerInteractiveClaudeDirectSmokePackage {
+    name = "firebreak-test-smoke-worker-interactive-claude-direct";
+    firebreakPackage = "firebreak";
+  };
+
+  firebreak-test-smoke-worker-interactive-claude-exit-direct = mkWorkerInteractiveClaudeDirectExitSmokePackage {
+    name = "firebreak-test-smoke-worker-interactive-claude-exit-direct";
+    firebreakPackage = "firebreak";
+  };
+
+  firebreak-test-smoke-worker-interactive-codex-direct = mkWorkerInteractiveCodexDirectSmokePackage {
+    name = "firebreak-test-smoke-worker-interactive-codex-direct";
+    firebreakPackage = "firebreak";
   };
 
   firebreak-test-smoke-worker-guest-bridge = mkWorkerGuestBridgeSmokePackage {

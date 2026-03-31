@@ -47,7 +47,7 @@ mkdir -p "$worker_state_dir" "$firebreak_state_dir" "$workspace_dir"
 
 print_failure_debug() {
   printf '%s\n' '--- host worker debug --json ---' >&2
-  FIREBREAK_WORKER_STATE_DIR="$worker_state_dir" @AGENT_BIN@ worker debug --json >&2 || true
+  FIREBREAK_WORKER_STATE_DIR="$worker_state_dir" @FIREBREAK_BIN@ worker debug --json >&2 || true
 }
 
 on_exit() {
@@ -66,7 +66,7 @@ NORMALIZED_LOG="$normalized_log" \
 WORKER_STATE_DIR="$worker_state_dir" \
 FIREBREAK_STATE_DIR="$firebreak_state_dir" \
 WORKSPACE_DIR="$workspace_dir" \
-AGENT_BIN=@AGENT_BIN@ \
+FIREBREAK_BIN=@FIREBREAK_BIN@ \
 python3 - <<'PY'
 import os
 import pty
@@ -78,8 +78,9 @@ import time
 import fcntl
 import struct
 import termios
+import errno
 
-agent_bin = os.environ["AGENT_BIN"]
+firebreak_bin = os.environ["FIREBREAK_BIN"]
 log_path = os.environ["SESSION_LOG"]
 normalized_log_path = os.environ["NORMALIZED_LOG"]
 workspace_dir = os.environ["WORKSPACE_DIR"]
@@ -100,7 +101,7 @@ winsize = struct.pack("HHHH", rows, cols, 0, 0)
 fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, winsize)
 
 command = [
-    agent_bin,
+    firebreak_bin,
     "worker",
     "run",
     "--attach",
@@ -155,7 +156,12 @@ with open(log_path, "wb") as log_file:
         while time.time() < deadline:
             readable, _, _ = select.select([master_fd], [], [], 0.5)
             if readable:
-                chunk = os.read(master_fd, 65536)
+                try:
+                    chunk = os.read(master_fd, 65536)
+                except OSError as exc:
+                    if exc.errno == errno.EIO:
+                        break
+                    raise
                 if not chunk:
                     break
                 transcript.extend(chunk)

@@ -44,7 +44,11 @@ trace_path = os.environ["TRACE_PATH"]
 request_dir = os.path.dirname(request_path)
 worker_root_path = os.path.join(request_dir, "worker-root")
 worker_root_cache = None
+runtime_metadata_cache = None
+attach_stage_path_cache = None
+command_signal_stream_path_cache = None
 trace_mirrored = False
+poll_interval = 0.005
 
 
 def resolve_worker_root():
@@ -76,6 +80,51 @@ def persist_response_exit_code(code: int) -> None:
             handle.write(f"{code}\n")
     except OSError:
         pass
+
+
+def resolve_runtime_metadata():
+    global runtime_metadata_cache, attach_stage_path_cache, command_signal_stream_path_cache
+    if runtime_metadata_cache is not None:
+        return runtime_metadata_cache
+    worker_root = resolve_worker_root()
+    if not worker_root:
+        return None
+    runtime_path = os.path.join(worker_root, "instance", ".firebreak-runtime.json")
+    try:
+        with open(runtime_path, "r", encoding="utf-8") as handle:
+            runtime_metadata_cache = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return None
+    agent_exec_output_dir = runtime_metadata_cache.get("agent_exec_output_dir")
+    if isinstance(agent_exec_output_dir, str) and agent_exec_output_dir:
+        attach_stage_path_cache = os.path.join(agent_exec_output_dir, "attach_stage")
+        command_signal_stream_path_cache = os.path.join(agent_exec_output_dir, "command-signals.stream")
+    return runtime_metadata_cache
+
+
+def current_attach_stage() -> str:
+    resolve_runtime_metadata()
+    if not attach_stage_path_cache:
+        return ""
+    try:
+        return open(attach_stage_path_cache, "r", encoding="utf-8").read().strip()
+    except OSError:
+        return ""
+
+
+def append_command_signal(signal_name: str) -> None:
+    resolve_runtime_metadata()
+    if not command_signal_stream_path_cache:
+        return
+    try:
+        with open(command_signal_stream_path_cache, "a", encoding="utf-8") as handle:
+            handle.write(signal_name + "\n")
+    except OSError:
+        pass
+
+
+def command_stage_active() -> bool:
+    return command_start_marker_state["seen"] or current_attach_stage() == "command-start"
 
 def trace(message: str) -> None:
     with open(trace_path, "a", encoding="utf-8") as handle:
@@ -174,12 +223,20 @@ try:
             except OSError:
                 pass
         trace("attach-worker-started")
+        terminal_emulation = {"owner": "bridge"}
+        trace("attach-terminal-emulation:bridge")
         terminal_rows = request_lines if request_lines is not None else 24
         terminal_columns = request_columns if request_columns is not None else 80
         terminal_state = {"row": 1, "column": 1}
         terminal_query_buffer = bytearray()
+        command_start_marker_state = {"seen": False}
+        focus_state = {"enabled": False, "sent": False}
+        kitty_keyboard_state = {"flags": 0}
+        kitty_keyboard_stack = []
+        repeated_interrupt_state = {"last_at": None}
         terminal_queries = [
             (b"\x1b[6n", "cursor"),
+            (b"\x1b[5n", "status"),
             (b"\x1b[?u", "kitty-kbd-query"),
             (b"\x1b[c", "da1"),
             (b"\x1b]10;?\x1b\\", "osc10"),
@@ -187,6 +244,10 @@ try:
             (b"\x1b]11;?\x1b\\", "osc11"),
             (b"\x1b]11;?\x07", "osc11"),
         ]
+        sync_output_dcs_sequences = {
+            b"\x1bP=1s\x1b\\": "attach-sync-output-begin",
+            b"\x1bP=2s\x1b\\": "attach-sync-output-end",
+        }
 
         def longest_query_prefix(data):
             longest = 0
@@ -198,6 +259,39 @@ try:
                         break
                     max_prefix -= 1
             return longest
+
+        def consume_terminal_sequence(data, index):
+            if data[index] != 0x1B:
+                return None, index + 1, None
+            if index + 1 >= len(data):
+                return None, index, "incomplete"
+
+            next_byte = data[index + 1]
+            if next_byte == 0x5B:
+                seq_end = index + 2
+                while seq_end < len(data) and not (0x40 <= data[seq_end] <= 0x7E):
+                    seq_end += 1
+                if seq_end >= len(data):
+                    return None, index, "incomplete"
+                return bytes(data[index:seq_end + 1]), seq_end + 1, "csi"
+            if next_byte == 0x5D:
+                osc_end = data.find(b"\x07", index + 2)
+                st_end = data.find(b"\x1b\\", index + 2)
+                candidates = [end for end in (osc_end, st_end) if end >= 0]
+                if not candidates:
+                    return None, index, "incomplete"
+                end_index = min(candidates)
+                if end_index == osc_end:
+                    return bytes(data[index:end_index + 1]), end_index + 1, "osc"
+                return bytes(data[index:end_index + 2]), end_index + 2, "osc"
+            if next_byte == 0x50:
+                dcs_end = data.find(b"\x1b\\", index + 2)
+                if dcs_end < 0:
+                    return None, index, "incomplete"
+                return bytes(data[index:dcs_end + 2]), dcs_end + 2, "dcs"
+            if next_byte == 0x1B:
+                return bytes(data[index:index + 1]), index + 1, "esc"
+            return bytes(data[index:index + 2]), index + 2, "esc"
 
         def write_terminal_reply(response):
             saved_attr = None
@@ -240,6 +334,59 @@ try:
                 digits = "".join(ch for ch in item if ch.isdigit())
                 params.append(int(digits) if digits else None)
             return params
+
+        def parse_optional_int(raw_value, default=0):
+            digits = "".join(ch for ch in raw_value if ch.isdigit())
+            if not digits:
+                return default
+            return int(digits)
+
+        def apply_kitty_keyboard_mode(raw_params):
+            flags_raw, sep, mode_raw = raw_params.partition(";")
+            flags = parse_optional_int(flags_raw, default=0)
+            mode = parse_optional_int(mode_raw, default=1) if sep else 1
+            previous_flags = kitty_keyboard_state["flags"]
+            if mode == 1:
+                kitty_keyboard_state["flags"] = flags
+            elif mode == 2:
+                kitty_keyboard_state["flags"] |= flags
+            elif mode == 3:
+                kitty_keyboard_state["flags"] &= ~flags
+            trace(
+                f"attach-term-kitty-set:flags={flags}:mode={mode}:previous={previous_flags}:current={kitty_keyboard_state['flags']}"
+            )
+
+        def push_kitty_keyboard_flags(raw_value):
+            flags = parse_optional_int(raw_value, default=0)
+            kitty_keyboard_stack.append(kitty_keyboard_state["flags"])
+            kitty_keyboard_state["flags"] = flags
+            trace(
+                f"attach-term-kitty-push:requested={flags}:stack-depth={len(kitty_keyboard_stack)}:current={kitty_keyboard_state['flags']}"
+            )
+
+        def pop_kitty_keyboard_flags(raw_value):
+            pop_count = parse_optional_int(raw_value, default=1)
+            if pop_count < 1:
+                pop_count = 1
+            for _ in range(pop_count):
+                if kitty_keyboard_stack:
+                    kitty_keyboard_state["flags"] = kitty_keyboard_stack.pop()
+                else:
+                    kitty_keyboard_state["flags"] = 0
+                    break
+            trace(
+                f"attach-term-kitty-pop:count={pop_count}:stack-depth={len(kitty_keyboard_stack)}:current={kitty_keyboard_state['flags']}"
+            )
+
+        def send_focus_in_event():
+            if not focus_state["enabled"] or focus_state["sent"]:
+                return
+            try:
+                write_terminal_reply(b"\x1b[I")
+                trace("attach-term-reply:focus-in")
+                focus_state["sent"] = True
+            except OSError:
+                pass
 
         def update_terminal_cursor(data):
             index = 0
@@ -308,6 +455,18 @@ try:
                         elif final == "d":
                             terminal_state["row"] = first if first is not None else 1
                             clamp_cursor()
+                        elif final == "h" and raw_params == "?1004":
+                            focus_state["enabled"] = True
+                            focus_state["sent"] = False
+                            trace("attach-term-mode-set:?1004")
+                        elif final == "l" and raw_params == "?1004":
+                            focus_state["enabled"] = False
+                            focus_state["sent"] = False
+                            trace("attach-term-mode-reset:?1004")
+                        elif final == "h":
+                            trace(f"attach-term-mode-set:{raw_params or 'default'}")
+                        elif final == "l":
+                            trace(f"attach-term-mode-reset:{raw_params or 'default'}")
                         index = seq_end + 1
                         continue
                     if next_byte == 0x5D:
@@ -336,6 +495,8 @@ try:
             if query_name == "cursor":
                 clamp_cursor()
                 return f"\x1b[{terminal_state['row']};{terminal_state['column']}R".encode("ascii")
+            if query_name == "status":
+                return b"\x1b[0n"
             if query_name == "kitty-kbd-query":
                 return b"\x1b[?0u"
             if query_name == "da1":
@@ -346,46 +507,106 @@ try:
                 return b"\x1b]11;rgb:0000/0000/0000\x1b\\"
             return b""
 
+        def handle_command_start_marker():
+            command_start_marker_state["seen"] = True
+            terminal_emulation["owner"] = "nested"
+            terminal_query_buffer.clear()
+            focus_state["enabled"] = False
+            focus_state["sent"] = False
+            kitty_keyboard_state["flags"] = 0
+            kitty_keyboard_stack.clear()
+            repeated_interrupt_state["last_at"] = None
+            terminal_state["row"] = 1
+            terminal_state["column"] = 1
+            trace("attach-terminal-emulation:nested")
+            trace("attach-command-stream-marker")
+
+        def maybe_escalate_repeated_interrupt(chunk):
+            if not command_stage_active():
+                return
+            now = time.monotonic()
+            for byte in chunk:
+                if byte != 0x03:
+                    continue
+                previous = repeated_interrupt_state["last_at"]
+                repeated_interrupt_state["last_at"] = now
+                if previous is None or now - previous > 8.0:
+                    continue
+                append_command_signal("INT")
+                trace("attach-signal-request:INT")
+
         def handle_terminal_queries(chunk):
+            if terminal_emulation["owner"] == "nested":
+                update_terminal_cursor(chunk)
+                return chunk
+
             terminal_query_buffer.extend(chunk)
             data = bytes(terminal_query_buffer)
             forwarded = bytearray()
             index = 0
 
-            while True:
-                next_match = None
-                for pattern, query_name in terminal_queries:
-                    match_index = data.find(pattern, index)
-                    if match_index < 0:
+            while index < len(data):
+                if data[index] == 0x1B:
+                    sequence, next_index, sequence_type = consume_terminal_sequence(data, index)
+                    if sequence_type == "incomplete":
+                        break
+                    if sequence_type == "dcs" and sequence in sync_output_dcs_sequences:
+                        trace(sync_output_dcs_sequences[sequence])
+                        index = next_index
                         continue
-                    if next_match is None or match_index < next_match[0]:
-                        next_match = (match_index, pattern, query_name)
-                if next_match is None:
-                    break
-                match_index, pattern, query_name = next_match
-                segment = data[index:match_index]
-                forwarded.extend(segment)
-                update_terminal_cursor(segment)
-                trace(f"attach-term-query:{query_name}")
-                response = build_terminal_reply(query_name)
-                try:
-                    write_terminal_reply(response)
-                    trace(f"attach-term-reply:{query_name}:{response.hex()}")
-                except OSError:
-                    pass
-                index = match_index + len(pattern)
+                    if sequence_type == "csi" and sequence is not None:
+                        raw_params = sequence[2:-1].decode("ascii", "ignore")
+                        final = chr(sequence[-1])
+                        if final == "u":
+                            if raw_params.startswith(">"):
+                                push_kitty_keyboard_flags(raw_params[1:])
+                                index = next_index
+                                continue
+                            if raw_params.startswith("<"):
+                                pop_kitty_keyboard_flags(raw_params[1:])
+                                index = next_index
+                                continue
+                            if raw_params.startswith("="):
+                                apply_kitty_keyboard_mode(raw_params[1:])
+                                index = next_index
+                                continue
+                        if raw_params == "?2026" and final == "h":
+                            trace("attach-term-mode-set:?2026")
+                            index = next_index
+                            continue
+                        if raw_params == "?2026" and final == "l":
+                            trace("attach-term-mode-reset:?2026")
+                            index = next_index
+                            continue
+                    matched_query = False
+                    if sequence is not None:
+                        for pattern, query_name in terminal_queries:
+                            if sequence != pattern:
+                                continue
+                            trace(f"attach-term-query:{query_name}")
+                            response = build_terminal_reply(query_name)
+                            try:
+                                write_terminal_reply(response)
+                                trace(f"attach-term-reply:{query_name}:{response.hex()}")
+                            except OSError:
+                                pass
+                            index = next_index
+                            matched_query = True
+                            break
+                    if matched_query:
+                        continue
+                    if sequence is not None:
+                        forwarded.extend(sequence)
+                        update_terminal_cursor(sequence)
+                        index = next_index
+                        continue
 
-            remainder = data[index:]
-            keep = longest_query_prefix(remainder)
-            if keep > 0:
-                visible = remainder[:-keep]
-                forwarded.extend(visible)
-                update_terminal_cursor(visible)
-                terminal_query_buffer[:] = remainder[-keep:]
-            else:
-                forwarded.extend(remainder)
-                update_terminal_cursor(remainder)
-                terminal_query_buffer.clear()
+                byte = data[index:index + 1]
+                forwarded.extend(byte)
+                update_terminal_cursor(byte)
+                index += 1
+
+            terminal_query_buffer[:] = data[index:]
 
             return bytes(forwarded)
 
@@ -394,9 +615,17 @@ try:
             saw_input = False
             total_input_bytes = 0
             sample_budget = 64
+            command_stage_initialized = False
             try:
                 trace("attach-stdin-stream-opened")
                 while True:
+                    if not command_stage_initialized and (command_start_marker_state["seen"] or current_attach_stage() == "command-start"):
+                        command_stage_initialized = True
+                        try:
+                            offset = os.path.getsize(stdin_stream)
+                        except OSError:
+                            pass
+                        trace(f"attach-stdin-offset-reset:{offset}")
                     with open(stdin_stream, "rb") as source:
                         source.seek(offset)
                         chunk = source.read(4096)
@@ -411,12 +640,13 @@ try:
                             sample = chunk[:sample_budget]
                             trace(f"attach-stdin-sample-hex:{sample.hex()}")
                             sample_budget -= len(sample)
+                        maybe_escalate_repeated_interrupt(chunk)
                         os.write(master_fd, chunk)
                         continue
                     if os.path.exists(stdin_eof_path):
                         trace("attach-stdin-eof")
                         break
-                    time.sleep(0.1)
+                    time.sleep(poll_interval)
             except OSError:
                 pass
             finally:
@@ -425,6 +655,7 @@ try:
 
         def pump_stdout():
             saw_output = False
+            command_stage_initialized = False
             try:
                 trace("attach-stdout-stream-opened")
                 with open(stdout_stream, "ab", buffering=0) as sink:
@@ -439,14 +670,12 @@ try:
                         if not saw_output:
                             trace("attach-stdout-first-byte")
                             saw_output = True
-                        forwarded = handle_terminal_queries(chunk)
-                        if forwarded:
-                            sink.write(forwarded)
-                            sink.flush()
-                if terminal_query_buffer:
-                    sink.write(bytes(terminal_query_buffer))
-                    sink.flush()
-                    terminal_query_buffer.clear()
+                        if current_attach_stage() == "command-start" and not command_start_marker_state["seen"]:
+                            handle_command_start_marker()
+                        if not command_stage_initialized and (command_start_marker_state["seen"] or current_attach_stage() == "command-start"):
+                            command_stage_initialized = True
+                        sink.write(chunk)
+                        sink.flush()
             except OSError:
                 pass
 
@@ -463,12 +692,11 @@ try:
         else:
             exit_code = 1
         trace(f"attach-worker-exit:{exit_code}")
-        stdin_thread.join(timeout=1)
-        stdout_thread.join(timeout=5)
         try:
             os.close(master_fd)
         except OSError:
             pass
+        stdin_thread.join(timeout=1)
         stdout_thread.join(timeout=1)
         stdout = ""
         stderr = ""

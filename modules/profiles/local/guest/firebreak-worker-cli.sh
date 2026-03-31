@@ -79,6 +79,7 @@ bridge_request_attach() {
   fi
 
   requests_dir=$bridge_dir/requests
+  printf '%s\n' 'firebreak: connecting to worker bridge' >&2
   mkdir -p "$requests_dir"
   request_dir=$(mktemp -d "$requests_dir/request.XXXXXX")
   request_tmp_path=$request_dir/request.json.tmp
@@ -192,7 +193,14 @@ PY
     fi
   }
 
+  reset_attach_terminal_ui() {
+    if [ -e /dev/tty ]; then
+      printf '\r\033[2K\033[0m\033[r\033[?25h\033[?1049l\033[?1047l\033[?1048l\033[?2004l\033[?1004l\033[?1006l\033[?1003l\033[?1002l\033[?1000l\033[?2026l\n' >/dev/tty 2>/dev/null || true
+    fi
+  }
+
   cleanup_attach() {
+    release_kind_spawn_lock
     restore_tty
   }
 
@@ -203,9 +211,12 @@ PY
   attach_client_script=$request_dir/attach-client.py
   cat >"$attach_client_script" <<'PY'
 import os
+import select
 import sys
 import threading
 import time
+import errno
+import fcntl
 
 request_dir = os.environ["REQUEST_DIR"]
 stdin_stream = os.environ["STDIN_STREAM"]
@@ -224,6 +235,10 @@ stdout_started = threading.Event()
 progress_done = threading.Event()
 stdin_done = threading.Event()
 printed_messages = set()
+poll_interval = 0.005
+stdin_reply_buffer = bytearray()
+stdout_flags = fcntl.fcntl(stdout_fd, fcntl.F_GETFL)
+fcntl.fcntl(stdout_fd, fcntl.F_SETFL, stdout_flags | os.O_NONBLOCK)
 
 
 def trace(message: str) -> None:
@@ -240,23 +255,174 @@ def print_progress(message: str) -> None:
     printed_messages.add(message)
     os.write(stderr_fd, (message + "\n").encode())
 
+
+def classify_csi_reply(sequence: bytes):
+    if not sequence.startswith(b"\x1b[") or len(sequence) < 3:
+        return None
+    final = sequence[-1:]
+    payload = sequence[2:-1].decode("ascii", "ignore")
+    if final == b"R":
+        parts = payload.split(";")
+        if len(parts) == 2 and all(part.isdigit() for part in parts):
+            return "cursor"
+    if payload.startswith("?") and final == b"u":
+        reply_body = payload[1:]
+        if reply_body and all(ch.isdigit() or ch in ";:" for ch in reply_body):
+            return "kitty-kbd-reply"
+    if payload.startswith("?") and final == b"c":
+        reply_body = payload[1:]
+        if reply_body and all(ch.isdigit() or ch in ";:" for ch in reply_body):
+            return "da1-reply"
+    return None
+
+
+def classify_osc_reply(sequence: bytes):
+    if sequence.startswith(b"\x1b]10;"):
+        return "osc10-reply"
+    if sequence.startswith(b"\x1b]11;"):
+        return "osc11-reply"
+    return None
+
+
+def is_partial_reply(data: bytes) -> bool:
+    if not data:
+        return False
+    if data == b"\x1b":
+        return True
+    if data.startswith(b"\x1b]"):
+        return data.startswith((b"\x1b]10;", b"\x1b]11;"))
+    if not data.startswith(b"\x1b["):
+        return False
+    if len(data) == 2:
+        return True
+    payload = data[2:]
+    return all(byte in b"0123456789;:?" for byte in payload)
+
+
+def strip_terminal_replies(chunk: bytes) -> bytes:
+    stdin_reply_buffer.extend(chunk)
+    data = bytes(stdin_reply_buffer)
+    forwarded = bytearray()
+    index = 0
+
+    while index < len(data):
+        byte = data[index]
+        if byte != 0x1B:
+            forwarded.append(byte)
+            index += 1
+            continue
+
+        if index + 1 >= len(data):
+            break
+
+        next_byte = data[index + 1]
+        if next_byte == 0x5B:
+            seq_end = index + 2
+            while seq_end < len(data) and not (0x40 <= data[seq_end] <= 0x7E):
+                seq_end += 1
+            if seq_end >= len(data):
+                break
+            sequence = data[index:seq_end + 1]
+            reply_name = classify_csi_reply(sequence)
+            if reply_name is not None:
+                trace(f"guest-stdin-term-reply:{reply_name}:{sequence.hex()}")
+                index = seq_end + 1
+                continue
+            forwarded.extend(sequence)
+            index = seq_end + 1
+            continue
+
+        if next_byte == 0x5D:
+            osc_end_bel = data.find(b"\x07", index + 2)
+            osc_end_st = data.find(b"\x1b\\", index + 2)
+            end_candidates = [end for end in (osc_end_bel, osc_end_st) if end >= 0]
+            if not end_candidates:
+                break
+            end_index = min(end_candidates)
+            if end_index == osc_end_bel:
+                sequence = data[index:end_index + 1]
+                advance = end_index + 1
+            else:
+                sequence = data[index:end_index + 2]
+                advance = end_index + 2
+            reply_name = classify_osc_reply(sequence)
+            if reply_name is not None:
+                trace(f"guest-stdin-term-reply:{reply_name}:{sequence.hex()}")
+                index = advance
+                continue
+            forwarded.extend(sequence)
+            index = advance
+            continue
+
+        forwarded.append(byte)
+        index += 1
+
+    remainder = data[index:]
+    if remainder and not is_partial_reply(remainder):
+        forwarded.extend(remainder)
+        stdin_reply_buffer.clear()
+    else:
+        stdin_reply_buffer[:] = remainder
+
+    return bytes(forwarded)
+
+
 def pump_stdout() -> None:
     offset = 0
+    pending = bytearray()
+    saw_stdout_bytes = False
+    total_stdout_bytes = 0
+    pending_high_water = 0
+    last_block_trace_at = 0.0
     try:
         while True:
+            current_size = 0
             if os.path.exists(stdout_stream):
+                try:
+                    current_size = os.path.getsize(stdout_stream)
+                except OSError:
+                    current_size = 0
+            if current_size > offset and len(pending) < 262144:
                 with open(stdout_stream, "rb") as handle:
                     handle.seek(offset)
-                    chunk = handle.read(4096)
+                    chunk = handle.read(min(65536, current_size - offset))
                 if chunk:
                     offset += len(chunk)
-                    stdout_started.set()
-                    os.write(stdout_fd, chunk)
+                    pending.extend(chunk)
+                    if len(pending) > pending_high_water:
+                        pending_high_water = len(pending)
+            if pending:
+                stdout_started.set()
+                _, writable, _ = select.select([], [stdout_fd], [], poll_interval)
+                if not writable:
+                    now = time.monotonic()
+                    if now - last_block_trace_at >= 1.0:
+                        trace(f"guest-stdout-backpressure:pending={len(pending)}")
+                        last_block_trace_at = now
                     continue
-            if os.path.exists(exit_code_path):
+                try:
+                    written = os.write(stdout_fd, pending)
+                except BlockingIOError:
+                    continue
+                except OSError as error:
+                    if error.errno in (errno.EAGAIN, errno.EWOULDBLOCK):
+                        continue
+                    trace(f"guest-stdout-write-error:{error.errno}")
+                    break
+                if written > 0:
+                    if not saw_stdout_bytes:
+                        trace("guest-stdout-first-byte")
+                        saw_stdout_bytes = True
+                    total_stdout_bytes += written
+                    del pending[:written]
+                    continue
+            if os.path.exists(exit_code_path) and not pending and offset >= current_size:
                 break
-            time.sleep(0.1)
+            time.sleep(poll_interval)
     finally:
+        if saw_stdout_bytes:
+            trace(f"guest-stdout-total-bytes:{total_stdout_bytes}")
+        trace(f"guest-stdout-pending-high-water:{pending_high_water}")
         stdout_done.set()
 
 
@@ -270,6 +436,9 @@ def pump_stdin() -> None:
             while True:
                 if os.path.exists(exit_code_path):
                     break
+                readable, _, _ = select.select([input_fd], [], [], poll_interval)
+                if not readable:
+                    continue
                 chunk = os.read(input_fd, 4096)
                 if not chunk:
                     if saw_stdin_bytes:
@@ -280,6 +449,9 @@ def pump_stdin() -> None:
                         break
                     trace("guest-stdin-empty-before-bytes")
                     break
+                chunk = strip_terminal_replies(chunk)
+                if not chunk:
+                    continue
                 if not saw_stdin_bytes:
                     trace("guest-stdin-first-byte")
                     trace(f"guest-stdin-first-chunk-hex:{chunk[:32].hex()}")
@@ -332,7 +504,7 @@ def pump_progress() -> None:
         if not reminded and time.monotonic() - started_at >= 15:
             print_progress("firebreak: still waiting for worker output")
             reminded = True
-        time.sleep(0.2)
+        time.sleep(0.05)
 
 stdout_thread = threading.Thread(target=pump_stdout, daemon=True)
 stdin_thread = threading.Thread(target=pump_stdin, daemon=True)
@@ -342,14 +514,18 @@ stdin_thread.start()
 progress_thread.start()
 
 while not os.path.exists(exit_code_path) and not stdout_done.is_set():
-    stdout_thread.join(timeout=0.1)
+    stdout_thread.join(timeout=poll_interval)
 
+trace("guest-attach-client-main-loop-exit")
 progress_done.set()
 stdout_done.set()
 stdin_done.set()
 stdout_thread.join(timeout=2)
+trace(f"guest-attach-client-stdout-thread-alive:{stdout_thread.is_alive()}")
 stdin_thread.join(timeout=1)
+trace(f"guest-attach-client-stdin-thread-alive:{stdin_thread.is_alive()}")
 progress_thread.join(timeout=1)
+trace(f"guest-attach-client-progress-thread-alive:{progress_thread.is_alive()}")
 
 try:
     pass
@@ -369,6 +545,7 @@ PY
 
   IFS= read -r bridge_exit_code < "$request_dir/response.exit-code" || bridge_exit_code=1
   restore_tty
+  reset_attach_terminal_ui
   case "$bridge_exit_code" in
     ''|*[!0-9]*)
       echo "invalid Firebreak worker bridge exit code: $bridge_exit_code" >&2
@@ -589,18 +766,40 @@ acquire_kind_spawn_lock() {
   kind_name=$1
   lock_root=$local_state_dir/spawn-locks
   kind_spawn_lock_dir=$lock_root/$kind_name.lock
+  current_boot_id=""
+
+  if [ -r /proc/sys/kernel/random/boot_id ]; then
+    IFS= read -r current_boot_id </proc/sys/kernel/random/boot_id || current_boot_id=""
+  fi
 
   mkdir -p "$lock_root"
   while :; do
     if mkdir "$kind_spawn_lock_dir" 2>/dev/null; then
       printf '%s\n' "$$" >"$kind_spawn_lock_dir/pid"
+      if [ -n "$current_boot_id" ]; then
+        printf '%s\n' "$current_boot_id" >"$kind_spawn_lock_dir/boot-id"
+      fi
       date +%s >"$kind_spawn_lock_dir/acquired-at"
       return 0
     fi
 
     stale_lock_pid=""
+    stale_lock_boot_id=""
     if [ -r "$kind_spawn_lock_dir/pid" ]; then
       IFS= read -r stale_lock_pid <"$kind_spawn_lock_dir/pid" || stale_lock_pid=""
+    fi
+    if [ -r "$kind_spawn_lock_dir/boot-id" ]; then
+      IFS= read -r stale_lock_boot_id <"$kind_spawn_lock_dir/boot-id" || stale_lock_boot_id=""
+    fi
+
+    if [ -n "$current_boot_id" ] && [ -z "$stale_lock_boot_id" ]; then
+      rm -rf "$kind_spawn_lock_dir"
+      continue
+    fi
+
+    if [ -n "$current_boot_id" ] && [ -n "$stale_lock_boot_id" ] && [ "$stale_lock_boot_id" != "$current_boot_id" ]; then
+      rm -rf "$kind_spawn_lock_dir"
+      continue
     fi
 
     if [ -n "$stale_lock_pid" ] && ! kill -0 "$stale_lock_pid" 2>/dev/null; then
@@ -614,7 +813,7 @@ acquire_kind_spawn_lock() {
 
 release_kind_spawn_lock() {
   if [ -n "${kind_spawn_lock_dir:-}" ]; then
-    rm -f "$kind_spawn_lock_dir/pid" "$kind_spawn_lock_dir/acquired-at"
+    rm -f "$kind_spawn_lock_dir/pid" "$kind_spawn_lock_dir/boot-id" "$kind_spawn_lock_dir/acquired-at"
     rmdir "$kind_spawn_lock_dir" 2>/dev/null || true
     kind_spawn_lock_dir=""
   fi
@@ -713,6 +912,9 @@ case "$subcommand" in
     done
 
     [ -n "$kind" ] || usage
+    if [ "$attach_mode" = "1" ]; then
+      printf '%s\n' "firebreak: resolving worker kind ($kind)" >&2
+    fi
     kind_json=$(resolve_kind "$kind")
 
     if [ -z "$backend" ]; then
@@ -732,9 +934,18 @@ case "$subcommand" in
         ;;
     esac
 
+    if [ "$attach_mode" = "1" ]; then
+      printf '%s\n' "firebreak: acquiring worker slot ($kind)" >&2
+    fi
     acquire_kind_spawn_lock "$kind"
+    if [ "$attach_mode" = "1" ]; then
+      printf '%s\n' "firebreak: worker slot acquired ($kind)" >&2
+    fi
     trap release_kind_spawn_lock EXIT INT TERM
     enforce_kind_limit "$kind_json" "$kind" "$backend"
+    if [ "$attach_mode" = "1" ]; then
+      printf '%s\n' "firebreak: worker slot validated ($kind)" >&2
+    fi
 
     case "$backend" in
       process)

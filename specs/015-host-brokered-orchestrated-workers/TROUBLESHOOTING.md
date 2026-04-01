@@ -1,6 +1,6 @@
 ---
 status: living
-last_updated: 2026-03-31
+last_updated: 2026-04-01
 ---
 
 # 015 Troubleshooting Playbook
@@ -316,6 +316,25 @@ What this means:
 - startup, rendering, and ordinary interaction can all be correct while final teardown semantics are still wrong
 - once this happens, the next boundary is deeper tty/signal semantics in the outer attach path, not basic stdin delivery
 
+### 15. Declared worker proxies can still fail in `local` mode if upstream installation is treated as incidental
+
+Symptoms:
+
+- a packaged CLI recipe declares `workerProxies` for commands such as `codex` or `claude`
+- switching the proxy to `--worker-mode local` fails with `missing upstream binary for .../.firebreak-upstream-*`
+- the same command still works in `vm` mode
+
+Root cause we uncovered:
+
+- the wrapper contract assumed the original packaged CLI binary already existed and could simply be renamed to `.firebreak-upstream-*`
+- packaged node-cli recipes only installed their primary package by default, so proxy-local commands that came from a different Firebreak worker package were never installed in the guest at all
+
+What fixed it:
+
+- treat the declared Firebreak worker `package = "firebreak-*"` as the source of truth for local upstream installation too
+- derive the in-VM upstream package/bin install contract from that package in shared packaged-node-cli logic
+- keep external recipe flakes free of duplicate npm package/bin metadata just to make `local` mode work
+
 ## What worked well
 
 - Narrow machine-readable phase files were much better than reading console fragments.
@@ -327,6 +346,7 @@ What this means:
 - Splitting terminal-query handling from ordinary stdin handling made the remaining bugs much easier to reason about.
 - Using more than one packaged CLI as a canary prevented us from overfitting all conclusions to `codex`.
 - Using a direct attached-worker canary and an AO-level canary together made it possible to isolate whether a remaining bug belonged to the inner worker VM or the outer orchestrator relay.
+- Keeping `launch_mode` and `worker-mode` separate avoided a misleading mental model. One controls how the VM starts; the other controls how a proxied command dispatches inside that already-started VM.
 
 ## What did not work well
 
@@ -337,6 +357,7 @@ What this means:
 - Treating long-running interactive exec sessions as reliable evidence collectors inside every automation environment.
 - Assuming that "output visible" implied "terminal contract correct".
 - Letting test-only terminal emulation drift away from the real product relay behavior.
+- Making `local` worker mode depend on undeclared incidental upstream binaries. If a proxy is part of the supported recipe contract, then its `local` mode must be provisioned deliberately, not assumed.
 
 ## Repeatable debugging order
 

@@ -113,3 +113,4 @@ Reopened for shared interactive lifecycle hardening. Detached flows, guest-local
 - whether the fastest acceptable packaged-tool delivery path is a host-shared prepared-tools mount, a baked image payload, or a hybrid repair path that uses the shared mount only when the baked payload is absent or stale
 - how much of the current transcript-noise cleanup should stay in debug-only views versus becoming part of future optional presentation filtering for live sessions
 - when to introduce the higher-level `workerProxies` authoring abstraction relative to the remaining TUI product bugs, since the UX direction is clear but the current priority remains interactive correctness
+- how to generalize package-derived local upstream resolution beyond the currently built-in Firebreak-managed worker packages without sliding back into duplicated per-recipe upstream metadata

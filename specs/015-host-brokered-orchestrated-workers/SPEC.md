@@ -88,6 +88,8 @@ The intended landing shape is:
 - The system shall implement the minimum attached-terminal reply contract required by the packaged interactive CLIs currently in scope, at the PTY edge rather than ad hoc inside multiple unrelated layers.
 - The system shall make attached interactive relay cadence low-latency enough that menu navigation and onboarding flows remain observably responsive.
 - The system shall preserve reviewable runtime artifacts for direct packaged-cli readiness probes when those probes fail.
+- The system shall treat both `--worker-mode vm` and `--worker-mode local` as first-class supported dispatch paths for declared packaged worker proxies, rather than as best-effort fallbacks.
+- When a packaged worker proxy points at a Firebreak-managed worker package such as `firebreak-codex` or `firebreak-claude-code`, the system shall derive the corresponding in-VM upstream CLI install contract from that package declaration instead of requiring recipe authors to restate npm package or bin metadata.
 - The system shall not require repeated network-backed package installation during the normal startup path for attached interactive workers once the packaged toolchain has been prepared successfully.
 - The system shall provide a deterministic packaged-tool delivery path for attached interactive workers, either by baking tools into the image or by reusing a prepared host-owned shared tools state outside the critical interactive boot path.
 - The system shall apply that deterministic packaged-tool delivery path to both Bun-managed and packaged node-cli worker images that participate in the orchestration flow.
@@ -114,6 +116,8 @@ The intended landing shape is:
 - `workerProxies` derives both the guest-visible worker-kind registry and the installed proxy commands from one source of truth for common packaged-cli recipes.
 - Packaged node-cli worker-proxy commands shall support a shared worker-mode switch so the same command name can either launch a sibling Firebreak worker (`vm`) or delegate to the original packaged in-VM CLI (`local`) without recipe-specific wrapper forks.
 - The shared worker-mode contract shall support both a global default and per-command overrides, with CLI overrides taking precedence over recipe defaults.
+- `launch_mode` and `worker-mode` are intentionally different scopes in the public contract and should remain distinct: `launch_mode` controls how the VM session starts, while `worker-mode` controls how a proxied packaged command dispatches inside that session.
+- For Firebreak-managed packaged worker proxies, the declared `package = "firebreak-*"` field is now the source of truth for both sibling-worker launch metadata and local upstream CLI installation. External recipes should not have to duplicate upstream package details just to make `local` mode work.
 - The lower-level split between worker-kind registration and installed command wrappers should remain available internally for advanced cases, but the common recipe-authoring path should not require wiring both fields manually.
 - The attached relay should publish command lifecycle markers on the PTY stream as well as through shared state files, so the host can react promptly even when shared-file visibility lags behind the live terminal stream.
 - Repeated interactive interrupt escalation belongs in the shared attached-worker lifecycle, not in recipe-specific glue. When the product-layer VMs already prove the path works, stricter direct canaries should guide follow-up hardening rather than blocking stable shared/runtime improvements from landing.
@@ -132,6 +136,7 @@ The intended landing shape is:
 - At least one attached packaged CLI can prove a meaningful post-input interactive state transition through the external orchestrator recipe path, so the system demonstrates usable TUI behavior instead of only startup visibility.
 - The product-layer orchestrator VMs in scope shall keep interactive `codex` working as a protected regression path while shared lifecycle changes continue underneath them.
 - The recipe-authoring UX for exposing sibling-worker commands should use a single higher-level declaration in the common packaged-cli case rather than permanently requiring recipe authors to configure both worker-kind registration and shell-facing proxy installation by hand.
+- The common packaged-cli recipe path shall not require duplicating local upstream package metadata for Firebreak-managed worker proxies just to support `--worker-mode local`.
 
 ## Dependencies and risks
 

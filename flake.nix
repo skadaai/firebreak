@@ -93,6 +93,7 @@
             mkWorkerGuestBridgeInteractiveSmokePackage
             mkWorkerGuestBridgeSmokePackage
             mkWorkerPackage
+            mkWorkerProxyScriptSmokePackage
             mkWorkerSmokePackage
             ;
         });

@@ -47,8 +47,20 @@ let
       postInstallScript
       ;
   });
-  installBinScriptSnippet =
+  upstreamInstallBinScriptSnippet =
     lib.concatStringsSep "\n"
+      (map
+        (scriptName:
+          ''
+            if [ -e "$npm_config_prefix/bin/${scriptName}" ]; then
+              mv "$npm_config_prefix/bin/${scriptName}" "$npm_config_prefix/bin/.firebreak-upstream-${scriptName}"
+            else
+              rm -f "$npm_config_prefix/bin/.firebreak-upstream-${scriptName}"
+            fi
+          '')
+        (builtins.attrNames installBinScripts));
+  installBinScriptSnippet =
+    upstreamInstallBinScriptSnippet + "\n" + lib.concatStringsSep "\n"
       (lib.mapAttrsToList
         (scriptName: scriptText:
           let
@@ -202,7 +214,7 @@ in {
         util-linux
       ] ++ extraBootstrapPackages;
       bootstrapScript = renderTemplate scriptVars ./guest/bootstrap.sh;
-      shellInit = renderTemplate scriptVars ./guest/shell-init.sh;
+  shellInit = renderTemplate scriptVars ./guest/shell-init.sh;
     };
 
     microvm.forwardPorts = forwardPorts;

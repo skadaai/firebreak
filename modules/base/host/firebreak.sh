@@ -57,7 +57,7 @@ EOF
 run_usage() {
   cat <<'EOF' >&2
 usage:
-  firebreak run <vm> [--shell] [-- <vm args...>]
+  firebreak run <vm> [--shell] [--worker-proxy-mode <worker|local>] [-- <vm args...>]
 EOF
   exit "${1:-0}"
 }
@@ -105,6 +105,7 @@ Available Firebreak VMs
 Examples:
   firebreak run codex
   firebreak run codex --shell
+  firebreak run codex --worker-proxy-mode local
   firebreak run claude-code -- --help
 EOF
 }
@@ -121,11 +122,24 @@ firebreak_run_command() {
   shift
 
   requested_vm_mode=${FIREBREAK_VM_MODE:-}
+  requested_worker_proxy_mode=${FIREBREAK_WORKER_PROXY_MODE:-}
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --shell)
         requested_vm_mode=shell
+        shift
+        ;;
+      --worker-proxy-mode)
+        [ "$#" -ge 2 ] || {
+          echo "missing value for --worker-proxy-mode" >&2
+          run_usage 1
+        }
+        requested_worker_proxy_mode=$2
+        shift 2
+        ;;
+      --worker-proxy-mode=*)
+        requested_worker_proxy_mode=${1#--worker-proxy-mode=}
         shift
         ;;
       --)
@@ -154,20 +168,46 @@ firebreak_run_command() {
       ;;
   esac
 
+  case "$requested_worker_proxy_mode" in
+    ""|worker|local)
+      ;;
+    *)
+      echo "unsupported FIREBREAK_WORKER_PROXY_MODE: $requested_worker_proxy_mode" >&2
+      echo "supported values: worker, local" >&2
+      run_usage 1
+      ;;
+  esac
+
+  firebreak_run_package() {
+    package_name=$1
+    shift
+
+    if [ -n "$requested_vm_mode" ] && [ -n "$requested_worker_proxy_mode" ]; then
+      FIREBREAK_VM_MODE="$requested_vm_mode" \
+      FIREBREAK_WORKER_PROXY_MODE="$requested_worker_proxy_mode" \
+      firebreak_exec_package "$package_name" "$@"
+      return
+    fi
+
+    if [ -n "$requested_vm_mode" ]; then
+      FIREBREAK_VM_MODE="$requested_vm_mode" firebreak_exec_package "$package_name" "$@"
+      return
+    fi
+
+    if [ -n "$requested_worker_proxy_mode" ]; then
+      FIREBREAK_WORKER_PROXY_MODE="$requested_worker_proxy_mode" firebreak_exec_package "$package_name" "$@"
+      return
+    fi
+
+    firebreak_exec_package "$package_name" "$@"
+  }
+
   case "$vm_name" in
     codex)
-      if [ -n "$requested_vm_mode" ]; then
-        FIREBREAK_VM_MODE="$requested_vm_mode" firebreak_exec_package "firebreak-codex" "$@"
-      else
-        firebreak_exec_package "firebreak-codex" "$@"
-      fi
+      firebreak_run_package "firebreak-codex" "$@"
       ;;
     claude-code)
-      if [ -n "$requested_vm_mode" ]; then
-        FIREBREAK_VM_MODE="$requested_vm_mode" firebreak_exec_package "firebreak-claude-code" "$@"
-      else
-        firebreak_exec_package "firebreak-claude-code" "$@"
-      fi
+      firebreak_run_package "firebreak-claude-code" "$@"
       ;;
     *)
       echo "unknown Firebreak VM: $vm_name" >&2
@@ -185,7 +225,7 @@ usage:
   firebreak init [--force] [--stdout] [--interactive] [--non-interactive]
   firebreak doctor [--verbose] [--json]
   firebreak vms [--json]
-  firebreak run <vm> [--shell] [-- <vm args...>]
+  firebreak run <vm> [--shell] [--worker-proxy-mode <worker|local>] [-- <vm args...>]
   firebreak worker <subcommand> ...
   firebreak internal <subcommand> ...
 

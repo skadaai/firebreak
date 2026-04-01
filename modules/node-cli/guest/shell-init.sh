@@ -13,6 +13,10 @@ export npm_config_prefix="$tool_home/.local"
 export PATH="$LOCAL_BIN:$PATH"
 @LAUNCH_ENV_EXPORTS@
 
+if [ -r /run/firebreak-agent/worker-proxy-mode ]; then
+  export FIREBREAK_WORKER_PROXY_MODE="$(cat /run/firebreak-agent/worker-proxy-mode)"
+fi
+
 firebreak_refresh_cli() {
   printf "Refreshing @NAME@ CLI...\n"
 

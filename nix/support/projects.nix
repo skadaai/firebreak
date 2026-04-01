@@ -2,12 +2,39 @@
 rec {
   mkWorkerProxyScript =
     {
+      commandName ? kind,
       kind,
       versionOutput ? "${kind} firebreak worker proxy",
     }:
     ''
       #!/usr/bin/env bash
       set -eu
+
+      upstream_bin=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/.firebreak-upstream-${commandName}
+      worker_proxy_mode=''${FIREBREAK_WORKER_PROXY_MODE:-}
+      if [ -z "$worker_proxy_mode" ] && [ -r /run/firebreak-agent/worker-proxy-mode ]; then
+        worker_proxy_mode=$(cat /run/firebreak-agent/worker-proxy-mode)
+      fi
+      if [ -z "$worker_proxy_mode" ]; then
+        worker_proxy_mode=worker
+      fi
+
+      case "$worker_proxy_mode" in
+        worker)
+          ;;
+        local)
+          if ! [ -x "$upstream_bin" ]; then
+            echo "missing upstream binary for ${commandName}: $upstream_bin" >&2
+            exit 1
+          fi
+          exec "$upstream_bin" "$@"
+          ;;
+        *)
+          echo "unsupported FIREBREAK_WORKER_PROXY_MODE: $worker_proxy_mode" >&2
+          echo "supported values: worker, local" >&2
+          exit 1
+          ;;
+      esac
 
       if [ "''${1:-}" = "--version" ]; then
         printf '%s\n' ${lib.escapeShellArg versionOutput}
@@ -290,6 +317,7 @@ rec {
         lib.mapAttrs
           (commandName: proxy:
             mkWorkerProxyScript {
+              inherit commandName;
               kind = proxy.kind;
               versionOutput = proxy.versionOutput or "${commandName} firebreak worker proxy";
             })

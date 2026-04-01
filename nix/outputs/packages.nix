@@ -27,6 +27,7 @@
   mkWorkerGuestBridgeInteractiveSmokePackage,
   mkWorkerGuestBridgeSmokePackage,
   mkWorkerPackage,
+  mkWorkerProxyScriptSmokePackage,
   mkWorkerSmokePackage,
 }:
 {
@@ -74,6 +75,10 @@
 
   firebreak-test-smoke-firebreak-cli-surface = mkFirebreakCliSurfaceSmokePackage {
     name = "firebreak-test-smoke-firebreak-cli-surface";
+  };
+
+  firebreak-test-smoke-worker-proxy-script = mkWorkerProxyScriptSmokePackage {
+    name = "firebreak-test-smoke-worker-proxy-script";
   };
 
   firebreak-internal-validate = mkValidationPackage {

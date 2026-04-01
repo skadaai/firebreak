@@ -79,10 +79,12 @@ rec {
           *"#firebreak-codex")
             printf '%s\n' "__VM__codex"
             printf '%s\n' "__MODE__''${FIREBREAK_VM_MODE:-unset}"
+            printf '%s\n' "__WORKER_PROXY_MODE__''${FIREBREAK_WORKER_PROXY_MODE:-unset}"
             ;;
           *"#firebreak-claude-code")
             printf '%s\n' "__VM__claude-code"
             printf '%s\n' "__MODE__''${FIREBREAK_VM_MODE:-unset}"
+            printf '%s\n' "__WORKER_PROXY_MODE__''${FIREBREAK_WORKER_PROXY_MODE:-unset}"
             ;;
           *"#firebreak-internal-validate")
             printf '%s\n' "__INTERNAL__validate"
@@ -133,6 +135,26 @@ rec {
       text = renderTemplate {
         "@FIREBREAK_CLI_BIN@" = "${fakeCli}/bin/firebreak-cli-smoke-firebreak";
       } ../../modules/base/tests/test-smoke-firebreak-cli-surface.sh;
+    };
+
+  mkWorkerProxyScriptSmokePackage = { name }:
+    let
+      workerProxyScript = self.lib.${system}.mkWorkerProxyScript {
+        commandName = "codex";
+        kind = "codex";
+        versionOutput = "codex firebreak worker proxy";
+      };
+    in
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        bash
+        coreutils
+        gnugrep
+      ];
+      text = renderTemplate {
+        "@WORKER_PROXY_SCRIPT@" = workerProxyScript;
+      } ../../modules/base/tests/test-smoke-worker-proxy-script.sh;
     };
 
   mkCloudJobPackage = {

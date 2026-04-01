@@ -15,6 +15,7 @@ agent_specific_config=${!agent_specific_config_var:-}
 agent_specific_host_path=${!agent_specific_host_path_var:-}
 agent_config_mode=${agent_specific_config:-${AGENT_CONFIG:-vm}}
 requested_vm_mode=${FIREBREAK_VM_MODE:-run}
+requested_worker_proxy_mode=${FIREBREAK_WORKER_PROXY_MODE:-worker}
 agent_session_mode_override=${FIREBREAK_AGENT_SESSION_MODE_OVERRIDE:-}
 agent_session_mode=agent
 default_agent_command=@DEFAULT_AGENT_COMMAND@
@@ -196,6 +197,16 @@ case "$requested_vm_mode" in
   *)
     echo "unsupported FIREBREAK_VM_MODE: $requested_vm_mode" >&2
     echo "supported values: run, shell" >&2
+    exit 1
+    ;;
+esac
+
+case "$requested_worker_proxy_mode" in
+  worker|local)
+    ;;
+  *)
+    echo "unsupported FIREBREAK_WORKER_PROXY_MODE: $requested_worker_proxy_mode" >&2
+    echo "supported values: worker, local" >&2
     exit 1
     ;;
 esac
@@ -404,6 +415,7 @@ printf '%s\n' "$host_uid" > "$host_meta_dir/host-uid"
 printf '%s\n' "$host_gid" > "$host_meta_dir/host-gid"
 printf '%s\n' "$agent_config_mode" > "$host_meta_dir/agent-config-mode"
 printf '%s\n' "$agent_session_mode" > "$host_meta_dir/agent-session-mode"
+printf '%s\n' "$requested_worker_proxy_mode" > "$host_meta_dir/worker-proxy-mode"
 if [ -n "$agent_term" ]; then
   printf '%s\n' "$agent_term" > "$host_meta_dir/agent-term"
 fi

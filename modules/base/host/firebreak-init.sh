@@ -17,6 +17,7 @@ AGENT_CONFIG=workspace
 
 # Public local mode selector:
 # FIREBREAK_VM_MODE=run
+# FIREBREAK_WORKER_PROXY_MODE=worker
 
 # Optional shared host config root when AGENT_CONFIG=host:
 # AGENT_CONFIG_HOST_PATH=~/.config/firebreak-agent

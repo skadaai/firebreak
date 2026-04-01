@@ -16,10 +16,20 @@ Firebreak is a VM-first control plane for running coding agents with a small pub
 firebreak vms
 firebreak run codex
 firebreak run codex --shell
+firebreak run codex --worker-proxy-mode local
 firebreak run claude-code -- --help
 ```
 
 `firebreak vms` lists the public VM workloads. `firebreak run <vm>` launches one of them through the existing Firebreak VM packages.
+
+For packaged node-cli VMs that expose `workerProxies`, `firebreak run` can also choose whether commands such as `codex` and `claude` launch as sibling Firebreak workers or as regular in-VM processes:
+
+```sh
+npx firebreak run codex --worker-proxy-mode worker
+npx firebreak run codex --worker-proxy-mode local
+```
+
+The same switch is available through `FIREBREAK_WORKER_PROXY_MODE=worker|local` when you launch an external recipe package directly with `nix run`.
 
 ## Local Workloads
 
@@ -93,25 +103,27 @@ firebreak worker stop codex-1234abcd
 firebreak worker rm codex-1234abcd
 ```
 
-Bridge-enabled recipes can declare `workerKinds` that resolve a stable kind name onto a backend such as `process` or `firebreak`.
+Bridge-enabled packaged node-cli recipes can declare `workerProxies` so selected command names resolve through the shared Firebreak worker bridge by default.
 
 Example external recipe fragment:
 
 ```nix
-workerKinds = {
+workerProxies = {
   codex = {
+    kind = "codex";
     backend = "firebreak";
     package = "firebreak-codex";
     vm_mode = "run";
     max_instances = 4;
   };
-};
-
-installBinScripts = {
-  codex = firebreak.lib.${system}.mkWorkerProxyScript {
-    kind = "codex";
+  claude = {
+    kind = "claude-code";
+    backend = "firebreak";
+    package = "firebreak-claude-code";
+    vm_mode = "run";
+    max_instances = 2;
   };
 };
 ```
 
-For packaged node-cli recipes, Firebreak also exposes `firebreak-bootstrap-wait` inside the guest so recipe-owned validation can wait for the shared bootstrap service to finish before probing installed CLIs or worker-proxy wrappers.
+For packaged node-cli recipes, Firebreak also exposes `firebreak-bootstrap-wait` inside the guest so recipe-owned validation can wait for the shared bootstrap service to finish before probing installed CLIs or worker-proxy wrappers. Those generated proxy commands honor `FIREBREAK_WORKER_PROXY_MODE=worker|local`, so the same recipe can flip between sibling-worker routing and regular in-VM execution without redefining command names.

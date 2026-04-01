@@ -67,6 +67,7 @@ Interactive TUI hardening after the first full end-to-end success. The current a
 - current manual AO validation for `codex` shows the nested worker starts and remains alive, and the remaining visibility bug has narrowed further from "missing basic terminal replies" to "Codex still renders blank even after richer PTY-edge replies and filtering are restored"
 - current manual AO validation for `claude` shows startup and interaction work, but exiting the nested session from AO still leaves the worker hanging after the `Press Ctrl-C again to exit` prompt
 - the external `vibe-kanban` recipe now exposes the same `codex` and `claude` sibling-worker proxy commands as AO, so the remaining TUI bugs can be compared against a second VM recipe canary
+- packaged node-cli worker proxies now support a shared `FIREBREAK_WORKER_PROXY_MODE=worker|local` switch, and the public `firebreak run` surface can set it directly with `--worker-proxy-mode`
 - a committed `vibe-kanban` interactive Codex smoke now protects the working Codex path against regressions while shared TUI lifecycle work continues
 - the same current worktree now reproduces the `claude` exit-limbo behavior in both AO and `vibe-kanban`, which retired recipe-specific suspicion and isolated the bug in the shared attached-worker lifecycle
 - a direct shared-layer `claude` exit smoke now reproduces the same raw-mode repeated-`Ctrl-C` behavior without AO or `vibe-kanban`, so the shared worker layer has a fast acceptance gate for this bug

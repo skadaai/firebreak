@@ -68,6 +68,7 @@ import time
 import fcntl
 import struct
 import termios
+import errno
 
 bin_path = os.environ["AGENT_ORCHESTRATOR_BIN"]
 log_path = os.environ["SESSION_LOG"]
@@ -108,7 +109,6 @@ with open(log_path, "wb") as log_file:
         "Google Vertex AI",
         "Microsoft Foundry",
     ]
-    claude_exit_confirm_marker = "Press Ctrl-C again to exit"
     control_sequence_pattern = re.compile(
         r"\x1b(?:\][^\x07\x1b]*(?:\x07|\x1b\\)|P.*?\x1b\\|[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])",
         re.DOTALL,
@@ -125,11 +125,15 @@ with open(log_path, "wb") as log_file:
     def compact(text: str) -> str:
         return re.sub(r"\s+", "", text).lower()
 
+    claude_exit_confirm_marker = "Press Ctrl-C again to exit"
+    claude_exit_confirm_compact = compact(claude_exit_confirm_marker)
+
     transcript = bytearray()
     sent_claude = False
     sent_enter = False
     sent_first_interrupt = False
     sent_second_interrupt = False
+    sent_third_interrupt = False
     saw_worker_output = False
     saw_claude_ui = False
     saw_claude_login = False
@@ -138,6 +142,7 @@ with open(log_path, "wb") as log_file:
     enter_deadline = None
     first_interrupt_deadline = None
     second_interrupt_deadline = None
+    third_interrupt_deadline = None
     deadline = time.time() + 600
     last_normalized = ""
     compact_markers = [compact(marker) for marker in claude_login_markers]
@@ -145,13 +150,23 @@ with open(log_path, "wb") as log_file:
     try:
         while time.time() < deadline:
             timeout = 0.5
-            for candidate in (enter_deadline, first_interrupt_deadline, second_interrupt_deadline):
+            for candidate in (
+                enter_deadline,
+                first_interrupt_deadline,
+                second_interrupt_deadline,
+                third_interrupt_deadline,
+            ):
                 if candidate is not None:
                     timeout = max(0.0, min(timeout, candidate - time.time()))
 
             readable, _, _ = select.select([master_fd], [], [], timeout)
             if readable:
-                chunk = os.read(master_fd, 65536)
+                try:
+                    chunk = os.read(master_fd, 65536)
+                except OSError as exc:
+                    if exc.errno == errno.EIO:
+                        break
+                    raise
                 if not chunk:
                     break
                 transcript.extend(chunk)
@@ -182,12 +197,15 @@ with open(log_path, "wb") as log_file:
                     for marker, compact_marker in zip(claude_login_markers, compact_markers):
                         if marker in normalized or compact_marker in compact_normalized:
                             saw_claude_login = True
-                            first_interrupt_deadline = time.time() + 1
+                            first_interrupt_deadline = time.time() + 3
                             break
 
-                if sent_first_interrupt and not saw_exit_confirm and claude_exit_confirm_marker in normalized:
+                if sent_first_interrupt and not saw_exit_confirm and (
+                    claude_exit_confirm_marker in normalized
+                    or claude_exit_confirm_compact in compact_normalized
+                ):
                     saw_exit_confirm = True
-                    second_interrupt_deadline = time.time() + 1
+                    second_interrupt_deadline = time.time() + 5
 
                 if sent_second_interrupt and shell_prompt_marker in normalized:
                     saw_shell_return = True
@@ -204,12 +222,19 @@ with open(log_path, "wb") as log_file:
                 os.write(master_fd, b"\x03")
                 sent_first_interrupt = True
                 first_interrupt_deadline = None
-                deadline = max(deadline, now + 30)
+                deadline = max(deadline, now + 45)
 
             if (saw_exit_confirm or sent_first_interrupt) and second_interrupt_deadline is not None and now >= second_interrupt_deadline and not sent_second_interrupt:
                 os.write(master_fd, b"\x03")
                 sent_second_interrupt = True
                 second_interrupt_deadline = None
+                third_interrupt_deadline = now + 10
+                deadline = max(deadline, now + 35)
+
+            if sent_second_interrupt and not saw_shell_return and third_interrupt_deadline is not None and now >= third_interrupt_deadline and not sent_third_interrupt:
+                os.write(master_fd, b"\x03")
+                sent_third_interrupt = True
+                third_interrupt_deadline = None
                 deadline = max(deadline, now + 20)
 
             if proc.poll() is not None:

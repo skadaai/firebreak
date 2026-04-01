@@ -537,7 +537,9 @@ terminal_state = {"row": 1, "column": 1}
 terminal_query_buffer = bytearray()
 stdin_reply_buffer = bytearray()
 command_start_marker_seen = False
+command_stream_stage = ""
 repeated_interrupt_state = {"last_at": None}
+command_interrupt_state = {"requested_at": None, "term_sent_at": None, "kill_sent": False}
 terminal_queries = [
     (b"\x1b[6n", "cursor"),
     (b"\x1b[5n", "status"),
@@ -653,11 +655,15 @@ def trace_debug(message: str) -> None:
 
 
 def handle_command_start_marker() -> None:
-    global focus_in_sent, command_start_marker_seen, focus_tracking_enabled, kitty_keyboard_flags
+    global focus_in_sent, command_start_marker_seen, focus_tracking_enabled, kitty_keyboard_flags, command_stream_stage
     command_start_marker_seen = True
+    command_stream_stage = "command-start"
     stdin_reply_buffer.clear()
     terminal_query_buffer.clear()
     repeated_interrupt_state["last_at"] = None
+    command_interrupt_state["requested_at"] = None
+    command_interrupt_state["term_sent_at"] = None
+    command_interrupt_state["kill_sent"] = False
     kitty_keyboard_stack.clear()
     kitty_keyboard_flags = 0
     terminal_state["row"] = 1
@@ -667,8 +673,41 @@ def handle_command_start_marker() -> None:
     trace_debug("command-stream-marker")
 
 
+def current_command_stage() -> str:
+    stage = relay.current_attach_stage()
+    if stage.startswith("command-exit:"):
+        return stage
+    if command_stream_stage.startswith("command-exit:"):
+        return command_stream_stage
+    if stage:
+        return stage
+    return command_stream_stage
+
+
 def command_stage_active() -> bool:
-    return command_start_marker_seen or relay.current_attach_stage() == "command-start"
+    stage = current_command_stage()
+    return command_start_marker_seen or stage == "command-start" or stage.startswith("command-exit:")
+
+
+def handle_firebreak_stream_marker(sequence: bytes) -> bool:
+    global command_stream_stage
+    prefix = b"\x1b]9001;firebreak;"
+    if not sequence.startswith(prefix):
+        return False
+    if sequence.endswith(b"\x07"):
+        payload = sequence[len(prefix):-1]
+    elif sequence.endswith(b"\x1b\\"):
+        payload = sequence[len(prefix):-2]
+    else:
+        return False
+    marker = payload.decode("ascii", "ignore")
+    if not marker:
+        return True
+    command_stream_stage = marker
+    trace_debug(f"command-stream-marker:{marker}")
+    if marker == "command-start" and not command_start_marker_seen:
+        handle_command_start_marker()
+    return True
 
 
 def maybe_escalate_repeated_interrupt(chunk: bytes) -> None:
@@ -683,6 +722,9 @@ def maybe_escalate_repeated_interrupt(chunk: bytes) -> None:
         if previous is None or now - previous > 8.0:
             continue
         relay.append_command_signal("INT")
+        command_interrupt_state["requested_at"] = now
+        command_interrupt_state["term_sent_at"] = None
+        command_interrupt_state["kill_sent"] = False
         trace_debug("stdin-signal-request:INT")
 
 
@@ -1033,6 +1075,9 @@ def split_terminal_output(chunk: bytes) -> bytes:
             if sequence_type == "escaped-esc":
                 index = next_index
                 continue
+            if sequence_type == "osc" and sequence is not None and handle_firebreak_stream_marker(sequence):
+                index = next_index
+                continue
             if sequence_type == "dcs" and sequence in sync_output_dcs_sequences:
                 trace_debug(sync_output_dcs_sequences[sequence])
                 index = next_index
@@ -1116,7 +1161,8 @@ def split_terminal_output(chunk: bytes) -> bytes:
 
     remainder = data[index:]
     terminal_query_buffer[:] = remainder
-    if remainder and (command_start_marker_seen or relay.current_attach_stage() == "command-start"):
+    stage = current_command_stage()
+    if remainder and (command_start_marker_seen or stage == "command-start" or stage.startswith("command-exit:")):
         trace_debug(f"command-output-remainder:{remainder[:32].hex()}")
     forwarded_bytes = bytes(forwarded)
     if forwarded_bytes:
@@ -1179,20 +1225,22 @@ def pump_stdout() -> None:
                 if raw_sample_count < 8:
                     trace_debug(f"stdout-raw-sample:{raw_chunk[:64].hex()}")
                     raw_sample_count += 1
-                if relay.current_attach_stage() == "command-start" and not command_start_marker_seen:
+                stage = current_command_stage()
+                if stage == "command-start" and not command_start_marker_seen:
                     handle_command_start_marker()
-                if (command_start_marker_seen or relay.current_attach_stage() == "command-start") and command_raw_sample_count < 8:
+                if (command_start_marker_seen or stage == "command-start" or stage.startswith("command-exit:")) and command_raw_sample_count < 8:
                     trace_debug(f"command-stdout-raw-sample:{raw_chunk[:64].hex()}")
                     command_raw_sample_count += 1
                 chunk = split_terminal_output(raw_chunk)
-                if (command_start_marker_seen or relay.current_attach_stage() == "command-start") and not command_stage_initialized:
+                stage = current_command_stage()
+                if (command_start_marker_seen or stage == "command-start" or stage.startswith("command-exit:")) and not command_stage_initialized:
                     command_stage_initialized = True
                 send_focus_in_event()
                 if not chunk:
                     if filtered_empty_sample_count < 8:
                         trace_debug("stdout-filtered-empty")
                         filtered_empty_sample_count += 1
-                    if (command_start_marker_seen or relay.current_attach_stage() == "command-start") and command_filtered_empty_sample_count < 8:
+                    if (command_start_marker_seen or stage == "command-start" or stage.startswith("command-exit:")) and command_filtered_empty_sample_count < 8:
                         trace_debug("command-stdout-filtered-empty")
                         command_filtered_empty_sample_count += 1
                     continue
@@ -1205,7 +1253,7 @@ def pump_stdout() -> None:
                         )
                     if relay.bridge_trace_path:
                         relay.trace_event(relay.bridge_trace_path, "nested-runner-first-byte")
-                if not command_output_chunk_seen and (command_start_marker_seen or relay.current_attach_stage() == "command-start"):
+                if not command_output_chunk_seen and (command_start_marker_seen or stage == "command-start" or stage.startswith("command-exit:")):
                     command_output_chunk_seen = True
                     if relay.wrapper_trace_log:
                         relay.trace_event(
@@ -1215,7 +1263,7 @@ def pump_stdout() -> None:
                     if relay.bridge_trace_path:
                         relay.trace_event(relay.bridge_trace_path, "nested-command-first-byte")
                 if (
-                    (command_start_marker_seen or relay.current_attach_stage() == "command-start")
+                    (command_start_marker_seen or stage == "command-start" or stage.startswith("command-exit:"))
                     and command_forwarded_sample_count < 16
                 ):
                     trace_debug(f"command-stdout-forwarded-sample:{chunk[:64].hex()}")
@@ -1259,9 +1307,28 @@ def wait_for_child_exit():
         if waited_pid == child_pid:
             return wait_status
 
-        stage = relay.current_attach_stage()
+        stage = current_command_stage()
+        now = time.monotonic()
+        if (
+            stage == "command-start"
+            and command_interrupt_state["requested_at"] is not None
+        ):
+            if (
+                command_interrupt_state["term_sent_at"] is None
+                and now - command_interrupt_state["requested_at"] >= 3.0
+            ):
+                relay.append_command_signal("TERM")
+                command_interrupt_state["term_sent_at"] = now
+                trace_debug("stdin-signal-request:TERM")
+            elif (
+                command_interrupt_state["term_sent_at"] is not None
+                and not command_interrupt_state["kill_sent"]
+                and now - command_interrupt_state["term_sent_at"] >= 5.0
+            ):
+                relay.append_command_signal("KILL")
+                command_interrupt_state["kill_sent"] = True
+                trace_debug("stdin-signal-request:KILL")
         if stage.startswith("command-exit:"):
-            now = time.monotonic()
             if command_exit_grace_started_at is None:
                 command_exit_grace_started_at = now
                 trace_debug(f"runner-command-exit-seen:{stage}")

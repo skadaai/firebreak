@@ -1,13 +1,13 @@
 ---
 status: in_progress
-last_updated: 2026-03-31
+last_updated: 2026-04-01
 ---
 
 # 015 Status
 
 ## Current phase
 
-Interactive TUI hardening after the first full end-to-end success. The current attached relay path is now strong enough to boot sibling workers, surface nested CLI output, and drive real onboarding transitions for both `claude` and `codex` through focused smokes and manual AO/VK validation. The open work has narrowed further: `codex` is now the protected working path, and the active product bug is the shared `claude` exit-handback behavior after the nested worker already exits cleanly.
+Interactive TUI hardening after the first full end-to-end success. The current attached relay path is now strong enough to boot sibling workers, surface nested CLI output, and drive real onboarding transitions for both `claude` and `codex` through focused smokes and manual AO/VK validation. `codex` is now a protected working path in both AO and `vibe-kanban`, and `claude` is also working interactively in those product-layer VMs. The remaining open work has narrowed to stricter shared-layer lifecycle coverage and polish rather than the basic product path.
 
 ## What has landed
 
@@ -59,6 +59,9 @@ Interactive TUI hardening after the first full end-to-end success. The current a
 - lower-latency relay polling is now part of the attached interactive path so menu navigation and first-screen interaction are no longer dominated by coarse bridge sleeps
 - the direct attached `claude` smoke now proves a real post-input transition from theme selection into login selection, which means the inner worker PTY and guest tty/session semantics are no longer the dominant remaining risk
 - the Agent Orchestrator interactive `claude` smoke now passes end to end, including a post-input transition past the theme screen
+- attached worker lifecycle now publishes PTY-side `command-start` and `command-exit` stream markers so the host relay can observe command-state transitions immediately instead of waiting only on shared-file visibility
+- the shared attached relay now escalates repeated interactive `Ctrl-C` requests through the worker signal channel, so product-layer `claude` exit behavior no longer depends solely on raw TTY byte delivery
+- the current head passes focused product-layer validation for interactive `codex` in AO and `vibe-kanban`, and for interactive `claude` in AO
 - manual AO validation now confirms that `claude` can be launched interactively and that `Enter` works inside the nested worker session on the current head
 - manual AO validation now confirms that `claude` can advance into its login flow, while also revealing a teardown bug where exiting the nested Claude session can still hang or terminate the parent AO VM instead of returning control cleanly
 - current manual AO validation for `codex` shows the nested worker starts and remains alive, and the remaining visibility bug has narrowed further from "missing basic terminal replies" to "Codex still renders blank even after richer PTY-edge replies and filtering are restored"
@@ -79,18 +82,20 @@ Interactive TUI hardening after the first full end-to-end success. The current a
 - richer lifecycle behavior such as worker reuse, log filtering, and cleanup policy refinements
 - possible transport hardening beyond the first file-share bridge, such as a mounted Unix-socket protocol
 - broader recipe adoption and validation beyond the first external orchestrator recipe
-- a higher-level recipe-authoring abstraction for sibling-worker command exposure, so recipes do not need to wire both `workerKinds` and installed proxy scripts manually in the common case
+- stricter shared-layer lifecycle coverage for attached `claude` exit semantics, so the direct canary can match the currently working AO/VK product behavior without relying on looser integration harness timing
+- optional polish for transcript noise, live-session cleanup, and any remaining debug-vs-live presentation rough edges
 
 ## Decision record
 
 - The host-brokered sibling-worker model is still the right architecture and remains in scope.
 - The investigation has already paid off enough to prove that broker creation, attach transport, terminal propagation, and nested command handoff are not the dominant remaining risks.
-- The major open risk has shifted from spawn architecture to interactive terminal lifecycle and UX behavior for full-screen packaged CLIs.
+- The major open risk has shifted from spawn architecture to shared interactive lifecycle hardening and stricter generic coverage for packaged full-screen CLIs.
 - `claude` is now treated as the clearer TUI canary for remaining terminal-contract bugs, while `codex` remains an important product target and the current regression gate.
 - End-to-end AO repros are now treated as integration gates, not as the primary debug loop. Focused direct packaged-worker readiness and reuse validation should lead.
 - Acceptance must now include meaningful post-input TUI behavior, not just "process started and emitted output".
 - Acceptance must also include correct nested-session teardown behavior. A working nested TUI is not sufficient if exiting it kills the orchestrator VM.
 - The current recipe-authoring UX is functionally correct but too low-level in the common case. Firebreak should converge on a single higher-level declaration for sibling-worker command exposure while preserving the lower-level fields internally for advanced recipes.
+- Product-layer validation in both AO and `vibe-kanban` now takes precedence over stricter experimental shared-layer canaries when deciding what is mature enough to bank. The direct canaries remain important, but they should not block landing a clearly working shared runtime improvement when the user-facing paths are already green.
 
 ## Current sources of truth
 
@@ -125,3 +130,4 @@ Interactive TUI hardening after the first full end-to-end success. The current a
 - 2026-03-31: Confirmed that `codex` now works inside both AO and `vibe-kanban`, committed a `vibe-kanban` interactive Codex smoke as a regression guard, and reprioritized the remaining work around the shared `claude` exit-handback bug.
 - 2026-03-31: Added a direct shared-layer `claude` exit smoke, proved that the nested worker can now exit cleanly on the repeated-interrupt path, and narrowed the remaining open issue to the outer prompt/terminal handback after the worker is already gone.
 - 2026-03-31: Implemented the higher-level `workerProxies` recipe abstraction for packaged node-cli VMs, validated that it derives both worker-kind JSON and installed `codex`/`claude` proxy scripts, and migrated the AO and `vibe-kanban` recipes off duplicated `workerKinds` plus `installBinScripts` wiring.
+- 2026-04-01: Landed PTY-side command stream markers and shared repeated-interrupt escalation in the attached relay, then revalidated the working product paths through AO and `vibe-kanban`. The current head now keeps interactive `codex` and `claude` working in the product-layer VMs while the remaining shared direct-exit canary is treated as a stricter follow-up gate rather than the release blocker for this slice.

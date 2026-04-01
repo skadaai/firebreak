@@ -1,6 +1,6 @@
 ---
 status: in_progress
-last_updated: 2026-03-30
+last_updated: 2026-04-01
 ---
 
 # 015 Host-Brokered Orchestrated Workers
@@ -113,6 +113,8 @@ The intended landing shape is:
 - Recipe authors no longer need to wire both `workerKinds` and installed worker-proxy commands in the common packaged-node-cli case; Firebreak now exposes a higher-level `workerProxies` declaration for that path.
 - `workerProxies` derives both the guest-visible worker-kind registry and the installed proxy commands from one source of truth for common packaged-cli recipes.
 - The lower-level split between worker-kind registration and installed command wrappers should remain available internally for advanced cases, but the common recipe-authoring path should not require wiring both fields manually.
+- The attached relay should publish command lifecycle markers on the PTY stream as well as through shared state files, so the host can react promptly even when shared-file visibility lags behind the live terminal stream.
+- Repeated interactive interrupt escalation belongs in the shared attached-worker lifecycle, not in recipe-specific glue. When the product-layer VMs already prove the path works, stricter direct canaries should guide follow-up hardening rather than blocking stable shared/runtime improvements from landing.
 
 ## Acceptance criteria
 
@@ -126,6 +128,7 @@ The intended landing shape is:
 - Worker identity, lifecycle state, and host-owned runtime paths are explicit and reviewable.
 - The first integration path can target an external orchestrator recipe such as [external/agent-orchestrator/flake.nix](../../external/agent-orchestrator/flake.nix) without changing the public names of existing single-agent packages.
 - At least one attached packaged CLI can prove a meaningful post-input interactive state transition through the external orchestrator recipe path, so the system demonstrates usable TUI behavior instead of only startup visibility.
+- The product-layer orchestrator VMs in scope shall keep interactive `codex` working as a protected regression path while shared lifecycle changes continue underneath them.
 - The recipe-authoring UX for exposing sibling-worker commands should use a single higher-level declaration in the common packaged-cli case rather than permanently requiring recipe authors to configure both worker-kind registration and shell-facing proxy installation by hand.
 
 ## Dependencies and risks

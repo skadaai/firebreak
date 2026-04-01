@@ -100,6 +100,14 @@ with open(log_path, "wb") as log_file:
     inner_boot_marker = "hostname=firebreak-claude-code"
     worker_output_marker = "firebreak: worker produced terminal output"
     claude_ui_marker = "MonokaiExtended"
+    claude_login_markers = [
+        "/login",
+        "Claude Pro",
+        "Anthropic Console",
+        "Amazon Bedrock",
+        "Google Vertex AI",
+        "Microsoft Foundry",
+    ]
     control_sequence_pattern = re.compile(
         r"\x1b(?:\][^\x07\x1b]*(?:\x07|\x1b\\)|P.*?\x1b\\|[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])",
         re.DOTALL,
@@ -113,19 +121,28 @@ with open(log_path, "wb") as log_file:
         text = re.sub(r"\n+", "\n", text)
         return text
 
+    def compact(text: str) -> str:
+        return re.sub(r"\s+", "", text).lower()
+
     transcript = bytearray()
     sent_claude = False
     sent_interrupt = False
+    sent_enter = False
     saw_worker_output = False
     saw_inner = False
     saw_claude_ui = False
+    saw_claude_login = False
+    enter_deadline = None
     interrupt_deadline = None
     terminate_deadline = None
     deadline = time.time() + 420
     last_normalized = ""
+    compact_markers = [compact(marker) for marker in claude_login_markers]
     try:
         while time.time() < deadline:
             timeout = 0.5
+            if enter_deadline is not None:
+                timeout = max(0.0, min(timeout, enter_deadline - time.time()))
             if interrupt_deadline is not None:
                 timeout = max(0.0, min(timeout, interrupt_deadline - time.time()))
             if terminate_deadline is not None:
@@ -146,6 +163,7 @@ with open(log_path, "wb") as log_file:
                     normalized_log_file.truncate()
                     normalized_log_file.flush()
                     last_normalized = normalized
+                compact_normalized = compact(normalized)
 
                 if not sent_claude and outer_marker in normalized:
                     os.write(master_fd, b"claude\r")
@@ -161,10 +179,23 @@ with open(log_path, "wb") as log_file:
 
                 if not saw_claude_ui and claude_ui_marker in normalized:
                     saw_claude_ui = True
-                    interrupt_deadline = time.time() + 2
+                    enter_deadline = time.time() + 1
+
+                if saw_claude_ui and not saw_claude_login:
+                    for marker, compact_marker in zip(claude_login_markers, compact_markers):
+                        if marker in normalized or compact_marker in compact_normalized:
+                            saw_claude_login = True
+                            interrupt_deadline = time.time() + 2
+                            break
 
             now = time.time()
-            if saw_claude_ui and interrupt_deadline is not None and now >= interrupt_deadline and not sent_interrupt:
+            if saw_claude_ui and enter_deadline is not None and now >= enter_deadline and not sent_enter:
+                os.write(master_fd, b"\r")
+                sent_enter = True
+                enter_deadline = None
+                deadline = max(deadline, now + 30)
+
+            if saw_claude_login and interrupt_deadline is not None and now >= interrupt_deadline and not sent_interrupt:
                 os.write(master_fd, b"\x03")
                 sent_interrupt = True
                 interrupt_deadline = None
@@ -216,6 +247,10 @@ with open(log_path, "wb") as log_file:
 
     if not saw_claude_ui:
         print("interactive Agent Orchestrator Claude smoke did not surface the Claude theme selection UI", file=sys.stderr)
+        raise SystemExit(1)
+
+    if not saw_claude_login:
+        print("interactive Agent Orchestrator Claude smoke did not advance past the theme selection screen", file=sys.stderr)
         raise SystemExit(1)
 PY
 

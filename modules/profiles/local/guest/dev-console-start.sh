@@ -366,6 +366,16 @@ EOF
                   kill -INT -- "-$command_job_pgid" 2>/dev/null || true
                 fi
                 ;;
+              TERM)
+                if [ -n "$command_job_pgid" ]; then
+                  kill -TERM -- "-$command_job_pgid" 2>/dev/null || true
+                fi
+                ;;
+              KILL)
+                if [ -n "$command_job_pgid" ]; then
+                  kill -KILL -- "-$command_job_pgid" 2>/dev/null || true
+                fi
+                ;;
             esac
           done <<EOF
 $(tail -c +"$((command_signal_offset + 1))" "$command_signal_stream_shared" 2>/dev/null || true)
@@ -475,6 +485,18 @@ PY
             stty sane </dev/tty 2>/dev/null || true
           fi
         }
+        emit_command_stream_marker() {
+          marker_name=$1
+          marker_value=${2-}
+          if [ ! -e /dev/tty ]; then
+            return 0
+          fi
+          if [ -n "$marker_value" ]; then
+            printf "\033]9001;firebreak;%s:%s\007" "$marker_name" "$marker_value" >/dev/tty 2>/dev/null || true
+          else
+            printf "\033]9001;firebreak;%s\007" "$marker_name" >/dev/tty 2>/dev/null || true
+          fi
+        }
         restore_command_tty() {
           if [ -n "$command_tty_state" ] && [ -e /dev/tty ]; then
             stty "$command_tty_state" </dev/tty 2>/dev/null || true
@@ -499,6 +521,7 @@ PY
         printf "%s\n" "command-start" >"$stage_path"
         rebind_command_stdio
         configure_command_tty
+        emit_command_stream_marker command-start
         write_command_process_snapshot
         start_command_process_monitor
         start_command_signal_monitor
@@ -510,6 +533,7 @@ PY
         printf "%s\n" "$status" >"$exit_code_path"
         write_command_state command-exit completed agent-attach-exec "$status"
         printf "%s\n" "command-exit:$status" >"$stage_path"
+        emit_command_stream_marker command-exit "$status"
         sudo poweroff >/dev/null 2>&1 || true
         exit "$status"
       '

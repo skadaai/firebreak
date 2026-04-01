@@ -344,4 +344,48 @@ rec {
         })
       ] ++ extraModules;
     };
+
+  mkPackagedNodeCliFlakeOutputs = {
+    firebreak,
+    nixpkgs,
+    mkProject,
+    testsModule,
+    nixosConfigurationName,
+    packageName,
+    runnerPackageName,
+    defaultForwardPorts ? [ ],
+    defaultSystem ? null,
+  }:
+    let
+      supportedSystems = builtins.attrNames firebreak.lib;
+      effectiveDefaultSystem =
+        if defaultSystem != null then
+          defaultSystem
+        else
+          "x86_64-linux";
+      projectFor = system: mkProject system defaultForwardPorts;
+      testProjectFor = system: mkProject system [ ];
+      testsFor = system:
+        import testsModule {
+          pkgs = nixpkgs.legacyPackages.${system};
+          project = projectFor system;
+          testProject = testProjectFor system;
+          firebreakBin = "${firebreak.packages.${system}.default}/bin/firebreak";
+        };
+      defaultProject = projectFor effectiveDefaultSystem;
+    in {
+      nixosConfigurations.${nixosConfigurationName} = defaultProject.nixosConfiguration;
+
+      packages = lib.genAttrs supportedSystems (system:
+        let
+          project = projectFor system;
+          tests = testsFor system;
+        in {
+          default = project.package;
+          "${packageName}" = project.package;
+          "${runnerPackageName}" = project.runnerPackage;
+        } // tests.packages);
+
+      checks = lib.genAttrs supportedSystems (system: (testsFor system).checks);
+    };
 }

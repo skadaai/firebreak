@@ -7,13 +7,6 @@
 
   outputs = { firebreak, nixpkgs, ... }:
     let
-      lib = nixpkgs.lib;
-      supportedSystems = builtins.attrNames firebreak.lib;
-      defaultSystem =
-        if builtins.elem builtins.currentSystem supportedSystems then
-          builtins.currentSystem
-        else
-          "x86_64-linux";
       mkProject = system: forwardPorts:
         firebreak.lib.${system}.mkPackagedNodeCliArtifacts {
           name = "firebreak-agent-orchestrator";
@@ -69,6 +62,13 @@
             alias ao-start='project-launch'
           '';
         };
+    in
+    firebreak.recipeLib.mkPackagedNodeCliFlakeOutputs {
+      inherit firebreak nixpkgs mkProject;
+      testsModule = ./tests.nix;
+      nixosConfigurationName = "firebreak-agent-orchestrator";
+      packageName = "firebreak-agent-orchestrator";
+      runnerPackageName = "firebreak-internal-runner-agent-orchestrator";
       defaultForwardPorts = [
         {
           from = "host";
@@ -92,28 +92,5 @@
           guest.port = 14801;
         }
       ];
-      project = mkProject defaultSystem defaultForwardPorts;
-      testProject = mkProject defaultSystem [ ];
-      testsFor = system:
-        import ./tests.nix {
-          pkgs = nixpkgs.legacyPackages.${system};
-          project = mkProject system defaultForwardPorts;
-          testProject = mkProject system [ ];
-          firebreakBin = "${firebreak.packages.${system}.default}/bin/firebreak";
-        };
-    in {
-      nixosConfigurations.firebreak-agent-orchestrator = project.nixosConfiguration;
-
-      packages = lib.genAttrs supportedSystems (system:
-        let
-          systemProject = mkProject system defaultForwardPorts;
-          tests = testsFor system;
-        in {
-          default = systemProject.package;
-          firebreak-agent-orchestrator = systemProject.package;
-          firebreak-internal-runner-agent-orchestrator = systemProject.runnerPackage;
-        } // tests.packages);
-
-      checks = lib.genAttrs supportedSystems (system: (testsFor system).checks);
     };
 }

@@ -20,11 +20,7 @@
         "aarch64-linux"
         "aarch64-darwin"
       ];
-      defaultHostSystem =
-        if builtins.elem builtins.currentSystem supportedHostSystems then
-          builtins.currentSystem
-        else
-          "x86_64-linux";
+      defaultHostSystem = "x86_64-linux";
       guestSystemFor = hostSystem:
         if hostSystem == "aarch64-darwin" then
           "aarch64-linux"
@@ -42,12 +38,19 @@
           inherit (supports.${system}) mkLocalVmArtifacts pkgs;
         });
     in {
+      recipeLib = {
+        inherit (supports.${defaultHostSystem})
+          mkPackagedNodeCliFlakeOutputs
+          ;
+      };
+
       lib = lib.genAttrs supportedHostSystems (system: {
         inherit (supports.${system})
           mkAgentVm
           mkLocalVmArtifacts
           mkLocalVmPackage
           mkPackagedNodeCliArtifacts
+          mkPackagedNodeCliFlakeOutputs
           mkRunnerPackage
           mkWorkerProxyScript
           mkWorkspaceProjectArtifacts

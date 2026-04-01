@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -eu
 
 default_firebreak_tmpdir=${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}

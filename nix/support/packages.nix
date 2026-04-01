@@ -31,6 +31,7 @@ rec {
         coreutils
         git
         gnugrep
+        gnused
         python3
       ];
       text = renderTemplate {
@@ -132,6 +133,7 @@ rec {
       runtimeInputs = with pkgs; [
         coreutils
         gnugrep
+        gnused
         python3
       ];
       text = renderTemplate {
@@ -300,6 +302,7 @@ rec {
         bash
         coreutils
         gnugrep
+        gnused
       ];
       text = renderTemplate {
         "@AGENT_BIN@" = "${self.packages.${system}.${workerPackage}}/bin/${workerPackage}";
@@ -314,6 +317,7 @@ rec {
         coreutils
         findutils
         gnugrep
+        gnused
         python3
       ];
       text = renderTemplate {

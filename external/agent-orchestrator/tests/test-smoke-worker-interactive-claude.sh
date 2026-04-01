@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -eu
 
 choose_tmp_root() {
@@ -68,6 +69,7 @@ import time
 import fcntl
 import struct
 import termios
+import errno
 
 bin_path = os.environ["AGENT_ORCHESTRATOR_BIN"]
 log_path = os.environ["SESSION_LOG"]
@@ -150,7 +152,12 @@ with open(log_path, "wb") as log_file:
 
             readable, _, _ = select.select([master_fd], [], [], timeout)
             if readable:
-                chunk = os.read(master_fd, 65536)
+                try:
+                    chunk = os.read(master_fd, 65536)
+                except OSError as exc:
+                    if exc.errno == errno.EIO:
+                        break
+                    raise
                 if not chunk:
                     break
                 transcript.extend(chunk)

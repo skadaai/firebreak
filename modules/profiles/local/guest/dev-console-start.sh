@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -eu
 
 target=@WORKSPACE_MOUNT@
@@ -41,7 +42,7 @@ write_command_state() {
 }
 EOF
   if [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
-    cp "$command_state_local" "$command_state_shared"
+    cp "$command_state_local" "$command_state_shared" 2>/dev/null || true
   fi
 }
 
@@ -172,7 +173,7 @@ case "$session_mode" in
 }
 EOF
           if [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
-            cp "'"$command_state_local"'" "'"$command_state_shared"'"
+            cp "'"$command_state_local"'" "'"$command_state_shared"'" 2>/dev/null || true
           fi
         }
         if command -v firebreak-bootstrap-wait >/dev/null 2>&1; then
@@ -238,7 +239,7 @@ EOF
 }
 EOF
           if [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
-            cp "'"$command_state_local"'" "'"$command_state_shared"'"
+            cp "'"$command_state_local"'" "'"$command_state_shared"'" 2>/dev/null || true
           fi
         }
         refresh_command_job_info() {

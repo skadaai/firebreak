@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -eu
 
 choose_tmp_root() {

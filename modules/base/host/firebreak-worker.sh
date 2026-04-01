@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -eu
 
 state_dir=${FIREBREAK_WORKER_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/firebreak/worker-broker}
@@ -21,9 +22,7 @@ EOF
 }
 
 json_escape() {
-  value=$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')
-  value=$(printf '%s' "$value" | tr '\n' ' ')
-  printf '%s' "$value"
+  printf '%s' "$1" | python3 -c 'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'
 }
 
 validate_token() {
@@ -417,7 +416,7 @@ fi
 set +e
 if [ "\$attach_mode" = "1" ]; then
   printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "attach-foreground-start" >>"\$trace_path"
-  printf '%s\n' "$$" >"\$child_pid_path"
+  printf '%s\n' "\$BASHPID" >"\$child_pid_path"
   $quoted_command
   command_status=\$?
 else
@@ -505,7 +504,7 @@ fi
 set +e
 if [ "\$attach_mode" = "1" ]; then
   printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "attach-foreground-start" >>"\$trace_path"
-  printf '%s\n' "$$" >"\$child_pid_path"
+  printf '%s\n' "\$BASHPID" >"\$child_pid_path"
   printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "firebreak-command-start" >>"\$trace_path"
   forwarded_term=\${TERM:-}
   forwarded_columns=\${COLUMNS:-}

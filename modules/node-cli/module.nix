@@ -54,7 +54,9 @@ let
       lib.filter (value: value != null)
         (lib.mapAttrsToList (_commandName: upstream: upstream.packageSpec or null) proxyLocalUpstreams)
     );
+  installBinNames = builtins.attrNames installBinScripts;
   proxyLocalUpstreamInstallArgs = lib.escapeShellArgs proxyLocalUpstreamSpecs;
+  installBinNamesArgs = lib.escapeShellArgs installBinNames;
   upstreamInstallBinScriptSnippet =
     lib.concatStringsSep "\n"
       (map
@@ -157,11 +159,6 @@ let
       timeout_seconds=''${FIREBREAK_BOOTSTRAP_WAIT_TIMEOUT_SECONDS:-300}
       elapsed_seconds=0
 
-      if [ -z "$timeout_seconds" ]; then
-        echo "FIREBREAK_BOOTSTRAP_WAIT_TIMEOUT_SECONDS must be a non-negative integer" >&2
-        exit 1
-      fi
-
       case "$timeout_seconds" in
         *[!0-9]*)
           echo "FIREBREAK_BOOTSTRAP_WAIT_TIMEOUT_SECONDS must be a non-negative integer" >&2
@@ -194,6 +191,7 @@ let
     "@DISPLAY_NAME@" = displayName;
     "@EXTRA_SHELL_INIT@" = extraShellInit;
     "@INSTALL_BIN_SCRIPTS@" = installBinScriptSnippet;
+    "@INSTALL_BIN_NAMES@" = installBinNamesArgs;
     "@INSTALL_STATE_ID@" = installStateId;
     "@LAUNCH_COMMAND_NAME@" = launchCommandName;
     "@LAUNCH_ENV_EXPORTS@" = launchEnvironmentExports;

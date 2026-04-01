@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -eu
 
 repo_root=@REPO_ROOT@
@@ -6,7 +7,15 @@ if ! [ -f "$repo_root/flake.nix" ]; then
   exit 1
 fi
 
-firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
+if [ -n "${FIREBREAK_TMPDIR:-}" ]; then
+  firebreak_tmp_root=$FIREBREAK_TMPDIR
+elif [ -n "${XDG_CACHE_HOME:-}" ]; then
+  firebreak_tmp_root=$XDG_CACHE_HOME/firebreak/tmp
+elif [ -n "${HOME:-}" ]; then
+  firebreak_tmp_root=$HOME/.cache/firebreak/tmp
+else
+  firebreak_tmp_root=${TMPDIR:-/tmp}/firebreak/tmp
+fi
 mkdir -p "$firebreak_tmp_root"
 smoke_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-project-config.XXXXXX")
 trap 'chmod -R u+w "$smoke_tmp_dir" 2>/dev/null || true; rm -rf "$smoke_tmp_dir"' EXIT INT TERM

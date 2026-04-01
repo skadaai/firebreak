@@ -15,8 +15,24 @@ process_request() {
 
   [ -f "$request_path" ] || return 0
   [ -f "$exit_code_path" ] && return 0
-  mkdir "$request_dir/.lock" 2>/dev/null || return 0
+  lock_dir=$request_dir/.lock
+  if ! mkdir "$lock_dir" 2>/dev/null; then
+    if [ -r "$lock_dir/pid" ]; then
+      lock_pid=$(cat "$lock_dir/pid" 2>/dev/null || true)
+      case "$lock_pid" in
+        ""|*[!0-9]*) ;;
+        *)
+          if ! kill -0 "$lock_pid" 2>/dev/null; then
+            rm -rf "$lock_dir"
+          fi
+          ;;
+      esac
+    fi
+    mkdir "$lock_dir" 2>/dev/null || return 0
+  fi
+  printf '%s\n' "$$" >"$lock_dir/pid"
 
+  REQUEST_DIR=$request_dir \
   REQUEST_PATH=$request_path \
   WORKER_SCRIPT=$worker_script \
   STDOUT_PATH=$stdout_path \
@@ -41,7 +57,7 @@ stdout_path = os.environ["STDOUT_PATH"]
 stderr_path = os.environ["STDERR_PATH"]
 exit_code_path = os.environ["EXIT_CODE_PATH"]
 trace_path = os.environ["TRACE_PATH"]
-request_dir = os.path.dirname(request_path)
+request_dir = os.environ["REQUEST_DIR"]
 worker_root_path = os.path.join(request_dir, "worker-root")
 worker_root_cache = None
 runtime_metadata_cache = None
@@ -161,6 +177,19 @@ def normalize_term(value):
     if term.lower() in legacy_terms:
         return "xterm-256color"
     return term
+
+
+def atomic_write_text(path: str, data: str) -> None:
+    tmp_path = f"{path}.tmp-{os.getpid()}"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as handle:
+            handle.write(data)
+        os.replace(tmp_path, path)
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
 
 try:
     trace("request-loaded")
@@ -634,11 +663,11 @@ try:
                         total_input_bytes += len(chunk)
                         if not saw_input:
                             trace("attach-stdin-first-byte")
-                            trace(f"attach-stdin-first-chunk-hex:{chunk[:32].hex()}")
+                            trace(f"attach-stdin-first-chunk-len:{len(chunk)}")
                             saw_input = True
                         if sample_budget > 0:
                             sample = chunk[:sample_budget]
-                            trace(f"attach-stdin-sample-hex:{sample.hex()}")
+                            trace(f"attach-stdin-sample-len:{len(sample)}")
                             sample_budget -= len(sample)
                         maybe_escalate_repeated_interrupt(chunk)
                         os.write(master_fd, chunk)
@@ -740,15 +769,16 @@ except Exception as error:
     exit_code = 1
     trace(f"bridge-error:{error}")
 
-with open(stdout_path, "w", encoding="utf-8") as handle:
-    handle.write(stdout)
-with open(stderr_path, "w", encoding="utf-8") as handle:
-    handle.write(stderr)
-with open(exit_code_path, "w", encoding="utf-8") as handle:
-    handle.write(f"{exit_code}\n")
+# response.exit-code is the commit signal: response.stdout and response.stderr must be complete first.
+atomic_write_text(stdout_path, stdout)
+atomic_write_text(stderr_path, stderr)
+atomic_write_text(exit_code_path, f"{exit_code}\n")
 persist_response_exit_code(exit_code)
 trace("response-written")
 PY
+  request_status=$?
+  rm -rf "$lock_dir"
+  return "$request_status"
 }
 
 while :; do

@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -eu
 
 dev_home=@DEV_HOME@
@@ -79,6 +80,23 @@ maybe_chown_dev() {
   return 1
 }
 
+write_ready_marker() {
+  ready_dir=$(dirname "$ready_marker")
+  ready_tmp=$(mktemp "$ready_dir/.bootstrap-ready.XXXXXX")
+  printf '%s
+' "$install_state_id" >"$ready_tmp"
+  mv -f "$ready_tmp" "$ready_marker"
+}
+
+wrappers_ready() {
+  for wrapper_name in @INSTALL_BIN_NAMES@; do
+    if [ ! -x "$local_bin/$wrapper_name" ]; then
+      return 1
+    fi
+  done
+  return 0
+}
+
 current_bootstrap_phase=init
 bootstrap_trap() {
   exit_code=$?
@@ -111,7 +129,7 @@ for bootstrap_dir in \
   ensure_dir "$bootstrap_dir"
 done
 
-if [ -x "$local_bin/@BIN_NAME@" ] && [ -r "$state_file" ] && [ "$(cat "$state_file")" = "$install_state_id" ] && [ -r "$ready_marker" ]; then
+if [ -x "$local_bin/@BIN_NAME@" ] && [ -r "$state_file" ] && [ "$(cat "$state_file")" = "$install_state_id" ] && [ -r "$ready_marker" ] && wrappers_ready; then
   log_phase "toolchain-cache-hit $package_spec"
   current_bootstrap_phase=toolchain-cache-hit
   write_bootstrap_state "$current_bootstrap_phase" "running" "$package_spec"
@@ -158,7 +176,7 @@ npm install --global --omit=dev "$@"
 EOF
 
 printf '%s\n' "$install_state_id" > "$state_file"
-printf '%s\n' "$install_state_id" > "$ready_marker"
+write_ready_marker
 maybe_chown_dev "$state_file"
 maybe_chown_dev "$ready_marker"
 

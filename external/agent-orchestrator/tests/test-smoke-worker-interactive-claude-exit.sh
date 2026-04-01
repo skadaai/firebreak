@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -eu
 
 choose_tmp_root() {
@@ -145,6 +146,7 @@ with open(log_path, "wb") as log_file:
     third_interrupt_deadline = None
     deadline = time.time() + 600
     last_normalized = ""
+    shell_return_baseline = 0
     compact_markers = [compact(marker) for marker in claude_login_markers]
 
     try:
@@ -180,6 +182,7 @@ with open(log_path, "wb") as log_file:
                     normalized_log_file.flush()
                     last_normalized = normalized
                 compact_normalized = compact(normalized)
+                post_exit_normalized = normalized[shell_return_baseline:]
 
                 if not sent_claude and outer_marker in normalized:
                     os.write(master_fd, b"claude\r")
@@ -205,9 +208,10 @@ with open(log_path, "wb") as log_file:
                     or claude_exit_confirm_compact in compact_normalized
                 ):
                     saw_exit_confirm = True
+                    shell_return_baseline = len(normalized)
                     second_interrupt_deadline = time.time() + 5
 
-                if sent_second_interrupt and shell_prompt_marker in normalized:
+                if sent_second_interrupt and shell_prompt_marker in post_exit_normalized:
                     saw_shell_return = True
                     break
 
@@ -227,6 +231,7 @@ with open(log_path, "wb") as log_file:
             if (saw_exit_confirm or sent_first_interrupt) and second_interrupt_deadline is not None and now >= second_interrupt_deadline and not sent_second_interrupt:
                 os.write(master_fd, b"\x03")
                 sent_second_interrupt = True
+                shell_return_baseline = len(last_normalized)
                 second_interrupt_deadline = None
                 third_interrupt_deadline = now + 10
                 deadline = max(deadline, now + 35)
@@ -234,6 +239,7 @@ with open(log_path, "wb") as log_file:
             if sent_second_interrupt and not saw_shell_return and third_interrupt_deadline is not None and now >= third_interrupt_deadline and not sent_third_interrupt:
                 os.write(master_fd, b"\x03")
                 sent_third_interrupt = True
+                shell_return_baseline = len(last_normalized)
                 third_interrupt_deadline = None
                 deadline = max(deadline, now + 20)
 

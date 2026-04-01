@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -eu
 
 export DEV_HOME=@DEV_HOME@
@@ -65,11 +66,11 @@ maybe_chown_dev() {
   if [ "$(id -u)" -ne 0 ]; then
     return 0
   fi
-  if chown @DEV_USER@:@DEV_USER@ "$target_path" 2>/dev/null; then
-    return 0
-  fi
   if [ "$shared_tool_home" = "1" ]; then
     log_phase "ownership-skip $target_path"
+    return 0
+  fi
+  if chown @DEV_USER@:@DEV_USER@ "$target_path" 2>/dev/null; then
     return 0
   fi
   echo "failed to chown bootstrap-managed path: $target_path" >&2
@@ -141,7 +142,7 @@ write_bootstrap_state "$current_bootstrap_phase" "running" "@AGENT_DISPLAY_NAME@
 cat > "$LOCAL_BIN/@AGENT_BIN@" <<'EOF'
 #!/bin/sh
 set -eu
-agent_bin="${BUN_INSTALL:-$HOME/.bun}/bin/@AGENT_BIN@"
+agent_bin="$BUN_INSTALL/bin/@AGENT_BIN@"
 if [ ! -x "$agent_bin" ]; then
   echo "@AGENT_DISPLAY_NAME@ is not installed in $agent_bin" >&2
   echo "Restart dev-bootstrap.service to reinstall it." >&2

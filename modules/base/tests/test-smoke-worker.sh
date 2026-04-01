@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -eu
 
 firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
@@ -5,37 +6,94 @@ mkdir -p "$firebreak_tmp_root"
 smoke_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-worker.XXXXXX")
 trap 'rm -rf "$smoke_tmp_dir"' EXIT INT TERM
 
+wait_for_status() {
+  worker_id=$1
+  expected_status=$2
+  inspect_output=""
+  status_pattern=$(printf '"status": "%s"' "$expected_status")
+
+  for _ in $(seq 1 100); do
+    inspect_output=$(
+      FIREBREAK_WORKER_STATE_DIR="$state_dir" \
+        @AGENT_BIN@ inspect "$worker_id"
+    )
+    if printf '%s\n' "$inspect_output" | grep -F -q "$status_pattern"; then
+      printf '%s' "$inspect_output"
+      return 0
+    fi
+    sleep 0.1
+  done
+
+  printf '%s' "$inspect_output"
+  return 1
+}
+
 state_dir=$smoke_tmp_dir/state
 workspace_dir=$smoke_tmp_dir/workspace
 fake_bin_dir=$smoke_tmp_dir/bin
-mkdir -p "$state_dir" "$workspace_dir" "$fake_bin_dir"
+fake_nix_store_dir=$smoke_tmp_dir/fake-nix-store
+mkdir -p "$state_dir" "$workspace_dir" "$fake_bin_dir" "$fake_nix_store_dir"
+export FAKE_NIX_STORE_DIR="$fake_nix_store_dir"
 
-cat >"$fake_bin_dir/nix" <<EOF
+# shellcheck disable=SC2154
+cat >"$fake_bin_dir/nix" <<'EOF'
 #!/usr/bin/env bash
 set -eu
 
-if [ "\${1:-}" = "--version" ]; then
+if [ "${1:-}" = "--version" ]; then
   printf '%s\n' 'nix smoke shim'
   exit 0
 fi
 
-while [ "\$#" -gt 0 ] && [ "\$1" != "run" ]; do
-  shift
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    build|run)
+      command=$1
+      shift
+      break
+      ;;
+    *)
+      shift
+      ;;
+  esac
 done
 
-[ "\$#" -gt 0 ] || exit 1
-shift
-installable=\${1:-}
-shift
-
-if [ "\${1:-}" = "--" ]; then
-  shift
+[ -n "${command:-}" ] || exit 1
+if [ "$command" = "build" ]; then
+  while [ "$#" -gt 0 ] && [ "${1#-}" != "$1" ]; do
+    shift
+  done
 fi
+[ "$#" -gt 0 ] || exit 1
+installable=${1:-}
+shift
 
-printf '%s\n' "__INSTALLABLE__\$installable"
+if [ "$command" = "build" ]; then
+  package_name=${installable##*#}
+  fake_out="$FAKE_NIX_STORE_DIR/$package_name"
+  mkdir -p "$fake_out/bin"
+  cat >"$fake_out/bin/$package_name" <<SCRIPT
+#!/usr/bin/env bash
+set -eu
+printf '%s\n' "__INSTALLABLE__$installable"
 printf '%s\n' "__SESSION_MODE__\${FIREBREAK_AGENT_SESSION_MODE_OVERRIDE:-}"
 for arg in "\$@"; do
   printf '%s\n' "__ARG__\$arg"
+done
+SCRIPT
+  chmod +x "$fake_out/bin/$package_name"
+  printf '%s\n' "$fake_out"
+  exit 0
+fi
+
+if [ "${1:-}" = "--" ]; then
+  shift
+fi
+
+printf '%s\n' "__INSTALLABLE__$installable"
+printf '%s\n' "__SESSION_MODE__${FIREBREAK_AGENT_SESSION_MODE_OVERRIDE:-}"
+for arg in "$@"; do
+  printf '%s\n' "__ARG__$arg"
 done
 EOF
 chmod +x "$fake_bin_dir/nix"
@@ -50,16 +108,7 @@ if [ -z "$process_worker_id" ]; then
   exit 1
 fi
 
-for _ in 1 2 3 4 5 6 7 8 9 10; do
-  process_inspect_output=$(
-    FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-      @AGENT_BIN@ inspect "$process_worker_id"
-  )
-  if printf '%s\n' "$process_inspect_output" | grep -F -q '"status": "exited"'; then
-    break
-  fi
-  sleep 0.1
-done
+process_inspect_output=$(wait_for_status "$process_worker_id" exited || true)
 
 if ! printf '%s\n' "$process_inspect_output" | grep -F -q '"backend": "process"'; then
   printf '%s\n' "$process_inspect_output" >&2
@@ -118,16 +167,7 @@ if [ -z "$firebreak_worker_id" ]; then
   exit 1
 fi
 
-for _ in 1 2 3 4 5 6 7 8 9 10; do
-  firebreak_inspect_output=$(
-    FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-      @AGENT_BIN@ inspect "$firebreak_worker_id"
-  )
-  if printf '%s\n' "$firebreak_inspect_output" | grep -F -q '"status": "exited"'; then
-    break
-  fi
-  sleep 0.1
-done
+firebreak_inspect_output=$(wait_for_status "$firebreak_worker_id" exited || true)
 
 if ! printf '%s\n' "$firebreak_inspect_output" | grep -F -q '"backend": "firebreak"'; then
   printf '%s\n' "$firebreak_inspect_output" >&2
@@ -158,16 +198,7 @@ stop_worker_id=$(
 
 FIREBREAK_WORKER_STATE_DIR="$state_dir" @AGENT_BIN@ stop "$stop_worker_id" >/dev/null
 
-for _ in 1 2 3 4 5 6 7 8 9 10; do
-  stop_inspect_output=$(
-    FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-      @AGENT_BIN@ inspect "$stop_worker_id"
-  )
-  if printf '%s\n' "$stop_inspect_output" | grep -F -q '"status": "stopped"'; then
-    break
-  fi
-  sleep 0.1
-done
+stop_inspect_output=$(wait_for_status "$stop_worker_id" stopped || true)
 
 if ! printf '%s\n' "$stop_inspect_output" | grep -F -q '"status": "stopped"'; then
   printf '%s\n' "$stop_inspect_output" >&2

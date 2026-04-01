@@ -58,7 +58,7 @@ last_updated: 2026-04-01
 3. Keep explicit session-preparation breadcrumbs for workspace, shared-tools, and exec-output mounts.
 4. Only add more attach transport instrumentation if the direct packaged-worker probes stop explaining failures.
 
-### Phase D: Revalidate AO end to end
+### Phase D: Revalidate AO end-to-end
 
 1. Re-run the plain attached `codex` proxy path from the AO VM only after Phases A through C are green.
 2. Keep recipe-owned smokes on a no-forward test variant unless the validation target is specifically host port exposure.

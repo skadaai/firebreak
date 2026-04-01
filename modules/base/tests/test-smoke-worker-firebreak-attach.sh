@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -eu
 
 default_firebreak_tmpdir=${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}
@@ -49,9 +50,9 @@ mkdir -p "$state_dir" "$firebreak_state_dir" "$workspace_dir"
 run_attach_version() {
   env \
     AGENT_CONFIG=outer-leak \
-    AGENT_CONFIG_HOST_PATH=/tmp/firebreak-worker-attach-leak \
+    AGENT_CONFIG_HOST_PATH="$smoke_tmp_dir"/firebreak-worker-attach-leak \
     CODEX_CONFIG=outer-leak \
-    CODEX_CONFIG_HOST_PATH=/tmp/firebreak-worker-codex-attach-leak \
+    CODEX_CONFIG_HOST_PATH="$smoke_tmp_dir"/firebreak-worker-codex-attach-leak \
     FIREBREAK_WORKER_STATE_DIR="$state_dir" \
     FIREBREAK_STATE_DIR="$firebreak_state_dir" \
     FIREBREAK_DEBUG_KEEP_RUNTIME=1 \

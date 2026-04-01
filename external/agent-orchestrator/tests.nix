@@ -1,6 +1,13 @@
 { pkgs, project, testProject, firebreakBin }:
 let
   packageBin = "${testProject.package}/bin/firebreak-agent-orchestrator";
+  mkExecutableCheck = { name, package }:
+    pkgs.runCommand name {
+      nativeBuildInputs = [ package ];
+    } ''
+      ${package}/bin/${name}
+      touch "$out"
+    '';
 
   workerProxySmoke = pkgs.writeShellApplication {
     name = "firebreak-test-smoke-agent-orchestrator-worker-proxy";
@@ -79,10 +86,25 @@ in {
   };
 
   checks = {
-    firebreak-test-smoke-agent-orchestrator-worker-proxy = workerProxySmoke;
-    firebreak-test-smoke-agent-orchestrator-worker-spawn = workerSpawnSmoke;
-    firebreak-test-smoke-agent-orchestrator-worker-interactive = workerInteractiveSmoke;
-    firebreak-test-smoke-agent-orchestrator-worker-interactive-claude = workerInteractiveClaudeSmoke;
-    firebreak-test-smoke-agent-orchestrator-worker-interactive-claude-exit = workerInteractiveClaudeExitSmoke;
+    firebreak-test-smoke-agent-orchestrator-worker-proxy = mkExecutableCheck {
+      name = "firebreak-test-smoke-agent-orchestrator-worker-proxy";
+      package = workerProxySmoke;
+    };
+    firebreak-test-smoke-agent-orchestrator-worker-spawn = mkExecutableCheck {
+      name = "firebreak-test-smoke-agent-orchestrator-worker-spawn";
+      package = workerSpawnSmoke;
+    };
+    firebreak-test-smoke-agent-orchestrator-worker-interactive = mkExecutableCheck {
+      name = "firebreak-test-smoke-agent-orchestrator-worker-interactive";
+      package = workerInteractiveSmoke;
+    };
+    firebreak-test-smoke-agent-orchestrator-worker-interactive-claude = mkExecutableCheck {
+      name = "firebreak-test-smoke-agent-orchestrator-worker-interactive-claude";
+      package = workerInteractiveClaudeSmoke;
+    };
+    firebreak-test-smoke-agent-orchestrator-worker-interactive-claude-exit = mkExecutableCheck {
+      name = "firebreak-test-smoke-agent-orchestrator-worker-interactive-claude-exit";
+      package = workerInteractiveClaudeExitSmoke;
+    };
   };
 }

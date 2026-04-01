@@ -3,7 +3,6 @@ let
   interactiveEcho = pkgs.writeShellApplication {
     name = "interactive-echo";
     runtimeInputs = with pkgs; [
-      bash
       coreutils
     ];
     text = ''

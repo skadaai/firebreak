@@ -97,6 +97,8 @@ default_agent_config_host_dir=$(resolve_host_dir "${agent_specific_host_path:-${
 
 reject_whitespace_path "$host_cwd" "current working directory"
 reject_whitespace_path "$resolved_firebreak_tmp_root" "Firebreak temporary runtime directory"
+reject_whitespace_path "$firebreak_state_root" "Firebreak state root"
+reject_whitespace_path "$default_firebreak_state_root" "default Firebreak state root"
 if [ "$host_system" = "aarch64-darwin" ]; then
   reject_comma_path "$host_cwd" "current working directory"
   reject_comma_path "$resolved_firebreak_tmp_root" "Firebreak temporary runtime directory"
@@ -540,7 +542,7 @@ elif [ "$agent_session_mode" = "agent-attach-exec" ]; then
   done
   cat >"$attach_runner_script" <<EOF
 set -eu
-cd "$(printf '%s' "$runner_workdir" | sed "s/'/'\\\\''/g")"
+cd '$(printf '%s' "$runner_workdir" | sed "s/'/'\\''/g")'
 export MICROVM_HOST_META_DIR='$(printf '%s' "$host_meta_dir" | sed "s/'/'\\\\''/g")'
 export MICROVM_HOST_CWD_SOCKET='$(printf '%s' "$hostcwd_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_AGENT_CONFIG_HOST_DIR='$(printf '%s' "$agent_config_host_dir" | sed "s/'/'\\\\''/g")'
@@ -1279,9 +1281,9 @@ def pump_stdin() -> None:
                 continue
             if first_input:
                 first_input = False
-                trace_debug(f"stdin-first-chunk:{chunk[:32].hex()}")
+                trace_debug(f"stdin-first-chunk-len:{len(chunk)}")
             else:
-                trace_debug(f"stdin-sample:{chunk[:16].hex()}")
+                trace_debug(f"stdin-sample-len:{len(chunk[:16])}")
             maybe_escalate_repeated_interrupt(chunk)
             try:
                 os.write(master_fd, chunk)

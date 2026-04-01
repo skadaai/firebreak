@@ -79,6 +79,4 @@ if ! grep -F -q '"phase": "command-exit"' "$command_state_path"; then
   exit 1
 fi
 
-rm -rf "$runtime_dir"
-
 printf '%s\n' "$output"

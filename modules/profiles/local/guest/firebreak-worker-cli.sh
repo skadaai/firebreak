@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -eu
 
 bridge_dir=@WORKER_BRIDGE_MOUNT@
@@ -454,12 +455,12 @@ def pump_stdin() -> None:
                     continue
                 if not saw_stdin_bytes:
                     trace("guest-stdin-first-byte")
-                    trace(f"guest-stdin-first-chunk-hex:{chunk[:32].hex()}")
+                    trace(f"guest-stdin-first-chunk-len:{len(chunk)}")
                 saw_stdin_bytes = True
                 total_stdin_bytes += len(chunk)
                 if sample_budget > 0:
                     sample = chunk[:sample_budget]
-                    trace(f"guest-stdin-sample-hex:{sample.hex()}")
+                    trace(f"guest-stdin-sample-len:{len(sample)}")
                     sample_budget -= len(sample)
                 sink.write(chunk)
                 sink.flush()
@@ -961,7 +962,8 @@ import sys
 data = json.loads(os.environ["KIND_JSON"])
 command = data.get("command")
 if not isinstance(command, list) or not command:
-    raise SystemExit(0)
+    print("worker kind command must be a non-empty list", file=sys.stderr)
+    raise SystemExit(1)
 
 argv = [
     os.environ["WORKER_LOCAL_HELPER"],

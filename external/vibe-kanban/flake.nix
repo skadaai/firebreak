@@ -16,34 +16,27 @@
           tagline = "vibe-kanban cli sandbox";
           packageSpec = "vibe-kanban";
           binName = "vibe-kanban";
-          workerBridgeEnabled = true;
-          workerKinds = {
+          workerProxies = {
             codex = {
+              kind = "codex";
               backend = "firebreak";
               package = "firebreak-codex";
               vm_mode = "run";
               max_instances = 4;
+              versionOutput = "codex firebreak-worker wrapper";
             };
-            claude-code = {
+            claude = {
+              kind = "claude-code";
               backend = "firebreak";
               package = "firebreak-claude-code";
               vm_mode = "run";
               max_instances = 2;
+              versionOutput = "claude firebreak-worker wrapper";
             };
           };
           runtimePackages = pkgs: with pkgs; [
             git
           ];
-          installBinScripts = {
-            codex = firebreak.lib.${system}.mkWorkerProxyScript {
-              kind = "codex";
-              versionOutput = "codex firebreak-worker wrapper";
-            };
-            claude = firebreak.lib.${system}.mkWorkerProxyScript {
-              kind = "claude-code";
-              versionOutput = "claude firebreak-worker wrapper";
-            };
-          };
           launchEnvironment = {
             FRONTEND_PORT = "3000";
             BACKEND_PORT = "3001";

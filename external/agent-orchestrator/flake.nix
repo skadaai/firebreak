@@ -16,19 +16,22 @@
           tagline = "agent-orchestrator cli sandbox";
           packageSpec = "@composio/ao";
           binName = "ao";
-          workerBridgeEnabled = true;
-          workerKinds = {
+          workerProxies = {
             codex = {
+              kind = "codex";
               backend = "firebreak";
               package = "firebreak-codex";
               vm_mode = "run";
               max_instances = 4;
+              versionOutput = "codex firebreak-worker wrapper";
             };
-            claude-code = {
+            claude = {
+              kind = "claude-code";
               backend = "firebreak";
               package = "firebreak-claude-code";
               vm_mode = "run";
               max_instances = 2;
+              versionOutput = "claude firebreak-worker wrapper";
             };
           };
           runtimePackages = pkgs: with pkgs; [
@@ -56,16 +59,6 @@
             mkdir -p "$ao_web_dir/node_modules/@composio"
             ln -sfn "$ao_core_dir" "$ao_web_dir/node_modules/@composio/ao-core"
           '';
-          installBinScripts = {
-            codex = firebreak.lib.${system}.mkWorkerProxyScript {
-              kind = "codex";
-              versionOutput = "codex firebreak-worker wrapper";
-            };
-            claude = firebreak.lib.${system}.mkWorkerProxyScript {
-              kind = "claude-code";
-              versionOutput = "claude firebreak-worker wrapper";
-            };
-          };
           launchCommand = "ao start .";
           extraShellInit = ''
             alias ao-start='project-launch'

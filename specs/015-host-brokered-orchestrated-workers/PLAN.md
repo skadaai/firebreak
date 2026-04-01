@@ -78,7 +78,7 @@ last_updated: 2026-03-31
 2. Fix the shared attached-worker `claude` exit-limbo bug in the common worker path, not in AO- or `vibe-kanban`-specific code.
 3. Use the direct shared-layer `claude` exit smoke as the first acceptance gate for that fix.
 4. Confirm the same fix through AO and `vibe-kanban` only after the direct shared-layer smoke is green.
-5. Leave `workerProxies` as the next design slice after the shared TUI lifecycle bug is closed.
+5. Keep the new `workerProxies` abstraction isolated from the remaining shared TUI lifecycle experiments so the recipe-authoring UX improvement can land without bundling terminal-risk changes.
 
 ## Validation approach
 

@@ -1,5 +1,5 @@
 { lib, pkgs, renderTemplate, mkLocalVmArtifacts }:
-{
+rec {
   mkWorkerProxyScript =
     {
       kind,
@@ -277,8 +277,28 @@
     extraModules ? [ ],
     workerBridgeEnabled ? false,
     workerKinds ? { },
+    workerProxies ? { },
   }:
     let
+      derivedWorkerKinds =
+        lib.mapAttrs'
+          (_commandName: proxy:
+            lib.nameValuePair proxy.kind (builtins.removeAttrs proxy [ "kind" "versionOutput" ]))
+          workerProxies;
+
+      derivedInstallBinScripts =
+        lib.mapAttrs
+          (commandName: proxy:
+            mkWorkerProxyScript {
+              kind = proxy.kind;
+              versionOutput = proxy.versionOutput or "${commandName} firebreak worker proxy";
+            })
+          workerProxies;
+
+      effectiveWorkerKinds = derivedWorkerKinds // workerKinds;
+      effectiveInstallBinScripts = derivedInstallBinScripts // installBinScripts;
+      effectiveWorkerBridgeEnabled = workerBridgeEnabled || workerProxies != { };
+
       packageSet =
         if builtins.isFunction runtimePackages then
           runtimePackages
@@ -299,8 +319,8 @@
     mkLocalVmArtifacts {
       inherit name;
       defaultAgentCommand = launchCommandName;
-      inherit workerBridgeEnabled;
-      inherit workerKinds;
+      workerBridgeEnabled = effectiveWorkerBridgeEnabled;
+      workerKinds = effectiveWorkerKinds;
       extraModules = [
         (import ../../modules/node-cli/module.nix {
           inherit
@@ -313,11 +333,11 @@
             launchEnvironment
             forwardPorts
             postInstallScript
-            installBinScripts
             readyCommandName
             memoryMiB
             extraShellInit
             ;
+          installBinScripts = effectiveInstallBinScripts;
           vmName = name;
           extraSystemPackages = packageSet pkgs;
           extraBootstrapPackages = bootstrapPackageSet pkgs;

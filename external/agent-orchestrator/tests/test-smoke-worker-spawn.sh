@@ -56,7 +56,7 @@ set +e
 output=$(
   cd "$workspace_dir"
   FIREBREAK_INSTANCE_EPHEMERAL=1 \
-    FIREBREAK_VM_MODE=shell \
+    FIREBREAK_LAUNCH_MODE=shell \
     AGENT_VM_COMMAND="bash $guest_script" \
     @AGENT_ORCHESTRATOR_BIN@ 2>&1
 )

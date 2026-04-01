@@ -31,7 +31,7 @@ nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run
 
 ```bash
 cd ~/your-project
-FIREBREAK_VM_MODE=shell nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
+FIREBREAK_LAUNCH_MODE=shell nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
   path:/path/to/firebreak/external/agent-orchestrator \
   --override-input firebreak path:/path/to/firebreak
 ```

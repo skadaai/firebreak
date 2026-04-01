@@ -3,7 +3,7 @@ set -eu
 set +e
 output=$(
   FIREBREAK_INSTANCE_EPHEMERAL=1 \
-    FIREBREAK_VM_MODE=shell \
+    FIREBREAK_LAUNCH_MODE=shell \
     AGENT_VM_COMMAND='FIREBREAK_BOOTSTRAP_WAIT_TIMEOUT_SECONDS=60 firebreak-bootstrap-wait && command -v firebreak-bootstrap-wait && command -v ao && command -v codex && codex --version && command -v claude && claude --version' \
     @AGENT_ORCHESTRATOR_BIN@ 2>&1
 )

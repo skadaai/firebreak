@@ -18,7 +18,7 @@ mkdir -p "$project_dir"
 unset AGENT_CONFIG
 unset AGENT_CONFIG_HOST_PATH
 unset FIREBREAK_PROJECT_CONFIG_FILE
-unset FIREBREAK_VM_MODE
+unset FIREBREAK_LAUNCH_MODE
 unset FIREBREAK_WORKER_MODE
 unset FIREBREAK_WORKER_MODES
 unset CODEX_CONFIG
@@ -69,7 +69,7 @@ require_pattern() {
 
 init_template_stdout=$(firebreak_cmd init --non-interactive --stdout)
 require_pattern "$init_template_stdout" "AGENT_CONFIG=workspace" "default AGENT_CONFIG template entry"
-require_pattern "$init_template_stdout" "# FIREBREAK_VM_MODE=run" "default FIREBREAK_VM_MODE template entry"
+require_pattern "$init_template_stdout" "# FIREBREAK_LAUNCH_MODE=run" "default FIREBREAK_LAUNCH_MODE template entry"
 require_pattern "$init_template_stdout" "# FIREBREAK_WORKER_MODE=local" "default FIREBREAK_WORKER_MODE template entry"
 require_pattern "$init_template_stdout" "# FIREBREAK_WORKER_MODES=codex=vm,claude=local" "default FIREBREAK_WORKER_MODES template entry"
 
@@ -93,7 +93,7 @@ fi
 
 interactive_init_file=$(cat "$project_dir/.firebreak.env")
 require_pattern "$interactive_init_file" "AGENT_CONFIG=workspace" "interactive init AGENT_CONFIG entry"
-require_pattern "$interactive_init_file" "FIREBREAK_VM_MODE=run" "interactive init FIREBREAK_VM_MODE entry"
+require_pattern "$interactive_init_file" "FIREBREAK_LAUNCH_MODE=run" "interactive init FIREBREAK_LAUNCH_MODE entry"
 
 cat >"$project_dir/.firebreak.env" <<EOF
 AGENT_CONFIG=host
@@ -129,7 +129,7 @@ assert "FIREBREAK_TASK_STATE_DIR" in obj["ignored_config_keys"]
 assert obj["agents"]["codex"]["mode"] == "workspace"
 assert obj["agents"]["codex"]["path"] == f"{project_dir}/.codex"
 assert obj["agents"]["claude-code"]["mode"] == "vm"
-assert obj["vm_mode"] == "run"
+assert obj["launch_mode"] == "run"
 PY
 
 doctor_verbose_json=$(AGENT_CONFIG=vm firebreak_cmd doctor --verbose --json)

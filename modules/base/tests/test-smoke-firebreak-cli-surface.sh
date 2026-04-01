@@ -48,6 +48,9 @@ require_pattern "$run_claude_shell_output" '__VM__claude-code' "claude-code run 
 require_pattern "$run_claude_shell_output" '__MODE__shell' "shell mode override"
 require_pattern "$run_claude_shell_output" '__ARG__prompt.txt' "claude-code forwarded argument"
 
+run_codex_launch_mode_output=$(@FIREBREAK_CLI_BIN@ run codex --launch-mode shell -- --version)
+require_pattern "$run_codex_launch_mode_output" '__MODE__shell' "explicit launch mode override"
+
 run_codex_local_output=$(@FIREBREAK_CLI_BIN@ run codex --worker-mode local -- --help)
 require_pattern "$run_codex_local_output" '__VM__codex' "codex local-mode delegation"
 require_pattern "$run_codex_local_output" '__WORKER_MODE__local' "worker mode override"
@@ -59,13 +62,13 @@ require_pattern "$run_codex_per_worker_output" '__WORKER_MODES__codex=vm' "codex
 require_pattern "$run_codex_per_worker_output" 'claude=local' "claude per-worker override"
 
 set +e
-invalid_vm_mode_output=$(FIREBREAK_VM_MODE=invalid @FIREBREAK_CLI_BIN@ run codex 2>&1)
-invalid_vm_mode_status=$?
+invalid_launch_mode_output=$(FIREBREAK_LAUNCH_MODE=invalid @FIREBREAK_CLI_BIN@ run codex 2>&1)
+invalid_launch_mode_status=$?
 set -e
 
-if [ "$invalid_vm_mode_status" -eq 0 ] || ! printf '%s\n' "$invalid_vm_mode_output" | grep -F -q "unsupported Firebreak VM mode"; then
-  printf '%s\n' "$invalid_vm_mode_output" >&2
-  echo "CLI surface smoke did not reject an invalid FIREBREAK_VM_MODE value" >&2
+if [ "$invalid_launch_mode_status" -eq 0 ] || ! printf '%s\n' "$invalid_launch_mode_output" | grep -F -q "unsupported Firebreak launch mode"; then
+  printf '%s\n' "$invalid_launch_mode_output" >&2
+  echo "CLI surface smoke did not reject an invalid FIREBREAK_LAUNCH_MODE value" >&2
   exit 1
 fi
 

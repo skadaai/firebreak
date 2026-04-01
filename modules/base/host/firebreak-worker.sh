@@ -8,7 +8,7 @@ command=${1:-}
 usage() {
   cat <<'EOF' >&2
 usage:
-  firebreak worker run --backend BACKEND --kind KIND [--workspace PATH] [--package NAME] [--vm-mode MODE] [--attach] [--json] [--] COMMAND...
+  firebreak worker run --backend BACKEND --kind KIND [--workspace PATH] [--package NAME] [--launch-mode MODE] [--attach] [--json] [--] COMMAND...
   firebreak worker ps [-a|--all] [--json]
   firebreak worker inspect WORKER_ID
   firebreak worker logs [--stdout|--stderr] [-f|--follow] WORKER_ID
@@ -91,7 +91,7 @@ worker_summary_json() {
   "status": "$(json_escape "$status")",
   "workspace": "$(json_escape "$workspace")",
   "package_name": $(if [ -n "$package_name" ]; then printf '"%s"' "$(json_escape "$package_name")"; else printf 'null'; fi),
-  "vm_mode": $(if [ -n "$vm_mode" ]; then printf '"%s"' "$(json_escape "$vm_mode")"; else printf 'null'; fi),
+  "launch_mode": $(if [ -n "$launch_mode" ]; then printf '"%s"' "$(json_escape "$launch_mode")"; else printf 'null'; fi),
   "pid": $pid,
   "trace_path": "$(json_escape "$trace_path")",
   "created_at": "$(json_escape "$created_at")",
@@ -129,10 +129,10 @@ write_metadata() {
   else
     rm -f "$worker_root/package-name"
   fi
-  if [ -n "$vm_mode" ]; then
-    printf '%s\n' "$vm_mode" >"$worker_root/vm-mode"
+  if [ -n "$launch_mode" ]; then
+    printf '%s\n' "$launch_mode" >"$worker_root/launch-mode"
   else
-    rm -f "$worker_root/vm-mode"
+    rm -f "$worker_root/launch-mode"
   fi
   if [ -n "$finished_at" ]; then
     printf '%s\n' "$finished_at" >"$worker_root/finished-at"
@@ -159,7 +159,7 @@ write_metadata() {
   "status": "$(json_escape "$status")",
   "workspace": "$(json_escape "$workspace")",
   "package_name": $(if [ -n "$package_name" ]; then printf '"%s"' "$(json_escape "$package_name")"; else printf 'null'; fi),
-  "vm_mode": $(if [ -n "$vm_mode" ]; then printf '"%s"' "$(json_escape "$vm_mode")"; else printf 'null'; fi),
+  "launch_mode": $(if [ -n "$launch_mode" ]; then printf '"%s"' "$(json_escape "$launch_mode")"; else printf 'null'; fi),
   "pid": $pid,
   "stdout_path": "$(json_escape "$stdout_path")",
   "stderr_path": "$(json_escape "$stderr_path")",
@@ -200,7 +200,7 @@ load_worker() {
   bridge_request_dir=""
   bridge_request_trace_path=""
   package_name=""
-  vm_mode=""
+  launch_mode=""
   finished_at=""
   exit_code=""
   stop_requested=0
@@ -213,8 +213,8 @@ load_worker() {
   if [ -f "$worker_root/bridge-request-trace-path" ]; then
     bridge_request_trace_path=$(cat "$worker_root/bridge-request-trace-path")
   fi
-  if [ -f "$worker_root/vm-mode" ]; then
-    vm_mode=$(cat "$worker_root/vm-mode")
+  if [ -f "$worker_root/launch-mode" ]; then
+    launch_mode=$(cat "$worker_root/launch-mode")
   fi
   if [ -f "$worker_root/finished-at" ]; then
     finished_at=$(cat "$worker_root/finished-at")
@@ -454,7 +454,7 @@ write_firebreak_launch_script() {
   quoted_finished_at=$(quote_arg "$worker_root/finished-at")
   quoted_child_pid=$(quote_arg "$worker_root/child-pid")
   quoted_instance_dir=$(quote_arg "$worker_root/instance")
-  quoted_vm_mode=$(quote_arg "$vm_mode")
+  quoted_launch_mode=$(quote_arg "$launch_mode")
   resolved_exec=$(resolve_firebreak_worker_exec "$FIREBREAK_FLAKE_REF#$package_name" "$package_name")
   quoted_resolved_exec=$(quote_arg "$resolved_exec")
 
@@ -473,7 +473,7 @@ exit_code_path=$quoted_exit_code
 finished_at_path=$quoted_finished_at
 child_pid_path=$quoted_child_pid
 instance_dir=$quoted_instance_dir
-vm_mode=$quoted_vm_mode
+launch_mode=$quoted_launch_mode
 attach_mode=$attach_mode
 
 finish() {
@@ -541,7 +541,7 @@ if [ "\$attach_mode" = "1" ]; then
       \${forwarded_columns:+COLUMNS="\$forwarded_columns"} \
       \${forwarded_lines:+LINES="\$forwarded_lines"} \
       FIREBREAK_INSTANCE_DIR="\$instance_dir" \
-      FIREBREAK_VM_MODE="\$vm_mode" \
+      FIREBREAK_LAUNCH_MODE="\$launch_mode" \
       FIREBREAK_AGENT_SESSION_MODE_OVERRIDE="agent-attach-exec" \
       $quoted_resolved_exec
   else
@@ -556,7 +556,7 @@ if [ "\$attach_mode" = "1" ]; then
       \${forwarded_columns:+COLUMNS="\$forwarded_columns"} \
       \${forwarded_lines:+LINES="\$forwarded_lines"} \
       FIREBREAK_INSTANCE_DIR="\$instance_dir" \
-      FIREBREAK_VM_MODE="\$vm_mode" \
+      FIREBREAK_LAUNCH_MODE="\$launch_mode" \
       $quoted_resolved_exec$quoted_args
   fi
   command_status=\$?
@@ -570,7 +570,7 @@ else
     -u CLAUDE_CONFIG \
     -u CLAUDE_CONFIG_HOST_PATH \
     FIREBREAK_INSTANCE_DIR="\$instance_dir" \
-    FIREBREAK_VM_MODE="\$vm_mode" \
+    FIREBREAK_LAUNCH_MODE="\$launch_mode" \
     $quoted_resolved_exec$quoted_args &
   child_pid=\$!
   printf '%s\n' "\$child_pid" >"\$child_pid_path"
@@ -591,7 +591,7 @@ spawn_worker() {
   kind=""
   workspace=$PWD
   package_name=""
-  vm_mode=run
+  launch_mode=run
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -611,8 +611,8 @@ spawn_worker() {
         package_name=$2
         shift 2
         ;;
-      --vm-mode)
-        vm_mode=$2
+      --launch-mode)
+        launch_mode=$2
         shift 2
         ;;
       --json)
@@ -664,10 +664,10 @@ spawn_worker() {
         exit 1
       }
       validate_token "$package_name" "worker package name"
-      case "$vm_mode" in
+      case "$launch_mode" in
         run|shell) ;;
         *)
-          echo "unsupported firebreak worker vm mode: $vm_mode" >&2
+          echo "unsupported firebreak worker launch mode: $launch_mode" >&2
           exit 1
           ;;
       esac
@@ -1525,7 +1525,7 @@ if workers_dir.is_dir():
                 "status": "unknown",
                 "workspace": None,
                 "package_name": None,
-                "vm_mode": None,
+                "launch_mode": None,
                 "pid": None,
                 "stdout_path": None,
                 "stderr_path": None,

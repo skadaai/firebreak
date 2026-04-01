@@ -205,7 +205,7 @@ Run these after the automated steps pass or when the automated runs are too slow
 Purpose: confirm the recipe is usable interactively, not only through smoke wrappers.
 
 ```sh
-FIREBREAK_VM_MODE=shell \
+FIREBREAK_LAUNCH_MODE=shell \
   nix --accept-flake-config --extra-experimental-features 'nix-command flakes' \
   run "path:$PWD/external/agent-orchestrator" \
   --override-input firebreak "path:$PWD"

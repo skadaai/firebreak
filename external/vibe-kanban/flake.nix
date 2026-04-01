@@ -20,7 +20,7 @@
               kind = "codex";
               backend = "firebreak";
               package = "firebreak-codex";
-              vm_mode = "run";
+              launch_mode = "run";
               max_instances = 4;
               versionOutput = "codex firebreak-worker wrapper";
             };
@@ -28,7 +28,7 @@
               kind = "claude-code";
               backend = "firebreak";
               package = "firebreak-claude-code";
-              vm_mode = "run";
+              launch_mode = "run";
               max_instances = 2;
               versionOutput = "claude firebreak-worker wrapper";
             };

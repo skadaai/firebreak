@@ -57,7 +57,7 @@ EOF
 run_usage() {
   cat <<'EOF' >&2
 usage:
-  firebreak run <vm> [--shell] [--worker-mode <vm|local|name=vm|name=local>] [-- <vm args...>]
+  firebreak run <vm> [--shell] [--launch-mode <run|shell>] [--worker-mode <vm|local|name=vm|name=local>] [-- <vm args...>]
 EOF
   exit "${1:-0}"
 }
@@ -105,6 +105,7 @@ Available Firebreak VMs
 Examples:
   firebreak run codex
   firebreak run codex --shell
+  firebreak run codex --launch-mode shell
   firebreak run codex --worker-mode local
   firebreak run codex --worker-mode codex=vm --worker-mode claude=local
   firebreak run claude-code -- --help
@@ -122,7 +123,7 @@ firebreak_run_command() {
   esac
   shift
 
-  requested_vm_mode=${FIREBREAK_VM_MODE:-}
+  requested_launch_mode=${FIREBREAK_LAUNCH_MODE:-}
   requested_worker_mode=${FIREBREAK_WORKER_MODE:-${FIREBREAK_WORKER_PROXY_MODE:-}}
   requested_worker_modes=${FIREBREAK_WORKER_MODES:-}
 
@@ -139,7 +140,19 @@ $worker_mode_entry"
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --shell)
-        requested_vm_mode=shell
+        requested_launch_mode=shell
+        shift
+        ;;
+      --launch-mode)
+        [ "$#" -ge 2 ] || {
+          echo "missing value for --launch-mode" >&2
+          run_usage 1
+        }
+        requested_launch_mode=$2
+        shift 2
+        ;;
+      --launch-mode=*)
+        requested_launch_mode=${1#*=}
         shift
         ;;
       --worker-mode|--worker-proxy-mode)
@@ -186,11 +199,11 @@ $worker_mode_entry"
     esac
   done
 
-  case "$requested_vm_mode" in
+  case "$requested_launch_mode" in
     ""|run|shell)
       ;;
     *)
-      echo "unsupported Firebreak VM mode: $requested_vm_mode" >&2
+      echo "unsupported Firebreak launch mode: $requested_launch_mode" >&2
       run_usage 1
       ;;
   esac
@@ -266,16 +279,17 @@ EOF
     package_name=$1
     shift
 
-    if [ -n "$requested_vm_mode" ] && { [ -n "$requested_worker_mode" ] || [ -n "$requested_worker_modes" ]; }; then
-      FIREBREAK_VM_MODE="$requested_vm_mode" \
+    if [ -n "$requested_launch_mode" ] && { [ -n "$requested_worker_mode" ] || [ -n "$requested_worker_modes" ]; }; then
+      FIREBREAK_LAUNCH_MODE="$requested_launch_mode" \
       FIREBREAK_WORKER_MODE="$requested_worker_mode" \
       FIREBREAK_WORKER_MODES="$requested_worker_modes" \
       firebreak_exec_package "$package_name" "$@"
       return
     fi
 
-    if [ -n "$requested_vm_mode" ]; then
-      FIREBREAK_VM_MODE="$requested_vm_mode" firebreak_exec_package "$package_name" "$@"
+    if [ -n "$requested_launch_mode" ]; then
+      FIREBREAK_LAUNCH_MODE="$requested_launch_mode" \
+      firebreak_exec_package "$package_name" "$@"
       return
     fi
 

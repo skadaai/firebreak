@@ -75,7 +75,7 @@ normalized_log_path = os.environ["NORMALIZED_LOG"]
 
 env = os.environ.copy()
 env["FIREBREAK_INSTANCE_EPHEMERAL"] = "1"
-env["FIREBREAK_VM_MODE"] = "shell"
+env["FIREBREAK_LAUNCH_MODE"] = "shell"
 env["FIREBREAK_WORKER_STATE_DIR"] = os.environ["WORKER_STATE_DIR"]
 
 master_fd, slave_fd = pty.openpty()

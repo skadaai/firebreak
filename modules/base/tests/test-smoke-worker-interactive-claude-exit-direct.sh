@@ -113,7 +113,7 @@ command = [
     workspace_dir,
     "--package",
     "firebreak-claude-code",
-    "--vm-mode",
+    "--launch-mode",
     "run",
     "--",
 ]

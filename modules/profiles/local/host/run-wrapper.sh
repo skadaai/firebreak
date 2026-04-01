@@ -14,7 +14,7 @@ agent_specific_host_path_var=@AGENT_ENV_PREFIX@_CONFIG_HOST_PATH
 agent_specific_config=${!agent_specific_config_var:-}
 agent_specific_host_path=${!agent_specific_host_path_var:-}
 agent_config_mode=${agent_specific_config:-${AGENT_CONFIG:-vm}}
-requested_vm_mode=${FIREBREAK_VM_MODE:-run}
+requested_launch_mode=${FIREBREAK_LAUNCH_MODE:-run}
 requested_worker_mode=${FIREBREAK_WORKER_MODE:-${FIREBREAK_WORKER_PROXY_MODE:-}}
 requested_worker_modes=${FIREBREAK_WORKER_MODES:-}
 agent_session_mode_override=${FIREBREAK_AGENT_SESSION_MODE_OVERRIDE:-}
@@ -188,7 +188,7 @@ fi
 
 runtime_debug_file=$runner_workdir/.firebreak-runtime.json
 
-case "$requested_vm_mode" in
+case "$requested_launch_mode" in
   run)
     agent_session_mode=agent
     ;;
@@ -196,7 +196,7 @@ case "$requested_vm_mode" in
     agent_session_mode=shell
     ;;
   *)
-    echo "unsupported FIREBREAK_VM_MODE: $requested_vm_mode" >&2
+    echo "unsupported FIREBREAK_LAUNCH_MODE: $requested_launch_mode" >&2
     echo "supported values: run, shell" >&2
     exit 1
     ;;

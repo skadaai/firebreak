@@ -9,7 +9,7 @@ Feature: Apple Silicon local support
 
   Scenario: Shell mode on an Apple Silicon Mac
     Given an operator is on an `aarch64-darwin` host
-    When the operator runs `FIREBREAK_VM_MODE=shell nix run .#firebreak-codex`
+    When the operator runs `FIREBREAK_LAUNCH_MODE=shell nix run .#firebreak-codex`
     Then Firebreak reaches the maintenance shell through the Apple Silicon local runtime
 
   Scenario: Unsupported Intel Mac host

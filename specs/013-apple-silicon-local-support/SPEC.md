@@ -77,7 +77,7 @@ The intended landing shape is:
 
 - `nix run .#firebreak-codex` and `nix run .#firebreak-claude-code` evaluate for `aarch64-darwin`.
 - on an Apple Silicon Mac, `nix run .#firebreak-codex` reaches the local agent entry path through a `vfkit`-based runtime.
-- on an Apple Silicon Mac, `FIREBREAK_VM_MODE=shell nix run .#firebreak-codex` reaches the maintenance shell.
+- on an Apple Silicon Mac, `FIREBREAK_LAUNCH_MODE=shell nix run .#firebreak-codex` reaches the maintenance shell.
 - on an Apple Silicon Mac, the local workspace path is shared into the guest and remains usable for interactive work.
 - on an Apple Silicon Mac, the local agent config path is shared into the guest when the selected config mode requires it.
 - on an Apple Silicon Mac, one-shot agent command execution still works for a simple command such as `--version`.

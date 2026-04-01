@@ -9,7 +9,7 @@ command=${1:-}
 usage() {
   cat <<'EOF' >&2
 usage:
-  firebreak worker run --kind KIND [--workspace PATH] [--backend BACKEND] [--package NAME] [--vm-mode MODE] [--attach] [--json] [--] COMMAND...
+  firebreak worker run --kind KIND [--workspace PATH] [--backend BACKEND] [--package NAME] [--launch-mode MODE] [--attach] [--json] [--] COMMAND...
   firebreak worker ps [-a|--all] [--json]
   firebreak worker inspect WORKER_ID
   firebreak worker logs [--stdout|--stderr] [-f|--follow] WORKER_ID
@@ -865,7 +865,7 @@ case "$subcommand" in
     kind=""
     workspace=$PWD
     package_name=""
-    vm_mode=""
+    launch_mode=""
     run_json=0
 
     while [ "$#" -gt 0 ]; do
@@ -886,8 +886,8 @@ case "$subcommand" in
           package_name=$2
           shift 2
           ;;
-        --vm-mode)
-          vm_mode=$2
+        --launch-mode)
+          launch_mode=$2
           shift 2
           ;;
         --json)
@@ -1003,18 +1003,18 @@ PY
         if [ -z "$package_name" ]; then
           package_name=$(resolve_kind_field "$kind_json" "package")
         fi
-        if [ -z "$vm_mode" ]; then
-          vm_mode=$(resolve_kind_field "$kind_json" "vm_mode")
+        if [ -z "$launch_mode" ]; then
+          launch_mode=$(resolve_kind_field "$kind_json" "launch_mode")
         fi
-        if [ -z "$vm_mode" ]; then
-          vm_mode=run
+        if [ -z "$launch_mode" ]; then
+          launch_mode=run
         fi
         if [ "$attach_mode" = "1" ]; then
-          bridge_request_attach run --backend firebreak --kind "$kind" --workspace "$workspace" --package "$package_name" --vm-mode "$vm_mode" --attach -- "$@"
+          bridge_request_attach run --backend firebreak --kind "$kind" --workspace "$workspace" --package "$package_name" --launch-mode "$launch_mode" --attach -- "$@"
         elif [ "$run_json" = "1" ]; then
-          bridge_request run --backend firebreak --kind "$kind" --workspace "$workspace" --package "$package_name" --vm-mode "$vm_mode" --json -- "$@"
+          bridge_request run --backend firebreak --kind "$kind" --workspace "$workspace" --package "$package_name" --launch-mode "$launch_mode" --json -- "$@"
         else
-          bridge_request run --backend firebreak --kind "$kind" --workspace "$workspace" --package "$package_name" --vm-mode "$vm_mode" -- "$@"
+          bridge_request run --backend firebreak --kind "$kind" --workspace "$workspace" --package "$package_name" --launch-mode "$launch_mode" -- "$@"
         fi
         run_status=$?
         release_kind_spawn_lock

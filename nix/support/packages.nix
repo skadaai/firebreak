@@ -78,13 +78,13 @@ rec {
         case "$installable" in
           *"#firebreak-codex")
             printf '%s\n' "__VM__codex"
-            printf '%s\n' "__MODE__''${FIREBREAK_VM_MODE:-unset}"
+            printf '%s\n' "__MODE__''${FIREBREAK_LAUNCH_MODE:-unset}"
             printf '%s\n' "__WORKER_MODE__''${FIREBREAK_WORKER_MODE:-unset}"
             printf '%s\n' "__WORKER_MODES__''${FIREBREAK_WORKER_MODES:-unset}"
             ;;
           *"#firebreak-claude-code")
             printf '%s\n' "__VM__claude-code"
-            printf '%s\n' "__MODE__''${FIREBREAK_VM_MODE:-unset}"
+            printf '%s\n' "__MODE__''${FIREBREAK_LAUNCH_MODE:-unset}"
             printf '%s\n' "__WORKER_MODE__''${FIREBREAK_WORKER_MODE:-unset}"
             printf '%s\n' "__WORKER_MODES__''${FIREBREAK_WORKER_MODES:-unset}"
             ;;
@@ -387,12 +387,12 @@ rec {
           bridge-firebreak = {
             backend = "firebreak";
             package = "firebreak-codex";
-            vm_mode = "run";
+            launch_mode = "run";
           };
           bridge-interactive-firebreak = {
             backend = "firebreak";
             package = "firebreak-interactive-echo";
-            vm_mode = "run";
+            launch_mode = "run";
           };
         };
         extraModules = [

@@ -37,7 +37,7 @@ The same behavior is available through `FIREBREAK_WORKER_MODE=vm|local` for a gl
 
 - `nix run .#firebreak-codex` launches Codex in the local Firebreak VM
 - `nix run .#firebreak-claude-code` launches Claude Code in the local Firebreak VM
-- `FIREBREAK_VM_MODE=shell nix run .#firebreak-codex` reaches the maintenance shell for the same VM package
+- `FIREBREAK_LAUNCH_MODE=shell nix run .#firebreak-codex` reaches the maintenance shell for the same VM package
 - supported local host systems: `x86_64-linux`, `aarch64-linux`, and Apple Silicon `aarch64-darwin`
 
 ## NPX Launcher
@@ -74,7 +74,7 @@ Example `.firebreak.env`:
 
 ```dotenv
 AGENT_CONFIG=workspace
-# FIREBREAK_VM_MODE=run
+# FIREBREAK_LAUNCH_MODE=run
 # CODEX_CONFIG=workspace
 # CLAUDE_CONFIG=workspace
 ```
@@ -85,7 +85,7 @@ AGENT_CONFIG=workspace
 
 - project root and config-file resolution
 - host platform and selected local runtime path
-- public VM mode resolution
+- public launch mode resolution
 - Codex and Claude Code config resolution
 - current working directory compatibility
 - KVM availability when relevant, plus primary-checkout state
@@ -116,7 +116,7 @@ workerProxies = {
     defaultMode = "vm";
     backend = "firebreak";
     package = "firebreak-codex";
-    vm_mode = "run";
+    launch_mode = "run";
     max_instances = 4;
   };
   claude = {
@@ -124,7 +124,7 @@ workerProxies = {
     defaultMode = "vm";
     backend = "firebreak";
     package = "firebreak-claude-code";
-    vm_mode = "run";
+    launch_mode = "run";
     max_instances = 2;
   };
 };

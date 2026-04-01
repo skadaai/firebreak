@@ -7,9 +7,14 @@
 
   outputs = { firebreak, nixpkgs, ... }:
     let
-      system = "x86_64-linux";
-      pkgs = nixpkgs.legacyPackages.${system};
-      mkProject = forwardPorts:
+      lib = nixpkgs.lib;
+      supportedSystems = builtins.attrNames firebreak.lib;
+      defaultSystem =
+        if builtins.elem builtins.currentSystem supportedSystems then
+          builtins.currentSystem
+        else
+          "x86_64-linux";
+      mkProject = system: forwardPorts:
         firebreak.lib.${system}.mkPackagedNodeCliArtifacts {
           name = "firebreak-agent-orchestrator";
           displayName = "Agent Orchestrator";
@@ -64,7 +69,7 @@
             alias ao-start='project-launch'
           '';
         };
-      project = mkProject [
+      defaultForwardPorts = [
         {
           from = "host";
           proto = "tcp";
@@ -87,20 +92,28 @@
           guest.port = 14801;
         }
       ];
-      testProject = mkProject [ ];
-      tests = import ./tests.nix {
-        inherit pkgs project testProject;
-        firebreakBin = "${firebreak.packages.${system}.default}/bin/firebreak";
-      };
+      project = mkProject defaultSystem defaultForwardPorts;
+      testProject = mkProject defaultSystem [ ];
+      testsFor = system:
+        import ./tests.nix {
+          pkgs = nixpkgs.legacyPackages.${system};
+          project = mkProject system defaultForwardPorts;
+          testProject = mkProject system [ ];
+          firebreakBin = "${firebreak.packages.${system}.default}/bin/firebreak";
+        };
     in {
       nixosConfigurations.firebreak-agent-orchestrator = project.nixosConfiguration;
 
-      packages.${system} = {
-        default = project.package;
-        firebreak-agent-orchestrator = project.package;
-        firebreak-internal-runner-agent-orchestrator = project.runnerPackage;
-      } // tests.packages;
+      packages = lib.genAttrs supportedSystems (system:
+        let
+          systemProject = mkProject system defaultForwardPorts;
+          tests = testsFor system;
+        in {
+          default = systemProject.package;
+          firebreak-agent-orchestrator = systemProject.package;
+          firebreak-internal-runner-agent-orchestrator = systemProject.runnerPackage;
+        } // tests.packages);
 
-      checks.${system} = tests.checks;
+      checks = lib.genAttrs supportedSystems (system: (testsFor system).checks);
     };
 }

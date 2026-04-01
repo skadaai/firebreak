@@ -14,6 +14,7 @@
           tagline = "vibe-kanban cli sandbox";
           packageSpec = "vibe-kanban";
           binName = "vibe-kanban";
+          defaultWorkerMode = "vm";
           workerProxies = {
             codex = {
               kind = "codex";

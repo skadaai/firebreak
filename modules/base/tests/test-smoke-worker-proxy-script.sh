@@ -40,27 +40,33 @@ require_pattern() {
   fi
 }
 
-worker_version_output=$(codex --version)
+worker_version_output=$(FIREBREAK_WORKER_MODE=vm codex --version)
 require_pattern "$worker_version_output" "codex firebreak worker proxy" "worker proxy version output"
 
-worker_output=$(FIREBREAK_WORKER_PROXY_MODE=worker codex --help)
+default_output=$(codex --help)
+require_pattern "$default_output" "__UPSTREAM__--help" "default local dispatch"
+
+worker_output=$(FIREBREAK_WORKER_MODE=vm codex --help)
 require_pattern "$worker_output" "__WORKER__worker run --kind codex --workspace" "worker dispatch prefix"
 require_pattern "$worker_output" "--attach -- --help" "worker dispatch arguments"
 
-local_output=$(FIREBREAK_WORKER_PROXY_MODE=local codex --help)
+local_output=$(FIREBREAK_WORKER_MODE=local codex --help)
 require_pattern "$local_output" "__UPSTREAM__--help" "local upstream dispatch"
 
+per_worker_output=$(FIREBREAK_WORKER_MODE=local FIREBREAK_WORKER_MODES=codex=vm codex --help)
+require_pattern "$per_worker_output" "__WORKER__worker run --kind codex --workspace" "per-worker override precedence"
+
 set +e
-invalid_mode_output=$(FIREBREAK_WORKER_PROXY_MODE=invalid codex --help 2>&1)
+invalid_mode_output=$(FIREBREAK_WORKER_MODE=invalid codex --help 2>&1)
 invalid_mode_status=$?
 set -e
 
 if [ "$invalid_mode_status" -eq 0 ]; then
   printf '%s\n' "$invalid_mode_output" >&2
-  echo "worker proxy script accepted an invalid FIREBREAK_WORKER_PROXY_MODE" >&2
+  echo "worker proxy script accepted an invalid FIREBREAK_WORKER_MODE" >&2
   exit 1
 fi
 
-require_pattern "$invalid_mode_output" "unsupported FIREBREAK_WORKER_PROXY_MODE" "invalid mode rejection"
+require_pattern "$invalid_mode_output" "unsupported FIREBREAK_WORKER_MODE" "invalid mode rejection"
 
 printf '%s\n' "Firebreak worker proxy script smoke test passed"

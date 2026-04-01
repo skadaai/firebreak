@@ -79,12 +79,14 @@ rec {
           *"#firebreak-codex")
             printf '%s\n' "__VM__codex"
             printf '%s\n' "__MODE__''${FIREBREAK_VM_MODE:-unset}"
-            printf '%s\n' "__WORKER_PROXY_MODE__''${FIREBREAK_WORKER_PROXY_MODE:-unset}"
+            printf '%s\n' "__WORKER_MODE__''${FIREBREAK_WORKER_MODE:-unset}"
+            printf '%s\n' "__WORKER_MODES__''${FIREBREAK_WORKER_MODES:-unset}"
             ;;
           *"#firebreak-claude-code")
             printf '%s\n' "__VM__claude-code"
             printf '%s\n' "__MODE__''${FIREBREAK_VM_MODE:-unset}"
-            printf '%s\n' "__WORKER_PROXY_MODE__''${FIREBREAK_WORKER_PROXY_MODE:-unset}"
+            printf '%s\n' "__WORKER_MODE__''${FIREBREAK_WORKER_MODE:-unset}"
+            printf '%s\n' "__WORKER_MODES__''${FIREBREAK_WORKER_MODES:-unset}"
             ;;
           *"#firebreak-internal-validate")
             printf '%s\n' "__INTERNAL__validate"

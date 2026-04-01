@@ -40,7 +40,7 @@ require_pattern "$worker_help_output" "firebreak worker run" "worker help usage 
 run_codex_output=$(@FIREBREAK_CLI_BIN@ run codex -- --version)
 require_pattern "$run_codex_output" '__VM__codex' "codex run delegation"
 require_pattern "$run_codex_output" '__MODE__unset' "default run mode passthrough"
-require_pattern "$run_codex_output" '__WORKER_PROXY_MODE__unset' "default worker proxy mode passthrough"
+require_pattern "$run_codex_output" '__WORKER_MODE__unset' "default worker mode passthrough"
 require_pattern "$run_codex_output" '__ARG__--version' "codex forwarded argument"
 
 run_claude_shell_output=$(@FIREBREAK_CLI_BIN@ run claude-code --shell -- prompt.txt)
@@ -48,10 +48,15 @@ require_pattern "$run_claude_shell_output" '__VM__claude-code' "claude-code run 
 require_pattern "$run_claude_shell_output" '__MODE__shell' "shell mode override"
 require_pattern "$run_claude_shell_output" '__ARG__prompt.txt' "claude-code forwarded argument"
 
-run_codex_local_output=$(@FIREBREAK_CLI_BIN@ run codex --worker-proxy-mode local -- --help)
+run_codex_local_output=$(@FIREBREAK_CLI_BIN@ run codex --worker-mode local -- --help)
 require_pattern "$run_codex_local_output" '__VM__codex' "codex local-mode delegation"
-require_pattern "$run_codex_local_output" '__WORKER_PROXY_MODE__local' "worker proxy mode override"
+require_pattern "$run_codex_local_output" '__WORKER_MODE__local' "worker mode override"
 require_pattern "$run_codex_local_output" '__ARG__--help' "local-mode forwarded argument"
+
+run_codex_per_worker_output=$(@FIREBREAK_CLI_BIN@ run codex --worker-mode local --worker-mode codex=vm --worker-mode claude=local -- --version)
+require_pattern "$run_codex_per_worker_output" '__WORKER_MODE__local' "global worker mode with per-worker overrides"
+require_pattern "$run_codex_per_worker_output" '__WORKER_MODES__codex=vm' "codex per-worker override"
+require_pattern "$run_codex_per_worker_output" 'claude=local' "claude per-worker override"
 
 set +e
 invalid_vm_mode_output=$(FIREBREAK_VM_MODE=invalid @FIREBREAK_CLI_BIN@ run codex 2>&1)
@@ -65,13 +70,24 @@ if [ "$invalid_vm_mode_status" -eq 0 ] || ! printf '%s\n' "$invalid_vm_mode_outp
 fi
 
 set +e
-invalid_worker_proxy_mode_output=$(FIREBREAK_WORKER_PROXY_MODE=invalid @FIREBREAK_CLI_BIN@ run codex 2>&1)
-invalid_worker_proxy_mode_status=$?
+invalid_worker_mode_output=$(FIREBREAK_WORKER_MODE=invalid @FIREBREAK_CLI_BIN@ run codex 2>&1)
+invalid_worker_mode_status=$?
 set -e
 
-if [ "$invalid_worker_proxy_mode_status" -eq 0 ] || ! printf '%s\n' "$invalid_worker_proxy_mode_output" | grep -F -q "unsupported FIREBREAK_WORKER_PROXY_MODE"; then
-  printf '%s\n' "$invalid_worker_proxy_mode_output" >&2
-  echo "CLI surface smoke did not reject an invalid FIREBREAK_WORKER_PROXY_MODE value" >&2
+if [ "$invalid_worker_mode_status" -eq 0 ] || ! printf '%s\n' "$invalid_worker_mode_output" | grep -F -q "unsupported FIREBREAK_WORKER_MODE"; then
+  printf '%s\n' "$invalid_worker_mode_output" >&2
+  echo "CLI surface smoke did not reject an invalid FIREBREAK_WORKER_MODE value" >&2
+  exit 1
+fi
+
+set +e
+invalid_worker_modes_output=$(@FIREBREAK_CLI_BIN@ run codex --worker-mode codex=invalid 2>&1)
+invalid_worker_modes_status=$?
+set -e
+
+if [ "$invalid_worker_modes_status" -eq 0 ] || ! printf '%s\n' "$invalid_worker_modes_output" | grep -F -q "unsupported FIREBREAK_WORKER_MODE override"; then
+  printf '%s\n' "$invalid_worker_modes_output" >&2
+  echo "CLI surface smoke did not reject an invalid FIREBREAK_WORKER_MODE override value" >&2
   exit 1
 fi
 

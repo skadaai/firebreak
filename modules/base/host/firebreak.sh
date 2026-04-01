@@ -57,7 +57,7 @@ EOF
 run_usage() {
   cat <<'EOF' >&2
 usage:
-  firebreak run <vm> [--shell] [--worker-proxy-mode <worker|local>] [-- <vm args...>]
+  firebreak run <vm> [--shell] [--worker-mode <vm|local|name=vm|name=local>] [-- <vm args...>]
 EOF
   exit "${1:-0}"
 }
@@ -105,7 +105,8 @@ Available Firebreak VMs
 Examples:
   firebreak run codex
   firebreak run codex --shell
-  firebreak run codex --worker-proxy-mode local
+  firebreak run codex --worker-mode local
+  firebreak run codex --worker-mode codex=vm --worker-mode claude=local
   firebreak run claude-code -- --help
 EOF
 }
@@ -122,7 +123,18 @@ firebreak_run_command() {
   shift
 
   requested_vm_mode=${FIREBREAK_VM_MODE:-}
-  requested_worker_proxy_mode=${FIREBREAK_WORKER_PROXY_MODE:-}
+  requested_worker_mode=${FIREBREAK_WORKER_MODE:-${FIREBREAK_WORKER_PROXY_MODE:-}}
+  requested_worker_modes=${FIREBREAK_WORKER_MODES:-}
+
+  append_worker_mode_override() {
+    worker_mode_entry=$1
+    if [ -n "$requested_worker_modes" ]; then
+      requested_worker_modes="${requested_worker_modes}
+$worker_mode_entry"
+    else
+      requested_worker_modes=$worker_mode_entry
+    fi
+  }
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -130,16 +142,31 @@ firebreak_run_command() {
         requested_vm_mode=shell
         shift
         ;;
-      --worker-proxy-mode)
+      --worker-mode|--worker-proxy-mode)
         [ "$#" -ge 2 ] || {
-          echo "missing value for --worker-proxy-mode" >&2
+          echo "missing value for --worker-mode" >&2
           run_usage 1
         }
-        requested_worker_proxy_mode=$2
+        case "$2" in
+          *=*)
+            append_worker_mode_override "$2"
+            ;;
+          *)
+            requested_worker_mode=$2
+            ;;
+        esac
         shift 2
         ;;
-      --worker-proxy-mode=*)
-        requested_worker_proxy_mode=${1#--worker-proxy-mode=}
+      --worker-mode=*|--worker-proxy-mode=*)
+        worker_mode_value=${1#*=}
+        case "$worker_mode_value" in
+          *=*)
+            append_worker_mode_override "$worker_mode_value"
+            ;;
+          *)
+            requested_worker_mode=$worker_mode_value
+            ;;
+        esac
         shift
         ;;
       --)
@@ -168,23 +195,81 @@ firebreak_run_command() {
       ;;
   esac
 
-  case "$requested_worker_proxy_mode" in
-    ""|worker|local)
+  normalize_worker_mode() {
+    case "$1" in
+      worker)
+        printf '%s\n' "vm"
+        ;;
+      *)
+        printf '%s\n' "$1"
+        ;;
+    esac
+  }
+
+  requested_worker_mode=$(normalize_worker_mode "$requested_worker_mode")
+
+  case "$requested_worker_mode" in
+    ""|vm|local)
       ;;
     *)
-      echo "unsupported FIREBREAK_WORKER_PROXY_MODE: $requested_worker_proxy_mode" >&2
-      echo "supported values: worker, local" >&2
+      echo "unsupported FIREBREAK_WORKER_MODE: $requested_worker_mode" >&2
+      echo "supported values: vm, local" >&2
       run_usage 1
       ;;
   esac
+
+  if [ -n "$requested_worker_modes" ]; then
+    normalized_worker_modes=""
+    while IFS= read -r worker_mode_entry || [ -n "$worker_mode_entry" ]; do
+      worker_mode_entry=${worker_mode_entry#"${worker_mode_entry%%[![:space:]]*}"}
+      worker_mode_entry=${worker_mode_entry%"${worker_mode_entry##*[![:space:]]}"}
+      [ -n "$worker_mode_entry" ] || continue
+      case "$worker_mode_entry" in
+        *=*)
+          worker_name=${worker_mode_entry%%=*}
+          worker_mode_value=$(normalize_worker_mode "${worker_mode_entry#*=}")
+          case "$worker_mode_value" in
+            vm|local)
+              ;;
+            *)
+              echo "unsupported FIREBREAK_WORKER_MODE override: $worker_mode_entry" >&2
+              echo "supported override values: name=vm, name=local" >&2
+              exit 1
+              ;;
+          esac
+          case "$worker_name" in
+            ""|*[!A-Za-z0-9._-]*)
+              echo "unsupported FIREBREAK_WORKER_MODE override target: $worker_name" >&2
+              exit 1
+              ;;
+          esac
+          if [ -n "$normalized_worker_modes" ]; then
+            normalized_worker_modes="${normalized_worker_modes}
+${worker_name}=${worker_mode_value}"
+          else
+            normalized_worker_modes="${worker_name}=${worker_mode_value}"
+          fi
+          ;;
+        *)
+          echo "unsupported FIREBREAK_WORKER_MODE override: $worker_mode_entry" >&2
+          echo "supported override values: name=vm, name=local" >&2
+          exit 1
+          ;;
+      esac
+    done <<EOF
+$requested_worker_modes
+EOF
+    requested_worker_modes=$normalized_worker_modes
+  fi
 
   firebreak_run_package() {
     package_name=$1
     shift
 
-    if [ -n "$requested_vm_mode" ] && [ -n "$requested_worker_proxy_mode" ]; then
+    if [ -n "$requested_vm_mode" ] && { [ -n "$requested_worker_mode" ] || [ -n "$requested_worker_modes" ]; }; then
       FIREBREAK_VM_MODE="$requested_vm_mode" \
-      FIREBREAK_WORKER_PROXY_MODE="$requested_worker_proxy_mode" \
+      FIREBREAK_WORKER_MODE="$requested_worker_mode" \
+      FIREBREAK_WORKER_MODES="$requested_worker_modes" \
       firebreak_exec_package "$package_name" "$@"
       return
     fi
@@ -194,8 +279,10 @@ firebreak_run_command() {
       return
     fi
 
-    if [ -n "$requested_worker_proxy_mode" ]; then
-      FIREBREAK_WORKER_PROXY_MODE="$requested_worker_proxy_mode" firebreak_exec_package "$package_name" "$@"
+    if [ -n "$requested_worker_mode" ] || [ -n "$requested_worker_modes" ]; then
+      FIREBREAK_WORKER_MODE="$requested_worker_mode" \
+      FIREBREAK_WORKER_MODES="$requested_worker_modes" \
+      firebreak_exec_package "$package_name" "$@"
       return
     fi
 
@@ -225,7 +312,7 @@ usage:
   firebreak init [--force] [--stdout] [--interactive] [--non-interactive]
   firebreak doctor [--verbose] [--json]
   firebreak vms [--json]
-  firebreak run <vm> [--shell] [--worker-proxy-mode <worker|local>] [-- <vm args...>]
+  firebreak run <vm> [--shell] [--worker-mode <vm|local|name=vm|name=local>] [-- <vm args...>]
   firebreak worker <subcommand> ...
   firebreak internal <subcommand> ...
 

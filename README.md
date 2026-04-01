@@ -16,7 +16,8 @@ Firebreak is a VM-first control plane for running coding agents with a small pub
 firebreak vms
 firebreak run codex
 firebreak run codex --shell
-firebreak run codex --worker-proxy-mode local
+firebreak run codex --worker-mode local
+firebreak run codex --worker-mode codex=vm --worker-mode claude=local
 firebreak run claude-code -- --help
 ```
 
@@ -25,11 +26,12 @@ firebreak run claude-code -- --help
 For packaged node-cli VMs that expose `workerProxies`, `firebreak run` can also choose whether commands such as `codex` and `claude` launch as sibling Firebreak workers or as regular in-VM processes:
 
 ```sh
-npx firebreak run codex --worker-proxy-mode worker
-npx firebreak run codex --worker-proxy-mode local
+npx firebreak run codex --worker-mode vm
+npx firebreak run codex --worker-mode local
+npx firebreak run codex --worker-mode codex=vm --worker-mode claude=local
 ```
 
-The same switch is available through `FIREBREAK_WORKER_PROXY_MODE=worker|local` when you launch an external recipe package directly with `nix run`.
+The same behavior is available through `FIREBREAK_WORKER_MODE=vm|local` for a global default and `FIREBREAK_WORKER_MODES=codex=vm,claude=local` for per-command overrides when you launch an external recipe package directly with `nix run`. CLI flags always take precedence.
 
 ## Local Workloads
 
@@ -111,6 +113,7 @@ Example external recipe fragment:
 workerProxies = {
   codex = {
     kind = "codex";
+    defaultMode = "vm";
     backend = "firebreak";
     package = "firebreak-codex";
     vm_mode = "run";
@@ -118,6 +121,7 @@ workerProxies = {
   };
   claude = {
     kind = "claude-code";
+    defaultMode = "vm";
     backend = "firebreak";
     package = "firebreak-claude-code";
     vm_mode = "run";
@@ -126,4 +130,6 @@ workerProxies = {
 };
 ```
 
-For packaged node-cli recipes, Firebreak also exposes `firebreak-bootstrap-wait` inside the guest so recipe-owned validation can wait for the shared bootstrap service to finish before probing installed CLIs or worker-proxy wrappers. Those generated proxy commands honor `FIREBREAK_WORKER_PROXY_MODE=worker|local`, so the same recipe can flip between sibling-worker routing and regular in-VM execution without redefining command names.
+If a proxy does not define `defaultMode`, Firebreak falls back to the recipe-level `defaultWorkerMode`, which defaults to `local`.
+
+For packaged node-cli recipes, Firebreak also exposes `firebreak-bootstrap-wait` inside the guest so recipe-owned validation can wait for the shared bootstrap service to finish before probing installed CLIs or worker-proxy wrappers. Those generated proxy commands honor `FIREBREAK_WORKER_MODE=vm|local` and `FIREBREAK_WORKER_MODES=command=mode,...`, so the same recipe can flip between sibling-worker routing and regular in-VM execution without redefining command names.

@@ -13,8 +13,14 @@ export npm_config_prefix="$tool_home/.local"
 export PATH="$LOCAL_BIN:$PATH"
 @LAUNCH_ENV_EXPORTS@
 
-if [ -r /run/firebreak-agent/worker-proxy-mode ]; then
-  export FIREBREAK_WORKER_PROXY_MODE="$(cat /run/firebreak-agent/worker-proxy-mode)"
+if [ -r /run/firebreak-agent/worker-mode ]; then
+  export FIREBREAK_WORKER_MODE="$(cat /run/firebreak-agent/worker-mode)"
+elif [ -r /run/firebreak-agent/worker-proxy-mode ]; then
+  export FIREBREAK_WORKER_MODE="$(cat /run/firebreak-agent/worker-proxy-mode)"
+fi
+
+if [ -r /run/firebreak-agent/worker-modes ]; then
+  export FIREBREAK_WORKER_MODES="$(cat /run/firebreak-agent/worker-modes)"
 fi
 
 firebreak_refresh_cli() {

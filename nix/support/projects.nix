@@ -4,6 +4,8 @@ rec {
     {
       commandName ? kind,
       kind,
+      defaultMode ? null,
+      defaultWorkerMode ? "local",
       versionOutput ? "${kind} firebreak worker proxy",
     }:
     ''
@@ -11,16 +13,63 @@ rec {
       set -eu
 
       upstream_bin=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/.firebreak-upstream-${commandName}
-      worker_proxy_mode=''${FIREBREAK_WORKER_PROXY_MODE:-}
-      if [ -z "$worker_proxy_mode" ] && [ -r /run/firebreak-agent/worker-proxy-mode ]; then
-        worker_proxy_mode=$(cat /run/firebreak-agent/worker-proxy-mode)
-      fi
-      if [ -z "$worker_proxy_mode" ]; then
-        worker_proxy_mode=worker
+      default_worker_mode=${lib.escapeShellArg defaultWorkerMode}
+      proxy_default_mode=${lib.escapeShellArg (if defaultMode == null then "" else defaultMode)}
+
+      normalize_worker_mode() {
+        case "$1" in
+          worker)
+            printf '%s\n' "vm"
+            ;;
+          *)
+            printf '%s\n' "$1"
+            ;;
+        esac
+      }
+
+      resolve_command_worker_mode() {
+        raw_modes=$1
+        if [ -z "$raw_modes" ]; then
+          return 0
+        fi
+
+        printf '%s\n' "$raw_modes" | tr ',' '\n' | while IFS= read -r mode_entry || [ -n "$mode_entry" ]; do
+          mode_entry=$(printf '%s' "$mode_entry" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+          [ -n "$mode_entry" ] || continue
+          case "$mode_entry" in
+            ${commandName}=*)
+              printf '%s\n' "$(normalize_worker_mode "''${mode_entry#*=}")"
+              exit 0
+              ;;
+          esac
+        done
+      }
+
+      worker_mode_overrides=''${FIREBREAK_WORKER_MODES:-}
+      if [ -z "$worker_mode_overrides" ] && [ -r /run/firebreak-agent/worker-modes ]; then
+        worker_mode_overrides=$(cat /run/firebreak-agent/worker-modes)
       fi
 
-      case "$worker_proxy_mode" in
-        worker)
+      worker_mode=$(resolve_command_worker_mode "$worker_mode_overrides" || true)
+      if [ -z "$worker_mode" ]; then
+        worker_mode=''${FIREBREAK_WORKER_MODE:-''${FIREBREAK_WORKER_PROXY_MODE:-}}
+      fi
+      if [ -z "$worker_mode" ] && [ -r /run/firebreak-agent/worker-mode ]; then
+        worker_mode=$(cat /run/firebreak-agent/worker-mode)
+      fi
+      if [ -z "$worker_mode" ] && [ -r /run/firebreak-agent/worker-proxy-mode ]; then
+        worker_mode=$(cat /run/firebreak-agent/worker-proxy-mode)
+      fi
+      worker_mode=$(normalize_worker_mode "$worker_mode")
+      if [ -z "$worker_mode" ] && [ -n "$proxy_default_mode" ]; then
+        worker_mode=$proxy_default_mode
+      fi
+      if [ -z "$worker_mode" ]; then
+        worker_mode=$default_worker_mode
+      fi
+
+      case "$worker_mode" in
+        vm)
           ;;
         local)
           if ! [ -x "$upstream_bin" ]; then
@@ -30,8 +79,8 @@ rec {
           exec "$upstream_bin" "$@"
           ;;
         *)
-          echo "unsupported FIREBREAK_WORKER_PROXY_MODE: $worker_proxy_mode" >&2
-          echo "supported values: worker, local" >&2
+          echo "unsupported FIREBREAK_WORKER_MODE: $worker_mode" >&2
+          echo "supported values: vm, local" >&2
           exit 1
           ;;
       esac
@@ -303,6 +352,7 @@ rec {
     extraShellInit ? "",
     extraModules ? [ ],
     workerBridgeEnabled ? false,
+    defaultWorkerMode ? "local",
     workerKinds ? { },
     workerProxies ? { },
   }:
@@ -319,6 +369,8 @@ rec {
             mkWorkerProxyScript {
               inherit commandName;
               kind = proxy.kind;
+              defaultMode = proxy.defaultMode or null;
+              inherit defaultWorkerMode;
               versionOutput = proxy.versionOutput or "${commandName} firebreak worker proxy";
             })
           workerProxies;

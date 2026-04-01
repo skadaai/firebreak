@@ -14,6 +14,7 @@
           tagline = "agent-orchestrator cli sandbox";
           packageSpec = "@composio/ao";
           binName = "ao";
+          defaultWorkerMode = "vm";
           workerProxies = {
             codex = {
               kind = "codex";

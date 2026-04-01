@@ -7,6 +7,8 @@ session_mode_file=@HOST_META_MOUNT@/agent-session-mode
 session_term_file=@HOST_META_MOUNT@/agent-term
 session_columns_file=@HOST_META_MOUNT@/agent-columns
 session_lines_file=@HOST_META_MOUNT@/agent-lines
+worker_mode_file=@HOST_META_MOUNT@/worker-mode
+worker_modes_file=@HOST_META_MOUNT@/worker-modes
 worker_proxy_mode_file=@HOST_META_MOUNT@/worker-proxy-mode
 agent_tools_enabled=@AGENT_TOOLS_ENABLED@
 agent_tools_mount=@AGENT_TOOLS_MOUNT@
@@ -18,6 +20,8 @@ command_state_local=$guest_state_dir/command-state.json
 session_term_state_file=$guest_state_dir/session-term
 session_columns_state_file=$guest_state_dir/session-columns
 session_lines_state_file=$guest_state_dir/session-lines
+worker_mode_state_file=$guest_state_dir/worker-mode
+worker_modes_state_file=$guest_state_dir/worker-modes
 worker_proxy_mode_state_file=$guest_state_dir/worker-proxy-mode
 
 log_phase() {
@@ -97,6 +101,14 @@ fi
 if [ -r "$session_lines_file" ]; then
   cat "$session_lines_file" > "$session_lines_state_file"
   chmod 0644 "$session_lines_state_file"
+fi
+if [ -r "$worker_mode_file" ]; then
+  cat "$worker_mode_file" > "$worker_mode_state_file"
+  chmod 0644 "$worker_mode_state_file"
+fi
+if [ -r "$worker_modes_file" ]; then
+  cat "$worker_modes_file" > "$worker_modes_state_file"
+  chmod 0644 "$worker_modes_state_file"
 fi
 if [ -r "$worker_proxy_mode_file" ]; then
   cat "$worker_proxy_mode_file" > "$worker_proxy_mode_state_file"

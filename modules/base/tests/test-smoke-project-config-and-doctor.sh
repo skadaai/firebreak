@@ -19,7 +19,8 @@ unset AGENT_CONFIG
 unset AGENT_CONFIG_HOST_PATH
 unset FIREBREAK_PROJECT_CONFIG_FILE
 unset FIREBREAK_VM_MODE
-unset FIREBREAK_WORKER_PROXY_MODE
+unset FIREBREAK_WORKER_MODE
+unset FIREBREAK_WORKER_MODES
 unset CODEX_CONFIG
 unset CODEX_CONFIG_HOST_PATH
 unset CLAUDE_CONFIG
@@ -69,7 +70,8 @@ require_pattern() {
 init_template_stdout=$(firebreak_cmd init --non-interactive --stdout)
 require_pattern "$init_template_stdout" "AGENT_CONFIG=workspace" "default AGENT_CONFIG template entry"
 require_pattern "$init_template_stdout" "# FIREBREAK_VM_MODE=run" "default FIREBREAK_VM_MODE template entry"
-require_pattern "$init_template_stdout" "# FIREBREAK_WORKER_PROXY_MODE=worker" "default FIREBREAK_WORKER_PROXY_MODE template entry"
+require_pattern "$init_template_stdout" "# FIREBREAK_WORKER_MODE=local" "default FIREBREAK_WORKER_MODE template entry"
+require_pattern "$init_template_stdout" "# FIREBREAK_WORKER_MODES=codex=vm,claude=local" "default FIREBREAK_WORKER_MODES template entry"
 
 set +e
 interactive_init_output=$(

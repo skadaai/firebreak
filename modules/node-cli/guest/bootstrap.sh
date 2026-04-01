@@ -151,7 +151,8 @@ mkdir -p \
   "$npm_config_prefix"
 rm -rf "$1"
 rm -f "$npm_config_prefix/bin/@BIN_NAME@"
-npm install --global --omit=dev "$2"
+set -- "$2" @PROXY_LOCAL_UPSTREAM_INSTALL_ARGS@
+npm install --global --omit=dev "$@"
 @POST_INSTALL_SCRIPT@
 @INSTALL_BIN_SCRIPTS@
 EOF

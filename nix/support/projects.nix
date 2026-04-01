@@ -1,5 +1,16 @@
 { lib, pkgs, renderTemplate, mkLocalVmArtifacts }:
 rec {
+  workerProxyLocalUpstreamsByPackage = {
+    firebreak-codex = {
+      packageSpec = "@openai/codex@latest";
+      binName = "codex";
+    };
+    firebreak-claude-code = {
+      packageSpec = "@anthropic-ai/claude-code@latest";
+      binName = "claude";
+    };
+  };
+
   mkWorkerProxyScript =
     {
       commandName ? kind,
@@ -357,6 +368,21 @@ rec {
     workerProxies ? { },
   }:
     let
+      derivedProxyLocalUpstreams =
+        lib.mapAttrs
+          (commandName: proxy:
+            let
+              packageName = proxy.package or null;
+              knownUpstream =
+                if packageName != null && builtins.hasAttr packageName workerProxyLocalUpstreamsByPackage
+                then builtins.getAttr packageName workerProxyLocalUpstreamsByPackage
+                else { };
+            in {
+              packageSpec = knownUpstream.packageSpec or null;
+              binName = knownUpstream.binName or commandName;
+            })
+          workerProxies;
+
       derivedWorkerKinds =
         lib.mapAttrs'
           (_commandName: proxy:
@@ -418,6 +444,7 @@ rec {
             extraShellInit
             ;
           installBinScripts = effectiveInstallBinScripts;
+          proxyLocalUpstreams = derivedProxyLocalUpstreams;
           vmName = name;
           extraSystemPackages = packageSet pkgs;
           extraBootstrapPackages = bootstrapPackageSet pkgs;

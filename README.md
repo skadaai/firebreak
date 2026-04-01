@@ -132,4 +132,6 @@ workerProxies = {
 
 If a proxy does not define `defaultMode`, Firebreak falls back to the recipe-level `defaultWorkerMode`, which defaults to `local`.
 
+For Firebreak-managed worker packages such as `firebreak-codex` and `firebreak-claude-code`, local mode is derived from the declared `package` automatically. Recipe authors do not need to re-declare the upstream npm package or bin name just to make `local` mode work.
+
 For packaged node-cli recipes, Firebreak also exposes `firebreak-bootstrap-wait` inside the guest so recipe-owned validation can wait for the shared bootstrap service to finish before probing installed CLIs or worker-proxy wrappers. Those generated proxy commands honor `FIREBREAK_WORKER_MODE=vm|local` and `FIREBREAK_WORKER_MODES=command=mode,...`, so the same recipe can flip between sibling-worker routing and regular in-VM execution without redefining command names.

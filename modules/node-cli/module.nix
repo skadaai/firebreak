@@ -11,6 +11,7 @@
   forwardPorts ? [ ],
   postInstallScript ? "",
   installBinScripts ? { },
+  proxyLocalUpstreams ? { },
   memoryMiB ? 3072,
   extraSystemPackages ? [ ],
   extraBootstrapPackages ? [ ],
@@ -45,15 +46,32 @@ let
       installBinScripts
       packageSpec
       postInstallScript
+      proxyLocalUpstreams
       ;
   });
+  proxyLocalUpstreamSpecs =
+    lib.unique (
+      lib.filter (value: value != null)
+        (lib.mapAttrsToList (_commandName: upstream: upstream.packageSpec or null) proxyLocalUpstreams)
+    );
+  proxyLocalUpstreamInstallArgs = lib.escapeShellArgs proxyLocalUpstreamSpecs;
   upstreamInstallBinScriptSnippet =
     lib.concatStringsSep "\n"
       (map
         (scriptName:
+          let
+            proxyLocalUpstream =
+              if builtins.hasAttr scriptName proxyLocalUpstreams
+              then builtins.getAttr scriptName proxyLocalUpstreams
+              else null;
+            upstreamBinName =
+              if proxyLocalUpstream != null
+              then proxyLocalUpstream.binName or scriptName
+              else scriptName;
+          in
           ''
-            if [ -e "$npm_config_prefix/bin/${scriptName}" ]; then
-              mv "$npm_config_prefix/bin/${scriptName}" "$npm_config_prefix/bin/.firebreak-upstream-${scriptName}"
+            if [ -e "$npm_config_prefix/bin/${upstreamBinName}" ]; then
+              mv "$npm_config_prefix/bin/${upstreamBinName}" "$npm_config_prefix/bin/.firebreak-upstream-${scriptName}"
             else
               rm -f "$npm_config_prefix/bin/.firebreak-upstream-${scriptName}"
             fi
@@ -183,6 +201,7 @@ let
     "@NAME@" = vmName;
     "@NPM_CACHE_DIR@" = npmCacheDir;
     "@PACKAGE_NODE_MODULES@" = packageNodeModules;
+    "@PROXY_LOCAL_UPSTREAM_INSTALL_ARGS@" = proxyLocalUpstreamInstallArgs;
     "@PACKAGE_SPEC@" = packageSpec;
     "@POST_INSTALL_SCRIPT@" = postInstallScript;
     "@READY_COMMAND_NAME@" = readyCommandName;

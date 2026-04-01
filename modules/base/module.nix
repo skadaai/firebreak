@@ -3,6 +3,9 @@ let
   cfg = config.agentVm;
   devHome = "/var/lib/${cfg.devUser}";
   agentConfigVmDir = "${devHome}/${cfg.agentConfigDirName}";
+  hostIsDarwin = lib.hasSuffix "-darwin" cfg.hostSystem;
+  roStoreShareProto = if hostIsDarwin then "virtiofs" else "9p";
+  localHypervisor = if hostIsDarwin then "vfkit" else "qemu";
 
   scriptVars = {
     "@DEV_HOME@" = devHome;
@@ -35,6 +38,18 @@ in {
       type = types.str;
       default = "reliable isolation for high-trust automation";
       description = "Short startup tagline printed in the interactive guest session.";
+    };
+
+    hostSystem = mkOption {
+      type = types.str;
+      default = pkgs.stdenv.hostPlatform.system;
+      description = "Host platform used to build and run the MicroVM wrapper.";
+    };
+
+    guestSystem = mkOption {
+      type = types.str;
+      default = pkgs.stdenv.hostPlatform.system;
+      description = "Guest platform used for the NixOS system inside the MicroVM.";
     };
 
     devUser = mkOption {
@@ -308,7 +323,7 @@ in {
       } ];
       shares = [ {
         # use proto = "virtiofs" for MicroVMs that are started by systemd
-        proto = "9p";
+        proto = roStoreShareProto;
         tag = "ro-store";
         # a host's /nix/store will be picked up so that no
         # squashfs/erofs will be built for it.
@@ -316,7 +331,7 @@ in {
         mountPoint = "/nix/.ro-store";
       } ];
 
-      hypervisor = "qemu";
+      hypervisor = localHypervisor;
       socket = cfg.controlSocket;
     };
   };

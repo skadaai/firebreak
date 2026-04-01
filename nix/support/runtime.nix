@@ -1,11 +1,13 @@
-{ self, nixpkgs, microvm, system, renderTemplate }:
+{ self, nixpkgs, microvm, system, guestSystem, renderTemplate }:
 let
+  lib = nixpkgs.lib;
   pkgs = nixpkgs.legacyPackages.${system};
 
   mkRunnerPackage = runner:
     pkgs.runCommand "${runner.name}-compat" {
       nativeBuildInputs = with pkgs; [
         coreutils
+        gnugrep
         gnused
       ];
     } ''
@@ -25,9 +27,35 @@ let
           ln -s "$entry" "$out/bin/$name"
         fi
       done
-      substituteInPlace "$out/bin/microvm-run" \
-        --replace-fail 'aio=io_uring' 'aio=threads' \
-        --replace-fail '-enable-kvm -cpu host,+x2apic,-sgx' '$(if [ -r /dev/kvm ]; then printf "%s" "-enable-kvm -cpu host,+x2apic,-sgx"; else printf "%s" "-cpu max"; fi)'
+      if grep -F -q 'aio=io_uring' "$out/bin/microvm-run"; then
+        substituteInPlace "$out/bin/microvm-run" \
+          --replace-fail 'aio=io_uring' 'aio=threads'
+      fi
+      if [ "${system}" = "x86_64-linux" ] && grep -F -q -- '-enable-kvm -cpu host,+x2apic,-sgx' "$out/bin/microvm-run"; then
+        substituteInPlace "$out/bin/microvm-run" \
+          --replace-fail '-enable-kvm -cpu host,+x2apic,-sgx' '$(if [ -r /dev/kvm ]; then printf "%s" "-enable-kvm -cpu host,+x2apic,-sgx"; else printf "%s" "-cpu max"; fi)'
+      fi
+
+      cat > "$out/bin/firebreak-runner-extra-args" <<'EOF'
+firebreak_extra_args=()
+
+if [ -n "''${MICROVM_VFKIT_HOST_CWD_DIR:-}" ]; then
+  firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_HOST_CWD_DIR},mountTag=hostcwd")
+fi
+
+if [ -n "''${MICROVM_VFKIT_HOST_META_DIR:-}" ]; then
+  firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_HOST_META_DIR},mountTag=hostmeta")
+fi
+
+if [ -n "''${MICROVM_VFKIT_AGENT_CONFIG_HOST_DIR:-}" ]; then
+  firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_AGENT_CONFIG_HOST_DIR},mountTag=hostagentconfig")
+fi
+
+if [ -n "''${MICROVM_VFKIT_AGENT_EXEC_OUTPUT_DIR:-}" ]; then
+  firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_AGENT_EXEC_OUTPUT_DIR},mountTag=hostexecoutput")
+fi
+EOF
+      chmod 0555 "$out/bin/firebreak-runner-extra-args"
     '';
 
   mkAgentVm = {
@@ -36,7 +64,7 @@ let
     profileModules ? [ self.nixosModules.firebreak-local-profile ],
   }:
     nixpkgs.lib.nixosSystem {
-      inherit system;
+      system = guestSystem;
       specialArgs = {
         inherit renderTemplate;
       };
@@ -45,6 +73,9 @@ let
         self.nixosModules.firebreak-vm-base
         {
           agentVm.name = name;
+          agentVm.hostSystem = system;
+          agentVm.guestSystem = guestSystem;
+          microvm.vmHostPackages = pkgs;
         }
       ] ++ profileModules ++ extraModules;
     };
@@ -59,13 +90,31 @@ let
     agentEnvPrefix ? "AGENT",
     workerBridgeEnabled ? false,
   }:
+    let
+      runnerWrapper = pkgs.writeShellScript "firebreak-runner-wrapper" ''
+        set -eu
+        . ${runner}/bin/firebreak-runner-extra-args
+        exec ${runner}/bin/microvm-run "$@" "''${firebreak_extra_args[@]}"
+      '';
+    in
     pkgs.writeShellApplication {
       inherit name;
-      runtimeInputs = with pkgs; [ bash coreutils git gnused nix python3 util-linux virtiofsd ];
+      runtimeInputs =
+        with pkgs;
+        [
+          bash
+          coreutils
+          git
+          gnused
+          nix
+          python3
+          util-linux
+        ] ++ lib.optional pkgs.stdenv.hostPlatform.isLinux virtiofsd;
       text = renderTemplate {
+        "@HOST_SYSTEM@" = system;
         "@CONTROL_SOCKET@" = "${controlSocketName}.socket";
         "@DEFAULT_AGENT_COMMAND@" = defaultAgentCommand;
-        "@RUNNER@" = "${runner}/bin/microvm-run";
+        "@RUNNER@" = "${runnerWrapper}";
         "@AGENT_CONFIG_DIR_NAME@" = agentConfigDirName;
         "@DEFAULT_AGENT_CONFIG_HOST_DIR@" = defaultAgentConfigHostDir;
         "@AGENT_ENV_PREFIX@" = agentEnvPrefix;

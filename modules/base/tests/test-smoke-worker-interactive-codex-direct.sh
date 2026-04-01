@@ -68,6 +68,7 @@ FIREBREAK_STATE_DIR="$firebreak_state_dir" \
 WORKSPACE_DIR="$workspace_dir" \
 FIREBREAK_BIN=@FIREBREAK_BIN@ \
 python3 - <<'PY'
+import errno
 import os
 import pty
 import re
@@ -153,7 +154,12 @@ with open(log_path, "wb") as log_file:
         while time.time() < deadline:
             readable, _, _ = select.select([master_fd], [], [], 0.5)
             if readable:
-                chunk = os.read(master_fd, 65536)
+                try:
+                    chunk = os.read(master_fd, 65536)
+                except OSError as exc:
+                    if exc.errno == errno.EIO:
+                        break
+                    raise
                 if not chunk:
                     break
                 transcript.extend(chunk)

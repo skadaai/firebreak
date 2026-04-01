@@ -1,5 +1,5 @@
 ---
-status: draft
+status: in_progress
 last_updated: 2026-03-24
 ---
 
@@ -33,7 +33,7 @@ last_updated: 2026-03-24
 
 ## Current status
 
-Specified only. Implementation has not started.
+Implemented in the bounded Firebreak task worktree, with flake evaluation and launcher smoke validation completed. Real `aarch64-linux` runtime validation on KVM hardware remains open.
 
 ## Open questions
 

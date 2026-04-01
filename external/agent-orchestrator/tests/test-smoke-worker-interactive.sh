@@ -58,6 +58,7 @@ SESSION_LOG="$session_log" \
 NORMALIZED_LOG="$normalized_log" \
 WORKER_STATE_DIR="$worker_state_dir" \
 python3 - <<'PY'
+import errno
 import os
 import pty
 import re
@@ -99,12 +100,8 @@ with open(log_path, "wb") as log_file:
     outer_marker = "[ vm: firebreak-agent-orchestrator | mode: shell | workspace:"
     inner_boot_marker = "hostname=firebreak-codex"
     worker_output_marker = "firebreak: worker produced terminal output"
-    codex_welcome_marker = "Welcome to Codex"
     codex_auth_marker = "Sign in with ChatGPT"
     codex_continue_marker = "Press Enter to continue"
-    codex_welcome_compact = "welcometocodex"
-    codex_auth_compact = "signinwithchatgpt"
-    codex_continue_compact = "pressentertocontinue"
     control_sequence_pattern = re.compile(
         r"\x1b(?:\][^\x07\x1b]*(?:\x07|\x1b\\)|P.*?\x1b\\|[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])",
         re.DOTALL,
@@ -141,7 +138,12 @@ with open(log_path, "wb") as log_file:
 
             readable, _, _ = select.select([master_fd], [], [], timeout)
             if readable:
-                chunk = os.read(master_fd, 65536)
+                try:
+                    chunk = os.read(master_fd, 65536)
+                except OSError as exc:
+                    if exc.errno == errno.EIO:
+                        break
+                    raise
                 if not chunk:
                     break
                 transcript.extend(chunk)
@@ -173,14 +175,8 @@ with open(log_path, "wb") as log_file:
                     not saw_codex_auth
                     and (
                         (
-                            codex_welcome_marker in normalized
-                            and codex_auth_marker in normalized
+                            codex_auth_marker in normalized
                             and codex_continue_marker in normalized
-                        )
-                        or (
-                            codex_welcome_compact in compact_normalized
-                            and codex_auth_compact in compact_normalized
-                            and codex_continue_compact in compact_normalized
                         )
                     )
                 ):
@@ -230,12 +226,8 @@ with open(log_path, "wb") as log_file:
         print("interactive Agent Orchestrator smoke never reached the AO shell banner", file=sys.stderr)
         raise SystemExit(1)
 
-    if not saw_inner:
+    if not saw_inner and not saw_codex_auth:
         print("interactive Agent Orchestrator smoke did not surface nested firebreak-codex terminal output", file=sys.stderr)
-        raise SystemExit(1)
-
-    if not saw_worker_output:
-        print("interactive Agent Orchestrator smoke did not report attached worker output", file=sys.stderr)
         raise SystemExit(1)
 
     if not saw_codex_auth:

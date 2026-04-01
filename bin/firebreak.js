@@ -24,6 +24,12 @@ const topLevelCommand = args[0] || "";
 const forcedLocalRoot = process.env.FIREBREAK_LAUNCHER_PACKAGE_ROOT || "";
 const kvmPath = process.env.FIREBREAK_LAUNCHER_KVM_PATH || "/dev/kvm";
 const nixHelpersDisabled = process.env.FIREBREAK_LAUNCHER_DISABLE_NIX_HELPERS === "1"
+const launcherPlatform = process.env.FIREBREAK_LAUNCHER_TEST_PLATFORM || process.platform
+const launcherArch = process.env.FIREBREAK_LAUNCHER_TEST_ARCH || process.arch
+const supportedLinuxArchitectures = new Map([
+  ["x64", "x86_64-linux"],
+  ["arm64", "aarch64-linux"]
+])
 
 const fail = (message) => {
   console.error(`firebreak launcher: ${message}`)
@@ -101,13 +107,20 @@ const resolveLibexecDir = (localRoot) => {
 }
 
 const checkPlatform = () => {
-  if (process.platform !== "linux") {
-    fail("Firebreak currently requires a Linux host.")
+  if (launcherPlatform === "linux" && supportedLinuxArchitectures.has(launcherArch)) {
+    return;
   }
 
-  if (process.arch !== "x64") {
-    fail("Firebreak currently targets x86_64 Linux hosts.")
+  if (launcherPlatform === "darwin" && launcherArch === "arm64") {
+    console.warn('Support on macOS is EXPERIMENTAL! Please report issues at https://github.com/skadaai/firebreak/issues')
+    return;
   }
+
+  if (launcherPlatform === "darwin") {
+    fail("Firebreak local support on macOS requires Apple Silicon (arm64). Intel Macs are not supported.")
+  }
+
+  fail(`Firebreak currently targets ${Array.from(supportedLinuxArchitectures.values()).join(", ")} and aarch64-darwin hosts.`)
 }
 
 const checkNix = () => {
@@ -194,6 +207,10 @@ const needsNix = commandRequiresNix()
 const commandUsesOra = () => runCommandRequiresNix()
 
 const checkKvm = () => {
+  if (launcherPlatform !== "linux") {
+    return;
+  }
+
   const failure = kvmFailureReason()
   if (!failure) {
     return;

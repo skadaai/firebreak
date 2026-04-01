@@ -18,6 +18,7 @@ requested_vm_mode=${FIREBREAK_VM_MODE:-run}
 agent_session_mode_override=${FIREBREAK_AGENT_SESSION_MODE_OVERRIDE:-}
 agent_session_mode=agent
 default_agent_command=@DEFAULT_AGENT_COMMAND@
+host_system=@HOST_SYSTEM@
 agent_command_override=""
 shell_command_override=${AGENT_VM_COMMAND:-}
 agent_config_host_dir=""
@@ -63,6 +64,17 @@ sanitize_positive_dimension() {
   esac
 }
 
+reject_comma_path() {
+  path=$1
+  description=$2
+  case "$path" in
+    *,*)
+      echo "$description contains a comma, which the Apple Silicon vfkit runtime share injection does not support: $path" >&2
+      exit 1
+      ;;
+  esac
+}
+
 resolve_host_dir() {
   path=$1
   if [ "$path" = "~" ]; then
@@ -83,6 +95,10 @@ default_agent_config_host_dir=$(resolve_host_dir "${agent_specific_host_path:-${
 
 reject_whitespace_path "$host_cwd" "current working directory"
 reject_whitespace_path "$resolved_firebreak_tmp_root" "Firebreak temporary runtime directory"
+if [ "$host_system" = "aarch64-darwin" ]; then
+  reject_comma_path "$host_cwd" "current working directory"
+  reject_comma_path "$resolved_firebreak_tmp_root" "Firebreak temporary runtime directory"
+fi
 firebreak_tmp_root=$resolved_firebreak_tmp_root
 mkdir -p "$firebreak_tmp_root"
 host_runtime_dir=$(mktemp -d "$firebreak_tmp_root/r.XXXXXX")
@@ -239,6 +255,9 @@ case "$agent_config_mode" in
     esac
 
     reject_whitespace_path "$agent_config_host_dir" "agent host config path"
+    if [ "$host_system" = "aarch64-darwin" ]; then
+      reject_comma_path "$agent_config_host_dir" "agent host config path"
+    fi
 
     mkdir -p "$agent_config_host_dir"
     ;;
@@ -265,6 +284,9 @@ if [ "$agent_config_mode" = "workspace" ] && [ -L "$workspace_agent_config_path"
         if ! [ -d "$agent_config_host_dir" ] && ! [ -w "$target_parent" ]; then
           echo "workspace agent config symlink target is not writable on the host; falling back to $default_agent_config_host_dir" >&2
           agent_config_host_dir=$default_agent_config_host_dir
+        fi
+        if [ "$host_system" = "aarch64-darwin" ]; then
+          reject_comma_path "$agent_config_host_dir" "workspace agent config symlink target"
         fi
         mkdir -p "$agent_config_host_dir"
         ;;
@@ -395,42 +417,61 @@ if [ -n "$agent_command_override" ]; then
   printf '%s\n' "$agent_command_override" > "$host_meta_dir/agent-command"
 fi
 
-start_virtiofsd "$host_cwd" "$hostcwd_socket" "$virtiofsd_hostcwd_log"
-hostcwd_virtiofsd_pid=$started_virtiofsd_pid
-trace_wrapper "virtiofs-hostcwd-ready"
+if [ "$host_system" != "aarch64-darwin" ]; then
+  start_virtiofsd "$host_cwd" "$hostcwd_socket" "$virtiofsd_hostcwd_log"
+  hostcwd_virtiofsd_pid=$started_virtiofsd_pid
+  trace_wrapper "virtiofs-hostcwd-ready"
 
-if [ -n "$agent_config_host_dir" ]; then
-  start_virtiofsd "$agent_config_host_dir" "$agent_config_socket" "$virtiofsd_agent_config_log"
-  agent_config_virtiofsd_pid=$started_virtiofsd_pid
-  trace_wrapper "virtiofs-agent-config-ready"
-fi
-if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
-  start_virtiofsd "$host_exec_output_dir" "$agent_exec_output_socket" "$virtiofsd_agent_exec_log"
-  agent_exec_output_virtiofsd_pid=$started_virtiofsd_pid
-  trace_wrapper "virtiofs-agent-exec-ready"
-fi
-start_virtiofsd "$host_agent_tools_dir" "$agent_tools_socket" "$virtiofsd_agent_tools_log"
-agent_tools_virtiofsd_pid=$started_virtiofsd_pid
-trace_wrapper "virtiofs-agent-tools-ready"
-if [ "$worker_bridge_enabled" = "1" ]; then
-  start_virtiofsd "$worker_bridge_dir" "$worker_bridge_socket" "$virtiofsd_worker_bridge_log"
-  worker_bridge_virtiofsd_pid=$started_virtiofsd_pid
-  worker_bridge_socket_env=$worker_bridge_socket
-  env \
-    FIREBREAK_FLAKE_REF='@FIREBREAK_FLAKE_REF@' \
-    FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG='1' \
-    FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
-    FIREBREAK_WORKER_BRIDGE_DIR="$worker_bridge_dir" \
-    bash "$worker_bridge_server_script" "$worker_bridge_dir" "$worker_helper_script" >"$worker_bridge_server_log" 2>&1 &
-  worker_bridge_server_pid=$!
-  trace_wrapper "worker-bridge-ready"
+  if [ -n "$agent_config_host_dir" ]; then
+    start_virtiofsd "$agent_config_host_dir" "$agent_config_socket" "$virtiofsd_agent_config_log"
+    agent_config_virtiofsd_pid=$started_virtiofsd_pid
+    trace_wrapper "virtiofs-agent-config-ready"
+  fi
+  if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
+    start_virtiofsd "$host_exec_output_dir" "$agent_exec_output_socket" "$virtiofsd_agent_exec_log"
+    agent_exec_output_virtiofsd_pid=$started_virtiofsd_pid
+    trace_wrapper "virtiofs-agent-exec-ready"
+  fi
+
+  start_virtiofsd "$host_agent_tools_dir" "$agent_tools_socket" "$virtiofsd_agent_tools_log"
+  agent_tools_virtiofsd_pid=$started_virtiofsd_pid
+  trace_wrapper "virtiofs-agent-tools-ready"
+
+  if [ "$worker_bridge_enabled" = "1" ]; then
+    start_virtiofsd "$worker_bridge_dir" "$worker_bridge_socket" "$virtiofsd_worker_bridge_log"
+    worker_bridge_virtiofsd_pid=$started_virtiofsd_pid
+    worker_bridge_socket_env=$worker_bridge_socket
+    env \
+      FIREBREAK_FLAKE_REF='@FIREBREAK_FLAKE_REF@' \
+      FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG='1' \
+      FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
+      FIREBREAK_WORKER_BRIDGE_DIR="$worker_bridge_dir" \
+      bash "$worker_bridge_server_script" "$worker_bridge_dir" "$worker_helper_script" >"$worker_bridge_server_log" 2>&1 &
+    worker_bridge_server_pid=$!
+    trace_wrapper "worker-bridge-ready"
+  fi
 fi
 
-runner_status=0
-trace_wrapper "runner-start"
-if [ "$agent_session_mode" = "agent-exec" ]; then
-  (
-    cd "$runner_workdir"
+run_runner() {
+  if [ "$host_system" = "aarch64-darwin" ]; then
+    if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
+      env \
+        MICROVM_VFKIT_HOST_META_DIR="$host_meta_dir" \
+        MICROVM_VFKIT_HOST_CWD_DIR="$host_cwd" \
+        MICROVM_VFKIT_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
+        MICROVM_VFKIT_AGENT_EXEC_OUTPUT_DIR="$host_exec_output_dir" \
+        @RUNNER@ "$@"
+    else
+      env \
+        MICROVM_VFKIT_HOST_META_DIR="$host_meta_dir" \
+        MICROVM_VFKIT_HOST_CWD_DIR="$host_cwd" \
+        MICROVM_VFKIT_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
+        @RUNNER@ "$@"
+    fi
+    return
+  fi
+
+  if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
     env \
       MICROVM_HOST_META_DIR="$host_meta_dir" \
       MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
@@ -440,6 +481,24 @@ if [ "$agent_session_mode" = "agent-exec" ]; then
       MICROVM_AGENT_TOOLS_SOCKET="$agent_tools_socket" \
       MICROVM_WORKER_BRIDGE_SOCKET="$worker_bridge_socket_env" \
       @RUNNER@ "$@"
+  else
+    env \
+      MICROVM_HOST_META_DIR="$host_meta_dir" \
+      MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
+      MICROVM_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
+      MICROVM_AGENT_CONFIG_HOST_SOCKET="$agent_config_socket" \
+      MICROVM_AGENT_TOOLS_SOCKET="$agent_tools_socket" \
+      MICROVM_WORKER_BRIDGE_SOCKET="$worker_bridge_socket_env" \
+      @RUNNER@ "$@"
+  fi
+}
+
+runner_status=0
+trace_wrapper "runner-start"
+if [ "$agent_session_mode" = "agent-exec" ]; then
+  (
+    cd "$runner_workdir"
+    run_runner "$@"
   ) >"$runner_stdout_log" 2>"$runner_stderr_log" || runner_status=$?
 elif [ "$agent_session_mode" = "agent-attach-exec" ]; then
   attach_runner_script=$host_runtime_dir/attached-runner.sh
@@ -1411,14 +1470,7 @@ EOF
 else
   (
     cd "$runner_workdir"
-    env \
-      MICROVM_HOST_META_DIR="$host_meta_dir" \
-      MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
-      MICROVM_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
-      MICROVM_AGENT_CONFIG_HOST_SOCKET="$agent_config_socket" \
-      MICROVM_AGENT_TOOLS_SOCKET="$agent_tools_socket" \
-      MICROVM_WORKER_BRIDGE_SOCKET="$worker_bridge_socket_env" \
-      @RUNNER@ "$@"
+    run_runner "$@"
   ) || runner_status=$?
 fi
 trace_wrapper "runner-exit:$runner_status"

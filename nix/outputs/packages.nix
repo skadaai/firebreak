@@ -1,6 +1,9 @@
 {
   self,
   system,
+  hostIsLinux,
+  lib,
+  localVmArtifacts,
   mkAgentPackage,
   mkAgentVersionSmokePackage,
   mkCloudJobPackage,
@@ -29,22 +32,11 @@
 {
   default = self.packages.${system}.firebreak;
 
-  firebreak-internal-runner-codex = mkRunnerPackage self.nixosConfigurations.firebreak-codex.config.microvm.declaredRunner;
-  firebreak-internal-runner-claude-code = mkRunnerPackage self.nixosConfigurations.firebreak-claude-code.config.microvm.declaredRunner;
-  firebreak-internal-runner-interactive-echo = mkRunnerPackage self.nixosConfigurations.firebreak-interactive-echo.config.microvm.declaredRunner;
-  firebreak-internal-runner-codex-cloud = mkRunnerPackage self.nixosConfigurations.firebreak-codex-cloud.config.microvm.declaredRunner;
-  firebreak-internal-runner-claude-code-cloud = mkRunnerPackage self.nixosConfigurations.firebreak-claude-code-cloud.config.microvm.declaredRunner;
-  firebreak-internal-runner-test-cloud = mkRunnerPackage self.nixosConfigurations.firebreak-cloud-smoke.config.microvm.declaredRunner;
+  firebreak-internal-runner-codex = localVmArtifacts.firebreak-codex.runnerPackage;
+  firebreak-internal-runner-claude-code = localVmArtifacts.firebreak-claude-code.runnerPackage;
+  firebreak-internal-runner-interactive-echo = localVmArtifacts.firebreak-interactive-echo.runnerPackage;
 
-  firebreak-codex = mkAgentPackage {
-    name = "firebreak-codex";
-    runner = self.packages.${system}.firebreak-internal-runner-codex;
-    controlSocketName = "firebreak-codex";
-    defaultAgentCommand = "codex";
-    agentConfigDirName = ".codex";
-    defaultAgentConfigHostDir = "$HOME/.codex";
-    agentEnvPrefix = "CODEX";
-  };
+  firebreak-codex = localVmArtifacts.firebreak-codex.package;
 
   firebreak-test-smoke-codex = mkSmokePackage {
     name = "firebreak-test-smoke-codex";
@@ -60,15 +52,7 @@
     agentDisplayName = "Codex";
   };
 
-  firebreak-claude-code = mkAgentPackage {
-    name = "firebreak-claude-code";
-    runner = self.packages.${system}.firebreak-internal-runner-claude-code;
-    controlSocketName = "firebreak-claude-code";
-    defaultAgentCommand = "claude";
-    agentConfigDirName = ".claude";
-    defaultAgentConfigHostDir = "$HOME/.claude";
-    agentEnvPrefix = "CLAUDE";
-  };
+  firebreak-claude-code = localVmArtifacts.firebreak-claude-code.package;
 
   firebreak-test-smoke-claude-code = mkSmokePackage {
     name = "firebreak-test-smoke-claude-code";
@@ -78,37 +62,7 @@
     agentConfigDirName = ".claude";
   };
 
-  firebreak-interactive-echo = mkAgentPackage {
-    name = "firebreak-interactive-echo";
-    runner = self.packages.${system}.firebreak-internal-runner-interactive-echo;
-    controlSocketName = "firebreak-interactive-echo";
-    defaultAgentCommand = "interactive-echo";
-    agentConfigDirName = ".firebreak";
-    defaultAgentConfigHostDir = "$HOME/.firebreak/firebreak-interactive-echo";
-  };
-
-  firebreak-internal-job-codex-cloud = mkCloudJobPackage {
-    name = "firebreak-internal-job-codex-cloud";
-    runnerName = "firebreak-internal-runner-codex-cloud";
-    defaultStateDir = "$HOME/.firebreak/firebreak-codex-cloud";
-  };
-
-  firebreak-internal-job-claude-code-cloud = mkCloudJobPackage {
-    name = "firebreak-internal-job-claude-code-cloud";
-    runnerName = "firebreak-internal-runner-claude-code-cloud";
-    defaultStateDir = "$HOME/.firebreak/firebreak-claude-code-cloud";
-  };
-
-  firebreak-internal-job-test-cloud = mkCloudJobPackage {
-    name = "firebreak-internal-job-test-cloud";
-    runnerName = "firebreak-internal-runner-test-cloud";
-    defaultStateDir = "$HOME/.firebreak/firebreak-cloud-smoke";
-  };
-
-  firebreak-test-smoke-cloud-job = mkCloudSmokePackage {
-    name = "firebreak-test-smoke-cloud-job";
-    jobPackage = "firebreak-internal-job-test-cloud";
-  };
+  firebreak-interactive-echo = localVmArtifacts.firebreak-interactive-echo.package;
 
   firebreak-test-smoke-project-config-and-doctor = mkProjectConfigSmokePackage {
     name = "firebreak-test-smoke-project-config-and-doctor";
@@ -124,6 +78,7 @@
 
   firebreak-internal-validate = mkValidationPackage {
     name = "firebreak-internal-validate";
+    includeCloudSuite = hostIsLinux;
   };
 
   firebreak-test-smoke-internal-validate = mkValidationSmokePackage {
@@ -187,5 +142,32 @@
 
   firebreak = mkFirebreakCliPackage {
     name = "firebreak";
+  };
+} // lib.optionalAttrs hostIsLinux {
+  firebreak-internal-runner-codex-cloud = localVmArtifacts.firebreak-codex-cloud.runnerPackage;
+  firebreak-internal-runner-claude-code-cloud = localVmArtifacts.firebreak-claude-code-cloud.runnerPackage;
+  firebreak-internal-runner-test-cloud = localVmArtifacts.firebreak-cloud-smoke.runnerPackage;
+
+  firebreak-internal-job-codex-cloud = mkCloudJobPackage {
+    name = "firebreak-internal-job-codex-cloud";
+    runnerName = "firebreak-internal-runner-codex-cloud";
+    defaultStateDir = "$HOME/.firebreak/firebreak-codex-cloud";
+  };
+
+  firebreak-internal-job-claude-code-cloud = mkCloudJobPackage {
+    name = "firebreak-internal-job-claude-code-cloud";
+    runnerName = "firebreak-internal-runner-claude-code-cloud";
+    defaultStateDir = "$HOME/.firebreak/firebreak-claude-code-cloud";
+  };
+
+  firebreak-internal-job-test-cloud = mkCloudJobPackage {
+    name = "firebreak-internal-job-test-cloud";
+    runnerName = "firebreak-internal-runner-test-cloud";
+    defaultStateDir = "$HOME/.firebreak/firebreak-cloud-smoke";
+  };
+
+  firebreak-test-smoke-cloud-job = mkCloudSmokePackage {
+    name = "firebreak-test-smoke-cloud-job";
+    jobPackage = "firebreak-internal-job-test-cloud";
   };
 }

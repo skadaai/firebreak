@@ -2,6 +2,7 @@
 let
   cfg = config.agentVm;
   devHome = "/var/lib/${cfg.devUser}";
+  hostMetaFsType = if lib.hasSuffix "-darwin" cfg.hostSystem then "virtiofs" else "9p";
 
   qemu9pOptions = [
     "nofail"
@@ -89,8 +90,16 @@ in {
 
     fileSystems.${cfg.hostMetaMount} = {
       device = "hostmeta";
-      fsType = "9p";
-      options = qemu9pOptions ++ [ "ro" ];
+      fsType = hostMetaFsType;
+      options =
+        if hostMetaFsType == "virtiofs" then
+          [
+            "defaults"
+            "ro"
+            "x-systemd.after=systemd-modules-load.service"
+          ]
+        else
+          qemu9pOptions ++ [ "ro" ];
     };
 
     systemd.services.adopt-host-identity = {
@@ -172,6 +181,6 @@ in {
       };
     };
 
-    microvm.extraArgsScript = "${runtimeExtraArgsScript}";
+    microvm.extraArgsScript = lib.optionalString (!lib.hasSuffix "-darwin" cfg.hostSystem) "${runtimeExtraArgsScript}";
   };
 }

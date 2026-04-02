@@ -79,6 +79,7 @@ last_updated: 2026-04-01
 3. Use the direct shared-layer `claude` exit smoke as the stricter follow-up gate for the remaining lifecycle edge cases, without letting it regress the already-working product paths.
 4. Mature or drop any remaining experimental AO/VK harness logic so only durable regression coverage remains in tree.
 5. Keep the new `workerProxies` abstraction isolated from future shared TUI lifecycle experiments so the recipe-authoring UX improvement stays banked while lower-level terminal work continues.
+6. Defer the shared worker-engine extraction in `modules/profiles/local/module.nix` until after this PR merges, so the merge branch stays focused on behavior and validation rather than wrapper refactors.
 
 ## Validation approach
 

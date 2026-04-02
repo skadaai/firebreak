@@ -8,7 +8,7 @@ local_state_dir=@WORKER_LOCAL_STATE_DIR@
 command=${1:-}
 
 usage() {
-  cat <<'EOF' >&2
+  cat <<'INNER_USAGE' >&2
 usage:
   firebreak worker run --kind KIND [--workspace PATH] [--backend BACKEND] [--package NAME] [--launch-mode MODE] [--attach] [--json] [--] COMMAND...
   firebreak worker ps [-a|--all] [--json]
@@ -18,8 +18,60 @@ usage:
   firebreak worker stop [--all] [--json] [WORKER_ID...]
   firebreak worker rm [--all] [--force] [--json] [WORKER_ID...]
   firebreak worker prune [--force] [--json]
-EOF
+INNER_USAGE
   exit "${1:-1}"
+}
+
+bridge_request_mode() {
+  subcommand=${1:-}
+  shift || true
+  case "$subcommand" in
+    logs)
+      for arg in "$@"; do
+        case "$arg" in
+          -f|--follow)
+            printf '%s\n' stream
+            return 0
+            ;;
+        esac
+      done
+      ;;
+    stop|rm|prune)
+      printf '%s\n' long
+      return 0
+      ;;
+  esac
+  printf '%s\n' quick
+}
+
+emit_bridge_response_file() {
+  response_path=$1
+  offset_var=$2
+  output_target=$3
+  response_offset=0
+  case "$offset_var" in
+    stdout_offset)
+      response_offset=$stdout_offset
+      ;;
+    stderr_offset)
+      response_offset=$stderr_offset
+      ;;
+    *)
+      echo "unsupported bridge response offset variable: $offset_var" >&2
+      exit 1
+      ;;
+  esac
+  [ -f "$response_path" ] || return 0
+  response_size=$(wc -c <"$response_path")
+  [ "$response_size" -gt "$response_offset" ] || return 0
+  start_byte=$((response_offset + 1))
+  if [ "$output_target" = "stdout" ]; then
+    tail -c +"$start_byte" "$response_path"
+    stdout_offset=$response_size
+  else
+    tail -c +"$start_byte" "$response_path" >&2
+    stderr_offset=$response_size
+  fi
 }
 
 bridge_request() {
@@ -44,24 +96,38 @@ with open(request_path, "w", encoding="utf-8") as handle:
 PY
   mv "$request_tmp_path" "$request_dir/request.json"
 
-  for _ in $(seq 1 600); do
+  request_mode=$(bridge_request_mode "$@")
+  # shellcheck disable=SC2034
+  stdout_offset=0
+  # shellcheck disable=SC2034
+  stderr_offset=0
+  timeout_iterations=600
+  case "$request_mode" in
+    long)
+      timeout_iterations=36000
+      ;;
+    stream)
+      timeout_iterations=0
+      ;;
+  esac
+
+  iteration=0
+  while :; do
+    emit_bridge_response_file "$request_dir/response.stdout" stdout_offset stdout
+    emit_bridge_response_file "$request_dir/response.stderr" stderr_offset stderr
     if [ -f "$request_dir/response.exit-code" ]; then
       break
     fi
+    if [ "$timeout_iterations" -gt 0 ] && [ "$iteration" -ge "$timeout_iterations" ]; then
+      echo "timed out waiting for Firebreak worker bridge response" >&2
+      exit 1
+    fi
+    iteration=$((iteration + 1))
     sleep 0.1
   done
 
-  if ! [ -f "$request_dir/response.exit-code" ]; then
-    echo "timed out waiting for Firebreak worker bridge response" >&2
-    exit 1
-  fi
-
-  if [ -f "$request_dir/response.stdout" ]; then
-    cat "$request_dir/response.stdout"
-  fi
-  if [ -f "$request_dir/response.stderr" ]; then
-    cat "$request_dir/response.stderr" >&2
-  fi
+  emit_bridge_response_file "$request_dir/response.stdout" stdout_offset stdout
+  emit_bridge_response_file "$request_dir/response.stderr" stderr_offset stderr
 
   IFS= read -r bridge_exit_code < "$request_dir/response.exit-code" || bridge_exit_code=1
   case "$bridge_exit_code" in
@@ -72,7 +138,6 @@ PY
   esac
   return "$bridge_exit_code"
 }
-
 bridge_request_attach() {
   if ! [ -d "$bridge_dir" ]; then
     echo "Firebreak worker bridge is unavailable at $bridge_dir" >&2

@@ -87,6 +87,8 @@ Interactive TUI hardening after the first full end-to-end success. The current a
 - stricter shared-layer lifecycle coverage for attached `claude` exit semantics, so the direct canary can match the currently working AO/VK product behavior without relying on looser integration harness timing
 - optional polish for transcript noise, live-session cleanup, and any remaining debug-vs-live presentation rough edges
 
+- defer the shared worker-engine extraction from `modules/profiles/local/module.nix` until after this PR merges, because it is structural cleanup rather than a blocker for the current runtime and validation path
+
 ## Decision record
 
 - The host-brokered sibling-worker model is still the right architecture and remains in scope.

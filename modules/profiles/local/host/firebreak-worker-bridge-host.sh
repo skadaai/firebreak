@@ -58,8 +58,13 @@ stderr_path = os.environ["STDERR_PATH"]
 exit_code_path = os.environ["EXIT_CODE_PATH"]
 trace_path = os.environ["TRACE_PATH"]
 request_dir = os.environ["REQUEST_DIR"]
-worker_root_path = os.path.join(request_dir, "worker-root")
+worker_id_path = os.path.join(request_dir, "worker-id")
 worker_root_cache = None
+xdg_state_home = os.environ.get("XDG_STATE_HOME")
+home_dir = os.environ.get("HOME") or "/tmp"
+default_state_home = xdg_state_home or os.path.join(home_dir, ".local", "state")
+worker_state_dir = os.environ.get("FIREBREAK_WORKER_STATE_DIR") or os.path.join(default_state_home, "firebreak", "worker-broker")
+workers_root = os.path.realpath(os.path.join(worker_state_dir, "workers"))
 runtime_metadata_cache = None
 attach_stage_path_cache = None
 command_signal_stream_path_cache = None
@@ -67,15 +72,27 @@ trace_mirrored = False
 poll_interval = 0.005
 
 
+def valid_worker_id(worker_id: str) -> bool:
+    return bool(worker_id) and all(ch.isalnum() or ch in "-._" for ch in worker_id)
+
+
 def resolve_worker_root():
     global worker_root_cache, trace_mirrored
     if worker_root_cache and os.path.isdir(worker_root_cache):
         return worker_root_cache
     try:
-        candidate = open(worker_root_path, "r", encoding="utf-8").read().strip()
+        worker_id = open(worker_id_path, "r", encoding="utf-8").read().strip()
     except OSError:
         return None
-    if not candidate or not os.path.isdir(candidate):
+    if not valid_worker_id(worker_id):
+        return None
+    candidate = os.path.realpath(os.path.join(workers_root, worker_id))
+    try:
+        if os.path.commonpath([workers_root, candidate]) != workers_root:
+            return None
+    except ValueError:
+        return None
+    if not os.path.isdir(candidate):
         return None
     worker_root_cache = candidate
     if not trace_mirrored and os.path.exists(trace_path):
@@ -85,8 +102,6 @@ def resolve_worker_root():
         except OSError:
             pass
     return worker_root_cache
-
-
 def persist_response_exit_code(code: int) -> None:
     worker_root = resolve_worker_root()
     if not worker_root:

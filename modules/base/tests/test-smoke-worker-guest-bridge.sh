@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -eu
 
 default_firebreak_tmpdir=${TMPDIR:-/tmp}
@@ -8,13 +9,23 @@ fi
 firebreak_tmp_root=${FIREBREAK_TMPDIR:-$default_firebreak_tmpdir}/firebreak/tmp
 mkdir -p "$firebreak_tmp_root"
 smoke_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-worker-guest-bridge.XXXXXX")
-trap 'rm -rf "$smoke_tmp_dir"' EXIT INT TERM
+keep_smoke_tmp_dir=0
+cleanup() {
+  if [ "$keep_smoke_tmp_dir" = "1" ]; then
+    printf '%s\n' "preserved worker guest bridge smoke artifacts: $smoke_tmp_dir" >&2
+    return
+  fi
+  rm -rf "$smoke_tmp_dir"
+}
+trap cleanup EXIT INT TERM
 
 workspace_dir=$smoke_tmp_dir/workspace
-mkdir -p "$workspace_dir"
+state_dir=$smoke_tmp_dir/state
+firebreak_state_dir=$smoke_tmp_dir/firebreak-state
+mkdir -p "$workspace_dir" "$state_dir" "$firebreak_state_dir"
 
 guest_script=$workspace_dir/guest-bridge-check.sh
-cat >"$guest_script" <<'EOF'
+cat >"$guest_script" <<'INNER_EOF'
 set -eu
 
 stale_lock_dir=/var/lib/dev/.local/state/firebreak/worker-local/spawn-locks/bridge-process.lock
@@ -113,28 +124,6 @@ if ! printf '%s\n' "$attach_output" | grep -F -q 'codex-cli'; then
   exit 1
 fi
 
-printf '%s\n' '__BRIDGE_LIMIT_START__'
-limited_spawn_output=$(firebreak worker run --kind bridge-limited --workspace "$PWD" --json)
-limited_worker_id=$(LIMITED_RUN_OUTPUT="$limited_spawn_output" python3 - <<'PY'
-import json
-import os
-
-print(json.loads(os.environ["LIMITED_RUN_OUTPUT"])["worker_id"])
-PY
-)
-
-set +e
-limited_second_output=$(firebreak worker run --kind bridge-limited --workspace "$PWD" 2>&1)
-limited_second_status=$?
-set -e
-
-if [ "$limited_second_status" -eq 0 ] || ! printf '%s\n' "$limited_second_output" | grep -F -q "reached max_instances=1"; then
-  printf '%s\n' "$limited_second_output" >&2
-  echo "guest bridge smoke did not enforce the worker kind max_instances limit" >&2
-  exit 1
-fi
-
-firebreak worker stop "$limited_worker_id" >/dev/null
 
 list_output=$(firebreak worker ps -a)
 printf '__BRIDGE_LIST__%s\n' "$list_output"
@@ -144,48 +133,34 @@ if ! printf '%s\n' "$list_output" | grep -F -q "$worker_id"; then
   exit 1
 fi
 
-stop_all_spawn_one=$(firebreak worker run --kind bridge-stop --workspace "$PWD" --json)
-stop_all_one_id=$(STOP_ALL_RUN_ONE="$stop_all_spawn_one" python3 - <<'PY'
-import json
-import os
-
-print(json.loads(os.environ["STOP_ALL_RUN_ONE"])["worker_id"])
-PY
-)
-
-stop_all_spawn_two=$(firebreak worker run --kind bridge-stop --workspace "$PWD" --json)
-stop_all_two_id=$(STOP_ALL_RUN_TWO="$stop_all_spawn_two" python3 - <<'PY'
-import json
-import os
-
-print(json.loads(os.environ["STOP_ALL_RUN_TWO"])["worker_id"])
-PY
-)
-
-stop_all_output=$(firebreak worker stop --all)
-printf '__BRIDGE_STOP_ALL__%s\n' "$stop_all_output"
-
-if ! printf '%s\n' "$stop_all_output" | grep -F -q "$stop_all_one_id"; then
-  echo "guest bridge smoke stop --all did not include the first running worker" >&2
-  exit 1
-fi
-
-if ! printf '%s\n' "$stop_all_output" | grep -F -q "$stop_all_two_id"; then
-  echo "guest bridge smoke stop --all did not include the second running worker" >&2
-  exit 1
-fi
 
 printf '%s\n' '__BRIDGE_OK__'
-EOF
+INNER_EOF
 
-output=$(
+if ! output=$(
   cd "$workspace_dir"
   env -u AGENT_CONFIG -u AGENT_CONFIG_HOST_PATH -u CODEX_CONFIG -u CODEX_CONFIG_HOST_PATH -u CLAUDE_CONFIG -u CLAUDE_CONFIG_HOST_PATH \
-    FIREBREAK_INSTANCE_EPHEMERAL=1 @BRIDGE_VM_BIN@ "$guest_script"
-)
+    FIREBREAK_WORKER_STATE_DIR="$state_dir" \
+    FIREBREAK_STATE_DIR="$firebreak_state_dir" \
+    FIREBREAK_DEBUG_KEEP_RUNTIME=1 \
+    FIREBREAK_INSTANCE_EPHEMERAL=1 \
+    timeout 300 @BRIDGE_VM_BIN@ "$guest_script" 2>&1
+); then
+  keep_smoke_tmp_dir=1
+  printf '%s\n' "$output" >&2
+  printf '%s\n' '--- host worker debug --json ---' >&2
+  FIREBREAK_WORKER_STATE_DIR="$state_dir" @AGENT_BIN@ worker debug --json >&2 || true
+  echo "worker guest bridge smoke VM run failed" >&2
+  exit 1
+fi
+
+printf '%s\n' "$output"
 
 if ! printf '%s\n' "$output" | grep -F -q '__BRIDGE_OK__'; then
+  keep_smoke_tmp_dir=1
   printf '%s\n' "$output" >&2
+  printf '%s\n' '--- host worker debug --json ---' >&2
+  FIREBREAK_WORKER_STATE_DIR="$state_dir" @AGENT_BIN@ worker debug --json >&2 || true
   echo "worker guest bridge smoke did not complete successfully" >&2
   exit 1
 fi

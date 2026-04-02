@@ -9,6 +9,7 @@ firebreak_load_project_config
 resolved_firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
 firebreak_state_root=${FIREBREAK_STATE_DIR:-${XDG_STATE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.local/state}/firebreak}
 default_firebreak_state_root=${XDG_STATE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.local/state}/firebreak
+worker_state_dir=${FIREBREAK_WORKER_STATE_DIR:-$firebreak_state_root/worker-broker}
 agent_specific_config_var=@AGENT_ENV_PREFIX@_CONFIG
 agent_specific_host_path_var=@AGENT_ENV_PREFIX@_CONFIG_HOST_PATH
 agent_specific_config=${!agent_specific_config_var:-}
@@ -99,6 +100,7 @@ reject_whitespace_path "$host_cwd" "current working directory"
 reject_whitespace_path "$resolved_firebreak_tmp_root" "Firebreak temporary runtime directory"
 reject_whitespace_path "$firebreak_state_root" "Firebreak state root"
 reject_whitespace_path "$default_firebreak_state_root" "default Firebreak state root"
+reject_whitespace_path "$worker_state_dir" "Firebreak worker state directory"
 if [ "$host_system" = "aarch64-darwin" ]; then
   reject_comma_path "$host_cwd" "current working directory"
   reject_comma_path "$resolved_firebreak_tmp_root" "Firebreak temporary runtime directory"
@@ -477,6 +479,7 @@ if [ "$host_system" != "aarch64-darwin" ]; then
       FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG='1' \
       FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
       FIREBREAK_WORKER_BRIDGE_DIR="$worker_bridge_dir" \
+      FIREBREAK_WORKER_STATE_DIR="$worker_state_dir" \
       bash "$worker_bridge_server_script" "$worker_bridge_dir" "$worker_helper_script" >"$worker_bridge_server_log" 2>&1 &
     worker_bridge_server_pid=$!
     trace_wrapper "worker-bridge-ready"

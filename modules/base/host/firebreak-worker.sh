@@ -694,7 +694,7 @@ spawn_worker() {
   bridge_request_dir=${FIREBREAK_WORKER_BRIDGE_REQUEST_DIR:-}
   bridge_request_trace_path=${FIREBREAK_WORKER_BRIDGE_TRACE_PATH:-}
   if [ -n "$bridge_request_dir" ] && [ -d "$bridge_request_dir" ]; then
-    printf '%s\n' "$worker_root" >"$bridge_request_dir/worker-root" || true
+    printf '%s\n' "$worker_id" >"$bridge_request_dir/worker-id" || true
   fi
   : >"$stdout_path"
   : >"$stderr_path"

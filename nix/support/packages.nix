@@ -426,6 +426,7 @@ rec {
         gnugrep
       ];
       text = renderTemplate {
+        "@AGENT_BIN@" = "${self.packages.${system}.firebreak}/bin/firebreak";
         "@BRIDGE_VM_BIN@" = "${bridgeVm.package}/bin/firebreak-worker-guest-bridge-smoke-vm";
       } ../../modules/base/tests/test-smoke-worker-guest-bridge.sh;
     };

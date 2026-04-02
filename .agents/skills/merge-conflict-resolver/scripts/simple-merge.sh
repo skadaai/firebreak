@@ -88,7 +88,11 @@ fi
 
 # Attempt merge
 echo "Attempting to merge $TARGET_BRANCH into $SOURCE_BRANCH..."
-if git merge "$TARGET_BRANCH" --no-edit; then
+set +e
+git merge "$TARGET_BRANCH" --no-edit
+EXITCODE=$?
+set -e
+if [ "$EXITCODE" -eq 0 ]; then
     echo ""
     echo "✓ Merge completed successfully (no conflicts)"
     echo ""
@@ -98,7 +102,6 @@ if git merge "$TARGET_BRANCH" --no-edit; then
     echo "Next steps:"
     echo "  git push $REMOTE_NAME $SOURCE_BRANCH"
 else
-    EXITCODE=$?
     echo ""
     echo "✗ Merge conflicts detected"
     echo ""
@@ -112,7 +115,7 @@ else
     echo ""
     echo "Or to abort:"
     echo "  git merge --abort"
-    exit $EXITCODE
+    exit "$EXITCODE"
 fi
 
 echo ""

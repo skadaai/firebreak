@@ -682,7 +682,6 @@ spawn_worker() {
   worker_suffix=$(printf '%s|%s|%s|%s\n' "$kind" "$backend" "$created_at" "$$" | sha256sum | cut -c1-12)
   worker_id=$kind-$worker_suffix
   worker_root=$(worker_root_for_id "$worker_id")
-  mkdir -p "$worker_root"
   stdout_path=$worker_root/stdout.log
   stderr_path=$worker_root/stderr.log
   trace_path=$worker_root/trace.log
@@ -696,20 +695,29 @@ spawn_worker() {
   if [ -n "$bridge_request_dir" ] && [ -d "$bridge_request_dir" ]; then
     printf '%s\n' "$worker_id" >"$bridge_request_dir/worker-id" || true
   fi
+
+  launch_script_tmp=$(mktemp "$state_dir/workers/.launch.XXXXXX")
+  case "$backend" in
+    process)
+      if ! write_process_launch_script "$launch_script_tmp" "$attach_mode" "$@"; then
+        rm -f "$launch_script_tmp"
+        exit 1
+      fi
+      ;;
+    firebreak)
+      if ! write_firebreak_launch_script "$launch_script_tmp" "$attach_mode" "$@"; then
+        rm -f "$launch_script_tmp"
+        exit 1
+      fi
+      ;;
+  esac
+
+  mkdir -p "$worker_root"
   : >"$stdout_path"
   : >"$stderr_path"
   : >"$trace_path"
-
   launch_script=$worker_root/launch.sh
-  case "$backend" in
-    process)
-      write_process_launch_script "$launch_script" "$attach_mode" "$@"
-      ;;
-    firebreak)
-      mkdir -p "$worker_root/instance"
-      write_firebreak_launch_script "$launch_script" "$attach_mode" "$@"
-      ;;
-  esac
+  mv "$launch_script_tmp" "$launch_script"
 
   if [ "$attach_mode" = "1" ]; then
     pid=$$

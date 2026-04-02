@@ -275,7 +275,7 @@ EOF
     requested_worker_modes=$normalized_worker_modes
   fi
 
-  firebreak_run_package() {
+  dispatch_run_package() {
     package_name=$1
     shift
 
@@ -305,10 +305,10 @@ EOF
 
   case "$vm_name" in
     codex)
-      firebreak_run_package "firebreak-codex" "$@"
+      dispatch_run_package "firebreak-codex" "$@"
       ;;
     claude-code)
-      firebreak_run_package "firebreak-claude-code" "$@"
+      dispatch_run_package "firebreak-claude-code" "$@"
       ;;
     *)
       echo "unknown Firebreak VM: $vm_name" >&2

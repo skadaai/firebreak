@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -eu
 
 choose_tmp_root() {
@@ -22,6 +23,7 @@ choose_tmp_root() {
 
 firebreak_tmp_root=$(choose_tmp_root)
 smoke_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-agent-orchestrator-worker-interactive.XXXXXX")
+status=0
 
 cleanup() {
   if [ "$status" -eq 0 ]; then
@@ -85,8 +87,7 @@ cols = 114
 winsize = struct.pack("HHHH", rows, cols, 0, 0)
 fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, winsize)
 
-with open(log_path, "wb") as log_file:
-    normalized_log_file = open(normalized_log_path, "w", encoding="utf-8")
+with open(log_path, "wb") as log_file, open(normalized_log_path, "w", encoding="utf-8") as normalized_log_file:
     proc = subprocess.Popen(
         [bin_path],
         stdin=slave_fd,
@@ -184,7 +185,7 @@ with open(log_path, "wb") as log_file:
                     interrupt_deadline = time.time() + 2
 
             now = time.time()
-            if saw_inner and interrupt_deadline is not None and now >= interrupt_deadline and not sent_interrupt:
+            if saw_codex_auth and interrupt_deadline is not None and now >= interrupt_deadline and not sent_interrupt:
                 os.write(master_fd, b"\x03")
                 sent_interrupt = True
                 interrupt_deadline = None
@@ -212,7 +213,6 @@ with open(log_path, "wb") as log_file:
                 proc.wait()
             raise SystemExit(1)
     finally:
-        normalized_log_file.close()
         try:
             os.close(master_fd)
         except OSError:

@@ -1,7 +1,7 @@
 export FIREBREAK_EXTERNAL_PROJECT="@NAME@"
 tool_home="@DEV_HOME@"
-if [ -d @AGENT_TOOLS_MOUNT@ ]; then
-  tool_home=@AGENT_TOOLS_MOUNT@
+if [ -d "@AGENT_TOOLS_MOUNT@" ]; then
+  tool_home="@AGENT_TOOLS_MOUNT@"
 fi
 export LOCAL_BIN="$tool_home/.local/bin"
 export XDG_CONFIG_HOME="$tool_home/.config"
@@ -14,13 +14,19 @@ export PATH="$LOCAL_BIN:$PATH"
 @LAUNCH_ENV_EXPORTS@
 
 if [ -r /run/firebreak-agent/worker-mode ]; then
-  export FIREBREAK_WORKER_MODE="$(cat /run/firebreak-agent/worker-mode)"
+  if worker_mode_value=$(cat /run/firebreak-agent/worker-mode); then
+    export FIREBREAK_WORKER_MODE="$worker_mode_value"
+  fi
 elif [ -r /run/firebreak-agent/worker-proxy-mode ]; then
-  export FIREBREAK_WORKER_MODE="$(cat /run/firebreak-agent/worker-proxy-mode)"
+  if worker_mode_value=$(cat /run/firebreak-agent/worker-proxy-mode); then
+    export FIREBREAK_WORKER_MODE="$worker_mode_value"
+  fi
 fi
 
 if [ -r /run/firebreak-agent/worker-modes ]; then
-  export FIREBREAK_WORKER_MODES="$(cat /run/firebreak-agent/worker-modes)"
+  if worker_modes_value=$(cat /run/firebreak-agent/worker-modes); then
+    export FIREBREAK_WORKER_MODES="$worker_modes_value"
+  fi
 fi
 
 firebreak_refresh_cli() {

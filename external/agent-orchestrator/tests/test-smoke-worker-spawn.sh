@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -eu
 
 firebreak_tmp_root=${FIREBREAK_TMPDIR:-${TMPDIR:-/tmp}}/firebreak/tmp

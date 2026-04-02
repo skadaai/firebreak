@@ -276,6 +276,7 @@ rec {
         bash
         coreutils
         gnused
+        nix
         python3
       ];
       text = builtins.readFile ../../modules/base/host/firebreak-worker.sh;

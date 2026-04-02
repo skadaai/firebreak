@@ -494,12 +494,16 @@ run_runner() {
         MICROVM_VFKIT_HOST_CWD_DIR="$host_cwd" \
         MICROVM_VFKIT_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
         MICROVM_VFKIT_AGENT_EXEC_OUTPUT_DIR="$host_exec_output_dir" \
+        MICROVM_VFKIT_AGENT_TOOLS_DIR="$host_agent_tools_dir" \
+        MICROVM_VFKIT_WORKER_BRIDGE_DIR="$worker_bridge_dir" \
         @RUNNER@ "$@"
     else
       env \
         MICROVM_VFKIT_HOST_META_DIR="$host_meta_dir" \
         MICROVM_VFKIT_HOST_CWD_DIR="$host_cwd" \
         MICROVM_VFKIT_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
+        MICROVM_VFKIT_AGENT_TOOLS_DIR="$host_agent_tools_dir" \
+        MICROVM_VFKIT_WORKER_BRIDGE_DIR="$worker_bridge_dir" \
         @RUNNER@ "$@"
     fi
     return

@@ -1,6 +1,6 @@
 {
   "skill_name": "merge-conflict-resolver",
-  "skill_path": "/srv/projects/instructor-workflow/skills/merge-conflict-resolver",
+  "skill_path": "${SKILL_PATH}",
   "test_version": "1.0",
   "description": "Test cases for merge-conflict-resolver skill - generic Git merge conflict analysis and resolution",
   "unit_tests": [
@@ -45,12 +45,12 @@
       "description": "End-to-end test: check merge status without making changes",
       "steps": [
         {
-          "action": "Change to instructor-workflow repository",
-          "command": "cd /srv/projects/instructor-workflow"
+          "action": "Change to repository root",
+          "command": "cd \"$(git -C \"${SKILL_PATH}\" rev-parse --show-toplevel)\""
         },
         {
           "action": "Run status checker",
-          "command": "/srv/projects/instructor-workflow/skills/merge-conflict-resolver/scripts/check-merge-status.sh"
+          "command": "\"${SKILL_PATH}\"/scripts/check-merge-status.sh"
         },
         {
           "action": "Verify no errors",
@@ -66,19 +66,19 @@
       "steps": [
         {
           "action": "Check resolve-merge-conflicts.sh",
-          "command": "test -x /srv/projects/instructor-workflow/skills/merge-conflict-resolver/scripts/resolve-merge-conflicts.sh && echo '✓ Main orchestrator exists and is executable'"
+          "command": "test -x \"${SKILL_PATH}\"/scripts/resolve-merge-conflicts.sh && echo '✓ Main orchestrator exists and is executable'"
         },
         {
           "action": "Check analyze-and-merge.sh",
-          "command": "test -x /srv/projects/instructor-workflow/skills/merge-conflict-resolver/scripts/analyze-and-merge.sh && echo '✓ Analyzer exists and is executable'"
+          "command": "test -x \"${SKILL_PATH}\"/scripts/analyze-and-merge.sh && echo '✓ Analyzer exists and is executable'"
         },
         {
           "action": "Check simple-merge.sh",
-          "command": "test -x /srv/projects/instructor-workflow/skills/merge-conflict-resolver/scripts/simple-merge.sh && echo '✓ Simple merger exists and is executable'"
+          "command": "test -x \"${SKILL_PATH}\"/scripts/simple-merge.sh && echo '✓ Simple merger exists and is executable'"
         },
         {
           "action": "Check check-merge-status.sh",
-          "command": "test -x /srv/projects/instructor-workflow/skills/merge-conflict-resolver/scripts/check-merge-status.sh && echo '✓ Status checker exists and is executable'"
+          "command": "test -x \"${SKILL_PATH}\"/scripts/check-merge-status.sh && echo '✓ Status checker exists and is executable'"
         }
       ],
       "expected_result": "All four core scripts exist and have execute permissions"
@@ -90,11 +90,11 @@
       "steps": [
         {
           "action": "Check SKILL.md has frontmatter",
-          "command": "head -3 /srv/projects/instructor-workflow/skills/merge-conflict-resolver/SKILL.md | grep -q 'name: merge-conflict-resolver' && echo '✓ SKILL.md has proper frontmatter'"
+          "command": "head -3 \"${SKILL_PATH}\"/SKILL.md | grep -q 'name: merge-conflict-resolver' && echo '✓ SKILL.md has proper frontmatter'"
         },
         {
           "action": "Check README.md exists",
-          "command": "test -f /srv/projects/instructor-workflow/skills/merge-conflict-resolver/README.md && wc -l /srv/projects/instructor-workflow/skills/merge-conflict-resolver/README.md | grep -q '[0-9]' && echo '✓ README.md exists and has content'"
+          "command": "test -f \"${SKILL_PATH}\"/README.md && wc -l \"${SKILL_PATH}\"/README.md | grep -q '[0-9]' && echo '✓ README.md exists and has content'"
         }
       ],
       "expected_result": "Documentation files exist with proper structure and content"
@@ -108,15 +108,15 @@
       "steps": [
         {
           "action": "Search for PR #185 references",
-          "command": "! grep -r 'PR #185' /srv/projects/instructor-workflow/skills/merge-conflict-resolver/scripts/ && echo 'No PR #185 found'"
+          "command": "! grep -r 'PR #185' \"${SKILL_PATH}\"/scripts/ && echo 'No PR #185 found'"
         },
         {
           "action": "Search for infrastructure-tooling references",
-          "command": "! grep -r 'infrastructure-tooling' /srv/projects/instructor-workflow/skills/merge-conflict-resolver/scripts/ && echo 'No infrastructure-tooling found'"
+          "command": "! grep -r 'infrastructure-tooling' \"${SKILL_PATH}\"/scripts/ && echo 'No infrastructure-tooling found'"
         },
         {
           "action": "Search for hardcoded bigsirflrts path",
-          "command": "! grep -r '/srv/projects/bigsirflrts' /srv/projects/instructor-workflow/skills/merge-conflict-resolver/scripts/ && echo 'No hardcoded paths found'"
+          "command": "! grep -r '/srv/projects/bigsirflrts' \"${SKILL_PATH}\"/scripts/ && echo 'No hardcoded paths found'"
         }
       ],
       "validation_method": "exit_code",
@@ -129,7 +129,7 @@
       "steps": [
         {
           "action": "Check for git rev-parse usage",
-          "command": "grep -q 'git rev-parse --show-toplevel' /srv/projects/instructor-workflow/skills/merge-conflict-resolver/scripts/analyze-and-merge.sh && echo '✓ Uses git rev-parse for repo detection'"
+          "command": "grep -q 'git rev-parse --show-toplevel' \"${SKILL_PATH}\"/scripts/analyze-and-merge.sh && echo '✓ Uses git rev-parse for repo detection'"
         }
       ],
       "validation_method": "exit_code",
@@ -142,11 +142,11 @@
       "steps": [
         {
           "action": "Check for color definitions",
-          "command": "grep -E 'RED=|GREEN=|YELLOW=|BLUE=' /srv/projects/instructor-workflow/skills/merge-conflict-resolver/scripts/analyze-and-merge.sh && echo '✓ Color codes present'"
+          "command": "grep -E 'RED=|GREEN=|YELLOW=|BLUE=' \"${SKILL_PATH}\"/scripts/analyze-and-merge.sh && echo '✓ Color codes present'"
         },
         {
           "action": "Check for NO_COLOR support",
-          "command": "grep -q 'NO_COLOR' /srv/projects/instructor-workflow/skills/merge-conflict-resolver/scripts/analyze-and-merge.sh && echo '✓ NO_COLOR environment variable supported'"
+          "command": "grep -q 'NO_COLOR' \"${SKILL_PATH}\"/scripts/analyze-and-merge.sh && echo '✓ NO_COLOR environment variable supported'"
         }
       ],
       "validation_method": "exit_code",
@@ -157,8 +157,8 @@
     "unit_tests": "Test individual scripts for basic functionality (status checking without modifications)",
     "integration_tests": "Test script existence, permissions, and documentation completeness",
     "regression_tests": "Ensure genericization is complete and original design features are preserved",
-    "setup": "No fixture files needed - tests run against live instructor-workflow repository",
+    "setup": "No fixture files needed - tests run against the live repository resolved from ${SKILL_PATH}",
     "cleanup": "No cleanup needed - status checks are non-destructive",
-    "howto": "Run with: python3 /srv/projects/instructor-workflow/skills/skill-testing-framework/scripts/run_tests.py /srv/projects/instructor-workflow/skills/merge-conflict-resolver/tests/merge-conflict-resolver-tests.json --skill-path /srv/projects/instructor-workflow/skills/merge-conflict-resolver"
+    "howto": "Run with: TEST_FRAMEWORK=/path/to/run_tests.py ./tests/run-tests.sh"
   }
 }

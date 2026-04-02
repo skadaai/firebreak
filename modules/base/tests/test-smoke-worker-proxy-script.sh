@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -eu
 
 tmp_root=${TMPDIR:-/tmp}

@@ -107,7 +107,7 @@ cd /path/to/your/repo
 
 ### Success Case (No Conflicts)
 
-```
+```text
 ==================================================================
 ✓ SUCCESS: Merge completed without conflicts!
 ==================================================================
@@ -124,7 +124,7 @@ Next steps:
 
 ### Conflict Case (Manual Resolution Needed)
 
-```
+```text
 =================================================
 ✗ MERGE CONFLICTS DETECTED
 =================================================
@@ -150,7 +150,7 @@ git merge --abort
 
 ### Pre-Merge Analysis
 
-```
+```text
 [Step 7] Checking for potential conflicts...
 ✓ No overlapping file changes detected
 Merge should be clean!
@@ -369,6 +369,7 @@ chmod +x skills/merge-conflict-resolver/scripts/*.sh
 4. ✅ **Keep both changes when possible**: Merge functionality, don't just delete
 5. ✅ **Preserve security fixes**: Don't accidentally revert critical changes
 6. ✅ **Document complex resolutions**: Add comments explaining why
+
 ### After Merging
 
 1. ✅ **Review the merge commit**: `git show HEAD`
@@ -379,7 +380,7 @@ chmod +x skills/merge-conflict-resolver/scripts/*.sh
 
 ## File Structure
 
-```
+```text
 skills/merge-conflict-resolver/
 ├── SKILL.md                          # This file
 ├── README.md                         # Usage guide

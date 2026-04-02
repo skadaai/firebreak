@@ -12,7 +12,7 @@ cd /path/to/your/repository
 **What it does**: Shows current branch, merge status, uncommitted changes, and remote tracking info without making any changes.
 
 **Example Output**:
-```
+```text
 === Repository Status Check ===
 
 Repository: /srv/projects/my-project
@@ -54,7 +54,7 @@ Tracking: origin/feature/new-feature
 **What it does**: Basic merge workflow with minimal output - perfect when you just want to merge quickly.
 
 **Example Output**:
-```
+```text
 === Simple Merge Helper ===
 
 Repository: /srv/projects/my-project
@@ -93,7 +93,7 @@ Next steps:
 **What it does**: Comprehensive 8-step workflow with detailed analysis of potential conflicts before attempting merge.
 
 **Example Output**:
-```
+```text
 ===================================================================
 Merge Conflict Analysis - 8-Step Workflow
 Repository: /srv/projects/my-project
@@ -190,7 +190,7 @@ When conflicts occur, here's what you'll see and how to resolve them:
 
 ### Conflict Detected Output:
 
-```
+```text
 [Step 8] Attempting merge...
 Running: git merge origin/main --no-edit
 
@@ -248,21 +248,25 @@ DEBUG_MODE = False
 ```
 
 **Step 2**: Stage the resolved file:
+
 ```bash
 git add src/config.py
 ```
 
 **Step 3**: Repeat for all conflicting files:
+
 ```bash
 git add README.md
 ```
 
 **Step 4**: Continue the merge:
+
 ```bash
 git merge --continue
 ```
 
 **Step 5**: Push the resolved merge:
+
 ```bash
 git push origin feature/my-branch
 ```

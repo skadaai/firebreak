@@ -54,6 +54,14 @@ fi
 if [ -n "''${MICROVM_VFKIT_AGENT_EXEC_OUTPUT_DIR:-}" ]; then
   firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_AGENT_EXEC_OUTPUT_DIR},mountTag=hostexecoutput")
 fi
+
+if [ -n "''${MICROVM_VFKIT_AGENT_TOOLS_DIR:-}" ]; then
+  firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_AGENT_TOOLS_DIR},mountTag=hostagenttools")
+fi
+
+if [ -n "''${MICROVM_VFKIT_WORKER_BRIDGE_DIR:-}" ]; then
+  firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_WORKER_BRIDGE_DIR},mountTag=hostworkerbridge")
+fi
 EOF
       chmod 0555 "$out/bin/firebreak-runner-extra-args"
     '';

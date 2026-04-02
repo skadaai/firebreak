@@ -140,12 +140,13 @@ rec {
       lockfileArgs = lib.escapeShellArgs lockfiles;
       readyCommandArgs = lib.escapeShellArgs readyCommands;
       readyCommandName = "${name}-ready";
+      effectiveWorkerBridgeEnabled = workerBridgeEnabled || workerKinds != { };
       launchCommandName = "${name}-launch";
     in
     mkLocalVmArtifacts {
       inherit name;
       defaultAgentCommand = launchCommandName;
-      inherit workerBridgeEnabled;
+      workerBridgeEnabled = effectiveWorkerBridgeEnabled;
       inherit workerKinds;
       extraModules = [
         ({ config, pkgs, ... }:
@@ -403,7 +404,7 @@ rec {
 
       effectiveWorkerKinds = derivedWorkerKinds // workerKinds;
       effectiveInstallBinScripts = derivedInstallBinScripts // installBinScripts;
-      effectiveWorkerBridgeEnabled = workerBridgeEnabled || workerProxies != { };
+      effectiveWorkerBridgeEnabled = workerBridgeEnabled || workerKinds != { } || workerProxies != { };
 
       packageSet =
         if builtins.isFunction runtimePackages then
@@ -487,12 +488,11 @@ rec {
         let
           project = projectFor system;
           tests = testsFor system;
-        in {
+        in tests.packages // {
           default = project.package;
           "${packageName}" = project.package;
           "${runnerPackageName}" = project.runnerPackage;
-        } // tests.packages);
-
+        });
       checks = lib.genAttrs supportedSystems (system: (testsFor system).checks);
     };
 }

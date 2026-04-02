@@ -30,7 +30,7 @@ process_request() {
     fi
     mkdir "$lock_dir" 2>/dev/null || return 0
   fi
-  printf '%s\n' "$$" >"$lock_dir/pid"
+  printf '%s\n' "${BASHPID:-$$}" >"$lock_dir/pid"
 
   REQUEST_DIR=$request_dir \
   REQUEST_PATH=$request_path \
@@ -274,6 +274,8 @@ try:
         terminal_state = {"row": 1, "column": 1}
         terminal_query_buffer = bytearray()
         command_start_marker_state = {"seen": False}
+        stdin_input_gate = {"open": False, "release_at": None, "saw_terminal_reply": False}
+        trace_scan_state = {"offset": 0}
         focus_state = {"enabled": False, "sent": False}
         kitty_keyboard_state = {"flags": 0}
         kitty_keyboard_stack = []
@@ -562,6 +564,12 @@ try:
             repeated_interrupt_state["last_at"] = None
             terminal_state["row"] = 1
             terminal_state["column"] = 1
+            stdin_input_gate["release_at"] = time.monotonic() + 10.0
+            stdin_input_gate["saw_terminal_reply"] = False
+            try:
+                trace_scan_state["offset"] = os.path.getsize(trace_path)
+            except OSError:
+                trace_scan_state["offset"] = 0
             trace("attach-terminal-emulation:nested")
             trace("attach-command-stream-marker")
 
@@ -578,6 +586,23 @@ try:
                     continue
                 append_command_signal("INT")
                 trace("attach-signal-request:INT")
+
+        def note_nested_terminal_replies():
+            if stdin_input_gate["saw_terminal_reply"]:
+                return
+            try:
+                with open(trace_path, "r", encoding="utf-8") as handle:
+                    handle.seek(trace_scan_state["offset"])
+                    lines = handle.readlines()
+                    trace_scan_state["offset"] = handle.tell()
+            except OSError:
+                return
+            for line in lines:
+                if not line.startswith("attach-term-reply:"):
+                    continue
+                stdin_input_gate["saw_terminal_reply"] = True
+                trace("attach-stdin-gate-arm:trace-terminal-reply")
+                return
 
         def handle_terminal_queries(chunk):
             if terminal_emulation["owner"] == "nested":
@@ -656,20 +681,36 @@ try:
 
         def pump_stdin():
             offset = 0
+            pending_input = bytearray()
             saw_input = False
             total_input_bytes = 0
             sample_budget = 64
-            command_stage_initialized = False
             try:
                 trace("attach-stdin-stream-opened")
                 while True:
-                    if not command_stage_initialized and (command_start_marker_state["seen"] or current_attach_stage() == "command-start"):
-                        command_stage_initialized = True
-                        try:
-                            offset = os.path.getsize(stdin_stream)
-                        except OSError:
-                            pass
-                        trace(f"attach-stdin-offset-reset:{offset}")
+                    if command_start_marker_state["seen"] and stdin_input_gate["release_at"] is not None:
+                        trace(f"attach-stdin-command-start:pending={len(pending_input)}")
+                        stdin_input_gate["release_at"] = None
+                    if command_start_marker_state["seen"] and not stdin_input_gate["open"]:
+                        note_nested_terminal_replies()
+                    if (
+                        command_start_marker_state["seen"]
+                        and pending_input
+                        and (
+                            stdin_input_gate["open"]
+                            or (
+                                stdin_input_gate["release_at"] is not None
+                                and time.monotonic() >= stdin_input_gate["release_at"]
+                            )
+                        )
+                    ):
+                        if not stdin_input_gate["open"]:
+                            stdin_input_gate["open"] = True
+                            trace("attach-stdin-gate-open:timeout")
+                        chunk = bytes(pending_input)
+                        pending_input.clear()
+                        maybe_escalate_repeated_interrupt(chunk)
+                        os.write(master_fd, chunk)
                     with open(stdin_stream, "rb") as source:
                         source.seek(offset)
                         chunk = source.read(4096)
@@ -684,6 +725,16 @@ try:
                             sample = chunk[:sample_budget]
                             trace(f"attach-stdin-sample-len:{len(sample)}")
                             sample_budget -= len(sample)
+                        if (
+                            not command_start_marker_state["seen"]
+                            or (
+                                not stdin_input_gate["open"]
+                                and stdin_input_gate["release_at"] is not None
+                                and time.monotonic() < stdin_input_gate["release_at"]
+                            )
+                        ):
+                            pending_input.extend(chunk)
+                            continue
                         maybe_escalate_repeated_interrupt(chunk)
                         os.write(master_fd, chunk)
                         continue
@@ -714,10 +765,21 @@ try:
                         if not saw_output:
                             trace("attach-stdout-first-byte")
                             saw_output = True
+                        command_start_marker_seen_before_chunk = command_start_marker_state["seen"]
                         if current_attach_stage() == "command-start" and not command_start_marker_state["seen"]:
                             handle_command_start_marker()
+                        if command_start_marker_state["seen"] and not stdin_input_gate["open"]:
+                            note_nested_terminal_replies()
                         if not command_stage_initialized and (command_start_marker_state["seen"] or current_attach_stage() == "command-start"):
                             command_stage_initialized = True
+                        if (
+                            command_start_marker_seen_before_chunk
+                            and stdin_input_gate["saw_terminal_reply"]
+                            and not stdin_input_gate["open"]
+                            and (b"\n" in chunk or b"\r" in chunk)
+                        ):
+                            stdin_input_gate["open"] = True
+                            trace("attach-stdin-gate-open:stdout-line")
                         sink.write(chunk)
                         sink.flush()
             except OSError:
@@ -796,10 +858,29 @@ PY
   return "$request_status"
 }
 
+request_lock_active() {
+  lock_dir=$1
+  [ -d "$lock_dir" ] || return 1
+  [ -r "$lock_dir/pid" ] || return 1
+
+  IFS= read -r lock_pid <"$lock_dir/pid" || lock_pid=""
+  case "$lock_pid" in
+    ""|*[!0-9]*)
+      return 1
+      ;;
+  esac
+
+  kill -0 "$lock_pid" 2>/dev/null
+}
+
 while :; do
   for request_dir in "$bridge_dir"/requests/*; do
     [ -d "$request_dir" ] || continue
-    process_request "$request_dir"
+    [ -f "$request_dir/response.exit-code" ] && continue
+    if request_lock_active "$request_dir/.lock"; then
+      continue
+    fi
+    process_request "$request_dir" &
   done
   sleep 0.1
 done

@@ -429,6 +429,18 @@ start_virtiofsd() {
   exit 1
 }
 
+start_worker_bridge_server() {
+  env \
+    FIREBREAK_FLAKE_REF='@FIREBREAK_FLAKE_REF@' \
+    FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG='1' \
+    FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
+    FIREBREAK_WORKER_BRIDGE_DIR="$worker_bridge_dir" \
+    FIREBREAK_WORKER_STATE_DIR="$worker_state_dir" \
+    bash "$worker_bridge_server_script" "$worker_bridge_dir" "$worker_helper_script" >"$worker_bridge_server_log" 2>&1 &
+  worker_bridge_server_pid=$!
+  trace_wrapper "worker-bridge-ready"
+}
+
 printf '%s\n' "$host_cwd" > "$host_meta_dir/mount-path"
 printf '%s\n' "$host_uid" > "$host_meta_dir/host-uid"
 printf '%s\n' "$host_gid" > "$host_meta_dir/host-gid"
@@ -474,16 +486,11 @@ if [ "$host_system" != "aarch64-darwin" ]; then
     start_virtiofsd "$worker_bridge_dir" "$worker_bridge_socket" "$virtiofsd_worker_bridge_log"
     worker_bridge_virtiofsd_pid=$started_virtiofsd_pid
     worker_bridge_socket_env=$worker_bridge_socket
-    env \
-      FIREBREAK_FLAKE_REF='@FIREBREAK_FLAKE_REF@' \
-      FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG='1' \
-      FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
-      FIREBREAK_WORKER_BRIDGE_DIR="$worker_bridge_dir" \
-      FIREBREAK_WORKER_STATE_DIR="$worker_state_dir" \
-      bash "$worker_bridge_server_script" "$worker_bridge_dir" "$worker_helper_script" >"$worker_bridge_server_log" 2>&1 &
-    worker_bridge_server_pid=$!
-    trace_wrapper "worker-bridge-ready"
   fi
+fi
+
+if [ "$worker_bridge_enabled" = "1" ]; then
+  start_worker_bridge_server
 fi
 
 run_runner() {

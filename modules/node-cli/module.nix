@@ -151,13 +151,38 @@ let
   };
   bootstrapWaitScript = pkgs.writeShellApplication {
     name = "firebreak-bootstrap-wait";
-    runtimeInputs = with pkgs; [ coreutils ];
+    runtimeInputs = with pkgs; [ coreutils python3 ];
     text = ''
       set -eu
 
       ready_marker='${bootstrapReadyMarker}'
+      bootstrap_state_path=''${FIREBREAK_BOOTSTRAP_STATE_PATH:-/run/firebreak-agent/bootstrap-state.json}
       timeout_seconds=''${FIREBREAK_BOOTSTRAP_WAIT_TIMEOUT_SECONDS:-300}
       elapsed_seconds=0
+
+      report_bootstrap_error() {
+        BOOTSTRAP_STATE_PATH="$bootstrap_state_path" python3 - <<'PY'
+import json
+import os
+import sys
+
+path = os.environ["BOOTSTRAP_STATE_PATH"]
+try:
+    with open(path, "r", encoding="utf-8") as handle:
+        data = json.load(handle)
+except OSError:
+    raise SystemExit(1)
+except ValueError:
+    raise SystemExit(1)
+
+if data.get("status") != "error":
+    raise SystemExit(1)
+
+phase = data.get("phase") or "unknown"
+detail = data.get("detail") or "bootstrap failed"
+print(f"Firebreak bootstrap failed during {phase}: {detail}", file=sys.stderr)
+PY
+      }
 
       case "$timeout_seconds" in
         *[!0-9]*)
@@ -170,12 +195,19 @@ let
         if [ -r "$ready_marker" ]; then
           exit 0
         fi
+        if report_bootstrap_error; then
+          exit 1
+        fi
         sleep 1
         elapsed_seconds=$((elapsed_seconds + 1))
       done
 
       if [ -r "$ready_marker" ]; then
         exit 0
+      fi
+
+      if report_bootstrap_error; then
+        exit 1
       fi
 
       echo "timed out waiting for Firebreak bootstrap readiness marker: $ready_marker" >&2

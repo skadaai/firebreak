@@ -219,6 +219,7 @@ PY
 
   if [ "$interactive_mode" != "1" ]; then
     mv "$request_tmp_path" "$request_dir/request.json"
+    start_bridge_attach_spawn_lock_handoff "$request_dir"
 
     for _ in $(seq 1 36000); do
       if [ -f "$request_dir/response.exit-code" ]; then
@@ -273,6 +274,7 @@ PY
   trap cleanup_attach EXIT INT TERM
 
   mv "$request_tmp_path" "$request_dir/request.json"
+  start_bridge_attach_spawn_lock_handoff "$request_dir"
   printf '%s\n' 'firebreak: starting worker' >&2
   attach_client_script=$request_dir/attach-client.py
   cat >"$attach_client_script" <<'PY'
@@ -300,6 +302,7 @@ stdout_done = threading.Event()
 stdout_started = threading.Event()
 progress_done = threading.Event()
 stdin_done = threading.Event()
+response_written = threading.Event()
 printed_messages = set()
 poll_interval = 0.005
 stdin_reply_buffer = bytearray()
@@ -564,8 +567,9 @@ def pump_progress() -> None:
                         print_progress(f"firebreak: worker exited ({line.split(':', 1)[1]})")
                     elif line == "response-written":
                         print_progress("firebreak: attach session completed")
+                        response_written.set()
                 seen_trace_lines = len(trace_lines)
-        if stdout_started.is_set() or os.path.exists(exit_code_path):
+        if stdout_started.is_set() or os.path.exists(exit_code_path) or response_written.is_set():
             break
         if not reminded and time.monotonic() - started_at >= 15:
             print_progress("firebreak: still waiting for worker output")
@@ -579,7 +583,7 @@ stdout_thread.start()
 stdin_thread.start()
 progress_thread.start()
 
-while not os.path.exists(exit_code_path) and not stdout_done.is_set():
+while not os.path.exists(exit_code_path) and not response_written.is_set() and not stdout_done.is_set():
     stdout_thread.join(timeout=poll_interval)
 
 trace("guest-attach-client-main-loop-exit")
@@ -605,8 +609,16 @@ PY
   trap - EXIT INT TERM
 
   if ! [ -f "$request_dir/response.exit-code" ]; then
-    echo "timed out waiting for Firebreak worker attach response" >&2
-    exit 1
+    for _ in $(seq 1 100); do
+      if [ -f "$request_dir/response.exit-code" ]; then
+        break
+      fi
+      sleep 0.05
+    done
+    if ! [ -f "$request_dir/response.exit-code" ]; then
+      echo "timed out waiting for Firebreak worker attach response" >&2
+      exit 1
+    fi
   fi
 
   IFS= read -r bridge_exit_code < "$request_dir/response.exit-code" || bridge_exit_code=1
@@ -810,13 +822,14 @@ enforce_kind_limit() {
   kind_json=$1
   kind_name=$2
   kind_backend=$3
+  active_count=$(count_active_workers_for_kind "$kind_name" "$kind_backend")
+  kind_limit_active_count=$active_count
 
   max_instances=$(resolve_kind_max_instances "$kind_json")
   if [ -z "$max_instances" ]; then
     return 0
   fi
 
-  active_count=$(count_active_workers_for_kind "$kind_name" "$kind_backend")
   if [ "$active_count" -ge "$max_instances" ]; then
     echo "worker kind '$kind_name' reached max_instances=$max_instances" >&2
     exit 1
@@ -883,6 +896,60 @@ release_kind_spawn_lock() {
     rmdir "$kind_spawn_lock_dir" 2>/dev/null || true
     kind_spawn_lock_dir=""
   fi
+}
+
+remove_kind_spawn_lock_dir() {
+  lock_dir=$1
+  [ -n "$lock_dir" ] || return 0
+  rm -f "$lock_dir/pid" "$lock_dir/boot-id" "$lock_dir/acquired-at"
+  rmdir "$lock_dir" 2>/dev/null || true
+}
+
+start_local_attach_spawn_lock_handoff() {
+  kind_name=$1
+  kind_backend=$2
+  initial_active_count=$3
+  lock_dir=$kind_spawn_lock_dir
+  owner_pid=${BASHPID:-$$}
+
+  [ -n "$lock_dir" ] || return 0
+  (
+    while kill -0 "$owner_pid" 2>/dev/null; do
+      current_active_count=$(count_active_workers_for_kind "$kind_name" "$kind_backend" 2>/dev/null || true)
+      case "$current_active_count" in
+        ''|*[!0-9]*)
+          current_active_count=""
+          ;;
+      esac
+      if [ -n "$current_active_count" ] && [ "$current_active_count" -gt "$initial_active_count" ]; then
+        remove_kind_spawn_lock_dir "$lock_dir"
+        exit 0
+      fi
+      sleep 0.05
+    done
+  ) &
+}
+
+start_bridge_attach_spawn_lock_handoff() {
+  request_dir=$1
+  lock_dir=$kind_spawn_lock_dir
+  owner_pid=${BASHPID:-$$}
+  worker_id_path=$request_dir/worker-id
+  exit_code_path=$request_dir/response.exit-code
+
+  [ -n "$lock_dir" ] || return 0
+  (
+    while kill -0 "$owner_pid" 2>/dev/null; do
+      if [ -s "$worker_id_path" ]; then
+        remove_kind_spawn_lock_dir "$lock_dir"
+        exit 0
+      fi
+      if [ -f "$exit_code_path" ]; then
+        exit 0
+      fi
+      sleep 0.05
+    done
+  ) &
 }
 
 collect_json_results_for_ids() {
@@ -1018,6 +1085,9 @@ case "$subcommand" in
         if [ "$#" -eq 0 ]; then
           default_command_json=$(resolve_kind_field "$kind_json" "command")
           if [ -n "$default_command_json" ]; then
+            if [ "$attach_mode" = "1" ]; then
+              start_local_attach_spawn_lock_handoff "$kind" "$backend" "${kind_limit_active_count:-0}"
+            fi
             KIND_JSON=$kind_json WORKER_LOCAL_HELPER=$local_helper WORKER_KIND=$kind WORKER_WORKSPACE=$workspace WORKER_RUN_JSON=$run_json WORKER_ATTACH_MODE=$attach_mode python3 - <<'PY'
 import json
 import os
@@ -1055,6 +1125,7 @@ PY
           fi
         fi
         if [ "$attach_mode" = "1" ]; then
+          start_local_attach_spawn_lock_handoff "$kind" "$backend" "${kind_limit_active_count:-0}"
           "$local_helper" run --backend process --kind "$kind" --workspace "$workspace" --attach -- "$@"
         elif [ "$run_json" = "1" ]; then
           "$local_helper" run --backend process --kind "$kind" --workspace "$workspace" --json -- "$@"

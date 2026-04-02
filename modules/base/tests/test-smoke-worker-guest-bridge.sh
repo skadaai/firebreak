@@ -114,6 +114,55 @@ if [ "$stop_status" != "stopping" ] && [ "$stop_status" != "stopped" ]; then
   exit 1
 fi
 
+attach_parallel_dir=$(mktemp -d "$PWD/bridge-attach-parallel.XXXXXX")
+attach_parallel_start=$(python3 - <<'PY'
+import time
+print(time.monotonic())
+PY
+)
+(
+  firebreak worker run --kind bridge-process --workspace "$PWD" --attach -- sh -c 'sleep 3; printf attach-one'
+) >"$attach_parallel_dir/one.out" &
+attach_parallel_one_pid=$!
+(
+  firebreak worker run --kind bridge-process --workspace "$PWD" --attach -- sh -c 'sleep 3; printf attach-two'
+) >"$attach_parallel_dir/two.out" &
+attach_parallel_two_pid=$!
+
+wait "$attach_parallel_one_pid"
+wait "$attach_parallel_two_pid"
+
+attach_parallel_elapsed=$(ATTACH_PARALLEL_START="$attach_parallel_start" python3 - <<'PY'
+import os
+import time
+
+print(time.monotonic() - float(os.environ["ATTACH_PARALLEL_START"]))
+PY
+)
+printf '__BRIDGE_ATTACH_PARALLEL_ELAPSED__%s\n' "$attach_parallel_elapsed"
+
+if ! grep -F -q 'attach-one' "$attach_parallel_dir/one.out"; then
+  cat "$attach_parallel_dir/one.out" >&2
+  echo "guest bridge smoke first attached process worker did not complete successfully" >&2
+  exit 1
+fi
+
+if ! grep -F -q 'attach-two' "$attach_parallel_dir/two.out"; then
+  cat "$attach_parallel_dir/two.out" >&2
+  echo "guest bridge smoke second attached process worker did not complete successfully" >&2
+  exit 1
+fi
+
+ATTACH_PARALLEL_ELAPSED="$attach_parallel_elapsed" python3 - <<'PY'
+import os
+import sys
+
+elapsed = float(os.environ["ATTACH_PARALLEL_ELAPSED"])
+if elapsed >= 5.0:
+    print(f"parallel attached process workers took too long: {elapsed:.3f}s", file=sys.stderr)
+    raise SystemExit(1)
+PY
+
 printf '%s\n' '__BRIDGE_ATTACH_START__'
 attach_output=$(firebreak worker run --kind bridge-firebreak --workspace "$PWD" --attach -- --version)
 printf '__BRIDGE_ATTACH__%s\n' "$attach_output"

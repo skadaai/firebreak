@@ -55,13 +55,11 @@ if child_pid == 0:
 os.close(slave_fd)
 
 output = bytearray()
-ready_seen = False
-input_attempts = 0
-last_input_sent_at = 0.0
 child_wait_status = None
 deadline = time.monotonic() + 300
 
 try:
+    os.write(master_fd, b"ping-early\n")
     while True:
         if time.monotonic() >= deadline:
             timed_out_output = output.decode("utf-8", errors="replace")
@@ -80,14 +78,6 @@ try:
             if not chunk:
                 break
             output.extend(chunk)
-            if b"READY" in output:
-                ready_seen = True
-            if ready_seen and b"ECHO:ping" not in output:
-                now = time.monotonic()
-                if input_attempts == 0 or now - last_input_sent_at >= 5.0:
-                    os.write(master_fd, b"ping\n")
-                    input_attempts += 1
-                    last_input_sent_at = now
             continue
 
         waited_pid, wait_status = os.waitpid(child_pid, os.WNOHANG)
@@ -99,14 +89,6 @@ try:
                 chunk = b""
             if chunk:
                 output.extend(chunk)
-                if b"READY" in output:
-                    ready_seen = True
-                if ready_seen and b"ECHO:ping" not in output:
-                    now = time.monotonic()
-                    if input_attempts == 0 or now - last_input_sent_at >= 5.0:
-                        os.write(master_fd, b"ping\n")
-                        input_attempts += 1
-                        last_input_sent_at = now
                 continue
             break
 finally:
@@ -133,10 +115,9 @@ if "READY" not in attach_output:
     sys.stderr.write("\ninteractive guest bridge smoke did not receive the ready marker\n")
     raise SystemExit(1)
 
-if "ECHO:ping" not in attach_output:
+if "ECHO:ping-early" not in attach_output:
     sys.stderr.write(attach_output)
-    sys.stderr.write(f"\ninteractive guest bridge smoke sent ping {input_attempts} time(s)\n")
-    sys.stderr.write("\ninteractive guest bridge smoke did not receive the echoed input\n")
+    sys.stderr.write("\ninteractive guest bridge smoke did not preserve the early input written before READY\n")
     raise SystemExit(1)
 
 if exit_code != 0:

@@ -657,6 +657,63 @@ print(json.dumps(kinds[kind_name]))
 PY
 }
 
+resolve_kind_run_config() {
+  kind_name=$1
+  requested_backend=${2:-}
+  [ -r "$worker_kinds_file" ] || {
+    echo "Firebreak worker kinds file is unavailable: $worker_kinds_file" >&2
+    exit 1
+  }
+
+  KIND_NAME=$kind_name REQUESTED_BACKEND=$requested_backend WORKER_KINDS_FILE=$worker_kinds_file python3 - <<'PY'
+import json
+import os
+import shlex
+import sys
+
+kind_name = os.environ["KIND_NAME"]
+requested_backend = os.environ.get("REQUESTED_BACKEND", "")
+with open(os.environ["WORKER_KINDS_FILE"], "r", encoding="utf-8") as handle:
+    kinds = json.load(handle)
+
+if kind_name not in kinds:
+    print(f"unknown worker kind: {kind_name}", file=sys.stderr)
+    raise SystemExit(1)
+
+kind = kinds[kind_name]
+backend = requested_backend or kind.get("backend") or ""
+max_instances = kind.get("max_instances", kind.get("maxInstances"))
+if max_instances is None or max_instances == "":
+    max_instances_value = ""
+elif isinstance(max_instances, int):
+    if max_instances <= 0:
+        print("worker kind max_instances must be greater than zero", file=sys.stderr)
+        raise SystemExit(1)
+    max_instances_value = str(max_instances)
+elif isinstance(max_instances, str) and max_instances.isdigit():
+    parsed = int(max_instances)
+    if parsed <= 0:
+        print("worker kind max_instances must be greater than zero", file=sys.stderr)
+        raise SystemExit(1)
+    max_instances_value = str(parsed)
+else:
+    print("worker kind max_instances must be a positive integer", file=sys.stderr)
+    raise SystemExit(1)
+
+command = kind.get("command")
+command_json = json.dumps(command) if command is not None else ""
+package_name = kind.get("package")
+launch_mode = kind.get("launch_mode")
+
+print(f"resolved_kind_json={shlex.quote(json.dumps(kind))}")
+print(f"resolved_backend={shlex.quote(backend)}")
+print(f"resolved_max_instances={shlex.quote(max_instances_value)}")
+print(f"resolved_command_json={shlex.quote(command_json)}")
+print(f"resolved_package_name={shlex.quote(package_name if isinstance(package_name, str) else '')}")
+print(f"resolved_launch_mode={shlex.quote(launch_mode if isinstance(launch_mode, str) else '')}")
+PY
+}
+
 resolve_kind_field() {
   kind_json=$1
   field_name=$2
@@ -819,16 +876,14 @@ PY
 }
 
 enforce_kind_limit() {
-  kind_json=$1
-  kind_name=$2
-  kind_backend=$3
-  active_count=$(count_active_workers_for_kind "$kind_name" "$kind_backend")
-  kind_limit_active_count=$active_count
-
-  max_instances=$(resolve_kind_max_instances "$kind_json")
+  kind_name=$1
+  kind_backend=$2
+  max_instances=$3
   if [ -z "$max_instances" ]; then
     return 0
   fi
+
+  active_count=$(count_active_workers_for_kind "$kind_name" "$kind_backend")
 
   if [ "$active_count" -ge "$max_instances" ]; then
     echo "worker kind '$kind_name' reached max_instances=$max_instances" >&2
@@ -839,6 +894,37 @@ enforce_kind_limit() {
 local_worker_exists() {
   worker_id=$1
   [ -f "$local_state_dir/workers/$worker_id/metadata.json" ]
+}
+
+local_worker_ids_for_kind() {
+  target_kind=$1
+
+  mkdir -p "$local_state_dir/workers"
+  for candidate_root in "$local_state_dir"/workers/*; do
+    [ -d "$candidate_root" ] || continue
+    if ! [ -f "$candidate_root/kind" ]; then
+      continue
+    fi
+
+    candidate_kind=""
+    IFS= read -r candidate_kind <"$candidate_root/kind" || candidate_kind=""
+    if [ "$candidate_kind" = "$target_kind" ]; then
+      basename "$candidate_root"
+    fi
+  done
+}
+
+worker_id_in_list() {
+  target_worker_id=$1
+  shift || true
+
+  for known_worker_id in "$@"; do
+    if [ "$known_worker_id" = "$target_worker_id" ]; then
+      return 0
+    fi
+  done
+
+  return 1
 }
 
 acquire_kind_spawn_lock() {
@@ -907,24 +993,23 @@ remove_kind_spawn_lock_dir() {
 
 start_local_attach_spawn_lock_handoff() {
   kind_name=$1
-  kind_backend=$2
-  initial_active_count=$3
+  shift
+  known_worker_ids=("$@")
   lock_dir=$kind_spawn_lock_dir
   owner_pid=${BASHPID:-$$}
 
   [ -n "$lock_dir" ] || return 0
   (
     while kill -0 "$owner_pid" 2>/dev/null; do
-      current_active_count=$(count_active_workers_for_kind "$kind_name" "$kind_backend" 2>/dev/null || true)
-      case "$current_active_count" in
-        ''|*[!0-9]*)
-          current_active_count=""
-          ;;
-      esac
-      if [ -n "$current_active_count" ] && [ "$current_active_count" -gt "$initial_active_count" ]; then
-        remove_kind_spawn_lock_dir "$lock_dir"
-        exit 0
-      fi
+      while IFS= read -r current_worker_id; do
+        [ -n "$current_worker_id" ] || continue
+        if ! worker_id_in_list "$current_worker_id" "${known_worker_ids[@]}"; then
+          remove_kind_spawn_lock_dir "$lock_dir"
+          exit 0
+        fi
+      done <<EOF
+$(local_worker_ids_for_kind "$kind_name" 2>/dev/null || true)
+EOF
       sleep 0.05
     done
   ) &
@@ -1048,11 +1133,19 @@ case "$subcommand" in
     if [ "$attach_mode" = "1" ]; then
       printf '%s\n' "firebreak: resolving worker kind ($kind)" >&2
     fi
-    kind_json=$(resolve_kind "$kind")
-
-    if [ -z "$backend" ]; then
-      backend=$(resolve_kind_field "$kind_json" "backend")
-    fi
+    resolved_kind_json=""
+    resolved_backend=""
+    resolved_max_instances=""
+    resolved_command_json=""
+    resolved_package_name=""
+    resolved_launch_mode=""
+    eval "$(resolve_kind_run_config "$kind" "$backend")"
+    kind_json=$resolved_kind_json
+    backend=$resolved_backend
+    kind_max_instances=$resolved_max_instances
+    kind_default_command_json=$resolved_command_json
+    kind_package_name=$resolved_package_name
+    kind_launch_mode=$resolved_launch_mode
 
     if [ "$attach_mode" = "1" ] && [ "$run_json" = "1" ]; then
       echo "firebreak worker run does not support --attach with --json" >&2
@@ -1075,7 +1168,7 @@ case "$subcommand" in
       printf '%s\n' "firebreak: worker slot acquired ($kind)" >&2
     fi
     trap release_kind_spawn_lock EXIT INT TERM
-    enforce_kind_limit "$kind_json" "$kind" "$backend"
+    enforce_kind_limit "$kind" "$backend" "$kind_max_instances"
     if [ "$attach_mode" = "1" ]; then
       printf '%s\n' "firebreak: worker slot validated ($kind)" >&2
     fi
@@ -1083,10 +1176,11 @@ case "$subcommand" in
     case "$backend" in
       process)
         if [ "$#" -eq 0 ]; then
-          default_command_json=$(resolve_kind_field "$kind_json" "command")
+          default_command_json=$kind_default_command_json
           if [ -n "$default_command_json" ]; then
             if [ "$attach_mode" = "1" ]; then
-              start_local_attach_spawn_lock_handoff "$kind" "$backend" "${kind_limit_active_count:-0}"
+              mapfile -t initial_kind_worker_ids < <(local_worker_ids_for_kind "$kind")
+              start_local_attach_spawn_lock_handoff "$kind" "${initial_kind_worker_ids[@]}"
             fi
             KIND_JSON=$kind_json WORKER_LOCAL_HELPER=$local_helper WORKER_KIND=$kind WORKER_WORKSPACE=$workspace WORKER_RUN_JSON=$run_json WORKER_ATTACH_MODE=$attach_mode python3 - <<'PY'
 import json
@@ -1125,7 +1219,8 @@ PY
           fi
         fi
         if [ "$attach_mode" = "1" ]; then
-          start_local_attach_spawn_lock_handoff "$kind" "$backend" "${kind_limit_active_count:-0}"
+          mapfile -t initial_kind_worker_ids < <(local_worker_ids_for_kind "$kind")
+          start_local_attach_spawn_lock_handoff "$kind" "${initial_kind_worker_ids[@]}"
           "$local_helper" run --backend process --kind "$kind" --workspace "$workspace" --attach -- "$@"
         elif [ "$run_json" = "1" ]; then
           "$local_helper" run --backend process --kind "$kind" --workspace "$workspace" --json -- "$@"
@@ -1139,10 +1234,10 @@ PY
         ;;
       firebreak)
         if [ -z "$package_name" ]; then
-          package_name=$(resolve_kind_field "$kind_json" "package")
+          package_name=$kind_package_name
         fi
         if [ -z "$launch_mode" ]; then
-          launch_mode=$(resolve_kind_field "$kind_json" "launch_mode")
+          launch_mode=$kind_launch_mode
         fi
         if [ -z "$launch_mode" ]; then
           launch_mode=run

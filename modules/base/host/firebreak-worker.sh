@@ -149,29 +149,70 @@ write_metadata() {
     rm -f "$worker_root/stop-requested"
   fi
 
-  cat >"$worker_root/metadata.json" <<EOF
-{
-  "worker_id": "$(json_escape "$worker_id")",
-  "authority": "$(json_escape "$worker_authority")",
-  "backend": "$(json_escape "$backend")",
-  "kind": "$(json_escape "$kind")",
-  "status": "$(json_escape "$status")",
-  "workspace": "$(json_escape "$workspace")",
-  "package_name": $(if [ -n "$package_name" ]; then printf '"%s"' "$(json_escape "$package_name")"; else printf 'null'; fi),
-  "launch_mode": $(if [ -n "$launch_mode" ]; then printf '"%s"' "$(json_escape "$launch_mode")"; else printf 'null'; fi),
-  "pid": $pid,
-  "stdout_path": "$(json_escape "$stdout_path")",
-  "stderr_path": "$(json_escape "$stderr_path")",
-  "trace_path": "$(json_escape "$trace_path")",
-  "bridge_request_dir": $(if [ -n "${bridge_request_dir:-}" ]; then printf '"%s"' "$(json_escape "$bridge_request_dir")"; else printf 'null'; fi),
-  "bridge_request_trace_path": $(if [ -n "${bridge_request_trace_path:-}" ]; then printf '"%s"' "$(json_escape "$bridge_request_trace_path")"; else printf 'null'; fi),
-  "worker_root": "$(json_escape "$worker_root")",
-  "created_at": "$(json_escape "$created_at")",
-  "finished_at": $(if [ -n "$finished_at" ]; then printf '"%s"' "$(json_escape "$finished_at")"; else printf 'null'; fi),
-  "exit_code": $(if [ -n "$exit_code" ]; then printf '%s' "$exit_code"; else printf 'null'; fi),
-  "stop_requested": $([ "$stop_requested" = "1" ] && printf 'true' || printf 'false')
+  emit_metadata_json >"$worker_root/metadata.json"
 }
-EOF
+
+emit_metadata_json() {
+  WORKER_ID=$worker_id \
+  WORKER_AUTHORITY=$worker_authority \
+  WORKER_BACKEND=$backend \
+  WORKER_KIND=$kind \
+  WORKER_STATUS=$status \
+  WORKER_WORKSPACE=$workspace \
+  WORKER_PACKAGE_NAME=$package_name \
+  WORKER_LAUNCH_MODE=$launch_mode \
+  WORKER_PID=$pid \
+  WORKER_STDOUT_PATH=$stdout_path \
+  WORKER_STDERR_PATH=$stderr_path \
+  WORKER_TRACE_PATH=$trace_path \
+  WORKER_BRIDGE_REQUEST_DIR=${bridge_request_dir:-} \
+  WORKER_BRIDGE_REQUEST_TRACE_PATH=${bridge_request_trace_path:-} \
+  WORKER_ROOT=$worker_root \
+  WORKER_CREATED_AT=$created_at \
+  WORKER_FINISHED_AT=$finished_at \
+  WORKER_EXIT_CODE=$exit_code \
+  WORKER_STOP_REQUESTED=$stop_requested \
+  python3 - <<'PY'
+import json
+import os
+import sys
+
+
+def optional_text(name: str):
+    value = os.environ.get(name, "")
+    return value if value else None
+
+
+def optional_int(name: str):
+    value = os.environ.get(name, "")
+    return int(value) if value else None
+
+
+data = {
+    "worker_id": os.environ["WORKER_ID"],
+    "authority": os.environ["WORKER_AUTHORITY"],
+    "backend": os.environ["WORKER_BACKEND"],
+    "kind": os.environ["WORKER_KIND"],
+    "status": os.environ["WORKER_STATUS"],
+    "workspace": os.environ["WORKER_WORKSPACE"],
+    "package_name": optional_text("WORKER_PACKAGE_NAME"),
+    "launch_mode": optional_text("WORKER_LAUNCH_MODE"),
+    "pid": int(os.environ["WORKER_PID"]),
+    "stdout_path": os.environ["WORKER_STDOUT_PATH"],
+    "stderr_path": os.environ["WORKER_STDERR_PATH"],
+    "trace_path": os.environ["WORKER_TRACE_PATH"],
+    "bridge_request_dir": optional_text("WORKER_BRIDGE_REQUEST_DIR"),
+    "bridge_request_trace_path": optional_text("WORKER_BRIDGE_REQUEST_TRACE_PATH"),
+    "worker_root": os.environ["WORKER_ROOT"],
+    "created_at": os.environ["WORKER_CREATED_AT"],
+    "finished_at": optional_text("WORKER_FINISHED_AT"),
+    "exit_code": optional_int("WORKER_EXIT_CODE"),
+    "stop_requested": os.environ.get("WORKER_STOP_REQUESTED") == "1",
+}
+
+json.dump(data, sys.stdout)
+sys.stdout.write("\n")
+PY
 }
 
 load_worker() {
@@ -228,6 +269,7 @@ load_worker() {
 
 refresh_worker_status() {
   worker_id=$1
+  persist_changes=${2:-1}
   load_worker "$worker_id"
 
   if [ -f "$worker_root/exit-code" ]; then
@@ -243,7 +285,9 @@ refresh_worker_status() {
     else
       status="exited"
     fi
-    write_metadata
+    if [ "$persist_changes" = "1" ]; then
+      write_metadata
+    fi
     return 0
   fi
 
@@ -260,17 +304,23 @@ refresh_worker_status() {
     else
       status="exited"
     fi
-    write_metadata
+    if [ "$persist_changes" = "1" ]; then
+      write_metadata
+    fi
     return 0
   fi
 
   if process_is_alive "$pid"; then
     if [ "$stop_requested" = "1" ] && [ "$status" != "stopping" ]; then
       status="stopping"
-      write_metadata
+      if [ "$persist_changes" = "1" ]; then
+        write_metadata
+      fi
     elif [ "$status" = "active" ]; then
       status="running"
-      write_metadata
+      if [ "$persist_changes" = "1" ]; then
+        write_metadata
+      fi
     fi
     return 0
   fi
@@ -290,7 +340,9 @@ refresh_worker_status() {
   else
     status="exited"
   fi
-  write_metadata
+  if [ "$persist_changes" = "1" ]; then
+    write_metadata
+  fi
 }
 
 quote_arg() {
@@ -732,8 +784,9 @@ spawn_worker() {
     exit "$attach_status"
   fi
 
-  nohup bash "$launch_script" >/dev/null 2>&1 &
+  nohup bash "$launch_script" >/dev/null 2>&1 </dev/null &
   pid=$!
+  disown "$pid" 2>/dev/null || true
   write_metadata
 
   if [ "$run_json" = "1" ]; then
@@ -840,8 +893,8 @@ ps_workers() {
 
 inspect_worker() {
   [ "$#" -eq 1 ] || usage
-  refresh_worker_status "$1"
-  cat "$(worker_root_for_id "$1")/metadata.json"
+  refresh_worker_status "$1" 0
+  emit_metadata_json
 }
 
 logs_worker() {
@@ -1500,6 +1553,7 @@ if workers_dir.is_dir():
                 trace_tail = tail_text(trace_path)
                 child_pid_raw = read_text(worker_dir / "child-pid")
                 child_pid = int(child_pid_raw) if child_pid_raw and child_pid_raw.isdigit() else None
+                pid_is_alive = pid_alive(item.get("pid"))
                 item["stdout_size"] = file_size(item.get("stdout_path"))
                 item["stderr_size"] = file_size(item.get("stderr_path"))
                 item["trace_size"] = file_size(str(trace_path))
@@ -1507,7 +1561,7 @@ if workers_dir.is_dir():
                 item["last_trace_event"] = last_trace_event(trace_tail)
                 item["bridge_request_dir"] = item.get("bridge_request_dir")
                 item["bridge_request_trace_path"] = item.get("bridge_request_trace_path")
-                item["pid_alive"] = pid_alive(item.get("pid"))
+                item["pid_alive"] = pid_is_alive
                 item["child_pid"] = child_pid
                 item["child_pid_alive"] = pid_alive(child_pid)
                 item["instance_dir"] = str(worker_dir / "instance") if (worker_dir / "instance").is_dir() else None
@@ -1517,7 +1571,11 @@ if workers_dir.is_dir():
                     item.get("bridge_request_trace_path"),
                     worker_dir,
                 )
-                item["process_tree"] = process_tree(item.get("pid"))
+                item["process_tree"] = (
+                    process_tree(item.get("pid"))
+                    if pid_is_alive and item.get("status") in {"active", "running", "stopping"}
+                    else []
+                )
                 items.append(item)
                 continue
             except Exception:
@@ -1582,6 +1640,7 @@ debug_worker() {
   done
 
   mkdir -p "$state_dir/workers"
+  for_each_worker :
   workers_json=$(debug_read_workers_json)
   worker_count=$(JSON_INPUT=$workers_json python3 - <<'PY'
 import json

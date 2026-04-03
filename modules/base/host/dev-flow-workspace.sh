@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -eu
 
 state_dir=${DEV_FLOW_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/firebreak_dev-flow/workspaces}
@@ -285,7 +286,7 @@ create_workspace() {
   cat "$metadata_path"
 }
 
-  show_workspace() {
+show_workspace() {
   workspace_id=""
   while [ "$#" -gt 0 ]; do
     case "$1" in

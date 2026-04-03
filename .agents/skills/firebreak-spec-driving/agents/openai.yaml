@@ -1,6 +1,6 @@
 interface:
   display_name: "Firebreak Spec Driving"
   short_description: "Turn Firebreak specs into small execution slices"
-  default_prompt: "Use $firebreak-spec-driving to turn a Firebreak spec into the next bounded slice."
+  default_prompt: "Use $firebreak-spec-driving to turn a Firebreak spec into the next bounded slice and choose the right workspace scope."
 policy:
   allow_implicit_invocation: false

@@ -140,7 +140,7 @@ if [ "$agent_tools_enabled" = "1" ]; then
   log_phase prepare-agent-session-mount-agent-tools-start
   mkdir -p "$agent_tools_mount"
   if ! mountpoint -q "$agent_tools_mount"; then
-    if ! mount -t virtiofs hostagenttools "$agent_tools_mount"; then
+    if ! mount -t virtiofs -o exec hostagenttools "$agent_tools_mount"; then
       echo "failed to mount host agent tools share" >&2
       exit 1
     fi

@@ -3,7 +3,7 @@ kind: "role"
 selection: "exclusive"
 role_scope: "single-slice"
 description: "Chooses the owning spec, next bounded slice, workspace decision, and expected validation for one line of work."
-when: "Use as the active role when the next slice must be named clearly before any workspace creation or implementation work begins."
+when: "Use as the active role when the next slice must be named clearly before any workspace creation or implementation work begins. Stop at the plan and hand off once the owning spec, workspace decision, and expected validation are explicit."
 inherits:
   - "base"
 requires_runtime_profile: true

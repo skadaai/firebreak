@@ -46,6 +46,8 @@ The corresponding profile layer under [`.agents/profiles/`](/home/zvictor/develo
 - `local-operator` and `cloud-operator` use `dev-flow-runtime-profile`
 - `orchestrator` uses `dev-flow-autonomous-flow` for multi-slice coordination
 
+For role-selection guidance and profile preconditions, see [ROLE_SELECTION.md](/home/zvictor/development/firebreak/dev-flow-workspace-model/.agents/profiles/ROLE_SELECTION.md).
+
 ## Local Workloads
 
 - `nix run .#firebreak-codex` launches Codex in the local Firebreak VM

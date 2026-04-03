@@ -3,7 +3,7 @@ kind: "role"
 selection: "exclusive"
 role_scope: "single-slice"
 description: "Validates a dev-flow slice and reports evidence-backed outcomes."
-when: "Use as the active role when the main task is to run or interpret validation."
+when: "Use as the active role when the slice and workspace are already chosen and the main task is to run or interpret validation. Do not use it to decide spec ownership or workspace creation."
 inherits:
   - "base"
 requires_runtime_profile: true

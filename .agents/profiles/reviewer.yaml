@@ -3,7 +3,7 @@ kind: "role"
 selection: "exclusive"
 role_scope: "single-slice"
 description: "Reviews autonomous diffs and audit artifacts for safety and completeness."
-when: "Use as the active role when a slice has been implemented and needs a review verdict."
+when: "Use as the active role when implementation and validation evidence already exist and the main task is to issue a review verdict. Do not use it to choose the slice or to run implementation."
 inherits:
   - "base"
 requires_runtime_profile: true

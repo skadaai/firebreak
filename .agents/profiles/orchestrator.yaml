@@ -3,7 +3,7 @@ kind: "role"
 selection: "exclusive"
 role_scope: "multi-slice"
 description: "Coordinates more than one dev-flow slice across specs, workspaces, roles, or handoffs."
-when: "Use as the active role only when more than one slice, workspace, role, or handoff must be coordinated."
+when: "Use as the active role only when multiple slices, workspaces, or handoffs must be sequenced. Do not use it for a single bounded slice that already has one owner, one workspace decision, and one validation path."
 inherits:
   - "base"
 requires_runtime_profile: true

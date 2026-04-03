@@ -1,6 +1,6 @@
 ---
 status: living
-last_updated: 2026-04-01
+last_updated: 2026-04-03
 ---
 
 # 015 Troubleshooting Playbook
@@ -358,6 +358,11 @@ What fixed it:
 - Assuming that "output visible" implied "terminal contract correct".
 - Letting test-only terminal emulation drift away from the real product relay behavior.
 - Making `local` worker mode depend on undeclared incidental upstream binaries. If a proxy is part of the supported recipe contract, then its `local` mode must be provisioned deliberately, not assumed.
+
+## Deferred hardening to keep in view
+
+- Attached-worker process identity is still weaker than it should be. In attach mode, the current `child_pid_path` contract in `modules/base/host/firebreak-worker.sh` does not yet guarantee that stop and inspect paths are targeting the true foreground child process instead of a wrapper shell. This should be fixed as a shared worker-runtime hardening slice, not as a CLI-specific workaround.
+- Guest spawn-lock ownership is still lighter-weight than ideal. The current lock-directory handoff in `modules/profiles/local/guest/firebreak-worker-cli.sh` would be stronger with explicit ownership tokens and an initialization marker so older watchers or stale-lock reapers can never remove a newer claimant's lock. This is post-merge hardening, not a known blocker for the currently working AO/VK product paths.
 
 ## Repeatable debugging order
 

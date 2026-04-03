@@ -1,6 +1,6 @@
 ---
 status: in_progress
-last_updated: 2026-04-01
+last_updated: 2026-04-03
 ---
 
 # 015 Plan
@@ -80,6 +80,8 @@ last_updated: 2026-04-01
 4. Mature or drop any remaining experimental AO/VK harness logic so only durable regression coverage remains in tree.
 5. Keep the new `workerProxies` abstraction isolated from future shared TUI lifecycle experiments so the recipe-authoring UX improvement stays banked while lower-level terminal work continues.
 6. Defer the shared worker-engine extraction in `modules/profiles/local/module.nix` until after this PR merges, so the merge branch stays focused on behavior and validation rather than wrapper refactors.
+7. Defer attached-worker process-identity hardening in `modules/base/host/firebreak-worker.sh` until after this PR merges, so `child_pid_path` can later point at the real attached child process instead of the wrapper shell without mixing foreground-TTY surgery into the current merge branch.
+8. Defer spawn-lock ownership hardening in `modules/profiles/local/guest/firebreak-worker-cli.sh` until after this PR merges, so handoff watchers and stale-lock reaping can be tied to explicit lock ownership tokens and initialization markers instead of today's lighter-weight directory contract.
 
 ## Validation approach
 
@@ -115,3 +117,5 @@ Reopened for shared interactive lifecycle hardening. Detached flows, guest-local
 - how much of the current transcript-noise cleanup should stay in debug-only views versus becoming part of future optional presentation filtering for live sessions
 - when to introduce the higher-level `workerProxies` authoring abstraction relative to the remaining TUI product bugs, since the UX direction is clear but the current priority remains interactive correctness
 - how to generalize package-derived local upstream resolution beyond the currently built-in Firebreak-managed worker packages without sliding back into duplicated per-recipe upstream metadata
+- when to tighten attached-worker process identity so stop and inspect paths can rely on the true foreground child pid in attach mode instead of the current wrapper-shell pid file
+- how to harden guest spawn-lock ownership so stale watchers or partially initialized lock directories cannot accidentally remove a newer claimant's lock

@@ -1,6 +1,6 @@
 ---
 status: in_progress
-last_updated: 2026-04-01
+last_updated: 2026-04-03
 ---
 
 # 015 Status
@@ -88,6 +88,8 @@ Interactive TUI hardening after the first full end-to-end success. The current a
 - optional polish for transcript noise, live-session cleanup, and any remaining debug-vs-live presentation rough edges
 
 - defer the shared worker-engine extraction from `modules/profiles/local/module.nix` until after this PR merges, because it is structural cleanup rather than a blocker for the current runtime and validation path
+- defer attached-worker process-identity hardening in `modules/base/host/firebreak-worker.sh` until after this PR merges, because recording the real attached child pid instead of the wrapper shell pid is valuable but touches the same foreground-session boundary that just stabilized
+- defer guest spawn-lock ownership hardening in `modules/profiles/local/guest/firebreak-worker-cli.sh` until after this PR merges, because ownership tokens and initialization markers are worth adding but are not current product regressions in the working AO/VK paths
 
 ## Decision record
 
@@ -101,6 +103,7 @@ Interactive TUI hardening after the first full end-to-end success. The current a
 - The current recipe-authoring UX is functionally correct but too low-level in the common case. Firebreak should converge on a single higher-level declaration for sibling-worker command exposure while preserving the lower-level fields internally for advanced recipes.
 - `launch_mode` and `worker-mode` are now treated as separate user-facing scopes in this slice: one selects VM/session startup shape, while the other selects packaged command dispatch inside that session.
 - Product-layer validation in both AO and `vibe-kanban` now takes precedence over stricter experimental shared-layer canaries when deciding what is mature enough to bank. The direct canaries remain important, but they should not block landing a clearly working shared runtime improvement when the user-facing paths are already green.
+- Post-merge hardening should continue to prefer shared contracts over app-specific fixes. The remaining deferred items are about making generic worker bookkeeping and lock ownership more correct, not about teaching Firebreak special cases for `codex` or `claude`.
 
 ## Current sources of truth
 

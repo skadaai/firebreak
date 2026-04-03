@@ -60,13 +60,17 @@ let
     (renderTemplate scriptVars ./guest/prepare-agent-session.sh);
   firebreakWorkerEngineScript = pkgs.writeShellScript "firebreak-worker-engine"
     (builtins.readFile ../../base/host/firebreak-worker.sh);
+  firebreakWorkerEngineRuntimeInputs = with pkgs; [
+    bash
+    coreutils
+    findutils
+    gawk
+    gnused
+    python3
+  ];
   firebreakWorkerLocalHelper = pkgs.writeShellApplication {
     name = "firebreak-worker-local-helper";
-    runtimeInputs = with pkgs; [
-      bash
-      coreutils
-      gnused
-    ];
+    runtimeInputs = firebreakWorkerEngineRuntimeInputs;
     text = renderTemplate (scriptVars // {
       "@WORKER_ENGINE_SCRIPT@" = "${firebreakWorkerEngineScript}";
     }) ./guest/firebreak-worker-local-helper.sh;

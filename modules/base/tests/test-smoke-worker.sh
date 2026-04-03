@@ -173,6 +173,27 @@ if ! printf '%s\n' "$attach_firebreak_default_output" | grep -F -q '__SESSION_MO
   exit 1
 fi
 
+attach_firebreak_args_output=$(
+  PATH="$fake_bin_dir:$PATH" \
+    FIREBREAK_WORKER_STATE_DIR="$state_dir" \
+    FIREBREAK_FLAKE_REF='path:@REPO_ROOT@' \
+    FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG=1 \
+    FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
+    @AGENT_BIN@ run --attach --backend firebreak --kind smoke-firebreak-attach-args --workspace "$workspace_dir" --package firebreak-codex -- --version
+)
+
+if ! printf '%s\n' "$attach_firebreak_args_output" | grep -F -q '__SESSION_MODE__agent-attach-exec'; then
+  printf '%s\n' "$attach_firebreak_args_output" >&2
+  echo "worker smoke did not preserve agent-attach-exec mode when attached firebreak workers forwarded args" >&2
+  exit 1
+fi
+
+if ! printf '%s\n' "$attach_firebreak_args_output" | grep -F -q '__ARG__--version'; then
+  printf '%s\n' "$attach_firebreak_args_output" >&2
+  echo "worker smoke did not forward attached firebreak worker arguments" >&2
+  exit 1
+fi
+
 spawn_firebreak_output=$(
   PATH="$fake_bin_dir:$PATH" \
     FIREBREAK_WORKER_STATE_DIR="$state_dir" \
@@ -269,6 +290,54 @@ if ! printf '%s\n' "$attach_limit_stopped_output" | grep -F -q '"status": "stopp
   echo "worker smoke did not stop an attached firebreak worker cleanly" >&2
   exit 1
 fi
+
+scoped_limit_first_output=$(
+  PATH="$fake_bin_dir:$PATH" \
+    FIREBREAK_WORKER_STATE_DIR="$state_dir" \
+    FIREBREAK_FLAKE_REF='path:@REPO_ROOT@' \
+    FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG=1 \
+    FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
+    @AGENT_BIN@ run --backend firebreak --kind smoke-firebreak-scoped-limit --workspace "$workspace_dir" --package firebreak-codex --max-instances 1 --json -- __sleep__
+)
+
+scoped_limit_first_id=$(printf '%s\n' "$scoped_limit_first_output" | sed -n 's/.*"worker_id": "\([^"]*\)".*/\1/p' | head -n 1)
+if [ -z "$scoped_limit_first_id" ]; then
+  printf '%s\n' "$scoped_limit_first_output" >&2
+  echo "worker smoke did not return the first scoped-limit firebreak worker id" >&2
+  exit 1
+fi
+
+scoped_limit_first_running=$(wait_for_status "$scoped_limit_first_id" running || true)
+if ! printf '%s\n' "$scoped_limit_first_running" | grep -F -q '"status": "running"'; then
+  printf '%s\n' "$scoped_limit_first_running" >&2
+  echo "worker smoke did not report the first scoped-limit firebreak worker as running" >&2
+  exit 1
+fi
+
+scoped_limit_second_output=$(
+  PATH="$fake_bin_dir:$PATH" \
+    FIREBREAK_WORKER_STATE_DIR="$state_dir" \
+    FIREBREAK_FLAKE_REF='path:/alternate-firebreak-recipe' \
+    FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG=1 \
+    FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
+    @AGENT_BIN@ run --backend firebreak --kind smoke-firebreak-scoped-limit --workspace "$workspace_dir" --package firebreak-codex --max-instances 1 --json -- __sleep__
+)
+
+scoped_limit_second_id=$(printf '%s\n' "$scoped_limit_second_output" | sed -n 's/.*"worker_id": "\([^"]*\)".*/\1/p' | head -n 1)
+if [ -z "$scoped_limit_second_id" ]; then
+  printf '%s\n' "$scoped_limit_second_output" >&2
+  echo "worker smoke incorrectly shared max_instances across different firebreak recipes" >&2
+  exit 1
+fi
+
+scoped_limit_second_running=$(wait_for_status "$scoped_limit_second_id" running || true)
+if ! printf '%s\n' "$scoped_limit_second_running" | grep -F -q '"status": "running"'; then
+  printf '%s\n' "$scoped_limit_second_running" >&2
+  echo "worker smoke did not report the second scoped-limit firebreak worker as running" >&2
+  exit 1
+fi
+
+FIREBREAK_WORKER_STATE_DIR="$state_dir" @AGENT_BIN@ stop "$scoped_limit_first_id" "$scoped_limit_second_id" >/dev/null
 
 stop_worker_id=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \

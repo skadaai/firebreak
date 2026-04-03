@@ -69,18 +69,116 @@ worker_root_for_id() {
   printf '%s\n' "$state_dir/workers/$1"
 }
 
+read_host_boot_id() {
+  host_boot_id=""
+  if [ -r /proc/sys/kernel/random/boot_id ]; then
+    IFS= read -r host_boot_id </proc/sys/kernel/random/boot_id || host_boot_id=""
+  fi
+  printf '%s\n' "$host_boot_id"
+}
+
+read_process_state() {
+  target_pid=$1
+  TARGET_PID=$target_pid python3 - <<'PY'
+import os
+import sys
+
+path = f"/proc/{os.environ['TARGET_PID']}/stat"
+try:
+    with open(path, "r", encoding="utf-8") as handle:
+        text = handle.read().strip()
+except OSError:
+    raise SystemExit(1)
+
+rparen = text.rfind(")")
+if rparen == -1:
+    raise SystemExit(1)
+
+rest = text[rparen + 2 :].split()
+if not rest:
+    raise SystemExit(1)
+
+print(rest[0])
+PY
+}
+
+read_process_start_time() {
+  target_pid=$1
+  TARGET_PID=$target_pid python3 - <<'PY'
+import os
+import sys
+
+path = f"/proc/{os.environ['TARGET_PID']}/stat"
+try:
+    with open(path, "r", encoding="utf-8") as handle:
+        text = handle.read().strip()
+except OSError:
+    raise SystemExit(1)
+
+rparen = text.rfind(")")
+if rparen == -1:
+    raise SystemExit(1)
+
+rest = text[rparen + 2 :].split()
+if len(rest) < 20:
+    raise SystemExit(1)
+
+print(rest[19])
+PY
+}
+
+capture_process_identity() {
+  target_pid=$1
+  captured_process_boot_id=$(read_host_boot_id)
+  captured_process_start_time=""
+
+  for _ in $(seq 1 10); do
+    captured_process_start_time=$(read_process_start_time "$target_pid" 2>/dev/null || true)
+    if [ -n "$captured_process_start_time" ]; then
+      break
+    fi
+    sleep 0.1
+  done
+}
+
+process_matches_identity() {
+  target_pid=$1
+  expected_boot_id=${2:-}
+  expected_start_time=${3:-}
+
+  if [ -z "$expected_boot_id" ] || [ -z "$expected_start_time" ]; then
+    return 1
+  fi
+
+  current_boot_id=$(read_host_boot_id)
+  if [ -z "$current_boot_id" ] || [ "$current_boot_id" != "$expected_boot_id" ]; then
+    return 1
+  fi
+
+  current_start_time=$(read_process_start_time "$target_pid" 2>/dev/null || true)
+  if [ -z "$current_start_time" ] || [ "$current_start_time" != "$expected_start_time" ]; then
+    return 1
+  fi
+
+  return 0
+}
+
 process_is_alive() {
   target_pid=$1
+  expected_boot_id=${2:-}
+  expected_start_time=${3:-}
+
+  if ! process_matches_identity "$target_pid" "$expected_boot_id" "$expected_start_time"; then
+    return 1
+  fi
 
   if ! kill -0 "$target_pid" 2>/dev/null; then
     return 1
   fi
 
-  if [ -r "/proc/$target_pid/stat" ]; then
-    process_state=$(awk '{print $3}' "/proc/$target_pid/stat" 2>/dev/null || true)
-    if [ "$process_state" = "Z" ]; then
-      return 1
-    fi
+  process_state=$(read_process_state "$target_pid" 2>/dev/null || true)
+  if [ "$process_state" = "Z" ]; then
+    return 1
   fi
 
   return 0
@@ -97,8 +195,9 @@ worker_is_active_status() {
   esac
 }
 
-count_active_workers_for_kind() {
+count_active_workers_for_scope() {
   target_kind=$1
+  target_scope=$2
   active_count=0
 
   mkdir -p "$state_dir/workers"
@@ -107,7 +206,7 @@ count_active_workers_for_kind() {
     candidate_worker_id=$(basename "$candidate_root")
     refresh_worker_status "$candidate_worker_id"
     load_worker "$candidate_worker_id"
-    if [ "$kind" = "$target_kind" ] && worker_is_active_status "$status"; then
+    if [ "$kind" = "$target_kind" ] && [ "$worker_limit_scope" = "$target_scope" ] && worker_is_active_status "$status"; then
       active_count=$((active_count + 1))
     fi
   done
@@ -115,26 +214,54 @@ count_active_workers_for_kind() {
   printf '%s\n' "$active_count"
 }
 
+worker_limit_lock_name() {
+  kind_name=$1
+  scope_name=$2
+  lock_scope_hash=$(printf '%s|%s\n' "$kind_name" "$scope_name" | sha256sum | cut -c1-16)
+  printf '%s-%s\n' "$kind_name" "$lock_scope_hash"
+}
+
+remove_kind_limit_lock_dir() {
+  target_lock_dir=$1
+  removal_dir=$target_lock_dir.removing.${BASHPID:-$$}
+
+  rm -rf "$removal_dir"
+  if mv -T "$target_lock_dir" "$removal_dir" 2>/dev/null; then
+    rm -rf "$removal_dir"
+    return 0
+  fi
+
+  return 1
+}
+
 acquire_kind_limit_lock() {
   kind_name=$1
+  scope_name=$2
   lock_root=$state_dir/kind-locks
-  kind_limit_lock_dir=$lock_root/$kind_name.lock
-  current_boot_id=""
-
-  if [ -r /proc/sys/kernel/random/boot_id ]; then
-    IFS= read -r current_boot_id </proc/sys/kernel/random/boot_id || current_boot_id=""
-  fi
+  lock_name=$(worker_limit_lock_name "$kind_name" "$scope_name")
+  kind_limit_lock_dir=$lock_root/$lock_name.lock
+  kind_limit_lock_owned=0
+  current_boot_id=$(read_host_boot_id)
 
   mkdir -p "$lock_root"
   while :; do
-    if mkdir "$kind_limit_lock_dir" 2>/dev/null; then
-      printf '%s\n' "${BASHPID:-$$}" >"$kind_limit_lock_dir/pid"
+    kind_limit_lock_temp_dir=$kind_limit_lock_dir.tmp.${BASHPID:-$$}
+    rm -rf "$kind_limit_lock_temp_dir"
+
+    if mkdir "$kind_limit_lock_temp_dir" 2>/dev/null; then
+      printf '%s\n' "${BASHPID:-$$}" >"$kind_limit_lock_temp_dir/pid"
       if [ -n "$current_boot_id" ]; then
-        printf '%s\n' "$current_boot_id" >"$kind_limit_lock_dir/boot-id"
+        printf '%s\n' "$current_boot_id" >"$kind_limit_lock_temp_dir/boot-id"
       fi
-      date +%s >"$kind_limit_lock_dir/acquired-at"
-      return 0
+      date +%s >"$kind_limit_lock_temp_dir/acquired-at"
+      if mv -T "$kind_limit_lock_temp_dir" "$kind_limit_lock_dir" 2>/dev/null; then
+        kind_limit_lock_temp_dir=""
+        kind_limit_lock_owned=1
+        return 0
+      fi
     fi
+    rm -rf "$kind_limit_lock_temp_dir"
+    kind_limit_lock_temp_dir=""
 
     stale_lock_pid=""
     stale_lock_boot_id=""
@@ -146,17 +273,17 @@ acquire_kind_limit_lock() {
     fi
 
     if [ -n "$current_boot_id" ] && [ -z "$stale_lock_boot_id" ]; then
-      rm -rf "$kind_limit_lock_dir"
+      remove_kind_limit_lock_dir "$kind_limit_lock_dir" || true
       continue
     fi
 
     if [ -n "$current_boot_id" ] && [ -n "$stale_lock_boot_id" ] && [ "$stale_lock_boot_id" != "$current_boot_id" ]; then
-      rm -rf "$kind_limit_lock_dir"
+      remove_kind_limit_lock_dir "$kind_limit_lock_dir" || true
       continue
     fi
 
     if [ -n "$stale_lock_pid" ] && ! kill -0 "$stale_lock_pid" 2>/dev/null; then
-      rm -rf "$kind_limit_lock_dir"
+      remove_kind_limit_lock_dir "$kind_limit_lock_dir" || true
       continue
     fi
 
@@ -165,10 +292,15 @@ acquire_kind_limit_lock() {
 }
 
 release_kind_limit_lock() {
-  if [ -n "${kind_limit_lock_dir:-}" ]; then
-    rm -f "$kind_limit_lock_dir/pid" "$kind_limit_lock_dir/boot-id" "$kind_limit_lock_dir/acquired-at"
-    rmdir "$kind_limit_lock_dir" 2>/dev/null || true
+  if [ -n "${kind_limit_lock_temp_dir:-}" ]; then
+    rm -rf "$kind_limit_lock_temp_dir"
+    kind_limit_lock_temp_dir=""
+  fi
+
+  if [ "${kind_limit_lock_owned:-0}" = "1" ] && [ -n "${kind_limit_lock_dir:-}" ]; then
+    remove_kind_limit_lock_dir "$kind_limit_lock_dir" || true
     kind_limit_lock_dir=""
+    kind_limit_lock_owned=0
   fi
 }
 
@@ -184,6 +316,9 @@ worker_summary_json() {
   "package_name": $(if [ -n "$package_name" ]; then printf '"%s"' "$(json_escape "$package_name")"; else printf 'null'; fi),
   "launch_mode": $(if [ -n "$launch_mode" ]; then printf '"%s"' "$(json_escape "$launch_mode")"; else printf 'null'; fi),
   "pid": $pid,
+  "pid_boot_id": $(if [ -n "$pid_boot_id" ]; then printf '"%s"' "$(json_escape "$pid_boot_id")"; else printf 'null'; fi),
+  "pid_start_time": $(if [ -n "$pid_start_time" ]; then printf '"%s"' "$(json_escape "$pid_start_time")"; else printf 'null'; fi),
+  "flake_ref": $(if [ -n "$flake_ref" ]; then printf '"%s"' "$(json_escape "$flake_ref")"; else printf 'null'; fi),
   "trace_path": "$(json_escape "$trace_path")",
   "created_at": "$(json_escape "$created_at")",
   "finished_at": $(if [ -n "$finished_at" ]; then printf '"%s"' "$(json_escape "$finished_at")"; else printf 'null'; fi),
@@ -202,6 +337,16 @@ write_metadata() {
   printf '%s\n' "$created_at" >"$worker_root/created-at"
   printf '%s\n' "$status" >"$worker_root/status"
   printf '%s\n' "$pid" >"$worker_root/pid"
+  if [ -n "$pid_boot_id" ]; then
+    printf '%s\n' "$pid_boot_id" >"$worker_root/pid-boot-id"
+  else
+    rm -f "$worker_root/pid-boot-id"
+  fi
+  if [ -n "$pid_start_time" ]; then
+    printf '%s\n' "$pid_start_time" >"$worker_root/pid-start-time"
+  else
+    rm -f "$worker_root/pid-start-time"
+  fi
   printf '%s\n' "$stdout_path" >"$worker_root/stdout-path"
   printf '%s\n' "$stderr_path" >"$worker_root/stderr-path"
   printf '%s\n' "$trace_path" >"$worker_root/trace-path"
@@ -224,6 +369,16 @@ write_metadata() {
     printf '%s\n' "$launch_mode" >"$worker_root/launch-mode"
   else
     rm -f "$worker_root/launch-mode"
+  fi
+  if [ -n "$flake_ref" ]; then
+    printf '%s\n' "$flake_ref" >"$worker_root/flake-ref"
+  else
+    rm -f "$worker_root/flake-ref"
+  fi
+  if [ -n "$worker_limit_scope" ]; then
+    printf '%s\n' "$worker_limit_scope" >"$worker_root/worker-limit-scope"
+  else
+    rm -f "$worker_root/worker-limit-scope"
   fi
   if [ -n "$finished_at" ]; then
     printf '%s\n' "$finished_at" >"$worker_root/finished-at"
@@ -254,6 +409,9 @@ emit_metadata_json() {
   WORKER_PACKAGE_NAME=$package_name \
   WORKER_LAUNCH_MODE=$launch_mode \
   WORKER_PID=$pid \
+  WORKER_PID_BOOT_ID=$pid_boot_id \
+  WORKER_PID_START_TIME=$pid_start_time \
+  WORKER_FLAKE_REF=$flake_ref \
   WORKER_STDOUT_PATH=$stdout_path \
   WORKER_STDERR_PATH=$stderr_path \
   WORKER_TRACE_PATH=$trace_path \
@@ -290,6 +448,9 @@ data = {
     "package_name": optional_text("WORKER_PACKAGE_NAME"),
     "launch_mode": optional_text("WORKER_LAUNCH_MODE"),
     "pid": int(os.environ["WORKER_PID"]),
+    "pid_boot_id": optional_text("WORKER_PID_BOOT_ID"),
+    "pid_start_time": optional_text("WORKER_PID_START_TIME"),
+    "flake_ref": optional_text("WORKER_FLAKE_REF"),
     "stdout_path": os.environ["WORKER_STDOUT_PATH"],
     "stderr_path": os.environ["WORKER_STDERR_PATH"],
     "trace_path": os.environ["WORKER_TRACE_PATH"],
@@ -323,6 +484,8 @@ load_worker() {
   created_at=$(cat "$worker_root/created-at")
   status=$(cat "$worker_root/status")
   pid=$(cat "$worker_root/pid")
+  pid_boot_id=""
+  pid_start_time=""
   stdout_path=$(cat "$worker_root/stdout-path")
   stderr_path=$(cat "$worker_root/stderr-path")
   trace_path=$worker_root/trace.log
@@ -333,9 +496,17 @@ load_worker() {
   bridge_request_trace_path=""
   package_name=""
   launch_mode=""
+  flake_ref=""
+  worker_limit_scope=""
   finished_at=""
   exit_code=""
   stop_requested=0
+  if [ -f "$worker_root/pid-boot-id" ]; then
+    pid_boot_id=$(cat "$worker_root/pid-boot-id")
+  fi
+  if [ -f "$worker_root/pid-start-time" ]; then
+    pid_start_time=$(cat "$worker_root/pid-start-time")
+  fi
   if [ -f "$worker_root/package-name" ]; then
     package_name=$(cat "$worker_root/package-name")
   fi
@@ -347,6 +518,16 @@ load_worker() {
   fi
   if [ -f "$worker_root/launch-mode" ]; then
     launch_mode=$(cat "$worker_root/launch-mode")
+  fi
+  if [ -f "$worker_root/flake-ref" ]; then
+    flake_ref=$(cat "$worker_root/flake-ref")
+  fi
+  if [ -f "$worker_root/worker-limit-scope" ]; then
+    worker_limit_scope=$(cat "$worker_root/worker-limit-scope")
+  elif [ "$backend" = "process" ]; then
+    worker_limit_scope="process"
+  elif [ "$backend" = "firebreak" ] && [ -n "$flake_ref" ]; then
+    worker_limit_scope="firebreak:$flake_ref"
   fi
   if [ -f "$worker_root/finished-at" ]; then
     finished_at=$(cat "$worker_root/finished-at")
@@ -402,7 +583,7 @@ refresh_worker_status() {
     return 0
   fi
 
-  if process_is_alive "$pid"; then
+  if process_is_alive "$pid" "$pid_boot_id" "$pid_start_time"; then
     if [ "$stop_requested" = "1" ] && [ "$status" != "stopping" ]; then
       status="stopping"
       if [ "$persist_changes" = "1" ]; then
@@ -721,6 +902,7 @@ if [ "\$attach_mode" = "1" ]; then
       \${forwarded_lines:+LINES="\$forwarded_lines"} \
       FIREBREAK_INSTANCE_DIR="\$instance_dir" \
       FIREBREAK_LAUNCH_MODE="\$launch_mode" \
+      FIREBREAK_AGENT_SESSION_MODE_OVERRIDE="agent-attach-exec" \
       $quoted_resolved_exec$quoted_args
   fi
   command_status=\$?
@@ -757,6 +939,8 @@ spawn_worker() {
   package_name=""
   launch_mode=run
   max_instances=""
+  flake_ref=""
+  worker_limit_scope=""
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -815,19 +999,10 @@ spawn_worker() {
   validate_token "$kind" "worker kind"
   require_absolute_dir "$state_dir" "worker state dir"
   require_absolute_dir "$workspace" "worker workspace"
-  if [ -n "$max_instances" ]; then
-    validate_positive_integer "$max_instances" "worker max_instances"
-    acquire_kind_limit_lock "$kind"
-    trap release_kind_limit_lock EXIT INT TERM
-    active_count=$(count_active_workers_for_kind "$kind")
-    if [ "$active_count" -ge "$max_instances" ]; then
-      echo "worker kind '$kind' reached max_instances=$max_instances" >&2
-      exit 1
-    fi
-  fi
 
   case "$backend" in
     process)
+      worker_limit_scope="process"
       [ "$#" -gt 0 ] || {
         echo "process backend requires a command after '--'" >&2
         exit 1
@@ -836,6 +1011,10 @@ spawn_worker() {
     firebreak)
       if [ "$worker_allow_firebreak" != "1" ]; then
         echo "firebreak backend is unavailable in this worker runtime" >&2
+        exit 1
+      fi
+      if [ -z "${FIREBREAK_FLAKE_REF:-}" ]; then
+        echo "FIREBREAK_FLAKE_REF is required for firebreak worker backend" >&2
         exit 1
       fi
       [ -n "$package_name" ] || {
@@ -850,12 +1029,25 @@ spawn_worker() {
           exit 1
           ;;
       esac
+      flake_ref=$FIREBREAK_FLAKE_REF
+      worker_limit_scope="firebreak:$flake_ref"
       ;;
     *)
       echo "unsupported worker backend: $backend" >&2
       exit 1
       ;;
   esac
+
+  if [ -n "$max_instances" ]; then
+    validate_positive_integer "$max_instances" "worker max_instances"
+    acquire_kind_limit_lock "$kind" "$worker_limit_scope"
+    trap release_kind_limit_lock EXIT INT TERM
+    active_count=$(count_active_workers_for_scope "$kind" "$worker_limit_scope")
+    if [ "$active_count" -ge "$max_instances" ]; then
+      echo "worker kind '$kind' reached max_instances=$max_instances" >&2
+      exit 1
+    fi
+  fi
 
   mkdir -p "$state_dir/workers"
   created_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -898,6 +1090,9 @@ spawn_worker() {
 
   if [ "$attach_mode" = "1" ]; then
     pid=$$
+    capture_process_identity "$pid"
+    pid_boot_id=$captured_process_boot_id
+    pid_start_time=$captured_process_start_time
     write_metadata
     if [ -n "$bridge_request_dir" ] && [ -d "$bridge_request_dir" ]; then
       printf '%s\n' "$worker_id" >"$bridge_request_dir/worker-id" || true
@@ -917,6 +1112,9 @@ spawn_worker() {
   nohup bash "$launch_script" >/dev/null 2>&1 </dev/null &
   pid=$!
   disown "$pid" 2>/dev/null || true
+  capture_process_identity "$pid"
+  pid_boot_id=$captured_process_boot_id
+  pid_start_time=$captured_process_start_time
   write_metadata
   if [ -n "$bridge_request_dir" ] && [ -d "$bridge_request_dir" ]; then
     printf '%s\n' "$worker_id" >"$bridge_request_dir/worker-id" || true
@@ -1082,7 +1280,7 @@ stop_one_worker() {
   load_worker "$worker_id"
 
   stop_requested=1
-  if process_is_alive "$pid"; then
+  if process_is_alive "$pid" "$pid_boot_id" "$pid_start_time"; then
     status="stopping"
     write_metadata
     if [ -f "$worker_root/child-pid" ]; then
@@ -1101,14 +1299,18 @@ force_kill_worker() {
   load_worker "$target_worker_id"
 
   stop_requested=1
-  status="stopping"
-  write_metadata
+  if process_is_alive "$pid" "$pid_boot_id" "$pid_start_time"; then
+    status="stopping"
+    write_metadata
 
-  if [ -f "$worker_root/child-pid" ]; then
-    child_pid=$(cat "$worker_root/child-pid")
-    kill -KILL "$child_pid" 2>/dev/null || true
+    if [ -f "$worker_root/child-pid" ]; then
+      child_pid=$(cat "$worker_root/child-pid")
+      kill -KILL "$child_pid" 2>/dev/null || true
+    fi
+    kill -KILL "$pid" 2>/dev/null || true
+  else
+    refresh_worker_status "$target_worker_id"
   fi
-  kill -KILL "$pid" 2>/dev/null || true
 }
 
 emit_json_array_from_worker_ids() {

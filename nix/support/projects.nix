@@ -74,9 +74,11 @@ rec {
       worker_mode=$(normalize_worker_mode "$worker_mode")
       if [ -z "$worker_mode" ] && [ -n "$proxy_default_mode" ]; then
         worker_mode=$proxy_default_mode
+        worker_mode=$(normalize_worker_mode "$worker_mode")
       fi
       if [ -z "$worker_mode" ]; then
         worker_mode=$default_worker_mode
+        worker_mode=$(normalize_worker_mode "$worker_mode")
       fi
 
       if [ "''${1:-}" = "--version" ]; then

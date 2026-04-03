@@ -34,6 +34,10 @@ sync_guest_state_files() {
   if ! [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
     return 0
   fi
+  rm -f @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
+  printf '%s\n' '{}' > @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json
+  printf '%s\n' '{}' > @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
+  chmod 0644 @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
   if [ -f "$bootstrap_state_local" ]; then
     cp "$bootstrap_state_local" @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json
   fi

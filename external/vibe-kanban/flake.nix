@@ -2,7 +2,7 @@
   description = "Firebreak sandbox recipe for BloopAI/vibe-kanban";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-  inputs.firebreak.url = "github:skadaai/firebreak";
+  inputs.firebreak.url = "path:../.."; # move to github:skadaai/firebreak once moved out.
   inputs.firebreak.inputs.nixpkgs.follows = "nixpkgs";
 
   outputs = { firebreak, nixpkgs, ... }:

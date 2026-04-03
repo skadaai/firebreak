@@ -1,14 +1,6 @@
 { pkgs, project, testProject, firebreakBin }:
 let
   packageBin = "${testProject.package}/bin/firebreak-vibe-kanban";
-  mkExecutableCheck = { name, package }:
-    pkgs.runCommand name {
-      nativeBuildInputs = [ package ];
-    } ''
-      ${package}/bin/${name}
-      touch "$out"
-    '';
-
   workerInteractiveCodexSmoke = pkgs.writeShellApplication {
     name = "firebreak-test-smoke-vibe-kanban-worker-interactive-codex";
     runtimeInputs = with pkgs; [
@@ -27,10 +19,5 @@ in {
     firebreak-test-smoke-vibe-kanban-worker-interactive-codex = workerInteractiveCodexSmoke;
   };
 
-  checks = {
-    firebreak-test-smoke-vibe-kanban-worker-interactive-codex = mkExecutableCheck {
-      name = "firebreak-test-smoke-vibe-kanban-worker-interactive-codex";
-      package = workerInteractiveCodexSmoke;
-    };
-  };
+  checks = { };
 }

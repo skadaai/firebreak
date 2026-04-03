@@ -407,6 +407,10 @@ rec {
       effectiveWorkerKinds = derivedWorkerKinds // workerKinds;
       effectiveInstallBinScripts = derivedInstallBinScripts // installBinScripts;
       effectiveWorkerBridgeEnabled = workerBridgeEnabled || workerKinds != { } || workerProxies != { };
+      installBinSystemPackages =
+        lib.mapAttrsToList
+          (scriptName: scriptText: pkgs.writeShellScriptBin scriptName scriptText)
+          effectiveInstallBinScripts;
 
       packageSet =
         if builtins.isFunction runtimePackages then
@@ -449,7 +453,7 @@ rec {
           installBinScripts = effectiveInstallBinScripts;
           proxyLocalUpstreams = derivedProxyLocalUpstreams;
           vmName = name;
-          extraSystemPackages = packageSet pkgs;
+          extraSystemPackages = packageSet pkgs ++ installBinSystemPackages;
           extraBootstrapPackages = bootstrapPackageSet pkgs;
         })
       ] ++ extraModules;

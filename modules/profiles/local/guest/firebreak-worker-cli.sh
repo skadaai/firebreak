@@ -5,6 +5,7 @@ bridge_dir=@WORKER_BRIDGE_MOUNT@
 worker_kinds_file=@WORKER_KINDS_FILE@
 local_helper=@WORKER_LOCAL_HELPER@
 local_state_dir=@WORKER_LOCAL_STATE_DIR@
+kind_spawn_lock_dir=""
 command=${1:-}
 
 usage() {
@@ -995,7 +996,7 @@ start_local_attach_spawn_lock_handoff() {
   kind_name=$1
   shift
   known_worker_ids=("$@")
-  lock_dir=$kind_spawn_lock_dir
+  lock_dir=${kind_spawn_lock_dir:-}
   owner_pid=${BASHPID:-$$}
 
   [ -n "$lock_dir" ] || return 0
@@ -1017,7 +1018,7 @@ EOF
 
 start_bridge_attach_spawn_lock_handoff() {
   request_dir=$1
-  lock_dir=$kind_spawn_lock_dir
+  lock_dir=${kind_spawn_lock_dir:-}
   owner_pid=${BASHPID:-$$}
   worker_id_path=$request_dir/worker-id
   exit_code_path=$request_dir/response.exit-code

@@ -495,6 +495,10 @@ rec {
           "${packageName}" = project.package;
           "${runnerPackageName}" = project.runnerPackage;
         });
-      checks = lib.genAttrs supportedSystems (system: (testsFor system).checks);
+      checks = lib.genAttrs supportedSystems (system:
+        let
+          tests = testsFor system;
+        in
+        tests.packages // tests.checks);
     };
 }

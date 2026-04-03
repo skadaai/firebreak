@@ -34,6 +34,10 @@ sync_guest_state_files() {
   if ! [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
     return 0
   fi
+  mkdir -p "$guest_state_dir"
+  printf '%s\n' '{}' > "$bootstrap_state_local"
+  printf '%s\n' '{}' > "$command_state_local"
+  chmod 0644 "$bootstrap_state_local" "$command_state_local"
   rm -f @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
   printf '%s\n' '{}' > @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json
   printf '%s\n' '{}' > @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json

@@ -141,6 +141,20 @@ rec {
       } ../../modules/base/tests/test-smoke-firebreak-cli-surface.sh;
     };
 
+  mkWorkerFirebreakBridgeProbePackage = { name }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [ coreutils ];
+      text = ''
+        set -eu
+
+        printf '%s\n' 'bridge-firebreak-ok'
+        for arg in "$@"; do
+          printf 'arg:%s\n' "$arg"
+        done
+      '';
+    };
+
   mkWorkerProxyScriptSmokePackage = { name }:
     let
       workerProxyScript = self.lib.${system}.mkWorkerProxyScript {
@@ -391,7 +405,7 @@ rec {
           };
           bridge-firebreak = {
             backend = "firebreak";
-            package = "firebreak-codex";
+            package = "firebreak-worker-bridge-probe";
             launch_mode = "run";
           };
           bridge-interactive-firebreak = {
@@ -441,6 +455,7 @@ rec {
       runtimeInputs = with pkgs; [
         bash
         coreutils
+        gnugrep
         self.packages.${system}.firebreak-interactive-echo
       ];
       text = renderTemplate {

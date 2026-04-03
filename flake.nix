@@ -75,6 +75,7 @@
             mkCloudJobPackage
             mkCloudSmokePackage
             mkFirebreakCliSurfaceSmokePackage
+            mkWorkerFirebreakBridgeProbePackage
             mkFirebreakCliPackage
             mkLoopPackage
             mkLoopSmokePackage

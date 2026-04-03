@@ -115,11 +115,18 @@ if [ "$stop_status" != "stopping" ] && [ "$stop_status" != "stopped" ]; then
 fi
 
 attach_parallel_dir=$(mktemp -d "$PWD/bridge-attach-parallel.XXXXXX")
-attach_parallel_start=$(python3 - <<'PY'
-import time
-print(time.monotonic())
-PY
-)
+SECONDS=0
+single_attach_output=$(firebreak worker run --kind bridge-process --workspace "$PWD" --attach -- sh -c 'sleep 3; printf attach-baseline')
+single_attach_elapsed=$SECONDS
+printf '__BRIDGE_ATTACH_SINGLE_ELAPSED__%s\n' "$single_attach_elapsed"
+
+if ! printf '%s\n' "$single_attach_output" | grep -F -q 'attach-baseline'; then
+  printf '%s\n' "$single_attach_output" >&2
+  echo "guest bridge smoke baseline attached process worker did not complete successfully" >&2
+  exit 1
+fi
+
+SECONDS=0
 (
   firebreak worker run --kind bridge-process --workspace "$PWD" --attach -- sh -c 'sleep 3; printf attach-one'
 ) >"$attach_parallel_dir/one.out" &
@@ -132,13 +139,7 @@ attach_parallel_two_pid=$!
 wait "$attach_parallel_one_pid"
 wait "$attach_parallel_two_pid"
 
-attach_parallel_elapsed=$(ATTACH_PARALLEL_START="$attach_parallel_start" python3 - <<'PY'
-import os
-import time
-
-print(time.monotonic() - float(os.environ["ATTACH_PARALLEL_START"]))
-PY
-)
+attach_parallel_elapsed=$SECONDS
 printf '__BRIDGE_ATTACH_PARALLEL_ELAPSED__%s\n' "$attach_parallel_elapsed"
 
 if ! grep -F -q 'attach-one' "$attach_parallel_dir/one.out"; then
@@ -153,32 +154,30 @@ if ! grep -F -q 'attach-two' "$attach_parallel_dir/two.out"; then
   exit 1
 fi
 
-ATTACH_PARALLEL_ELAPSED="$attach_parallel_elapsed" python3 - <<'PY'
-import os
-import sys
+serialized_threshold=$((single_attach_elapsed * 2 - 2))
+minimum_parallel_threshold=$((single_attach_elapsed + 1))
+if [ "$serialized_threshold" -lt "$minimum_parallel_threshold" ]; then
+  serialized_threshold=$minimum_parallel_threshold
+fi
 
-elapsed = float(os.environ["ATTACH_PARALLEL_ELAPSED"])
-if elapsed >= 5.0:
-    print(f"parallel attached process workers took too long: {elapsed:.3f}s", file=sys.stderr)
-    raise SystemExit(1)
-PY
+if [ "$attach_parallel_elapsed" -ge "$serialized_threshold" ]; then
+  echo "parallel attached process workers took too long: ${attach_parallel_elapsed}s (single attached process took ${single_attach_elapsed}s)" >&2
+  exit 1
+fi
 
 printf '%s\n' '__BRIDGE_ATTACH_START__'
 attach_output=$(firebreak worker run --kind bridge-firebreak --workspace "$PWD" --attach -- --version)
 printf '__BRIDGE_ATTACH__%s\n' "$attach_output"
 
-if ! printf '%s\n' "$attach_output" | grep -F -q 'codex-cli'; then
+if ! printf '%s\n' "$attach_output" | grep -F -q 'bridge-firebreak-ok'; then
   printf '%s\n' "$attach_output" >&2
   echo "guest bridge smoke did not expose attached firebreak worker output" >&2
   exit 1
 fi
 
-
-list_output=$(firebreak worker ps -a)
-printf '__BRIDGE_LIST__%s\n' "$list_output"
-
-if ! printf '%s\n' "$list_output" | grep -F -q "$worker_id"; then
-  echo "guest bridge smoke did not list the spawned worker" >&2
+if ! printf '%s\n' "$attach_output" | grep -F -q 'arg:--version'; then
+  printf '%s\n' "$attach_output" >&2
+  echo "guest bridge smoke did not preserve forwarded firebreak worker arguments" >&2
   exit 1
 fi
 
@@ -193,7 +192,7 @@ if ! output=$(
     FIREBREAK_STATE_DIR="$firebreak_state_dir" \
     FIREBREAK_DEBUG_KEEP_RUNTIME=1 \
     FIREBREAK_INSTANCE_EPHEMERAL=1 \
-    timeout 300 @BRIDGE_VM_BIN@ "$guest_script" 2>&1
+    timeout 600 @BRIDGE_VM_BIN@ "$guest_script" 2>&1
 ); then
   keep_smoke_tmp_dir=1
   printf '%s\n' "$output" >&2

@@ -9,6 +9,7 @@
   mkCloudJobPackage,
   mkCloudSmokePackage,
   mkFirebreakCliSurfaceSmokePackage,
+  mkWorkerFirebreakBridgeProbePackage,
   mkFirebreakCliPackage,
   mkLoopPackage,
   mkLoopSmokePackage,
@@ -75,6 +76,10 @@
 
   firebreak-test-smoke-firebreak-cli-surface = mkFirebreakCliSurfaceSmokePackage {
     name = "firebreak-test-smoke-firebreak-cli-surface";
+  };
+
+  firebreak-worker-bridge-probe = mkWorkerFirebreakBridgeProbePackage {
+    name = "firebreak-worker-bridge-probe";
   };
 
   firebreak-test-smoke-worker-proxy-script = mkWorkerProxyScriptSmokePackage {

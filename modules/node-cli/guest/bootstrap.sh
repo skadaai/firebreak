@@ -144,7 +144,7 @@ for bootstrap_dir in \
   "$xdg_cache_home" \
   "$xdg_state_home" \
   "$npm_cache_dir"; do
-  chown "$dev_user:$dev_user" "$bootstrap_dir"
+  maybe_chown_dev "$bootstrap_dir"
 done
 
 if [ -x "$local_bin/@BIN_NAME@" ] && [ -r "$state_file" ] && [ "$(cat "$state_file")" = "$install_state_id" ] && [ -r "$ready_marker" ] && wrappers_ready; then

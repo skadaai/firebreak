@@ -54,6 +54,14 @@ fi
 if [ -n "''${MICROVM_VFKIT_AGENT_EXEC_OUTPUT_DIR:-}" ]; then
   firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_AGENT_EXEC_OUTPUT_DIR},mountTag=hostexecoutput")
 fi
+
+if [ -n "''${MICROVM_VFKIT_AGENT_TOOLS_DIR:-}" ]; then
+  firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_AGENT_TOOLS_DIR},mountTag=hostagenttools")
+fi
+
+if [ -n "''${MICROVM_VFKIT_WORKER_BRIDGE_DIR:-}" ]; then
+  firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_WORKER_BRIDGE_DIR},mountTag=hostworkerbridge")
+fi
 EOF
       chmod 0555 "$out/bin/firebreak-runner-extra-args"
     '';
@@ -88,6 +96,7 @@ EOF
     agentConfigDirName,
     defaultAgentConfigHostDir,
     agentEnvPrefix ? "AGENT",
+    workerBridgeEnabled ? false,
   }:
     let
       runnerWrapper = pkgs.writeShellScript "firebreak-runner-wrapper" ''
@@ -101,8 +110,13 @@ EOF
       runtimeInputs =
         with pkgs;
         [
+          bash
           coreutils
           git
+          gnused
+          nix
+          python3
+          util-linux
         ] ++ lib.optional pkgs.stdenv.hostPlatform.isLinux virtiofsd;
       text = renderTemplate {
         "@HOST_SYSTEM@" = system;
@@ -113,6 +127,10 @@ EOF
         "@DEFAULT_AGENT_CONFIG_HOST_DIR@" = defaultAgentConfigHostDir;
         "@AGENT_ENV_PREFIX@" = agentEnvPrefix;
         "@FIREBREAK_PROJECT_CONFIG_LIB@" = builtins.readFile ../../modules/base/host/firebreak-project-config.sh;
+        "@FIREBREAK_FLAKE_REF@" = "path:${builtins.toString ../../.}";
+        "@FIREBREAK_WORKER_LIB@" = builtins.readFile ../../modules/base/host/firebreak-worker.sh;
+        "@FIREBREAK_WORKER_BRIDGE_HOST_LIB@" = builtins.readFile ../../modules/profiles/local/host/firebreak-worker-bridge-host.sh;
+        "@WORKER_BRIDGE_ENABLED@" = if workerBridgeEnabled then "1" else "0";
       } ../../modules/profiles/local/host/run-wrapper.sh;
     };
 
@@ -124,6 +142,7 @@ EOF
     agentConfigDirName ? ".firebreak",
     defaultAgentConfigHostDir ? "$HOME/.firebreak/${name}",
     agentEnvPrefix ? "AGENT",
+    workerBridgeEnabled ? false,
   }:
     mkAgentPackage {
       inherit
@@ -132,7 +151,8 @@ EOF
         defaultAgentCommand
         agentConfigDirName
         defaultAgentConfigHostDir
-        agentEnvPrefix;
+        agentEnvPrefix
+        workerBridgeEnabled;
       runner = runnerPackage;
     };
 
@@ -145,10 +165,20 @@ EOF
     agentConfigDirName ? ".firebreak",
     defaultAgentConfigHostDir ? "$HOME/.firebreak/${name}",
     agentEnvPrefix ? "AGENT",
+    workerBridgeEnabled ? false,
+    workerKinds ? { },
   }:
     let
       nixosConfiguration = mkAgentVm {
-        inherit name extraModules profileModules;
+        inherit name profileModules;
+        extraModules =
+          extraModules
+          ++ nixpkgs.lib.optional (workerKinds != { }) {
+            agentVm.workerKindsJson = builtins.toJSON workerKinds;
+          }
+          ++ nixpkgs.lib.optional workerBridgeEnabled {
+            agentVm.workerBridgeEnabled = true;
+          };
       };
       runnerPackage = mkRunnerPackage nixosConfiguration.config.microvm.declaredRunner;
       package = mkLocalVmPackage {
@@ -159,7 +189,8 @@ EOF
           defaultAgentCommand
           agentConfigDirName
           defaultAgentConfigHostDir
-          agentEnvPrefix;
+          agentEnvPrefix
+          workerBridgeEnabled;
       };
     in {
       inherit nixosConfiguration package runnerPackage;

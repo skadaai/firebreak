@@ -4,28 +4,42 @@
   hostIsLinux,
   lib,
   localVmArtifacts,
+  mkAgentPackage,
   mkAgentVersionSmokePackage,
   mkCloudJobPackage,
   mkCloudSmokePackage,
   mkDevFlowCliPackage,
   mkDevFlowCliSurfaceSmokePackage,
   mkFirebreakCliSurfaceSmokePackage,
+  mkWorkerFirebreakBridgeProbePackage,
   mkFirebreakCliPackage,
   mkLoopPackage,
   mkLoopSmokePackage,
   mkNpxLauncherSmokePackage,
   mkProjectConfigSmokePackage,
+  mkRunnerPackage,
   mkSmokePackage,
   mkWorkspacePackage,
   mkWorkspaceSmokePackage,
   mkValidationPackage,
   mkValidationSmokePackage,
+  mkWorkerFirebreakAttachSmokePackage,
+  mkWorkerInteractiveClaudeDirectExitSmokePackage,
+  mkWorkerInteractiveClaudeDirectSmokePackage,
+  mkWorkerInteractiveCodexDirectSmokePackage,
+  mkWorkerGuestBridgeInteractiveSmokePackage,
+  mkWorkerGuestBridgeSmokePackage,
+  mkWorkerPackage,
+  mkWorkerProxyScriptSmokePackage,
+  mkWorkerSmokePackage,
 }:
 {
   default = self.packages.${system}.firebreak;
 
   firebreak-internal-runner-codex = localVmArtifacts.firebreak-codex.runnerPackage;
   firebreak-internal-runner-claude-code = localVmArtifacts.firebreak-claude-code.runnerPackage;
+  firebreak-internal-runner-interactive-echo = localVmArtifacts.firebreak-interactive-echo.runnerPackage;
+
   firebreak-codex = localVmArtifacts.firebreak-codex.package;
 
   firebreak-test-smoke-codex = mkSmokePackage {
@@ -52,6 +66,8 @@
     agentConfigDirName = ".claude";
   };
 
+  firebreak-interactive-echo = localVmArtifacts.firebreak-interactive-echo.package;
+
   firebreak-test-smoke-project-config-and-doctor = mkProjectConfigSmokePackage {
     name = "firebreak-test-smoke-project-config-and-doctor";
   };
@@ -66,6 +82,14 @@
 
   dev-flow-test-smoke-cli-surface = mkDevFlowCliSurfaceSmokePackage {
     name = "dev-flow-test-smoke-cli-surface";
+  };
+
+  firebreak-worker-bridge-probe = mkWorkerFirebreakBridgeProbePackage {
+    name = "firebreak-worker-bridge-probe";
+  };
+
+  firebreak-test-smoke-worker-proxy-script = mkWorkerProxyScriptSmokePackage {
+    name = "firebreak-test-smoke-worker-proxy-script";
   };
 
   dev-flow-validate = mkValidationPackage {
@@ -84,6 +108,43 @@
 
   dev-flow-test-smoke-workspace = mkWorkspaceSmokePackage {
     name = "dev-flow-test-smoke-workspace";
+  };
+
+  firebreak-worker = mkWorkerPackage {
+    name = "firebreak-worker";
+  };
+
+  firebreak-test-smoke-worker = mkWorkerSmokePackage {
+    name = "firebreak-test-smoke-worker";
+    workerPackage = "firebreak-worker";
+  };
+
+  firebreak-test-smoke-worker-firebreak-attach = mkWorkerFirebreakAttachSmokePackage {
+    name = "firebreak-test-smoke-worker-firebreak-attach";
+    workerPackage = "firebreak-worker";
+  };
+
+  firebreak-test-smoke-worker-interactive-claude-direct = mkWorkerInteractiveClaudeDirectSmokePackage {
+    name = "firebreak-test-smoke-worker-interactive-claude-direct";
+    firebreakPackage = "firebreak";
+  };
+
+  firebreak-test-smoke-worker-interactive-claude-exit-direct = mkWorkerInteractiveClaudeDirectExitSmokePackage {
+    name = "firebreak-test-smoke-worker-interactive-claude-exit-direct";
+    firebreakPackage = "firebreak";
+  };
+
+  firebreak-test-smoke-worker-interactive-codex-direct = mkWorkerInteractiveCodexDirectSmokePackage {
+    name = "firebreak-test-smoke-worker-interactive-codex-direct";
+    firebreakPackage = "firebreak";
+  };
+
+  firebreak-test-smoke-worker-guest-bridge = mkWorkerGuestBridgeSmokePackage {
+    name = "firebreak-test-smoke-worker-guest-bridge";
+  };
+
+  firebreak-test-smoke-worker-guest-bridge-interactive = mkWorkerGuestBridgeInteractiveSmokePackage {
+    name = "firebreak-test-smoke-worker-guest-bridge-interactive";
   };
 
   dev-flow-loop = mkLoopPackage {

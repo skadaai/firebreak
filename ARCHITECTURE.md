@@ -55,7 +55,18 @@ Do not use bare `session` to mean either the workspace or the attempt.
 - `modules/profiles/cloud` owns cloud-only guest behavior such as fixed workspace semantics, prompt-driven agent execution, and non-interactive job completion.
 - `modules/bun-agent` owns the shared contract for agents launched through Bun, including bootstrap and agent-specific environment exports.
 - `modules/node-cli` owns the shared contract for npm-installed packaged CLIs, including bootstrap, persistent install state, and project launch helpers.
+- `modules/node-cli` also owns the generic packaged-node bootstrap readiness contract (`firebreak-bootstrap-wait`) and declarative extra wrapper installation for recipe-owned CLI aliases such as worker proxies.
 - Agent modules such as `codex` and `claude-code` should stay thin. They should mostly declare package name, binary name, config directory, and any agent-specific packages or environment exports.
+
+## External Orchestrator Recipes
+
+External recipes should stay declarative and thin.
+
+- Declare orchestrated worker kinds through `workerKinds` on the recipe helper.
+- Use `max_instances` on a kind when the recipe needs a bounded concurrency contract.
+- Install recipe-visible wrapper binaries through `installBinScripts` instead of patching shared Firebreak code.
+- Reuse `firebreak.lib.${system}.mkWorkerProxyScript` when a CLI name should resolve through `firebreak worker`.
+- Keep orchestrator-specific smoke tests under the external recipe itself rather than adding them to Firebreak core.
 
 ## Adding A New Agent
 

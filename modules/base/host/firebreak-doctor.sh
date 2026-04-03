@@ -186,7 +186,7 @@ firebreak_doctor_command() {
       ;;
   esac
 
-  vm_mode=${FIREBREAK_VM_MODE:-run}
+  launch_mode=${FIREBREAK_LAUNCH_MODE:-run}
   git_common_dir=$(firebreak_doctor_git_common_dir)
   primary_checkout=$(firebreak_doctor_primary_checkout_state "$git_common_dir")
   host_platform=$(firebreak_doctor_host_platform)
@@ -230,7 +230,7 @@ EOF
   "local_runtime": "$(firebreak_doctor_json_escape "$local_runtime")",
   "cwd": "$(firebreak_doctor_json_escape "$PWD")",
   "cwd_whitespace": $([ "$cwd_whitespace" = "yes" ] && printf 'true' || printf 'false'),
-  "vm_mode": "$(firebreak_doctor_json_escape "$vm_mode")",
+  "launch_mode": "$(firebreak_doctor_json_escape "$launch_mode")",
   "git_common_dir": "$(firebreak_doctor_json_escape "${git_common_dir:-unknown}")",
   "primary_checkout": "$(firebreak_doctor_json_escape "$primary_checkout")",
   "kvm": "$(firebreak_doctor_json_escape "$kvm_state")",
@@ -256,7 +256,7 @@ EOF
   firebreak_doctor_report_line "project_config" "${FIREBREAK_RESOLVED_PROJECT_CONFIG_SOURCE}: ${FIREBREAK_RESOLVED_PROJECT_CONFIG_FILE}"
   firebreak_doctor_report_line "host_platform" "$host_platform"
   firebreak_doctor_report_line "local_runtime" "$local_runtime"
-  firebreak_doctor_report_line "vm_mode" "$vm_mode"
+  firebreak_doctor_report_line "launch_mode" "$launch_mode"
   firebreak_doctor_report_line "cwd_whitespace" "$cwd_whitespace"
   firebreak_doctor_report_line "primary_checkout" "$primary_checkout"
   firebreak_doctor_report_line "kvm" "$kvm_state"

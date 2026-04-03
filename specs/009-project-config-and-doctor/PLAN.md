@@ -9,7 +9,7 @@ last_updated: 2026-03-23
 
 1. Define the public project config contract, precedence rules, and stable key allowlist.
 2. Implement `.firebreak.env` discovery and loading for the human-facing Firebreak surface.
-3. Remove public compatibility aliases for local mode selection so `FIREBREAK_VM_MODE` is the only documented selector.
+3. Remove public compatibility aliases for local mode selection so `FIREBREAK_LAUNCH_MODE` is the only documented selector.
 4. Tighten local wrapper config resolution so agent-specific selectors override generic selectors for their matching workloads.
 5. Implement `firebreak init` with a minimal Firebreak-native template.
 6. Implement `firebreak doctor` with summary, verbose, and JSON output modes.

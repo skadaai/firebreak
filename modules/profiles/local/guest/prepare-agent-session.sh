@@ -97,6 +97,12 @@ fi
 log_phase prepare-agent-session-state-dir-start
 mkdir -p "$guest_state_dir"
 @CHOWN@ @DEV_USER@:@DEV_USER@ "$guest_state_dir"
+if [ -e "$bootstrap_state_local" ]; then
+  @CHOWN@ @DEV_USER@:@DEV_USER@ "$bootstrap_state_local"
+fi
+if [ -e "$command_state_local" ]; then
+  @CHOWN@ @DEV_USER@:@DEV_USER@ "$command_state_local"
+fi
 rm -f \
   "$session_term_state_file" \
   "$session_columns_state_file" \

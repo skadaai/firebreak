@@ -8,5 +8,6 @@ export FIREBREAK_AGENT_CONFIG_WORKSPACE_DIR_NAME='@WORKSPACE_DIR_NAME@'
 
 config_dir=$(@RESOLVE_AGENT_CONFIG_BIN@)
 export AGENT_CONFIG_DIR="$config_dir"
+agent_config_dir=$config_dir
 @CONFIG_ENV_EXPORTS@
 exec @REAL_BIN@ "$@"

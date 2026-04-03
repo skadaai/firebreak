@@ -78,7 +78,12 @@ run_scenario() {
 
   set +e
   output=$(
-    AGENT_CONFIG=$mode \
+    env \
+      -u AGENT_CONFIG \
+      -u AGENT_CONFIG_HOST_PATH \
+      -u CODEX_CONFIG \
+      -u CLAUDE_CONFIG \
+      AGENT_CONFIG="$mode" \
       FIREBREAK_VM_MODE=shell \
       FIREBREAK_INSTANCE_EPHEMERAL=1 \
       AGENT_CONFIG_HOST_PATH="${host_config_path:-}" \
@@ -141,7 +146,12 @@ run_agent_exec_scenario() {
   printf '%s\n' "running: $scenario_label"
   set +e
   output=$(
-    AGENT_CONFIG=$mode \
+    env \
+      -u AGENT_CONFIG \
+      -u AGENT_CONFIG_HOST_PATH \
+      -u CODEX_CONFIG \
+      -u CLAUDE_CONFIG \
+      AGENT_CONFIG="$mode" \
       FIREBREAK_INSTANCE_EPHEMERAL=1 \
       timeout --foreground "$timeout_seconds" \
       bash "$run_flake" run .#@AGENT_PACKAGE@ -- "$agent_cli_arg" 2>&1

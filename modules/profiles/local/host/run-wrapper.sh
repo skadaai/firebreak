@@ -17,6 +17,8 @@ default_agent_command=@DEFAULT_AGENT_COMMAND@
 agent_command_override=""
 shell_command_override=${AGENT_VM_COMMAND:-}
 shared_agent_config_host_dir=""
+workspace_bootstrap_config_host_dir=@WORKSPACE_BOOTSTRAP_CONFIG_HOST_DIR@
+host_config_adoption_enabled=@HOST_CONFIG_ADOPTION_ENABLED@
 default_control_socket=@CONTROL_SOCKET@
 instance_state_dir=${FIREBREAK_INSTANCE_DIR:-}
 instance_ephemeral=${FIREBREAK_INSTANCE_EPHEMERAL:-0}
@@ -78,8 +80,8 @@ append_optional_env_default() {
 
 default_agent_config_host_dir=$(resolve_host_dir "${AGENT_CONFIG_HOST_PATH:-@DEFAULT_AGENT_CONFIG_HOST_DIR@}")
 workspace_bootstrap_target=""
-if [ -n "@WORKSPACE_BOOTSTRAP_CONFIG_HOST_DIR@" ]; then
-  workspace_bootstrap_target=$(resolve_host_dir "@WORKSPACE_BOOTSTRAP_CONFIG_HOST_DIR@")
+if [ -n "$workspace_bootstrap_config_host_dir" ]; then
+  workspace_bootstrap_target=$(resolve_host_dir "$workspace_bootstrap_config_host_dir")
 fi
 shared_agent_config_host_dir=$default_agent_config_host_dir
 
@@ -189,7 +191,7 @@ case "$agent_config_mode" in
     ;;
 esac
 
-if [ "@HOST_CONFIG_ADOPTION_ENABLED@" = "1" ] && [ "$agent_config_mode" = "host" ]; then
+if [ "$host_config_adoption_enabled" = "1" ] && [ "$agent_config_mode" = "host" ]; then
   ensure_host_agent_config_subdir "$shared_agent_config_host_dir" "@AGENT_CONFIG_SUBDIR@" "$workspace_bootstrap_target"
 fi
 

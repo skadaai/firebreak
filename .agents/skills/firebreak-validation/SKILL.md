@@ -7,10 +7,14 @@ description: "Use when a workspace-backed change attempt needs evidence before c
 
 Use the Firebreak harness, not ad hoc shell output, as the source of truth.
 
+## Order
+
+Use this skill after the slice is implemented and the expected scope is known. Feed its result into `firebreak-review` instead of treating raw shell output as sufficient evidence.
+
 ## Workflow
 
 1. Pick the smallest named suite that proves the slice.
-2. Run it through `dev-flow validate run`.
+2. Run it through the current named validation entrypoint. In this branch, that is `dev-flow validate run`.
 3. Read the machine result and artifact paths.
 4. Decide the next action from the result.
 

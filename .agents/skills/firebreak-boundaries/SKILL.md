@@ -7,6 +7,10 @@ description: "Use when an autonomous workspace touches files, shared directories
 
 Firebreak autonomy applies only inside explicit boundaries. Before acting, define what the workspace may change and verify that any shared or mutable state stays inside approved roots.
 
+## Order
+
+Apply this skill once the workspace and slice are known, before edits or validation runs that touch shared paths, mutable runtime state, or parallel execution.
+
 ## Checks
 
 1. Declare the exact files or directories the workspace may modify before making changes.

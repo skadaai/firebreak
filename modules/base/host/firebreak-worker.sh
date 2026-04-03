@@ -9,7 +9,7 @@ command=${1:-}
 usage() {
   cat <<'EOF' >&2
 usage:
-  firebreak worker run --backend BACKEND --kind KIND [--workspace PATH] [--package NAME] [--launch-mode MODE] [--attach] [--json] [--] COMMAND...
+  firebreak worker run --backend BACKEND --kind KIND [--workspace PATH] [--package NAME] [--launch-mode MODE] [--max-instances COUNT] [--attach] [--json] [--] COMMAND...
   firebreak worker ps [-a|--all] [--json]
   firebreak worker inspect WORKER_ID
   firebreak worker logs [--stdout|--stderr] [-f|--follow] WORKER_ID
@@ -48,6 +48,23 @@ require_absolute_dir() {
   esac
 }
 
+validate_positive_integer() {
+  value=$1
+  description=$2
+
+  case "$value" in
+    ""|*[!0-9]*)
+      echo "$description must be a positive integer: $value" >&2
+      exit 1
+      ;;
+  esac
+
+  if [ "$value" -le 0 ]; then
+    echo "$description must be greater than zero: $value" >&2
+    exit 1
+  fi
+}
+
 worker_root_for_id() {
   printf '%s\n' "$state_dir/workers/$1"
 }
@@ -78,6 +95,81 @@ worker_is_active_status() {
       return 1
       ;;
   esac
+}
+
+count_active_workers_for_kind() {
+  target_kind=$1
+  active_count=0
+
+  mkdir -p "$state_dir/workers"
+  for candidate_root in "$state_dir"/workers/*; do
+    [ -d "$candidate_root" ] || continue
+    candidate_worker_id=$(basename "$candidate_root")
+    refresh_worker_status "$candidate_worker_id"
+    load_worker "$candidate_worker_id"
+    if [ "$kind" = "$target_kind" ] && worker_is_active_status "$status"; then
+      active_count=$((active_count + 1))
+    fi
+  done
+
+  printf '%s\n' "$active_count"
+}
+
+acquire_kind_limit_lock() {
+  kind_name=$1
+  lock_root=$state_dir/kind-locks
+  kind_limit_lock_dir=$lock_root/$kind_name.lock
+  current_boot_id=""
+
+  if [ -r /proc/sys/kernel/random/boot_id ]; then
+    IFS= read -r current_boot_id </proc/sys/kernel/random/boot_id || current_boot_id=""
+  fi
+
+  mkdir -p "$lock_root"
+  while :; do
+    if mkdir "$kind_limit_lock_dir" 2>/dev/null; then
+      printf '%s\n' "${BASHPID:-$$}" >"$kind_limit_lock_dir/pid"
+      if [ -n "$current_boot_id" ]; then
+        printf '%s\n' "$current_boot_id" >"$kind_limit_lock_dir/boot-id"
+      fi
+      date +%s >"$kind_limit_lock_dir/acquired-at"
+      return 0
+    fi
+
+    stale_lock_pid=""
+    stale_lock_boot_id=""
+    if [ -r "$kind_limit_lock_dir/pid" ]; then
+      IFS= read -r stale_lock_pid <"$kind_limit_lock_dir/pid" || stale_lock_pid=""
+    fi
+    if [ -r "$kind_limit_lock_dir/boot-id" ]; then
+      IFS= read -r stale_lock_boot_id <"$kind_limit_lock_dir/boot-id" || stale_lock_boot_id=""
+    fi
+
+    if [ -n "$current_boot_id" ] && [ -z "$stale_lock_boot_id" ]; then
+      rm -rf "$kind_limit_lock_dir"
+      continue
+    fi
+
+    if [ -n "$current_boot_id" ] && [ -n "$stale_lock_boot_id" ] && [ "$stale_lock_boot_id" != "$current_boot_id" ]; then
+      rm -rf "$kind_limit_lock_dir"
+      continue
+    fi
+
+    if [ -n "$stale_lock_pid" ] && ! kill -0 "$stale_lock_pid" 2>/dev/null; then
+      rm -rf "$kind_limit_lock_dir"
+      continue
+    fi
+
+    sleep 0.1
+  done
+}
+
+release_kind_limit_lock() {
+  if [ -n "${kind_limit_lock_dir:-}" ]; then
+    rm -f "$kind_limit_lock_dir/pid" "$kind_limit_lock_dir/boot-id" "$kind_limit_lock_dir/acquired-at"
+    rmdir "$kind_limit_lock_dir" 2>/dev/null || true
+    kind_limit_lock_dir=""
+  fi
 }
 
 worker_summary_json() {
@@ -448,6 +540,9 @@ finish() {
 }
 
 stop_child() {
+  if [ -z "\${child_pid:-}" ] && [ -r "\$child_pid_path" ]; then
+    child_pid=\$(cat "\$child_pid_path" 2>/dev/null || true)
+  fi
   if [ -n "\${child_pid:-}" ]; then
     kill "\$child_pid" 2>/dev/null || true
     wait "\$child_pid" 2>/dev/null || true
@@ -468,8 +563,12 @@ fi
 set +e
 if [ "\$attach_mode" = "1" ]; then
   printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "attach-foreground-start" >>"\$trace_path"
-  printf '%s\n' "\$BASHPID" >"\$child_pid_path"
-  $quoted_command
+  bash -c '
+    child_pid_path=\$1
+    shift
+    printf "%s\n" "\$BASHPID" >"\$child_pid_path"
+    exec "\$@"
+  ' bash "\$child_pid_path" $quoted_command
   command_status=\$?
 else
   printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "detached-background-start" >>"\$trace_path"
@@ -535,6 +634,9 @@ finish() {
 }
 
 stop_child() {
+  if [ -z "\${child_pid:-}" ] && [ -r "\$child_pid_path" ]; then
+    child_pid=\$(cat "\$child_pid_path" 2>/dev/null || true)
+  fi
   if [ -n "\${child_pid:-}" ]; then
     kill "\$child_pid" 2>/dev/null || true
     wait "\$child_pid" 2>/dev/null || true
@@ -556,7 +658,6 @@ fi
 set +e
 if [ "\$attach_mode" = "1" ]; then
   printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "attach-foreground-start" >>"\$trace_path"
-  printf '%s\n' "\$BASHPID" >"\$child_pid_path"
   printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "firebreak-command-start" >>"\$trace_path"
   forwarded_term=\${TERM:-}
   forwarded_columns=\${COLUMNS:-}
@@ -581,7 +682,13 @@ if [ "\$attach_mode" = "1" ]; then
     fi
   fi
   if [ "$forwarded_arg_count" -eq 0 ]; then
-    env \
+    bash -c '
+      child_pid_path=\$1
+      shift
+      printf "%s\n" "\$BASHPID" >"\$child_pid_path"
+      exec "\$@"
+    ' bash "\$child_pid_path" \
+      env \
       -u AGENT_CONFIG \
       -u AGENT_CONFIG_HOST_PATH \
       -u CODEX_CONFIG \
@@ -596,7 +703,13 @@ if [ "\$attach_mode" = "1" ]; then
       FIREBREAK_AGENT_SESSION_MODE_OVERRIDE="agent-attach-exec" \
       $quoted_resolved_exec
   else
-    env \
+    bash -c '
+      child_pid_path=\$1
+      shift
+      printf "%s\n" "\$BASHPID" >"\$child_pid_path"
+      exec "\$@"
+    ' bash "\$child_pid_path" \
+      env \
       -u AGENT_CONFIG \
       -u AGENT_CONFIG_HOST_PATH \
       -u CODEX_CONFIG \
@@ -643,6 +756,7 @@ spawn_worker() {
   workspace=$PWD
   package_name=""
   launch_mode=run
+  max_instances=""
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -664,6 +778,10 @@ spawn_worker() {
         ;;
       --launch-mode)
         launch_mode=$2
+        shift 2
+        ;;
+      --max-instances)
+        max_instances=$2
         shift 2
         ;;
       --json)
@@ -697,6 +815,16 @@ spawn_worker() {
   validate_token "$kind" "worker kind"
   require_absolute_dir "$state_dir" "worker state dir"
   require_absolute_dir "$workspace" "worker workspace"
+  if [ -n "$max_instances" ]; then
+    validate_positive_integer "$max_instances" "worker max_instances"
+    acquire_kind_limit_lock "$kind"
+    trap release_kind_limit_lock EXIT INT TERM
+    active_count=$(count_active_workers_for_kind "$kind")
+    if [ "$active_count" -ge "$max_instances" ]; then
+      echo "worker kind '$kind' reached max_instances=$max_instances" >&2
+      exit 1
+    fi
+  fi
 
   case "$backend" in
     process)
@@ -744,9 +872,6 @@ spawn_worker() {
   stop_requested=0
   bridge_request_dir=${FIREBREAK_WORKER_BRIDGE_REQUEST_DIR:-}
   bridge_request_trace_path=${FIREBREAK_WORKER_BRIDGE_TRACE_PATH:-}
-  if [ -n "$bridge_request_dir" ] && [ -d "$bridge_request_dir" ]; then
-    printf '%s\n' "$worker_id" >"$bridge_request_dir/worker-id" || true
-  fi
 
   launch_script_tmp=$(mktemp "$state_dir/workers/.launch.XXXXXX")
   case "$backend" in
@@ -774,6 +899,11 @@ spawn_worker() {
   if [ "$attach_mode" = "1" ]; then
     pid=$$
     write_metadata
+    if [ -n "$bridge_request_dir" ] && [ -d "$bridge_request_dir" ]; then
+      printf '%s\n' "$worker_id" >"$bridge_request_dir/worker-id" || true
+    fi
+    release_kind_limit_lock
+    trap - EXIT INT TERM
     configure_attach_tty
     trap restore_attach_tty EXIT INT TERM
     set +e
@@ -788,6 +918,11 @@ spawn_worker() {
   pid=$!
   disown "$pid" 2>/dev/null || true
   write_metadata
+  if [ -n "$bridge_request_dir" ] && [ -d "$bridge_request_dir" ]; then
+    printf '%s\n' "$worker_id" >"$bridge_request_dir/worker-id" || true
+  fi
+  release_kind_limit_lock
+  trap - EXIT INT TERM
 
   if [ "$run_json" = "1" ]; then
     cat "$worker_root/metadata.json"

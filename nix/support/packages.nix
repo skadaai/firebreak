@@ -313,6 +313,20 @@ rec {
     };
 
   mkWorkerSmokePackage = { name, workerPackage }:
+    let
+      smokeWorkerBin = pkgs.writeShellApplication {
+        name = "${name}-worker-bin";
+        runtimeInputs = with pkgs; [
+          bash
+          coreutils
+          findutils
+          gawk
+          gnused
+          python3
+        ];
+        text = builtins.readFile ../../modules/base/host/firebreak-worker.sh;
+      };
+    in
     pkgs.writeShellApplication {
       inherit name;
       runtimeInputs = with pkgs; [
@@ -322,7 +336,8 @@ rec {
         gnused
       ];
       text = renderTemplate {
-        "@AGENT_BIN@" = "${self.packages.${system}.${workerPackage}}/bin/${workerPackage}";
+        "@AGENT_BIN@" = "${smokeWorkerBin}/bin/${name}-worker-bin";
+        "@REPO_ROOT@" = builtins.toString ../../.;
       } ../../modules/base/tests/test-smoke-worker.sh;
     };
 

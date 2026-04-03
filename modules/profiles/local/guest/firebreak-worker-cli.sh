@@ -1160,17 +1160,26 @@ case "$subcommand" in
         ;;
     esac
 
-    if [ "$attach_mode" = "1" ]; then
-      printf '%s\n' "firebreak: acquiring worker slot ($kind)" >&2
-    fi
-    acquire_kind_spawn_lock "$kind"
-    if [ "$attach_mode" = "1" ]; then
-      printf '%s\n' "firebreak: worker slot acquired ($kind)" >&2
-    fi
-    trap release_kind_spawn_lock EXIT INT TERM
-    enforce_kind_limit "$kind" "$backend" "$kind_max_instances"
-    if [ "$attach_mode" = "1" ]; then
-      printf '%s\n' "firebreak: worker slot validated ($kind)" >&2
+    use_guest_kind_lock=0
+    case "$backend" in
+      process)
+        use_guest_kind_lock=1
+        ;;
+    esac
+
+    if [ "$use_guest_kind_lock" = "1" ]; then
+      if [ "$attach_mode" = "1" ]; then
+        printf '%s\n' "firebreak: acquiring worker slot ($kind)" >&2
+      fi
+      acquire_kind_spawn_lock "$kind"
+      if [ "$attach_mode" = "1" ]; then
+        printf '%s\n' "firebreak: worker slot acquired ($kind)" >&2
+      fi
+      trap release_kind_spawn_lock EXIT INT TERM
+      enforce_kind_limit "$kind" "$backend" "$kind_max_instances"
+      if [ "$attach_mode" = "1" ]; then
+        printf '%s\n' "firebreak: worker slot validated ($kind)" >&2
+      fi
     fi
 
     case "$backend" in
@@ -1242,12 +1251,31 @@ PY
         if [ -z "$launch_mode" ]; then
           launch_mode=run
         fi
+        bridge_run_args=(
+          run
+          --backend
+          firebreak
+          --kind
+          "$kind"
+          --workspace
+          "$workspace"
+          --package
+          "$package_name"
+          --launch-mode
+          "$launch_mode"
+        )
+        if [ -n "$kind_max_instances" ]; then
+          bridge_run_args+=(
+            --max-instances
+            "$kind_max_instances"
+          )
+        fi
         if [ "$attach_mode" = "1" ]; then
-          bridge_request_attach run --backend firebreak --kind "$kind" --workspace "$workspace" --package "$package_name" --launch-mode "$launch_mode" --attach -- "$@"
+          bridge_request_attach "${bridge_run_args[@]}" --attach -- "$@"
         elif [ "$run_json" = "1" ]; then
-          bridge_request run --backend firebreak --kind "$kind" --workspace "$workspace" --package "$package_name" --launch-mode "$launch_mode" --json -- "$@"
+          bridge_request "${bridge_run_args[@]}" --json -- "$@"
         else
-          bridge_request run --backend firebreak --kind "$kind" --workspace "$workspace" --package "$package_name" --launch-mode "$launch_mode" -- "$@"
+          bridge_request "${bridge_run_args[@]}" -- "$@"
         fi
         run_status=$?
         release_kind_spawn_lock

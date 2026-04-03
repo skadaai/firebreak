@@ -28,6 +28,21 @@ wait_for_status() {
   return 1
 }
 
+wait_for_worker_id_by_kind() {
+  kind_prefix=$1
+
+  for _ in $(seq 1 100); do
+    for candidate_root in "$state_dir"/workers/"$kind_prefix"-*; do
+      [ -d "$candidate_root" ] || continue
+      basename "$candidate_root"
+      return 0
+    done
+    sleep 0.1
+  done
+
+  return 1
+}
+
 state_dir=$smoke_tmp_dir/state
 workspace_dir=$smoke_tmp_dir/workspace
 fake_bin_dir=$smoke_tmp_dir/bin
@@ -77,6 +92,13 @@ if [ "$command" = "build" ]; then
 set -eu
 printf '%s\n' "__INSTALLABLE__$installable"
 printf '%s\n' "__SESSION_MODE__\${FIREBREAK_AGENT_SESSION_MODE_OVERRIDE:-}"
+if [ "\${1:-}" = "__sleep__" ]; then
+  shift
+  trap 'exit 0' TERM INT
+  while :; do
+    sleep 1
+  done
+fi
 for arg in "\$@"; do
   printf '%s\n' "__ARG__\$arg"
 done
@@ -139,7 +161,7 @@ fi
 attach_firebreak_default_output=$(
   PATH="$fake_bin_dir:$PATH" \
     FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    FIREBREAK_FLAKE_REF='path:/firebreak-worker-smoke' \
+    FIREBREAK_FLAKE_REF='path:@REPO_ROOT@' \
     FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG=1 \
     FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
     @AGENT_BIN@ run --attach --backend firebreak --kind smoke-firebreak-attach-default --workspace "$workspace_dir" --package firebreak-codex
@@ -154,7 +176,7 @@ fi
 spawn_firebreak_output=$(
   PATH="$fake_bin_dir:$PATH" \
     FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    FIREBREAK_FLAKE_REF='path:/firebreak-worker-smoke' \
+    FIREBREAK_FLAKE_REF='path:@REPO_ROOT@' \
     FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG=1 \
     FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
     @AGENT_BIN@ run --backend firebreak --kind smoke-firebreak --workspace "$workspace_dir" --package firebreak-codex --json -- --version
@@ -185,9 +207,66 @@ firebreak_logs_output=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
     @AGENT_BIN@ logs "$firebreak_worker_id"
 )
-if ! printf '%s\n' "$firebreak_logs_output" | grep -F -q '__INSTALLABLE__path:/firebreak-worker-smoke#firebreak-codex'; then
+if ! printf '%s\n' "$firebreak_logs_output" | grep -F -q '__INSTALLABLE__path:@REPO_ROOT@#firebreak-codex'; then
   printf '%s\n' "$firebreak_logs_output" >&2
   echo "worker smoke did not route the firebreak worker through nix run" >&2
+  exit 1
+fi
+
+attach_limit_output_path=$smoke_tmp_dir/firebreak-attach-limit.out
+attach_limit_error_path=$smoke_tmp_dir/firebreak-attach-limit.err
+(
+  PATH="$fake_bin_dir:$PATH" \
+    FIREBREAK_WORKER_STATE_DIR="$state_dir" \
+    FIREBREAK_FLAKE_REF='path:@REPO_ROOT@' \
+    FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG=1 \
+    FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
+    @AGENT_BIN@ run --attach --backend firebreak --kind smoke-firebreak-attach-limit --workspace "$workspace_dir" --package firebreak-codex --max-instances 1 -- __sleep__
+) >"$attach_limit_output_path" 2>"$attach_limit_error_path" &
+attach_limit_pid=$!
+
+attach_limit_worker_id=$(wait_for_worker_id_by_kind smoke-firebreak-attach-limit || true)
+if [ -z "$attach_limit_worker_id" ]; then
+  cat "$attach_limit_output_path" >&2 || true
+  cat "$attach_limit_error_path" >&2 || true
+  echo "worker smoke did not publish an attached firebreak worker id before enforcing max_instances" >&2
+  exit 1
+fi
+
+attach_limit_running_output=$(wait_for_status "$attach_limit_worker_id" running || true)
+if ! printf '%s\n' "$attach_limit_running_output" | grep -F -q '"status": "running"'; then
+  printf '%s\n' "$attach_limit_running_output" >&2
+  echo "worker smoke did not report the first attached firebreak worker as running" >&2
+  exit 1
+fi
+
+set +e
+attach_limit_second_output=$(
+  PATH="$fake_bin_dir:$PATH" \
+    FIREBREAK_WORKER_STATE_DIR="$state_dir" \
+    FIREBREAK_FLAKE_REF='path:@REPO_ROOT@' \
+    FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG=1 \
+    FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
+    @AGENT_BIN@ run --attach --backend firebreak --kind smoke-firebreak-attach-limit --workspace "$workspace_dir" --package firebreak-codex --max-instances 1 -- __sleep__ 2>&1
+)
+attach_limit_second_status=$?
+set -e
+
+if [ "$attach_limit_second_status" -eq 0 ] || ! printf '%s\n' "$attach_limit_second_output" | grep -F -q "reached max_instances=1"; then
+  printf '%s\n' "$attach_limit_second_output" >&2
+  echo "worker smoke did not enforce max_instances for attached firebreak workers" >&2
+  exit 1
+fi
+
+FIREBREAK_WORKER_STATE_DIR="$state_dir" @AGENT_BIN@ stop "$attach_limit_worker_id" >/dev/null
+set +e
+wait "$attach_limit_pid"
+set -e
+
+attach_limit_stopped_output=$(wait_for_status "$attach_limit_worker_id" stopped || true)
+if ! printf '%s\n' "$attach_limit_stopped_output" | grep -F -q '"status": "stopped"'; then
+  printf '%s\n' "$attach_limit_stopped_output" >&2
+  echo "worker smoke did not stop an attached firebreak worker cleanly" >&2
   exit 1
 fi
 

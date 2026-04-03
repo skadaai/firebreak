@@ -4,6 +4,7 @@ set -eu
 target=@WORKSPACE_MOUNT@
 session_mode=shell
 agent_command=@AGENT_COMMAND@
+agent_tools_mount=@AGENT_TOOLS_MOUNT@
 guest_state_dir=/run/firebreak-agent
 command_state_local=$guest_state_dir/command-state.json
 command_state_shared=@AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
@@ -60,8 +61,8 @@ fi
 
 case "$session_mode:$agent_command" in
   agent-attach-exec:codex|agent:codex)
-    if [ -x /run/agent-tools-host/.bun/bin/codex ]; then
-      agent_command="/run/agent-tools-host/.bun/bin/codex"
+    if [ -x "$agent_tools_mount/.bun/bin/codex" ]; then
+      agent_command="$agent_tools_mount/.bun/bin/codex"
     fi
     attach_shell_flag=-lc
     ;;
@@ -111,14 +112,14 @@ export CODEX_CONFIG_DIR='$(printf '%s' "$codex_config_dir" | sed "s/'/'\\\\''/g"
 export CODEX_SQLITE_HOME='$(printf '%s' "$codex_sqlite_dir" | sed "s/'/'\\\\''/g")'
 mkdir -p "\$CODEX_HOME" "\$CODEX_SQLITE_HOME"
 cd '$(printf '%s' "$target" | sed "s/'/'\\\\''/g")'
-exec /run/agent-tools-host/.bun/bin/codex --no-alt-screen
+exec '$(printf '%s' "$agent_tools_mount/.bun/bin/codex" | sed "s/'/'\\\\''/g")' --no-alt-screen
 EOF
   chmod 0555 "$codex_wrapper_path"
   agent_command=$codex_wrapper_path
 }
 
 case "$session_mode:$agent_command" in
-  agent-attach-exec:/run/agent-tools-host/.bun/bin/codex|agent:/run/agent-tools-host/.bun/bin/codex)
+  agent-attach-exec:"$agent_tools_mount"/.bun/bin/codex|agent:"$agent_tools_mount"/.bun/bin/codex)
     prepare_codex_command_wrapper
     ;;
 esac

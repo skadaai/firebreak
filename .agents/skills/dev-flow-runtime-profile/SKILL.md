@@ -1,9 +1,9 @@
 ---
-name: firebreak-runtime-profile
-description: "Use when Firebreak behavior depends on local interactive VM flows versus cloud non-interactive job flows."
+name: dev-flow-runtime-profile
+description: "Use when dev-flow behavior depends on local interactive VM flows versus cloud non-interactive job flows."
 ---
 
-# Firebreak Runtime Profile
+# Dev Flow Runtime Profile
 
 Choose one runtime mode before planning the slice.
 

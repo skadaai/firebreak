@@ -9,13 +9,13 @@ Use this as the top-level skill for non-trivial autonomous work in this branch.
 
 ## Sequence
 
-1. Use `firebreak-spec-driving` to identify the owning spec and next independent slice.
-2. Use `firebreak-work-task` to decide whether to reuse the current workspace or start another one.
-3. Use `firebreak-boundaries` to declare write scope and shared-path limits before editing.
-4. Use `firebreak-runtime-profile` before planning when local versus cloud behavior matters.
-5. Use `firebreak-change-loop` to keep the slice bounded and evidence-backed.
-6. Use `firebreak-validation` to gather machine-readable evidence.
-7. Use `firebreak-review` before commit or handoff.
+1. Use `dev-flow-spec-driving` to identify the owning spec and next independent slice.
+2. Use `dev-flow-workspace` to decide whether to reuse the current workspace or start another one.
+3. Use `dev-flow-boundaries` to declare write scope and shared-path limits before editing.
+4. Use `dev-flow-runtime-profile` before planning when local versus cloud behavior matters.
+5. Use `dev-flow-change-loop` to keep the slice bounded and evidence-backed.
+6. Use `dev-flow-validation` to gather machine-readable evidence.
+7. Use `dev-flow-review` before commit or handoff.
 
 ## Workspace Rules
 
@@ -28,6 +28,7 @@ Use this as the top-level skill for non-trivial autonomous work in this branch.
 - Use `dev-flow workspace ...` to create, inspect, and close workspaces.
 - Use `dev-flow validate run ...` for named validation suites.
 - Use `dev-flow loop run ...` only after the slice, workspace, and validation suites are explicit.
+- For concrete command shapes, see [references/commands.md](references/commands.md).
 
 ## Stop Conditions
 

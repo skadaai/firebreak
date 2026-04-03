@@ -1,15 +1,15 @@
 ---
-name: firebreak-validation
-description: "Use when a workspace-backed change attempt needs evidence before completion, handoff, or commit. This skill selects named Firebreak validation suites and classifies outcomes as passed, failed, or blocked."
+name: dev-flow-validation
+description: "Use when a workspace-backed change attempt needs evidence before completion, handoff, or commit. This skill selects named validation suites and classifies outcomes as passed, failed, or blocked."
 ---
 
-# Firebreak Validation
+# Dev Flow Validation
 
-Use the Firebreak harness, not ad hoc shell output, as the source of truth.
+Use the dev-flow harness, not ad hoc shell output, as the source of truth.
 
 ## Order
 
-Use this skill after the slice is implemented and the expected scope is known. Feed its result into `firebreak-review` instead of treating raw shell output as sufficient evidence.
+Use this skill after the slice is implemented and the expected scope is known. Feed its result into `dev-flow-review` instead of treating raw shell output as sufficient evidence.
 
 ## Workflow
 

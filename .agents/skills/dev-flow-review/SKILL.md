@@ -1,9 +1,9 @@
 ---
-name: firebreak-review
-description: "Use when deciding whether a Firebreak change is safe to land. This skill reviews diffs and audit artifacts for regressions, scope escapes, missing evidence, and misleading success claims."
+name: dev-flow-review
+description: "Use when deciding whether an autonomous change is safe to land. This skill reviews diffs and audit artifacts for regressions, scope escapes, missing evidence, and misleading success claims."
 ---
 
-# Firebreak Review
+# Dev Flow Review
 
 Review findings first. Approval is secondary.
 

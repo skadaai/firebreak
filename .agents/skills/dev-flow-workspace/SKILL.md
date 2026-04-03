@@ -1,15 +1,15 @@
 ---
-name: firebreak-work-task
+name: dev-flow-workspace
 description: "Use when autonomous work will edit code, validate a slice, or review a change. This skill keeps work inside an isolated workspace and out of the primary checkout."
 ---
 
-# Firebreak Work Task
+# Dev Flow Workspace
 
 Use one workspace per spec line.
 
 ## Order
 
-Use this skill after `firebreak-spec-driving` identifies the owning spec or maintenance line, and before substantial edits, validation, or review.
+Use this skill after `dev-flow-spec-driving` identifies the owning spec or maintenance line, and before substantial edits, validation, or review.
 
 ## Workflow
 

@@ -1,15 +1,15 @@
 ---
-name: firebreak-change-loop
+name: dev-flow-change-loop
 description: "Use when an autonomous slice is larger than a trivial one-line fix. This skill enforces the bounded loop: frame the attempt, record the plan, validate, review, then commit or block."
 ---
 
-# Firebreak Change Loop
+# Dev Flow Change Loop
 
 Follow the loop in order. Do not skip stages because the change looks small.
 
 ## Order
 
-The normal sequence is: choose the slice with `firebreak-spec-driving`, choose or confirm the workspace with `firebreak-work-task`, enforce scope with `firebreak-boundaries`, then run this loop through validation and review.
+The normal sequence is: choose the slice with `dev-flow-spec-driving`, choose or confirm the workspace with `dev-flow-workspace`, enforce scope with `dev-flow-boundaries`, then run this loop through validation and review.
 
 ## Loop
 
@@ -18,7 +18,7 @@ The normal sequence is: choose the slice with `firebreak-spec-driving`, choose o
 3. Reuse the current workspace for sequential work on the same spec; use a different workspace when the work moves to a different spec or unrelated line.
 4. Record one slice plan before substantial edits.
 5. Keep the slice narrow enough to validate and review in one pass.
-6. Run the required Firebreak validation suites.
+6. Run the required named validation suites.
 7. Run a review pass on the resulting diff and artifacts.
 8. Commit only if the slice is complete and evidence-backed.
 9. Otherwise stop with `blocked` or `failed`.

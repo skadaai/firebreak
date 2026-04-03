@@ -1,0 +1,6 @@
+interface:
+  display_name: "Dev Flow Review"
+  short_description: "Review autonomous changes for risk and evidence"
+  default_prompt: "Use $dev-flow-review to review an autonomous change for regressions, scope escapes, and missing evidence."
+policy:
+  allow_implicit_invocation: false

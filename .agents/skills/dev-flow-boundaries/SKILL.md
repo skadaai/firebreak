@@ -1,11 +1,11 @@
 ---
-name: firebreak-boundaries
+name: dev-flow-boundaries
 description: "Use when an autonomous workspace touches files, shared directories, or parallel execution. This skill requires explicit write scope, safe shared-path handling, runtime budgets, and workspace isolation."
 ---
 
-# Firebreak Boundaries
+# Dev Flow Boundaries
 
-Firebreak autonomy applies only inside explicit boundaries. Before acting, define what the workspace may change and verify that any shared or mutable state stays inside approved roots.
+Autonomous work applies only inside explicit boundaries. Before acting, define what the workspace may change and verify that any shared or mutable state stays inside approved roots.
 
 ## Order
 

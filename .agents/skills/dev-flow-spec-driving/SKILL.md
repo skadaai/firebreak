@@ -1,15 +1,15 @@
 ---
-name: firebreak-spec-driving
-description: "Use when work starts from a Firebreak spec or an underspecified request. This skill decides whether to amend an existing spec or create a new one, then turns the contract into the next thin execution slice."
+name: dev-flow-spec-driving
+description: "Use when work starts from a repo spec or an underspecified request. This skill decides whether to amend an existing spec or create a new one, then turns the contract into the next thin execution slice."
 ---
 
-# Firebreak Spec Driving
+# Dev Flow Spec Driving
 
 Drive from the durable contract, then choose the next slice.
 
 ## Order
 
-Use this skill before `firebreak-work-task` and `firebreak-change-loop`. First decide the owning spec and next slice, then decide whether that slice stays in the current workspace or needs a separate workspace.
+Use this skill before `dev-flow-workspace` and `dev-flow-change-loop`. First decide the owning spec and next slice, then decide whether that slice stays in the current workspace or needs a separate workspace.
 
 ## Workflow
 
@@ -31,4 +31,4 @@ Use this skill before `firebreak-work-task` and `firebreak-change-loop`. First d
 ## Example
 
 - If the current workspace is implementing `specs/007-cli-and-naming-contract` and the next change still belongs to that contract, keep using the same workspace.
-- If the next requested change belongs to a different spec or a distinct maintenance line, hand it off to `firebreak-work-task` as a separate workspace decision.
+- If the next requested change belongs to a different spec or a distinct maintenance line, hand it off to `dev-flow-workspace` as a separate workspace decision.

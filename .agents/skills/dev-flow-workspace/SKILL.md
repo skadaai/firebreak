@@ -35,6 +35,8 @@ Use this skill after `dev-flow-spec-driving` identifies the owning spec or maint
 7. Use workspace-owned VM state, validation artifacts, and review artifacts.
 8. Close the workspace with a real disposition when that line of work is done or parked.
 
+`dev-flow workspace` metadata should emit `workspace_id`, `branch`, `reuse_or_create`, and `shared_path_constraints` so downstream steps can reason about reuse versus creation and about shared-path handling without inferring them from prose.
+
 ## Rules
 
 - Never edit the primary checkout for autonomous work.

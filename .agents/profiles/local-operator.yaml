@@ -4,7 +4,7 @@ selection: "overlay"
 overlay_group: "runtime"
 conflicts_with:
   - "cloud-operator"
-description: "Operates against Firebreak's local interactive runtime."
+description: "Operates against dev-flow's local interactive runtime."
 when: "Use as the runtime overlay when the task targets local wrappers, local smoke flows, or developer-machine VM UX."
 inherits:
   - "base"

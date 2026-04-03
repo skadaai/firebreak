@@ -6,6 +6,10 @@ Use these as shape references, not rigid templates.
 
 If the active workspace already belongs to the same spec line, keep working in it and avoid creating another checkout.
 
+```sh
+dev-flow workspace show --workspace-id spec-007-cli
+```
+
 ## Start A Workspace For A Different Spec
 
 ```sh

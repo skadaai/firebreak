@@ -15,10 +15,18 @@ Use the dev-flow harness, not ad hoc shell output, as the source of truth.
 
 ## Outputs
 
-- `suite_name`
+- `suite`
 - `result`
-- `artifact_paths`
-- `next_action`
+- `required_capabilities`
+- `missing_capability`
+- `command`
+- `run_dir`
+- `stdout_path`
+- `stderr_path`
+- `exit_code_path`
+- `started_at`
+- `finished_at`
+- `exit_code`
 
 ## Order
 
@@ -27,9 +35,9 @@ Use this skill after the slice is implemented and the expected scope is known. F
 ## Workflow
 
 1. Pick the smallest named suite that proves the slice.
-2. Run it through the current named validation entrypoint. In this branch, that is `dev-flow validate run`.
-3. Read the machine result and artifact paths.
-4. Decide the next action from the result.
+2. Run it through the current named validation entrypoint, for example `dev-flow validate run`.
+3. Read the emitted `result`, command, capability fields, and output paths.
+4. Decide the next action from the emitted result.
 
 ## Outcomes
 

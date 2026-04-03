@@ -13,12 +13,12 @@ Do not use bare `session` to mean either the workspace or the attempt.
 
 ## Agent Workflow Surface
 
-- [`.agents/skills/dev-flow-autonomous-flow/`](/home/zvictor/development/firebreak/dev-flow-workspace-model/.agents/skills/dev-flow-autonomous-flow): top-level orchestration skill for non-trivial autonomous work.
-- [`.agents/skills/dev-flow-spec-driving/`](/home/zvictor/development/firebreak/dev-flow-workspace-model/.agents/skills/dev-flow-spec-driving): identifies the owning spec and next independent slice.
-- [`.agents/skills/dev-flow-workspace/`](/home/zvictor/development/firebreak/dev-flow-workspace-model/.agents/skills/dev-flow-workspace): decides whether to reuse the current workspace or create another one.
-- [`.agents/skills/dev-flow-validation/`](/home/zvictor/development/firebreak/dev-flow-workspace-model/.agents/skills/dev-flow-validation): records machine-readable validation evidence.
-- [`.agents/profiles/`](/home/zvictor/development/firebreak/dev-flow-workspace-model/.agents/profiles): role and runtime overlays that compose those skills into planner, worker, reviewer, validator, and runtime-specific operating modes.
-- [`.agents/profiles/ROLE_SELECTION.md`](/home/zvictor/development/firebreak/dev-flow-workspace-model/.agents/profiles/ROLE_SELECTION.md): preconditions and authority boundaries for choosing the right role.
+- [`.agents/skills/dev-flow-autonomous-flow/`](./.agents/skills/dev-flow-autonomous-flow): top-level orchestration skill for non-trivial autonomous work.
+- [`.agents/skills/dev-flow-spec-driving/`](./.agents/skills/dev-flow-spec-driving): identifies the owning spec and next independent slice.
+- [`.agents/skills/dev-flow-workspace/`](./.agents/skills/dev-flow-workspace): decides whether to reuse the current workspace or create another one.
+- [`.agents/skills/dev-flow-validation/`](./.agents/skills/dev-flow-validation): records machine-readable validation evidence.
+- [`.agents/profiles/`](./.agents/profiles): role and runtime overlays that compose those skills into planner, worker, reviewer, validator, and runtime-specific operating modes.
+- [`.agents/profiles/ROLE_SELECTION.md`](./.agents/profiles/ROLE_SELECTION.md): preconditions and authority boundaries for choosing the right role.
 
 ## Structure
 

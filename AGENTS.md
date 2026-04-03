@@ -100,10 +100,10 @@ Check [`UPSTREAM_REPOS.md`](./UPSTREAM_REPOS.md) first when choosing which upstr
 
 For non-trivial autonomous work in this branch, prefer the `dev-flow` workflow surface over ad hoc task language:
 
-- Start from [`dev-flow-autonomous-flow`](/home/zvictor/development/firebreak/dev-flow-workspace-model/.agents/skills/dev-flow-autonomous-flow/SKILL.md) when the work spans spec selection, workspace choice, validation, and review.
+- Start from [`dev-flow-autonomous-flow`](./.agents/skills/dev-flow-autonomous-flow/SKILL.md) when the work spans spec selection, workspace choice, validation, and review.
 - Use one workspace per spec line. Reuse it for sequential work on the same spec, and start another workspace when the work moves to a different spec or unrelated maintenance line.
-- Prefer the aligned role profiles in [`.agents/profiles/`](/home/zvictor/development/firebreak/dev-flow-workspace-model/.agents/profiles): `planner`, `worker`, `reviewer`, `validator`, `local-operator`, and `cloud-operator`.
-- Use [ROLE_SELECTION.md](/home/zvictor/development/firebreak/dev-flow-workspace-model/.agents/profiles/ROLE_SELECTION.md) to choose the smallest role that can complete the current phase.
+- Prefer the aligned role profiles in [`.agents/profiles/`](./.agents/profiles): `planner`, `worker`, `reviewer`, `validator`, `local-operator`, and `cloud-operator`.
+- Use [ROLE_SELECTION.md](./.agents/profiles/ROLE_SELECTION.md) to choose the smallest role that can complete the current phase.
 - Use `dev-flow workspace ...`, `dev-flow validate run ...`, and `dev-flow loop run ...` as the internal command surface for autonomous work.
 
 When a change requires manual setup outside the repository, such as configuring GitHub, registering self-hosted runners, adding secrets or variables, or any other human intervention, add or update a detailed step-by-step guide under [`guides/`](./guides) in the same change.

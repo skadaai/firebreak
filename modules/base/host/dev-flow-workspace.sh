@@ -120,6 +120,34 @@ load_workspace() {
   if [ -f "$workspace_state_root/closed-at" ]; then
     closed_at=$(cat "$workspace_state_root/closed-at")
   fi
+  reuse_or_create="reuse"
+  shared_path_constraints='["resolved shared paths must stay inside the workspace shared root",".codex, .claude, and .direnv remain shared unless the workspace owns the resolved path"]'
+}
+
+emit_metadata() {
+  cat <<EOF
+{
+  "workspace_id": "$(json_escape "$workspace_id")",
+  "status": "$(json_escape "$status")",
+  "owner": "$(json_escape "$owner")",
+  "branch": "$(json_escape "$branch")",
+  "primary_checkout": "$(json_escape "$primary_checkout")",
+  "workspace_path": "$(json_escape "$workspace_path")",
+  "shared_root": "$(json_escape "$workspace_shared_root")",
+  "workspace_state_root": "$(json_escape "$workspace_state_root")",
+  "validation_root": "$(json_escape "$validation_root")",
+  "runtime_root": "$(json_escape "$runtime_root")",
+  "vm_state_root": "$(json_escape "$vm_state_root")",
+  "artifact_root": "$(json_escape "$artifact_root")",
+  "tmp_root": "$(json_escape "$tmp_root")",
+  "cloud_state_root": "$(json_escape "$cloud_state_root")",
+  "reuse_or_create": "$(json_escape "$reuse_or_create")",
+  "shared_path_constraints": $shared_path_constraints,
+  "created_at": "$(json_escape "$created_at")",
+  "closed_at": $(if [ -n "$closed_at" ]; then printf '"%s"' "$(json_escape "$closed_at")"; else printf 'null'; fi),
+  "disposition": $(if [ -n "$disposition" ]; then printf '"%s"' "$(json_escape "$disposition")"; else printf 'null'; fi)
+}
+EOF
 }
 
 write_metadata() {
@@ -149,27 +177,7 @@ write_metadata() {
     rm -f "$workspace_state_root/closed-at"
   fi
 
-  cat >"$metadata_path" <<EOF
-{
-  "workspace_id": "$(json_escape "$workspace_id")",
-  "status": "$(json_escape "$status")",
-  "owner": "$(json_escape "$owner")",
-  "branch": "$(json_escape "$branch")",
-  "primary_checkout": "$(json_escape "$primary_checkout")",
-  "workspace_path": "$(json_escape "$workspace_path")",
-  "shared_root": "$(json_escape "$workspace_shared_root")",
-  "workspace_state_root": "$(json_escape "$workspace_state_root")",
-  "validation_root": "$(json_escape "$validation_root")",
-  "runtime_root": "$(json_escape "$runtime_root")",
-  "vm_state_root": "$(json_escape "$vm_state_root")",
-  "artifact_root": "$(json_escape "$artifact_root")",
-  "tmp_root": "$(json_escape "$tmp_root")",
-  "cloud_state_root": "$(json_escape "$cloud_state_root")",
-  "created_at": "$(json_escape "$created_at")",
-  "closed_at": $(if [ -n "$closed_at" ]; then printf '"%s"' "$(json_escape "$closed_at")"; else printf 'null'; fi),
-  "disposition": $(if [ -n "$disposition" ]; then printf '"%s"' "$(json_escape "$disposition")"; else printf 'null'; fi)
-}
-EOF
+  emit_metadata >"$metadata_path"
 }
 
 create_workspace() {
@@ -232,7 +240,8 @@ create_workspace() {
         echo "cannot resume inactive workspace '$workspace_id' with status '$status'" >&2
         exit 125
       fi
-      cat "$metadata_path"
+      reuse_or_create="reuse"
+      emit_metadata
       exit 0
     fi
     echo "workspace already exists: $workspace_id" >&2
@@ -265,6 +274,8 @@ create_workspace() {
   primary_checkout=$repo_root
   created_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   status="active"
+  reuse_or_create="create"
+  shared_path_constraints='["resolved shared paths must stay inside the workspace shared root",".codex, .claude, and .direnv remain shared unless the workspace owns the resolved path"]'
   disposition=""
   closed_at=""
 
@@ -274,7 +285,7 @@ create_workspace() {
   cat "$metadata_path"
 }
 
-show_workspace() {
+  show_workspace() {
   workspace_id=""
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -293,7 +304,8 @@ show_workspace() {
   fi
 
   load_workspace "$workspace_id"
-  cat "$metadata_path"
+  reuse_or_create="reuse"
+  emit_metadata
 }
 
 validate_workspace() {

@@ -15,12 +15,12 @@
   outputs = { self, nixpkgs, microvm }:
     let
       lib = nixpkgs.lib;
-      defaultHostSystem = "x86_64-linux";
       supportedHostSystems = [
-        defaultHostSystem
+        "x86_64-linux"
         "aarch64-linux"
         "aarch64-darwin"
       ];
+      defaultHostSystem = "x86_64-linux";
       guestSystemFor = hostSystem:
         if hostSystem == "aarch64-darwin" then
           "aarch64-linux"
@@ -38,13 +38,21 @@
           inherit (supports.${system}) mkLocalVmArtifacts pkgs;
         });
     in {
+      recipeLib = {
+        inherit (supports.${defaultHostSystem})
+          mkPackagedNodeCliFlakeOutputs
+          ;
+      };
+
       lib = lib.genAttrs supportedHostSystems (system: {
         inherit (supports.${system})
           mkAgentVm
           mkLocalVmArtifacts
           mkLocalVmPackage
           mkPackagedNodeCliArtifacts
+          mkPackagedNodeCliFlakeOutputs
           mkRunnerPackage
+          mkWorkerProxyScript
           mkWorkspaceProjectArtifacts
           ;
       });
@@ -62,22 +70,43 @@
           inherit (supports.${system})
             hostIsLinux
             lib
+            mkAgentPackage
             mkAgentVersionSmokePackage
             mkCloudJobPackage
             mkCloudSmokePackage
             mkFirebreakCliSurfaceSmokePackage
+            mkWorkerFirebreakBridgeProbePackage
             mkFirebreakCliPackage
             mkLoopPackage
             mkLoopSmokePackage
             mkNpxLauncherSmokePackage
             mkProjectConfigSmokePackage
+            mkRunnerPackage
             mkSmokePackage
             mkTaskPackage
             mkTaskSmokePackage
             mkValidationPackage
             mkValidationSmokePackage
+            mkWorkerFirebreakAttachSmokePackage
+            mkWorkerInteractiveClaudeDirectExitSmokePackage
+            mkWorkerInteractiveClaudeDirectSmokePackage
+            mkWorkerInteractiveCodexDirectSmokePackage
+            mkWorkerGuestBridgeInteractiveSmokePackage
+            mkWorkerGuestBridgeSmokePackage
+            mkWorkerPackage
+            mkWorkerProxyScriptSmokePackage
+            mkWorkerSmokePackage
             ;
         });
+
+      apps = lib.genAttrs supportedHostSystems (system: {
+        default = self.apps.${system}.firebreak;
+
+        firebreak = {
+          type = "app";
+          program = "${self.packages.${system}.firebreak}/bin/firebreak";
+        };
+      });
 
       checks = lib.genAttrs supportedHostSystems (system:
         import ./nix/outputs/checks.nix {

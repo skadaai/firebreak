@@ -13,6 +13,8 @@ let
     "@AGENT_CONFIG_DIR_FILE@" = cfg.agentConfigDirFile;
     "@AGENT_CONFIG_DIR_NAME@" = cfg.agentConfigDirName;
     "@START_DIR_FILE@" = cfg.startDirFile;
+    "@WORKER_KINDS_FILE@" = cfg.workerKindsFile;
+    "@WORKER_LOCAL_STATE_DIR@" = cfg.workerLocalStateDir;
     "@WORKSPACE_MOUNT@" = cfg.workspaceMount;
   };
 
@@ -122,6 +124,18 @@ in {
       description = "Guest path for a host-shared directory used to persist one-shot command stdout, stderr, and exit code.";
     };
 
+    agentToolsEnabled = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Whether the VM mounts a host-shared persistent tools directory for bootstrap-managed agent runtimes.";
+    };
+
+    agentToolsMount = mkOption {
+      type = types.str;
+      default = "/run/agent-tools-host";
+      description = "Guest path for an optional host-shared directory used to persist bootstrap-managed agent tools across VM launches.";
+    };
+
     agentCommand = mkOption {
       type = types.nullOr types.str;
       default = null;
@@ -203,6 +217,36 @@ in {
       default = null;
       description = "Optional oneshot bootstrap script that runs before the console starts.";
     };
+
+    workerBridgeEnabled = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Whether the guest exposes the Firebreak worker bridge surface for host-brokered worker requests.";
+    };
+
+    workerBridgeMount = mkOption {
+      type = types.str;
+      default = "/run/firebreak-worker-bridge";
+      description = "Guest path for the optional host-shared worker bridge request-response directory.";
+    };
+
+    workerKindsJson = mkOption {
+      type = types.str;
+      default = "{}";
+      description = "Machine-readable worker-kind declarations available inside the guest.";
+    };
+
+    workerKindsFile = mkOption {
+      type = types.str;
+      default = "/etc/firebreak-worker-kinds.json";
+      description = "Guest path to the resolved worker-kind declaration file.";
+    };
+
+    workerLocalStateDir = mkOption {
+      type = types.str;
+      default = "${devHome}/.local/state/firebreak/worker-local";
+      description = "Guest-owned state directory for guest-local process workers.";
+    };
   };
 
   config = {
@@ -222,7 +266,16 @@ in {
 
     security.sudo.wheelNeedsPassword = false;
 
+    assertions = [
+      {
+        assertion = lib.hasPrefix "/etc/" cfg.workerKindsFile;
+        message = "agentVm.workerKindsFile must stay under /etc so Firebreak can materialize it declaratively.";
+      }
+    ];
+
     environment.systemPackages = cfg.extraSystemPackages;
+
+    environment.etc.${lib.removePrefix "/etc/" cfg.workerKindsFile}.text = cfg.workerKindsJson;
 
     programs.bash.interactiveShellInit = ''
       ${baseShellInit}

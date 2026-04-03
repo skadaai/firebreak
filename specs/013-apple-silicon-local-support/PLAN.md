@@ -48,7 +48,7 @@ This MVP is intentionally narrower than full platform parity. It is the first pr
 - run `bash ./scripts/run-flake.sh run .#firebreak-test-smoke-npx-launcher`
 - manually validate on a real Apple Silicon Mac:
   - `nix run .#firebreak-codex`
-  - `FIREBREAK_VM_MODE=shell nix run .#firebreak-codex`
+  - `FIREBREAK_LAUNCH_MODE=shell nix run .#firebreak-codex`
   - one-shot `--version` execution
   - workspace sharing
   - agent config sharing

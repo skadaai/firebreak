@@ -20,6 +20,7 @@ let
 
   packages = import ./support/packages.nix {
     inherit self system pkgs renderTemplate;
+    inherit (runtime) mkLocalVmArtifacts;
   };
 in
 runtime // projects // packages // {

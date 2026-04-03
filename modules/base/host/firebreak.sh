@@ -11,6 +11,12 @@ command=${1:-}
 . "$firebreak_libexec_dir/firebreak-init.sh"
 . "$firebreak_libexec_dir/firebreak-doctor.sh"
 
+firebreak_exec_libexec() {
+  script_name=$1
+  shift
+  exec bash "$firebreak_libexec_dir/$script_name" "$@"
+}
+
 firebreak_require_flake_ref() {
   if [ -z "${FIREBREAK_FLAKE_REF:-}" ]; then
     echo "FIREBREAK_FLAKE_REF is required for commands that launch Firebreak workloads" >&2
@@ -51,7 +57,7 @@ EOF
 run_usage() {
   cat <<'EOF' >&2
 usage:
-  firebreak run <vm> [--shell] [-- <vm args...>]
+  firebreak run <vm> [--shell] [--launch-mode <run|shell>] [--worker-mode <vm|local|name=vm|name=local>] [-- <vm args...>]
 EOF
   exit "${1:-0}"
 }
@@ -99,6 +105,9 @@ Available Firebreak VMs
 Examples:
   firebreak run codex
   firebreak run codex --shell
+  firebreak run codex --launch-mode shell
+  firebreak run codex --worker-mode local
+  firebreak run codex --worker-mode codex=vm --worker-mode claude=local
   firebreak run claude-code -- --help
 EOF
 }
@@ -114,12 +123,63 @@ firebreak_run_command() {
   esac
   shift
 
-  requested_vm_mode=${FIREBREAK_VM_MODE:-}
+  requested_launch_mode=${FIREBREAK_LAUNCH_MODE:-}
+  requested_worker_mode=${FIREBREAK_WORKER_MODE:-${FIREBREAK_WORKER_PROXY_MODE:-}}
+  requested_worker_modes=${FIREBREAK_WORKER_MODES:-}
+
+  append_worker_mode_override() {
+    worker_mode_entry=$1
+    if [ -n "$requested_worker_modes" ]; then
+      requested_worker_modes="${requested_worker_modes}
+$worker_mode_entry"
+    else
+      requested_worker_modes=$worker_mode_entry
+    fi
+  }
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --shell)
-        requested_vm_mode=shell
+        requested_launch_mode=shell
+        shift
+        ;;
+      --launch-mode)
+        [ "$#" -ge 2 ] || {
+          echo "missing value for --launch-mode" >&2
+          run_usage 1
+        }
+        requested_launch_mode=$2
+        shift 2
+        ;;
+      --launch-mode=*)
+        requested_launch_mode=${1#*=}
+        shift
+        ;;
+      --worker-mode|--worker-proxy-mode)
+        [ "$#" -ge 2 ] || {
+          echo "missing value for --worker-mode" >&2
+          run_usage 1
+        }
+        case "$2" in
+          *=*)
+            append_worker_mode_override "$2"
+            ;;
+          *)
+            requested_worker_mode=$2
+            ;;
+        esac
+        shift 2
+        ;;
+      --worker-mode=*|--worker-proxy-mode=*)
+        worker_mode_value=${1#*=}
+        case "$worker_mode_value" in
+          *=*)
+            append_worker_mode_override "$worker_mode_value"
+            ;;
+          *)
+            requested_worker_mode=$worker_mode_value
+            ;;
+        esac
         shift
         ;;
       --)
@@ -139,29 +199,116 @@ firebreak_run_command() {
     esac
   done
 
-  case "$requested_vm_mode" in
+  case "$requested_launch_mode" in
     ""|run|shell)
       ;;
     *)
-      echo "unsupported Firebreak VM mode: $requested_vm_mode" >&2
+      echo "unsupported Firebreak launch mode: $requested_launch_mode" >&2
       run_usage 1
       ;;
   esac
 
+  normalize_worker_mode() {
+    case "$1" in
+      worker)
+        printf '%s\n' "vm"
+        ;;
+      *)
+        printf '%s\n' "$1"
+        ;;
+    esac
+  }
+
+  requested_worker_mode=$(normalize_worker_mode "$requested_worker_mode")
+
+  case "$requested_worker_mode" in
+    ""|vm|local)
+      ;;
+    *)
+      echo "unsupported FIREBREAK_WORKER_MODE: $requested_worker_mode" >&2
+      echo "supported values: vm, local" >&2
+      run_usage 1
+      ;;
+  esac
+
+  if [ -n "$requested_worker_modes" ]; then
+    normalized_worker_modes=""
+    while IFS= read -r worker_mode_entry || [ -n "$worker_mode_entry" ]; do
+      worker_mode_entry=${worker_mode_entry#"${worker_mode_entry%%[![:space:]]*}"}
+      worker_mode_entry=${worker_mode_entry%"${worker_mode_entry##*[![:space:]]}"}
+      [ -n "$worker_mode_entry" ] || continue
+      case "$worker_mode_entry" in
+        *=*)
+          worker_name=${worker_mode_entry%%=*}
+          worker_mode_value=$(normalize_worker_mode "${worker_mode_entry#*=}")
+          case "$worker_mode_value" in
+            vm|local)
+              ;;
+            *)
+              echo "unsupported FIREBREAK_WORKER_MODE override: $worker_mode_entry" >&2
+              echo "supported override values: name=vm, name=local" >&2
+              exit 1
+              ;;
+          esac
+          case "$worker_name" in
+            ""|*[!A-Za-z0-9._-]*)
+              echo "unsupported FIREBREAK_WORKER_MODE override target: $worker_name" >&2
+              exit 1
+              ;;
+          esac
+          if [ -n "$normalized_worker_modes" ]; then
+            normalized_worker_modes="${normalized_worker_modes}
+${worker_name}=${worker_mode_value}"
+          else
+            normalized_worker_modes="${worker_name}=${worker_mode_value}"
+          fi
+          ;;
+        *)
+          echo "unsupported FIREBREAK_WORKER_MODE override: $worker_mode_entry" >&2
+          echo "supported override values: name=vm, name=local" >&2
+          exit 1
+          ;;
+      esac
+    done <<EOF
+$requested_worker_modes
+EOF
+    requested_worker_modes=$normalized_worker_modes
+  fi
+
+  dispatch_run_package() {
+    package_name=$1
+    shift
+
+    if [ -n "$requested_launch_mode" ] && { [ -n "$requested_worker_mode" ] || [ -n "$requested_worker_modes" ]; }; then
+      FIREBREAK_LAUNCH_MODE="$requested_launch_mode" \
+      FIREBREAK_WORKER_MODE="$requested_worker_mode" \
+      FIREBREAK_WORKER_MODES="$requested_worker_modes" \
+      firebreak_exec_package "$package_name" "$@"
+      return
+    fi
+
+    if [ -n "$requested_launch_mode" ]; then
+      FIREBREAK_LAUNCH_MODE="$requested_launch_mode" \
+      firebreak_exec_package "$package_name" "$@"
+      return
+    fi
+
+    if [ -n "$requested_worker_mode" ] || [ -n "$requested_worker_modes" ]; then
+      FIREBREAK_WORKER_MODE="$requested_worker_mode" \
+      FIREBREAK_WORKER_MODES="$requested_worker_modes" \
+      firebreak_exec_package "$package_name" "$@"
+      return
+    fi
+
+    firebreak_exec_package "$package_name" "$@"
+  }
+
   case "$vm_name" in
     codex)
-      if [ -n "$requested_vm_mode" ]; then
-        FIREBREAK_VM_MODE="$requested_vm_mode" firebreak_exec_package "firebreak-codex" "$@"
-      else
-        firebreak_exec_package "firebreak-codex" "$@"
-      fi
+      dispatch_run_package "firebreak-codex" "$@"
       ;;
     claude-code)
-      if [ -n "$requested_vm_mode" ]; then
-        FIREBREAK_VM_MODE="$requested_vm_mode" firebreak_exec_package "firebreak-claude-code" "$@"
-      else
-        firebreak_exec_package "firebreak-claude-code" "$@"
-      fi
+      dispatch_run_package "firebreak-claude-code" "$@"
       ;;
     *)
       echo "unknown Firebreak VM: $vm_name" >&2
@@ -179,7 +326,8 @@ usage:
   firebreak init [--force] [--stdout] [--interactive] [--non-interactive]
   firebreak doctor [--verbose] [--json]
   firebreak vms [--json]
-  firebreak run <vm> [--shell] [-- <vm args...>]
+  firebreak run <vm> [--shell] [--launch-mode <run|shell>] [--worker-mode <vm|local|name=vm|name=local>] [-- <vm args...>]
+  firebreak worker <subcommand> ...
   firebreak internal <subcommand> ...
 
 Available commands:
@@ -187,6 +335,7 @@ Available commands:
   doctor      Explain resolved config and launch readiness
   vms         List the public Firebreak VM workloads
   run         Launch a public Firebreak VM workload
+  worker      Manage host-brokered Firebreak workers
   internal    Internal plumbing for Firebreak's self development by agents and automation
 
 Other human-facing commands remain reserved until they have clear user value and intuitive UX.
@@ -209,6 +358,10 @@ case "$command" in
   run)
     shift
     firebreak_run_command "$@"
+    ;;
+  worker)
+    shift
+    firebreak_exec_libexec "firebreak-worker.sh" "$@"
     ;;
   internal)
     shift

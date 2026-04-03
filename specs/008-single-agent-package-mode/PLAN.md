@@ -9,7 +9,7 @@ last_updated: 2026-03-23
 
 1. Define the single-package local-launch contract in this spec and acceptance file.
 2. Remove separate public `*-shell` package outputs from `flake.nix`.
-3. Keep shell mode available through `FIREBREAK_VM_MODE=shell` on the public package.
+3. Keep shell mode available through `FIREBREAK_LAUNCH_MODE=shell` on the public package.
 4. Update the local smoke harness to validate both default agent mode and shell override mode through one package.
 5. Remove legacy local mode aliases from the public contract and implementation.
 6. Update docs and architecture guidance to describe the single-package model.
@@ -35,4 +35,4 @@ Implemented.
 
 ## Open questions
 
-- none; the public mode vocabulary is `run|shell` through `FIREBREAK_VM_MODE`
+- none; the public mode vocabulary is `run|shell` through `FIREBREAK_LAUNCH_MODE`

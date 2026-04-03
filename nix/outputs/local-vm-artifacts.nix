@@ -23,6 +23,15 @@ in
     agentEnvPrefix = "CLAUDE";
   };
 
+  firebreak-interactive-echo = mkLocalVmArtifacts {
+    name = "firebreak-interactive-echo";
+    extraModules = [ self.nixosModules.firebreak-interactive-echo ];
+    controlSocketName = "firebreak-interactive-echo";
+    defaultAgentCommand = "interactive-echo";
+    agentConfigDirName = ".firebreak";
+    defaultAgentConfigHostDir = "$HOME/.firebreak/firebreak-interactive-echo";
+  };
+
 } // lib.optionalAttrs includeCloud {
   firebreak-codex-cloud = mkLocalVmArtifacts {
     name = "firebreak-codex-cloud";

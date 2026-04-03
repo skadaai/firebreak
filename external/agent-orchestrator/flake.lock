@@ -3,21 +3,19 @@
     "firebreak": {
       "inputs": {
         "microvm": "microvm",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": [
+          "nixpkgs"
+        ]
       },
       "locked": {
-        "lastModified": 1774302234,
-        "narHash": "sha256-IE5+PQEq5dfxdwpV91TYljXDOeMAvFEfXnpF0odBkB8=",
-        "owner": "skadaai",
-        "repo": "firebreak",
-        "rev": "5c5cfee3856b9ffc3cfc5dd8517fda1877e67865",
-        "type": "github"
+        "path": "../..",
+        "type": "path"
       },
       "original": {
-        "owner": "skadaai",
-        "repo": "firebreak",
-        "type": "github"
-      }
+        "path": "../..",
+        "type": "path"
+      },
+      "parent": []
     },
     "microvm": {
       "inputs": {
@@ -43,21 +41,24 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1773597492,
-        "narHash": "sha256-hQ284SkIeNaeyud+LS0WVLX+WL2rxcVZLFEaK0e03zg=",
+        "lastModified": 1774386573,
+        "narHash": "sha256-4hAV26quOxdC6iyG7kYaZcM3VOskcPUrdCQd/nx8obc=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "a07d4ce6bee67d7c838a8a5796e75dff9caa21ef",
+        "rev": "46db2e09e1d3f113a13c0d7b81e2f221c63b8ce9",
         "type": "github"
       },
       "original": {
-        "id": "nixpkgs",
-        "type": "indirect"
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
       }
     },
     "root": {
       "inputs": {
-        "firebreak": "firebreak"
+        "firebreak": "firebreak",
+        "nixpkgs": "nixpkgs"
       }
     },
     "spectrum": {

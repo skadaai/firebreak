@@ -25,3 +25,15 @@ if [ -n "${MICROVM_AGENT_EXEC_OUTPUT_SOCKET:-}" ]; then
     -chardev socket,id=fs-agentexecoutput,path="$MICROVM_AGENT_EXEC_OUTPUT_SOCKET" \
     -device vhost-user-fs-pci,chardev=fs-agentexecoutput,tag=hostexecoutput
 fi
+
+if [ -n "${MICROVM_AGENT_TOOLS_SOCKET:-}" ]; then
+  printf '%s\n' \
+    -chardev socket,id=fs-agenttools,path="$MICROVM_AGENT_TOOLS_SOCKET" \
+    -device vhost-user-fs-pci,chardev=fs-agenttools,tag=hostagenttools
+fi
+
+if [ -n "${MICROVM_WORKER_BRIDGE_SOCKET:-}" ]; then
+  printf '%s\n' \
+    -chardev socket,id=fs-workerbridge,path="$MICROVM_WORKER_BRIDGE_SOCKET" \
+    -device vhost-user-fs-pci,chardev=fs-workerbridge,tag=hostworkerbridge
+fi

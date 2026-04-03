@@ -55,8 +55,10 @@ let
         (lib.mapAttrsToList (_commandName: upstream: upstream.packageSpec or null) proxyLocalUpstreams)
     );
   installBinNames = builtins.attrNames installBinScripts;
+  proxyLocalUpstreamNames = builtins.attrNames proxyLocalUpstreams;
   proxyLocalUpstreamInstallArgs = lib.escapeShellArgs proxyLocalUpstreamSpecs;
   installBinNamesArgs = lib.escapeShellArgs installBinNames;
+  proxyLocalUpstreamNamesArgs = lib.escapeShellArgs proxyLocalUpstreamNames;
   upstreamInstallBinScriptSnippet =
     lib.concatStringsSep "\n"
       (map
@@ -224,6 +226,7 @@ PY
     "@EXTRA_SHELL_INIT@" = extraShellInit;
     "@INSTALL_BIN_SCRIPTS@" = installBinScriptSnippet;
     "@INSTALL_BIN_NAMES@" = installBinNamesArgs;
+    "@PROXY_LOCAL_UPSTREAM_NAMES@" = proxyLocalUpstreamNamesArgs;
     "@INSTALL_STATE_ID@" = installStateId;
     "@LAUNCH_COMMAND_NAME@" = launchCommandName;
     "@LAUNCH_ENV_EXPORTS@" = launchEnvironmentExports;

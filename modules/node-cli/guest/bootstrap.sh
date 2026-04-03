@@ -94,6 +94,11 @@ wrappers_ready() {
       return 1
     fi
   done
+  for wrapper_name in @PROXY_LOCAL_UPSTREAM_NAMES@; do
+    if [ ! -x "$local_bin/.firebreak-upstream-$wrapper_name" ]; then
+      return 1
+    fi
+  done
   return 0
 }
 

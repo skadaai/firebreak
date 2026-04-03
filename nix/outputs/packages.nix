@@ -1,11 +1,15 @@
 {
   self,
   system,
+  hostIsLinux,
+  lib,
+  localVmArtifacts,
   mkAgentPackage,
   mkAgentVersionSmokePackage,
   mkCloudJobPackage,
   mkCloudSmokePackage,
   mkFirebreakCliSurfaceSmokePackage,
+  mkWorkerFirebreakBridgeProbePackage,
   mkFirebreakCliPackage,
   mkLoopPackage,
   mkLoopSmokePackage,
@@ -17,28 +21,24 @@
   mkTaskSmokePackage,
   mkValidationPackage,
   mkValidationSmokePackage,
+  mkWorkerFirebreakAttachSmokePackage,
+  mkWorkerInteractiveClaudeDirectExitSmokePackage,
+  mkWorkerInteractiveClaudeDirectSmokePackage,
+  mkWorkerInteractiveCodexDirectSmokePackage,
+  mkWorkerGuestBridgeInteractiveSmokePackage,
+  mkWorkerGuestBridgeSmokePackage,
+  mkWorkerPackage,
+  mkWorkerProxyScriptSmokePackage,
+  mkWorkerSmokePackage,
 }:
 {
   default = self.packages.${system}.firebreak;
 
-  firebreak-internal-runner-codex = mkRunnerPackage self.nixosConfigurations.firebreak-codex.config.microvm.declaredRunner;
-  firebreak-internal-runner-claude-code = mkRunnerPackage self.nixosConfigurations.firebreak-claude-code.config.microvm.declaredRunner;
-  firebreak-internal-runner-codex-cloud = mkRunnerPackage self.nixosConfigurations.firebreak-codex-cloud.config.microvm.declaredRunner;
-  firebreak-internal-runner-claude-code-cloud = mkRunnerPackage self.nixosConfigurations.firebreak-claude-code-cloud.config.microvm.declaredRunner;
-  firebreak-internal-runner-test-cloud = mkRunnerPackage self.nixosConfigurations.firebreak-cloud-smoke.config.microvm.declaredRunner;
+  firebreak-internal-runner-codex = localVmArtifacts.firebreak-codex.runnerPackage;
+  firebreak-internal-runner-claude-code = localVmArtifacts.firebreak-claude-code.runnerPackage;
+  firebreak-internal-runner-interactive-echo = localVmArtifacts.firebreak-interactive-echo.runnerPackage;
 
-  firebreak-codex = mkAgentPackage {
-    name = "firebreak-codex";
-    runner = self.packages.${system}.firebreak-internal-runner-codex;
-    controlSocketName = "firebreak-codex";
-    defaultAgentCommand = "codex";
-    agentConfigSubdir = "codex";
-    defaultAgentConfigHostDir = "$HOME/.firebreak";
-    workspaceBootstrapConfigHostDir = "$HOME/.codex";
-    hostConfigAdoptionEnabled = true;
-    agentEnvPrefix = "CODEX";
-    sharedAgentConfig.enable = true;
-  };
+  firebreak-codex = localVmArtifacts.firebreak-codex.package;
 
   firebreak-test-smoke-codex = mkSmokePackage {
     name = "firebreak-test-smoke-codex";
@@ -56,18 +56,7 @@
     agentDisplayName = "Codex";
   };
 
-  firebreak-claude-code = mkAgentPackage {
-    name = "firebreak-claude-code";
-    runner = self.packages.${system}.firebreak-internal-runner-claude-code;
-    controlSocketName = "firebreak-claude-code";
-    defaultAgentCommand = "claude";
-    agentConfigSubdir = "claude";
-    defaultAgentConfigHostDir = "$HOME/.firebreak";
-    workspaceBootstrapConfigHostDir = "$HOME/.claude";
-    hostConfigAdoptionEnabled = true;
-    agentEnvPrefix = "CLAUDE";
-    sharedAgentConfig.enable = true;
-  };
+  firebreak-claude-code = localVmArtifacts.firebreak-claude-code.package;
 
   firebreak-test-smoke-claude-code = mkSmokePackage {
     name = "firebreak-test-smoke-claude-code";
@@ -78,6 +67,100 @@
     defaultAgentConfigHostDir = "$HOME/.firebreak";
     workspaceBootstrapConfigHostDir = "$HOME/.claude";
   };
+
+  firebreak-interactive-echo = localVmArtifacts.firebreak-interactive-echo.package;
+
+  firebreak-test-smoke-project-config-and-doctor = mkProjectConfigSmokePackage {
+    name = "firebreak-test-smoke-project-config-and-doctor";
+  };
+
+  firebreak-test-smoke-npx-launcher = mkNpxLauncherSmokePackage {
+    name = "firebreak-test-smoke-npx-launcher";
+  };
+
+  firebreak-test-smoke-firebreak-cli-surface = mkFirebreakCliSurfaceSmokePackage {
+    name = "firebreak-test-smoke-firebreak-cli-surface";
+  };
+
+  firebreak-worker-bridge-probe = mkWorkerFirebreakBridgeProbePackage {
+    name = "firebreak-worker-bridge-probe";
+  };
+
+  firebreak-test-smoke-worker-proxy-script = mkWorkerProxyScriptSmokePackage {
+    name = "firebreak-test-smoke-worker-proxy-script";
+  };
+
+  firebreak-internal-validate = mkValidationPackage {
+    name = "firebreak-internal-validate";
+    includeCloudSuite = hostIsLinux;
+  };
+
+  firebreak-test-smoke-internal-validate = mkValidationSmokePackage {
+    name = "firebreak-test-smoke-internal-validate";
+    validatePackage = "firebreak-internal-validate";
+  };
+
+  firebreak-internal-task = mkTaskPackage {
+    name = "firebreak-internal-task";
+  };
+
+  firebreak-worker = mkWorkerPackage {
+    name = "firebreak-worker";
+  };
+
+  firebreak-test-smoke-internal-task = mkTaskSmokePackage {
+    name = "firebreak-test-smoke-internal-task";
+  };
+
+  firebreak-test-smoke-worker = mkWorkerSmokePackage {
+    name = "firebreak-test-smoke-worker";
+    workerPackage = "firebreak-worker";
+  };
+
+  firebreak-test-smoke-worker-firebreak-attach = mkWorkerFirebreakAttachSmokePackage {
+    name = "firebreak-test-smoke-worker-firebreak-attach";
+    workerPackage = "firebreak-worker";
+  };
+
+  firebreak-test-smoke-worker-interactive-claude-direct = mkWorkerInteractiveClaudeDirectSmokePackage {
+    name = "firebreak-test-smoke-worker-interactive-claude-direct";
+    firebreakPackage = "firebreak";
+  };
+
+  firebreak-test-smoke-worker-interactive-claude-exit-direct = mkWorkerInteractiveClaudeDirectExitSmokePackage {
+    name = "firebreak-test-smoke-worker-interactive-claude-exit-direct";
+    firebreakPackage = "firebreak";
+  };
+
+  firebreak-test-smoke-worker-interactive-codex-direct = mkWorkerInteractiveCodexDirectSmokePackage {
+    name = "firebreak-test-smoke-worker-interactive-codex-direct";
+    firebreakPackage = "firebreak";
+  };
+
+  firebreak-test-smoke-worker-guest-bridge = mkWorkerGuestBridgeSmokePackage {
+    name = "firebreak-test-smoke-worker-guest-bridge";
+  };
+
+  firebreak-test-smoke-worker-guest-bridge-interactive = mkWorkerGuestBridgeInteractiveSmokePackage {
+    name = "firebreak-test-smoke-worker-guest-bridge-interactive";
+  };
+
+  firebreak-internal-loop = mkLoopPackage {
+    name = "firebreak-internal-loop";
+    taskPackage = "firebreak-internal-task";
+  };
+
+  firebreak-test-smoke-internal-loop = mkLoopSmokePackage {
+    name = "firebreak-test-smoke-internal-loop";
+  };
+
+  firebreak = mkFirebreakCliPackage {
+    name = "firebreak";
+  };
+} // lib.optionalAttrs hostIsLinux {
+  firebreak-internal-runner-codex-cloud = localVmArtifacts.firebreak-codex-cloud.runnerPackage;
+  firebreak-internal-runner-claude-code-cloud = localVmArtifacts.firebreak-claude-code-cloud.runnerPackage;
+  firebreak-internal-runner-test-cloud = localVmArtifacts.firebreak-cloud-smoke.runnerPackage;
 
   firebreak-internal-job-codex-cloud = mkCloudJobPackage {
     name = "firebreak-internal-job-codex-cloud";
@@ -100,47 +183,5 @@
   firebreak-test-smoke-cloud-job = mkCloudSmokePackage {
     name = "firebreak-test-smoke-cloud-job";
     jobPackage = "firebreak-internal-job-test-cloud";
-  };
-
-  firebreak-test-smoke-project-config-and-doctor = mkProjectConfigSmokePackage {
-    name = "firebreak-test-smoke-project-config-and-doctor";
-  };
-
-  firebreak-test-smoke-npx-launcher = mkNpxLauncherSmokePackage {
-    name = "firebreak-test-smoke-npx-launcher";
-  };
-
-  firebreak-test-smoke-firebreak-cli-surface = mkFirebreakCliSurfaceSmokePackage {
-    name = "firebreak-test-smoke-firebreak-cli-surface";
-  };
-
-  firebreak-internal-validate = mkValidationPackage {
-    name = "firebreak-internal-validate";
-  };
-
-  firebreak-test-smoke-internal-validate = mkValidationSmokePackage {
-    name = "firebreak-test-smoke-internal-validate";
-    validatePackage = "firebreak-internal-validate";
-  };
-
-  firebreak-internal-task = mkTaskPackage {
-    name = "firebreak-internal-task";
-  };
-
-  firebreak-test-smoke-internal-task = mkTaskSmokePackage {
-    name = "firebreak-test-smoke-internal-task";
-  };
-
-  firebreak-internal-loop = mkLoopPackage {
-    name = "firebreak-internal-loop";
-    taskPackage = "firebreak-internal-task";
-  };
-
-  firebreak-test-smoke-internal-loop = mkLoopSmokePackage {
-    name = "firebreak-test-smoke-internal-loop";
-  };
-
-  firebreak = mkFirebreakCliPackage {
-    name = "firebreak";
   };
 }

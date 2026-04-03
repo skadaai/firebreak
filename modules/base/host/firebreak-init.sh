@@ -15,8 +15,10 @@ firebreak_render_project_config_template() {
 # Shared config mode for local workload VMs:
 AGENT_CONFIG=host
 
-# Public local mode selector:
-# FIREBREAK_VM_MODE=run
+# Public local launch selector:
+# FIREBREAK_LAUNCH_MODE=run
+# FIREBREAK_WORKER_MODE=local
+# FIREBREAK_WORKER_MODES=codex=vm,claude=local
 
 # Optional shared host config root when AGENT_CONFIG=host.
 # Firebreak resolves per-agent subdirectories under this root:
@@ -37,7 +39,7 @@ firebreak_render_project_config_from_answers() {
 EOF
   printf '\n'
   printf 'AGENT_CONFIG=%s\n' "$FIREBREAK_INIT_AGENT_CONFIG"
-  printf 'FIREBREAK_VM_MODE=%s\n' "$FIREBREAK_INIT_VM_MODE"
+  printf 'FIREBREAK_LAUNCH_MODE=%s\n' "$FIREBREAK_INIT_LAUNCH_MODE"
 
   if [ -n "${FIREBREAK_INIT_AGENT_CONFIG_HOST_PATH:-}" ]; then
     printf 'AGENT_CONFIG_HOST_PATH=%s\n' "$FIREBREAK_INIT_AGENT_CONFIG_HOST_PATH"
@@ -198,9 +200,9 @@ firebreak_init_collect_interactive_answers() {
       "fresh|fresh: start from an empty runtime config each launch"
   )
 
-  FIREBREAK_INIT_VM_MODE=$(
+  FIREBREAK_INIT_LAUNCH_MODE=$(
     firebreak_init_prompt_choice \
-      "Select the default local VM mode" \
+      "Select the default local launch mode" \
       "1" \
       "run|run: launch the agent by default" \
       "shell|shell: enter the maintenance shell by default"

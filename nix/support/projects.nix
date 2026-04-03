@@ -1,5 +1,146 @@
 { lib, pkgs, renderTemplate, mkLocalVmArtifacts }:
+rec {
+  workerProxyLocalUpstreamsByPackage = {
+    firebreak-codex = {
+      packageSpec = "@openai/codex@latest";
+      binName = "codex";
+    };
+    firebreak-claude-code = {
+      packageSpec = "@anthropic-ai/claude-code@latest";
+      binName = "claude";
+    };
+  };
+
+  mkWorkerProxyScript =
+    {
+      commandName ? kind,
+      kind,
+      defaultMode ? null,
+      defaultWorkerMode ? "local",
+    }:
+    ''
+      #!/usr/bin/env bash
+      set -eu
+
+      script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+      upstream_bin=""
+      upstream_candidates=(
+        "$script_dir/.firebreak-upstream-${commandName}"
+      )
+      if [ -n "''${LOCAL_BIN:-}" ]; then
+        upstream_candidates+=("''${LOCAL_BIN}/.firebreak-upstream-${commandName}")
+      fi
+      if [ -n "''${npm_config_prefix:-}" ]; then
+        upstream_candidates+=("''${npm_config_prefix}/bin/.firebreak-upstream-${commandName}")
+      fi
+      if [ -n "''${HOME:-}" ]; then
+        upstream_candidates+=("''${HOME}/.local/bin/.firebreak-upstream-${commandName}")
+      fi
+      for upstream_candidate in "''${upstream_candidates[@]}"; do
+        if [ -x "$upstream_candidate" ]; then
+          upstream_bin=$upstream_candidate
+          break
+        fi
+      done
+      if [ -z "$upstream_bin" ]; then
+        upstream_bin="''${upstream_candidates[0]}"
+      fi
+      default_worker_mode=${lib.escapeShellArg defaultWorkerMode}
+      proxy_default_mode=${lib.escapeShellArg (if defaultMode == null then "" else defaultMode)}
+
+      normalize_worker_mode() {
+        case "$1" in
+          worker)
+            printf '%s\n' "vm"
+            ;;
+          *)
+            printf '%s\n' "$1"
+            ;;
+        esac
+      }
+
+      json_escape() {
+        printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+      }
+
+      resolve_command_worker_mode() {
+        raw_modes=$1
+        if [ -z "$raw_modes" ]; then
+          return 0
+        fi
+
+        raw_modes=$(printf '%s' "$raw_modes" | tr '\n' ',')
+        case ",$raw_modes," in
+          *",${commandName}="*)
+            resolved_mode=''${raw_modes#*"${commandName}="}
+            resolved_mode=''${resolved_mode%%,*}
+            if [ -n "$resolved_mode" ]; then
+              printf '%s\n' "$(normalize_worker_mode "$resolved_mode")"
+            fi
+            ;;
+        esac
+      }
+
+      worker_mode_overrides=''${FIREBREAK_WORKER_MODES:-}
+      if [ -z "$worker_mode_overrides" ] && [ -r /run/firebreak-agent/worker-modes ]; then
+        worker_mode_overrides=$(cat /run/firebreak-agent/worker-modes)
+      fi
+
+      worker_mode=$(resolve_command_worker_mode "$worker_mode_overrides" || true)
+      if [ -z "$worker_mode" ]; then
+        worker_mode=''${FIREBREAK_WORKER_MODE:-''${FIREBREAK_WORKER_PROXY_MODE:-}}
+      fi
+      if [ -z "$worker_mode" ] && [ -r /run/firebreak-agent/worker-mode ]; then
+        worker_mode=$(cat /run/firebreak-agent/worker-mode)
+      fi
+      if [ -z "$worker_mode" ] && [ -r /run/firebreak-agent/worker-proxy-mode ]; then
+        worker_mode=$(cat /run/firebreak-agent/worker-proxy-mode)
+      fi
+      worker_mode=$(normalize_worker_mode "$worker_mode")
+      if [ -z "$worker_mode" ] && [ -n "$proxy_default_mode" ]; then
+        worker_mode=$proxy_default_mode
+        worker_mode=$(normalize_worker_mode "$worker_mode")
+      fi
+      if [ -z "$worker_mode" ]; then
+        worker_mode=$default_worker_mode
+        worker_mode=$(normalize_worker_mode "$worker_mode")
+      fi
+
+      if [ "''${FIREBREAK_WRAPPER_INFO:-}" = "1" ]; then
+        cat <<__FIREBREAK_WRAPPER_INFO__
 {
+  "wrapper": "firebreak",
+  "command": "$(json_escape ${lib.escapeShellArg commandName})",
+  "kind": "$(json_escape ${lib.escapeShellArg kind})",
+  "default_mode": "$(json_escape "$default_worker_mode")",
+  "resolved_mode": "$(json_escape "$worker_mode")",
+  "upstream_bin": "$(json_escape "$upstream_bin")"
+}
+__FIREBREAK_WRAPPER_INFO__
+        exit 0
+      fi
+
+      case "$worker_mode" in
+        vm)
+          ;;
+        local)
+          if ! [ -x "$upstream_bin" ]; then
+            echo "missing upstream binary for ${commandName}: $upstream_bin" >&2
+            exit 1
+          fi
+          exec "$upstream_bin" "$@"
+          ;;
+        *)
+          echo "unsupported FIREBREAK_WORKER_MODE: $worker_mode" >&2
+          echo "supported values: vm, local" >&2
+          exit 1
+          ;;
+      esac
+
+      workspace=$PWD
+      exec firebreak worker run --kind ${lib.escapeShellArg kind} --workspace "$workspace" --attach -- "$@"
+    '';
+
   mkWorkspaceProjectArtifacts = {
     name,
     displayName,
@@ -13,6 +154,8 @@
     readyCommands ? [ ],
     extraShellInit ? "",
     extraModules ? [ ],
+    workerBridgeEnabled ? false,
+    workerKinds ? { },
   }:
     let
       packageSet =
@@ -33,11 +176,14 @@
       lockfileArgs = lib.escapeShellArgs lockfiles;
       readyCommandArgs = lib.escapeShellArgs readyCommands;
       readyCommandName = "${name}-ready";
+      effectiveWorkerBridgeEnabled = workerBridgeEnabled || workerKinds != { };
       launchCommandName = "${name}-launch";
     in
     mkLocalVmArtifacts {
       inherit name;
       defaultAgentCommand = launchCommandName;
+      workerBridgeEnabled = effectiveWorkerBridgeEnabled;
+      inherit workerKinds;
       extraModules = [
         ({ config, pkgs, ... }:
           let
@@ -247,14 +393,59 @@
     launchEnvironment ? { },
     forwardPorts ? [ ],
     postInstallScript ? "",
+    installBinScripts ? { },
     memoryMiB ? 3072,
     runtimePackages ? [ ],
     bootstrapPackages ? null,
     sharedAgentConfig ? { },
     extraShellInit ? "",
     extraModules ? [ ],
+    workerBridgeEnabled ? false,
+    defaultWorkerMode ? "local",
+    workerKinds ? { },
+    workerProxies ? { },
   }:
     let
+      derivedProxyLocalUpstreams =
+        lib.mapAttrs
+          (commandName: proxy:
+            let
+              packageName = proxy.package or null;
+              knownUpstream =
+                if packageName != null && builtins.hasAttr packageName workerProxyLocalUpstreamsByPackage
+                then builtins.getAttr packageName workerProxyLocalUpstreamsByPackage
+                else { };
+            in {
+              packageSpec = knownUpstream.packageSpec or null;
+              binName = knownUpstream.binName or commandName;
+            })
+          workerProxies;
+
+      derivedWorkerKinds =
+        lib.mapAttrs'
+          (_commandName: proxy:
+            lib.nameValuePair proxy.kind (builtins.removeAttrs proxy [ "kind" "versionOutput" ]))
+          workerProxies;
+
+      derivedInstallBinScripts =
+        lib.mapAttrs
+          (commandName: proxy:
+            mkWorkerProxyScript {
+              inherit commandName;
+              kind = proxy.kind;
+              defaultMode = proxy.defaultMode or null;
+              inherit defaultWorkerMode;
+            })
+          workerProxies;
+
+      effectiveWorkerKinds = derivedWorkerKinds // workerKinds;
+      effectiveInstallBinScripts = derivedInstallBinScripts // installBinScripts;
+      effectiveWorkerBridgeEnabled = workerBridgeEnabled || workerKinds != { } || workerProxies != { };
+      installBinSystemPackages =
+        lib.mapAttrsToList
+          (scriptName: scriptText: pkgs.writeShellScriptBin scriptName scriptText)
+          effectiveInstallBinScripts;
+
       packageSet =
         if builtins.isFunction runtimePackages then
           runtimePackages
@@ -276,6 +467,8 @@
       inherit name;
       defaultAgentCommand = launchCommandName;
       sharedAgentConfig = sharedAgentConfig;
+      workerBridgeEnabled = effectiveWorkerBridgeEnabled;
+      workerKinds = effectiveWorkerKinds;
       extraModules = [
         (import ../../modules/node-cli/module.nix {
           inherit
@@ -293,10 +486,59 @@
             sharedAgentConfig
             extraShellInit
             ;
+          installBinScripts = effectiveInstallBinScripts;
+          proxyLocalUpstreams = derivedProxyLocalUpstreams;
           vmName = name;
-          extraSystemPackages = packageSet pkgs;
+          extraSystemPackages = packageSet pkgs ++ installBinSystemPackages;
           extraBootstrapPackages = bootstrapPackageSet pkgs;
         })
       ] ++ extraModules;
+    };
+
+  mkPackagedNodeCliFlakeOutputs = {
+    firebreak,
+    nixpkgs,
+    mkProject,
+    testsModule,
+    nixosConfigurationName,
+    packageName,
+    runnerPackageName,
+    defaultForwardPorts ? [ ],
+    defaultSystem ? null,
+  }:
+    let
+      supportedSystems = builtins.attrNames firebreak.lib;
+      effectiveDefaultSystem =
+        if defaultSystem != null then
+          defaultSystem
+        else
+          "x86_64-linux";
+      projectFor = system: mkProject system defaultForwardPorts;
+      testProjectFor = system: mkProject system [ ];
+      testsFor = system:
+        import testsModule {
+          pkgs = nixpkgs.legacyPackages.${system};
+          project = projectFor system;
+          testProject = testProjectFor system;
+          firebreakBin = "${firebreak.packages.${system}.default}/bin/firebreak";
+        };
+      defaultProject = projectFor effectiveDefaultSystem;
+    in {
+      nixosConfigurations.${nixosConfigurationName} = defaultProject.nixosConfiguration;
+
+      packages = lib.genAttrs supportedSystems (system:
+        let
+          project = projectFor system;
+          tests = testsFor system;
+        in tests.packages // {
+          default = project.package;
+          "${packageName}" = project.package;
+          "${runnerPackageName}" = project.runnerPackage;
+        });
+      checks = lib.genAttrs supportedSystems (system:
+        let
+          tests = testsFor system;
+        in
+        tests.packages // tests.checks);
     };
 }

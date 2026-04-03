@@ -18,7 +18,7 @@ Implemented.
 - `workspace` mode now remains project-local for dedicated local workloads instead of being redirected into the shared host root
 - `firebreak init` writes a minimal Firebreak-native project defaults template
 - `firebreak doctor` reports summary, verbose, and JSON diagnostics for project config and local readiness
-- the local wrapper now uses `FIREBREAK_VM_MODE` as the only public local mode selector
+- the local wrapper now uses `FIREBREAK_LAUNCH_MODE` as the only public local mode selector
 - a dedicated smoke package covers the config/init/doctor contract
 
 ## What remains open

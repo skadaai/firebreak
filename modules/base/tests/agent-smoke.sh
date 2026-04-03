@@ -84,7 +84,7 @@ run_scenario() {
       -u CODEX_CONFIG \
       -u CLAUDE_CONFIG \
       AGENT_CONFIG="$mode" \
-      FIREBREAK_VM_MODE=shell \
+      FIREBREAK_LAUNCH_MODE=shell \
       FIREBREAK_INSTANCE_EPHEMERAL=1 \
       AGENT_CONFIG_HOST_PATH="${host_config_path:-}" \
       AGENT_VM_COMMAND="$smoke_probe_command" \

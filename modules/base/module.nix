@@ -2,7 +2,11 @@
 let
   cfg = config.agentVm;
   devHome = "/var/lib/${cfg.devUser}";
-  localBin = "${devHome}/.local/bin";
+  localBin =
+    if cfg.agentToolsEnabled then
+      "${cfg.agentToolsMount}/.local/bin"
+    else
+      "${devHome}/.local/bin";
   sharedAgentConfigEnvFile = "${cfg.hostMetaMount}/firebreak-shared-agent.env";
   resolveAgentConfigScript = pkgs.writeShellScript "firebreak-resolve-agent-config"
     (builtins.readFile ./guest/resolve-agent-config.sh);
@@ -33,6 +37,9 @@ let
       ""
     else
       "${sharedAgentWrapperPackage}/bin";
+  hostIsDarwin = lib.hasSuffix "-darwin" cfg.hostSystem;
+  roStoreShareProto = if hostIsDarwin then "virtiofs" else "9p";
+  localHypervisor = if hostIsDarwin then "vfkit" else "qemu";
 
   scriptVars = {
     "@DEV_HOME@" = devHome;
@@ -40,6 +47,8 @@ let
     "@AGENT_CONFIG_DIR_FILE@" = cfg.agentConfigDirFile;
     "@AGENT_CONFIG_DIR_NAME@" = cfg.agentConfigDirName;
     "@START_DIR_FILE@" = cfg.startDirFile;
+    "@WORKER_KINDS_FILE@" = cfg.workerKindsFile;
+    "@WORKER_LOCAL_STATE_DIR@" = cfg.workerLocalStateDir;
     "@WORKSPACE_MOUNT@" = cfg.workspaceMount;
     "@SHARED_AGENT_CONFIG_ENV_EXPORTS@" = lib.optionalString cfg.sharedAgentConfig.enable ''
       export FIREBREAK_SHARED_AGENT_CONFIG_ENABLED=1
@@ -75,6 +84,18 @@ in {
       type = types.str;
       default = "reliable isolation for high-trust automation";
       description = "Short startup tagline printed in the interactive guest session.";
+    };
+
+    hostSystem = mkOption {
+      type = types.str;
+      default = pkgs.stdenv.hostPlatform.system;
+      description = "Host platform used to build and run the MicroVM wrapper.";
+    };
+
+    guestSystem = mkOption {
+      type = types.str;
+      default = pkgs.stdenv.hostPlatform.system;
+      description = "Guest platform used for the NixOS system inside the MicroVM.";
     };
 
     devUser = mkOption {
@@ -141,6 +162,18 @@ in {
       type = types.str;
       default = "/run/agent-exec-output";
       description = "Guest path for a host-shared directory used to persist one-shot command stdout, stderr, and exit code.";
+    };
+
+    agentToolsEnabled = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Whether the VM mounts a host-shared persistent tools directory for bootstrap-managed agent runtimes.";
+    };
+
+    agentToolsMount = mkOption {
+      type = types.str;
+      default = "/run/agent-tools-host";
+      description = "Guest path for an optional host-shared directory used to persist bootstrap-managed agent tools across VM launches.";
     };
 
     agentCommand = mkOption {
@@ -297,6 +330,36 @@ in {
       default = null;
       description = "Optional oneshot bootstrap script that runs before the console starts.";
     };
+
+    workerBridgeEnabled = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Whether the guest exposes the Firebreak worker bridge surface for host-brokered worker requests.";
+    };
+
+    workerBridgeMount = mkOption {
+      type = types.str;
+      default = "/run/firebreak-worker-bridge";
+      description = "Guest path for the optional host-shared worker bridge request-response directory.";
+    };
+
+    workerKindsJson = mkOption {
+      type = types.str;
+      default = "{}";
+      description = "Machine-readable worker-kind declarations available inside the guest.";
+    };
+
+    workerKindsFile = mkOption {
+      type = types.str;
+      default = "/etc/firebreak-worker-kinds.json";
+      description = "Guest path to the resolved worker-kind declaration file.";
+    };
+
+    workerLocalStateDir = mkOption {
+      type = types.str;
+      default = "${devHome}/.local/state/firebreak/worker-local";
+      description = "Guest-owned state directory for guest-local process workers.";
+    };
   };
 
   config = {
@@ -316,9 +379,18 @@ in {
 
     security.sudo.wheelNeedsPassword = false;
 
+    assertions = [
+      {
+        assertion = lib.hasPrefix "/etc/" cfg.workerKindsFile;
+        message = "agentVm.workerKindsFile must stay under /etc so Firebreak can materialize it declaratively.";
+      }
+    ];
+
     environment.systemPackages =
       cfg.extraSystemPackages
       ++ lib.optional (sharedAgentWrapperPackage != null) sharedAgentWrapperPackage;
+
+    environment.etc.${lib.removePrefix "/etc/" cfg.workerKindsFile}.text = cfg.workerKindsJson;
 
     programs.bash.interactiveShellInit = ''
       ${baseShellInit}
@@ -366,7 +438,7 @@ in {
       } ];
       shares = [ {
         # use proto = "virtiofs" for MicroVMs that are started by systemd
-        proto = "9p";
+        proto = roStoreShareProto;
         tag = "ro-store";
         # a host's /nix/store will be picked up so that no
         # squashfs/erofs will be built for it.
@@ -374,7 +446,7 @@ in {
         mountPoint = "/nix/.ro-store";
       } ];
 
-      hypervisor = "qemu";
+      hypervisor = localHypervisor;
       socket = cfg.controlSocket;
     };
   };

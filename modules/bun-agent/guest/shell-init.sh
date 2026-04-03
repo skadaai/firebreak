@@ -1,9 +1,13 @@
 if [ "$USER" = "@DEV_USER@" ]; then
-  export BUN_INSTALL=@DEV_HOME@/.bun
-  export LOCAL_BIN=@DEV_HOME@/.local/bin
-  export XDG_CONFIG_HOME=@DEV_HOME@/.config
-  export XDG_CACHE_HOME=@DEV_HOME@/.cache
-  export XDG_STATE_HOME=@DEV_HOME@/.local/state
+  tool_home=@DEV_HOME@
+  if [ -d @AGENT_TOOLS_MOUNT@ ]; then
+    tool_home=@AGENT_TOOLS_MOUNT@
+  fi
+  export BUN_INSTALL="$tool_home/.bun"
+  export LOCAL_BIN="$tool_home/.local/bin"
+  export XDG_CONFIG_HOME="$tool_home/.config"
+  export XDG_CACHE_HOME="$tool_home/.cache"
+  export XDG_STATE_HOME="$tool_home/.local/state"
   export TMPDIR="$XDG_CACHE_HOME/tmp"
   export BUN_TMPDIR="$TMPDIR"
   export BUN_INSTALL_CACHE_DIR="$XDG_CACHE_HOME/bun/install/cache"

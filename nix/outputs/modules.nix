@@ -11,5 +11,6 @@
   };
   firebreak-codex = import ../../modules/codex/module.nix;
   firebreak-claude-code = import ../../modules/claude-code/module.nix;
+  firebreak-interactive-echo = import ../../modules/interactive-echo/module.nix;
   default = self.nixosModules.firebreak-codex;
 }

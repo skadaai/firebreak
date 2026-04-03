@@ -47,7 +47,7 @@ This guide lists the checks needed to validate [SPEC.md](../SPEC.md).
    - workspace resolves to `.firebreak/codex`
    - host resolves to `/run/agent-config-host-root/codex`
    - vm resolves to `/var/lib/dev/.firebreak/codex`
-   - `FIREBREAK_VM_MODE=shell` still works
+   - `FIREBREAK_LAUNCH_MODE=shell` still works
 
 5. Validate the dedicated Claude Code smoke against `workspace`, `vm`, `host`, and shell-mode resolution.
 
@@ -61,7 +61,7 @@ This guide lists the checks needed to validate [SPEC.md](../SPEC.md).
    - workspace resolves to `.firebreak/claude`
    - host resolves to `/run/agent-config-host-root/claude`
    - vm resolves to `/var/lib/dev/.firebreak/claude`
-   - `FIREBREAK_VM_MODE=shell` still works
+   - `FIREBREAK_LAUNCH_MODE=shell` still works
 
 ## Manual Checks
 
@@ -74,13 +74,13 @@ This guide lists the checks needed to validate [SPEC.md](../SPEC.md).
    Run:
 
    ```sh
-   AGENT_CONFIG=host FIREBREAK_VM_MODE=shell \
+   AGENT_CONFIG=host FIREBREAK_LAUNCH_MODE=shell \
    nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
      "path:$PWD#firebreak-codex"
    ```
 
    ```sh
-   AGENT_CONFIG=host FIREBREAK_VM_MODE=shell \
+   AGENT_CONFIG=host FIREBREAK_LAUNCH_MODE=shell \
    nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
      "path:$PWD#firebreak-claude-code"
    ```
@@ -103,7 +103,7 @@ This guide lists the checks needed to validate [SPEC.md](../SPEC.md).
    Launch:
 
    ```sh
-   AGENT_CONFIG=host AGENT_CONFIG_HOST_PATH=/tmp/firebreak-agent-share FIREBREAK_VM_MODE=shell \
+   AGENT_CONFIG=host AGENT_CONFIG_HOST_PATH=/tmp/firebreak-agent-share FIREBREAK_LAUNCH_MODE=shell \
    nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
      "path:$PWD/external/agent-orchestrator" \
      --override-input firebreak "path:$PWD"

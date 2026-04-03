@@ -30,7 +30,7 @@ Without a defined config and diagnostics contract, operators have to memorize im
 - define `firebreak init` as the bootstrap path for project-local defaults
 - define `firebreak doctor` as the diagnostics path for resolved Firebreak state
 - define precedence between generic and agent-specific config selectors
-- make `FIREBREAK_VM_MODE` the only public local mode selector
+- make `FIREBREAK_LAUNCH_MODE` the only public local mode selector
 
 ## Non-goals
 
@@ -56,7 +56,7 @@ The intended landing shape is:
 - `host` mode resolves through one shared host root plus stable per-agent subdirectories instead of per-agent host-path variables
 - `firebreak init` writes a minimal Firebreak-native defaults file
 - `firebreak doctor` explains the resolved config and launch readiness before a workload is started
-- `FIREBREAK_VM_MODE` is the public mode selector for local launch packages
+- `FIREBREAK_LAUNCH_MODE` is the public mode selector for local launch packages
 
 ## Requirements
 
@@ -83,7 +83,7 @@ The intended landing shape is:
 - When `firebreak doctor` reports local launch readiness, the system shall include whether the current working directory is compatible with Firebreak's mount and runtime path assumptions.
 - Where `firebreak doctor --json` is requested, the system shall emit machine-readable diagnostics.
 - Where `firebreak doctor --verbose` is requested, the system shall emit expanded diagnostics instead of only a short summary.
-- The system shall use `FIREBREAK_VM_MODE` as the documented public mode selector for local workload packages.
+- The system shall use `FIREBREAK_LAUNCH_MODE` as the documented public mode selector for local workload packages.
 - The system shall not require or document `FIREBREAK_AGENT_MODE` or `AGENT_VM_ENTRYPOINT` as public compatibility aliases once this contract lands.
 
 ## Acceptance criteria
@@ -95,7 +95,7 @@ The intended landing shape is:
 - `host` mode resolves through one shared host root with stable per-agent subdirectories.
 - `firebreak init` emits a Firebreak-native minimal template.
 - `firebreak doctor` can explain the resolved config and readiness state before launch.
-- `FIREBREAK_VM_MODE` is the public local mode selector, and legacy mode aliases are removed from the public contract.
+- `FIREBREAK_LAUNCH_MODE` is the public local mode selector, and legacy mode aliases are removed from the public contract.
 
 ## Dependencies and risks
 

@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -eu
 
 repo_root=@REPO_ROOT@
@@ -6,18 +7,29 @@ if ! [ -f "$repo_root/flake.nix" ]; then
   exit 1
 fi
 
-firebreak_tmp_root=${FIREBREAK_TMPDIR:-${TMPDIR:-/tmp}}/firebreak/tmp
+if [ -n "${FIREBREAK_TMPDIR:-}" ]; then
+  firebreak_tmp_root=$FIREBREAK_TMPDIR
+elif [ -n "${XDG_CACHE_HOME:-}" ]; then
+  firebreak_tmp_root=$XDG_CACHE_HOME/firebreak/tmp
+elif [ -n "${HOME:-}" ]; then
+  firebreak_tmp_root=$HOME/.cache/firebreak/tmp
+else
+  firebreak_tmp_root=${TMPDIR:-/tmp}/firebreak/tmp
+fi
 mkdir -p "$firebreak_tmp_root"
 smoke_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-project-config.XXXXXX")
-trap 'rm -rf "$smoke_tmp_dir"' EXIT INT TERM
+trap 'chmod -R u+w "$smoke_tmp_dir" 2>/dev/null || true; rm -rf "$smoke_tmp_dir"' EXIT INT TERM
 
 project_dir=$smoke_tmp_dir/project
+git_repo_dir=$smoke_tmp_dir/git-repo
 mkdir -p "$project_dir"
 
 unset AGENT_CONFIG
 unset AGENT_CONFIG_HOST_PATH
 unset FIREBREAK_PROJECT_CONFIG_FILE
-unset FIREBREAK_VM_MODE
+unset FIREBREAK_LAUNCH_MODE
+unset FIREBREAK_WORKER_MODE
+unset FIREBREAK_WORKER_MODES
 unset CODEX_CONFIG
 unset CLAUDE_CONFIG
 
@@ -25,6 +37,28 @@ firebreak_cmd() {
   (
     cd "$project_dir"
     nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run "path:$repo_root#firebreak" -- "$@"
+  )
+}
+
+prepare_git_repo() {
+  mkdir -p "$git_repo_dir"
+  cp -R "$repo_root/." "$git_repo_dir"
+  rm -rf "$git_repo_dir/.git"
+  chmod -R u+w "$git_repo_dir"
+  (
+    cd "$git_repo_dir"
+    git init -q
+    git config user.email smoke@example.invalid
+    git config user.name "Firebreak Smoke"
+    git add -A
+    git commit -q -m "smoke"
+  )
+}
+
+exact_firebreak_cmd() {
+  (
+    cd "$git_repo_dir"
+    nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak -- "$@"
   )
 }
 
@@ -42,7 +76,9 @@ require_pattern() {
 
 init_template_stdout=$(firebreak_cmd init --non-interactive --stdout)
 require_pattern "$init_template_stdout" "AGENT_CONFIG=host" "default AGENT_CONFIG template entry"
-require_pattern "$init_template_stdout" "# FIREBREAK_VM_MODE=run" "default FIREBREAK_VM_MODE template entry"
+require_pattern "$init_template_stdout" "# FIREBREAK_LAUNCH_MODE=run" "default FIREBREAK_LAUNCH_MODE template entry"
+require_pattern "$init_template_stdout" "# FIREBREAK_WORKER_MODE=local" "default FIREBREAK_WORKER_MODE template entry"
+require_pattern "$init_template_stdout" "# FIREBREAK_WORKER_MODES=codex=vm,claude=local" "default FIREBREAK_WORKER_MODES template entry"
 
 set +e
 interactive_init_output=$(
@@ -64,7 +100,7 @@ fi
 
 interactive_init_file=$(cat "$project_dir/.firebreak.env")
 require_pattern "$interactive_init_file" "AGENT_CONFIG=host" "interactive init AGENT_CONFIG entry"
-require_pattern "$interactive_init_file" "FIREBREAK_VM_MODE=run" "interactive init FIREBREAK_VM_MODE entry"
+require_pattern "$interactive_init_file" "FIREBREAK_LAUNCH_MODE=run" "interactive init FIREBREAK_LAUNCH_MODE entry"
 
 cat >"$project_dir/.firebreak.env" <<EOF
 AGENT_CONFIG=host
@@ -100,7 +136,7 @@ assert "FIREBREAK_TASK_STATE_DIR" in obj["ignored_config_keys"]
 assert obj["agents"]["codex"]["mode"] == "workspace"
 assert obj["agents"]["codex"]["path"] == f"{project_dir}/.firebreak/codex"
 assert obj["agents"]["claude-code"]["mode"] == "vm"
-assert obj["vm_mode"] == "run"
+assert obj["launch_mode"] == "run"
 PY
 
 doctor_verbose_json=$(AGENT_CONFIG=vm firebreak_cmd doctor --verbose --json)
@@ -120,6 +156,39 @@ assert details["cwd"] == project_dir
 assert details["project_root_source"] == "cwd"
 assert details["git_common_dir"] == "unknown"
 assert "FIREBREAK_TASK_STATE_DIR" in details["ignored_keys"]
+PY
+
+prepare_git_repo
+
+exact_doctor_json=$(exact_firebreak_cmd doctor --json)
+EXACT_DOCTOR_JSON=$exact_doctor_json GIT_REPO_DIR=$git_repo_dir python3 - <<'PY'
+import json
+import os
+
+obj = json.loads(os.environ["EXACT_DOCTOR_JSON"])
+git_repo_dir = os.environ["GIT_REPO_DIR"]
+
+assert obj["project_root"] == git_repo_dir
+assert obj["cwd"] == git_repo_dir
+assert obj["project_config_source"] == "none"
+PY
+
+exact_worker_state_dir=$smoke_tmp_dir/exact-worker-state
+mkdir -p "$exact_worker_state_dir"
+exact_worker_debug_json=$(
+  FIREBREAK_WORKER_STATE_DIR="$exact_worker_state_dir" \
+    exact_firebreak_cmd worker debug --json
+)
+EXACT_WORKER_DEBUG_JSON=$exact_worker_debug_json EXACT_WORKER_STATE_DIR=$exact_worker_state_dir python3 - <<'PY'
+import json
+import os
+
+obj = json.loads(os.environ["EXACT_WORKER_DEBUG_JSON"])
+
+assert obj["authority"] == "host"
+assert obj["state_dir"] == os.environ["EXACT_WORKER_STATE_DIR"]
+assert obj["worker_count"] == 0
+assert obj["requests"] == []
 PY
 
 printf '%s\n' "Firebreak project-config and doctor smoke test passed"

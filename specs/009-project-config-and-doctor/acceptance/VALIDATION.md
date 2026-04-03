@@ -74,7 +74,7 @@ Run these from the repository parent or with `path:` installables so they do not
    - Claude resolves to a `claude` subdirectory under the shared host root
    - `doctor` reports KVM and cwd compatibility state
 
-3. Verify the public local mode selector is only `FIREBREAK_VM_MODE`.
+3. Verify the public local mode selector is only `FIREBREAK_LAUNCH_MODE`.
 
-   Launch one public VM with `FIREBREAK_VM_MODE=shell` and confirm shell mode works.
+   Launch one public VM with `FIREBREAK_LAUNCH_MODE=shell` and confirm shell mode works.
    Confirm the docs and output do not instruct users to use `FIREBREAK_AGENT_MODE` or `AGENT_VM_ENTRYPOINT`.

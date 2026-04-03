@@ -31,9 +31,8 @@ nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run
 
 ```bash
 cd ~/your-project
-FIREBREAK_VM_MODE=shell nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
-  path:/path/to/firebreak/external/agent-orchestrator \
-  --override-input firebreak path:/path/to/firebreak
+FIREBREAK_LAUNCH_MODE=shell nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
+  path:/path/to/firebreak/external/agent-orchestrator
 ```
 
 
@@ -49,18 +48,19 @@ nix --accept-flake-config --extra-experimental-features 'nix-command flakes' bui
 nix --accept-flake-config --extra-experimental-features 'nix-command flakes' build path:/path/to/firebreak/external/vibe-kanban#firebreak-internal-runner-vibe-kanban
 ```
 
-The nested flakes are structured so they can live in external repositories and consume a published Firebreak input.
+The nested flakes consume the parent Firebreak checkout directly when run from this repository.
 
-For local development inside this repo, test the nested flake against your checkout explicitly:
+If you copy one of these recipe flakes into another repository, switch its `firebreak` input back to a published source first.
+
+For local development inside this repo, test the nested flake directly:
 
 ```bash
 cd ~/your-project
 nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
-  path:/path/to/firebreak/external/agent-orchestrator#firebreak-agent-orchestrator \
-  --override-input firebreak path:/path/to/firebreak
+  path:/path/to/firebreak/external/agent-orchestrator#firebreak-agent-orchestrator
 ```
 
-If a nested external flake errors with `attribute 'lib' missing`, that means its locked `github:skadaai/firebreak` input is older than the library export available in your checkout. Override the input explicitly when testing locally, or update/publish the upstream Firebreak input first.
+If a copied-out recipe flake errors with `attribute 'lib' missing` or `attribute 'recipeLib' missing`, point its `firebreak` input at a Firebreak revision that exports those helpers.
 
 ## Difficulties Found
 
@@ -70,6 +70,6 @@ If a nested external flake errors with `attribute 'lib' missing`, that means its
 4. Remaining friction: the local profile always mounts the caller's `PWD`. That keeps the launcher simple, but it still means the user cannot yet choose an arbitrary host workspace path independently of the launch directory.
 5. Remaining friction: Firebreak still hardcodes `x86_64-linux` in the root flake. External recipes inherit the same host and guest assumption instead of deriving it from `builtins.currentSystem` or exposing supported systems cleanly.
 6. Remaining friction: the local launcher rejects paths with whitespace because the runtime share injection does not support them. That is easy to trip over when sandboxing arbitrary external repos.
-7. Remaining friction: external recipe flakes currently have no generated lockfiles in-tree. That keeps the repo light, but the first host-side build will need to create locks or run with `--no-write-lock-file`.
+7. Resolved in this change: external recipe flakes now keep lockfiles in-tree so `flake check` and `nix run` do not need to mutate the working tree before the first local run.
 8. Remaining friction: full `nix build` validation depends on a writable Nix store or daemon socket. In constrained environments that means Firebreak recipes can be authored but not actually built, which argues for a more explicit validation story or helper command.
-9. Remaining friction: local development against nested external flakes requires `--override-input firebreak path:/path/to/firebreak` until the in-progress Firebreak helper changes are published and consumed by those child locks.
+9. Resolved in this change: nested external flakes now consume the in-repo Firebreak checkout directly, so local development no longer needs `--override-input firebreak ...`.

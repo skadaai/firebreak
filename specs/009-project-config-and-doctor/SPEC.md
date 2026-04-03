@@ -36,7 +36,7 @@ Without a defined config and diagnostics contract, operators have to memorize im
 
 - supporting `.agent-sandbox.env` or other legacy file names as Firebreak config files
 - keeping compatibility aliases such as `FIREBREAK_AGENT_MODE` or `AGENT_VM_ENTRYPOINT` as part of the public contract
-- exposing internal task, validation, loop, or cloud-job plumbing variables as project config controls
+- exposing dev-flow workspace, validation, loop, or cloud-job plumbing variables as project config controls
 - importing old container-runtime, socket, helper, or auth-slot behavior
 - defining every future human-facing command beyond the `init` and `doctor` contracts in this changeset
 

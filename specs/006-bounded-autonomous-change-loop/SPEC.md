@@ -1,6 +1,6 @@
 ---
 status: completed
-last_updated: 2026-03-21
+last_updated: 2026-04-02
 ---
 
 # 006 Bounded Autonomous Change Loop
@@ -38,11 +38,11 @@ Without a defined change loop, autonomy becomes vague: agents can overreach, ski
 
 This changeset is behavioral and operational.
 
-It defines the agent-facing control loop that sits on top of specs, work tasks, and validation harnesses. The intended landing shape is a bounded autonomous workflow where each substantial change attempt:
+It defines the agent-facing control loop that sits on top of specs, isolated workspaces, and validation harnesses. The intended landing shape is a bounded autonomous workflow where each substantial change attempt:
 
-- starts from a tracked spec or explicit task contract
+- starts from a tracked spec, an explicit workspace, or bounded maintenance action
 - records a plan and current slice
-- executes code changes inside an isolated task
+- executes code changes inside an isolated workspace
 - runs required validation suites autonomously
 - performs a review pass before commit
 - emits a machine-readable audit record
@@ -50,8 +50,10 @@ It defines the agent-facing control loop that sits on top of specs, work tasks, 
 
 ## Requirements
 
-- When an autonomous change attempt begins, the system shall associate that attempt with a tracked spec, explicit task contract, or bounded maintenance action.
+- When an autonomous change attempt begins, the system shall associate that attempt with a tracked spec, explicit workspace, or bounded maintenance action.
 - When an autonomous change attempt begins, the system shall record an execution plan or current slice before making substantial code changes.
+- When an autonomous change attempt continues work on the same spec line, the system may reuse the existing workspace for that spec.
+- When an autonomous change attempt starts work on a different spec or unrelated maintenance line, the system shall require a different workspace instead of reusing the current one.
 - When the system completes an implementation slice, the system shall run the required validation suites for that slice without requiring a human to restate them.
 - If required validation cannot run because host capabilities or policy requirements are not satisfied, then the system shall stop with a blocked result instead of claiming success.
 - If validation fails, then the system shall either retry within a configured budget or stop with a diagnosable blocked result.

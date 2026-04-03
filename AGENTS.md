@@ -39,14 +39,16 @@ There is no separate application `src/` tree yet. Keep shared behavior in the ba
   Builds the underlying declared runner without launching the VM.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-test-smoke-codex`
   Runs the lightweight host-side smoke test against the interactive Codex VM.
-- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-test-smoke-internal-loop`
-  Runs the bounded autonomous change-loop smoke against isolated Firebreak tasks.
+- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#dev-flow-test-smoke-loop`
+  Runs the bounded autonomous change-loop smoke against isolated dev-flow workspaces.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak`
-  Runs the top-level Firebreak CLI with the human-facing surface plus the `internal` subtree.
+  Runs the top-level Firebreak CLI with the human-facing VM surface.
+- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#dev-flow`
+  Runs the agent-oriented dev-flow CLI for workspace, validation, and bounded-attempt commands.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' flake check`
   Runs flake evaluation checks. Use this before submitting changes.
-- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak -- internal loop run ...`
-  Runs the bounded internal loop against an existing isolated task, recording plan, policy, validation, review, and commit evidence.
+- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#dev-flow -- loop run ...`
+  Runs the bounded loop against an existing isolated workspace, recording plan, policy, validation, review, and commit evidence.
 - GitHub Actions
   - `.github/workflows/ci.yml` runs hosted `flake check` on pushes and pull requests.
   - `.github/workflows/vm-smoke.yml` runs `firebreak-test-smoke-codex` on a self-hosted runner labeled `self-hosted`, `linux`, `x64`, and `kvm`.

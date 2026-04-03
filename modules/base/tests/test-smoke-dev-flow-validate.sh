@@ -1,9 +1,9 @@
 set -eu
 
-firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
-mkdir -p "$firebreak_tmp_root"
-state_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-internal-validate-state.XXXXXX")
-blocked_state_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-internal-validate-blocked.XXXXXX")
+dev_flow_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak_dev-flow/tmp}
+mkdir -p "$dev_flow_tmp_root"
+state_dir=$(mktemp -d "$dev_flow_tmp_root/test-smoke-dev-flow-validate-state.XXXXXX")
+blocked_state_dir=$(mktemp -d "$dev_flow_tmp_root/test-smoke-dev-flow-validate-blocked.XXXXXX")
 trap 'rm -rf "$state_dir" "$blocked_state_dir"' EXIT INT TERM
 
 validation_cmd() {
@@ -32,8 +32,8 @@ if ! grep -q '"stdout_path": "' "$summary_path"; then
 fi
 
 blocked_output=$(
-  FIREBREAK_VALIDATION_FORCE_BLOCKED_REASON=forced-test-block \
-    FIREBREAK_VALIDATION_STATE_DIR="$blocked_state_dir" \
+  DEV_FLOW_VALIDATION_FORCE_BLOCKED_REASON=forced-test-block \
+    DEV_FLOW_VALIDATION_STATE_DIR="$blocked_state_dir" \
     @VALIDATE_BIN@ run test-smoke-codex
 )
 
@@ -56,4 +56,4 @@ if ! grep -q '"missing_capability": "forced-test-block"' "$blocked_summary_path"
   exit 1
 fi
 
-printf '%s\n' "Firebreak internal validate smoke test passed"
+printf '%s\n' "dev-flow validate smoke test passed"

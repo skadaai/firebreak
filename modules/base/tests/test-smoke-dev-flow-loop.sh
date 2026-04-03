@@ -12,24 +12,24 @@ if [ "$git_common_dir" != ".git" ]; then
   exit 1
 fi
 
-firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
-mkdir -p "$firebreak_tmp_root"
-loop_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-internal-loop.XXXXXX")
+dev_flow_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak_dev-flow/tmp}
+mkdir -p "$dev_flow_tmp_root"
+loop_tmp_dir=$(mktemp -d "$dev_flow_tmp_root/test-smoke-dev-flow-loop.XXXXXX")
 trap 'rm -rf "$loop_tmp_dir"' EXIT INT TERM
 
-state_dir=$loop_tmp_dir/tasks
-worktree_root=$loop_tmp_dir/worktrees
+state_dir=$loop_tmp_dir/workspaces
+workspace_root=$loop_tmp_dir/checkouts
 shared_root=$loop_tmp_dir
 run_flake=$repo_root/scripts/run-flake.sh
 branch_suffix=$(basename "$loop_tmp_dir" | tr '.' '-')
 spec_path=specs/006-bounded-autonomous-change-loop/SPEC.md
 
-firebreak_cmd() {
-  FIREBREAK_TASK_STATE_DIR="$state_dir" \
-    FIREBREAK_TASK_WORKTREE_ROOT="$worktree_root" \
-    FIREBREAK_TASK_SHARED_ROOT="$shared_root" \
+dev_flow_cmd() {
+  DEV_FLOW_STATE_DIR="$state_dir" \
+    DEV_FLOW_WORKSPACE_ROOT="$workspace_root" \
+    DEV_FLOW_SHARED_ROOT="$shared_root" \
     FIREBREAK_TMPDIR="$loop_tmp_dir/tmp" \
-    bash "$run_flake" run .#firebreak -- "$@"
+    bash "$run_flake" run .#dev-flow -- "$@"
 }
 
 extract_json_field() {
@@ -38,18 +38,18 @@ extract_json_field() {
   printf '%s\n' "$output" | sed -n "s/.*\"$field\": \"\\([^\"]*\\)\".*/\\1/p" | head -n 1
 }
 
-close_task() {
-  task_id=$1
+close_workspace() {
+  workspace_id=$1
   disposition=$2
-  firebreak_cmd internal task close --task-id "$task_id" --disposition "$disposition" --cleanup-worktree >/dev/null
+  dev_flow_cmd workspace close --workspace-id "$workspace_id" --disposition "$disposition" --cleanup-workspace >/dev/null
 }
 
 success_branch="agent/spec-006-success-$branch_suffix"
-success_output=$(firebreak_cmd internal task create --task-id success --branch "$success_branch" --owner smoke)
-success_worktree=$(extract_json_field "$success_output" worktree_path)
-printf '%s\n' '# loop smoke' >"$success_worktree/LOOP_SMOKE.md"
-success_summary=$(firebreak_cmd internal loop run \
-  --task-id success \
+success_output=$(dev_flow_cmd workspace create --workspace-id spec-006-success --branch "$success_branch" --owner smoke)
+success_workspace=$(extract_json_field "$success_output" workspace_path)
+printf '%s\n' '# loop smoke' >"$success_workspace/LOOP_SMOKE.md"
+success_summary=$(dev_flow_cmd loop run \
+  --workspace-id spec-006-success \
   --attempt-id success-run \
   --spec "$spec_path" \
   --plan "Add loop smoke artifact" \
@@ -75,17 +75,17 @@ if ! [ -f "$success_plan_path" ] || ! [ -f "$success_review_path" ] || ! [ -f "$
   echo "loop smoke success scenario did not preserve the expected audit trail" >&2
   exit 1
 fi
-close_task success committed
+close_workspace spec-006-success committed
 
 validation_branch="agent/spec-006-validation-$branch_suffix"
-validation_output=$(firebreak_cmd internal task create --task-id validation-blocked --branch "$validation_branch" --owner smoke)
-validation_worktree=$(extract_json_field "$validation_output" worktree_path)
-printf '%s\n' '# validation blocked' >"$validation_worktree/VALIDATION_BLOCKED.md"
+validation_output=$(dev_flow_cmd workspace create --workspace-id spec-006-validation --branch "$validation_branch" --owner smoke)
+validation_workspace=$(extract_json_field "$validation_output" workspace_path)
+printf '%s\n' '# validation blocked' >"$validation_workspace/VALIDATION_BLOCKED.md"
 set +e
 validation_summary=$(
-  FIREBREAK_VALIDATION_FORCE_BLOCKED_REASON="smoke-blocked" \
-    firebreak_cmd internal loop run \
-      --task-id validation-blocked \
+  DEV_FLOW_VALIDATION_FORCE_BLOCKED_REASON="smoke-blocked" \
+    dev_flow_cmd loop run \
+      --workspace-id spec-006-validation \
       --attempt-id validation-blocked-run \
       --spec "$spec_path" \
       --plan "Exercise blocked validation path" \
@@ -106,14 +106,14 @@ if ! [ -f "$validation_plan_path" ] || ! [ -f "$validation_audit_root/validation
   echo "loop smoke validation-blocked scenario did not preserve validation evidence" >&2
   exit 1
 fi
-close_task validation-blocked blocked
+close_workspace spec-006-validation blocked
 
 policy_branch="agent/spec-006-policy-$branch_suffix"
-firebreak_cmd internal task create --task-id policy-blocked --branch "$policy_branch" --owner smoke >/dev/null
+dev_flow_cmd workspace create --workspace-id spec-006-policy --branch "$policy_branch" --owner smoke >/dev/null
 set +e
 policy_summary=$(
-  firebreak_cmd internal loop run \
-    --task-id policy-blocked \
+  dev_flow_cmd loop run \
+    --workspace-id spec-006-policy \
     --attempt-id policy-blocked-run \
     --spec "$spec_path" \
     --plan "Exercise blocked policy path" \
@@ -134,20 +134,20 @@ if ! [ -f "$policy_plan_path" ] || ! [ -f "$policy_audit_root/policy.log" ]; the
   echo "loop smoke policy-blocked scenario did not preserve policy evidence" >&2
   exit 1
 fi
-close_task policy-blocked blocked
+close_workspace spec-006-policy blocked
 
 shared_escape_branch="agent/spec-006-shared-escape-$branch_suffix"
-shared_escape_output=$(firebreak_cmd internal task create --task-id shared-escape --branch "$shared_escape_branch" --owner smoke)
-shared_escape_worktree=$(extract_json_field "$shared_escape_output" worktree_path)
+shared_escape_output=$(dev_flow_cmd workspace create --workspace-id spec-006-shared-escape --branch "$shared_escape_branch" --owner smoke)
+shared_escape_workspace=$(extract_json_field "$shared_escape_output" workspace_path)
 shared_escape_root=$loop_tmp_dir/shared-escape-root
 mkdir -p "$shared_escape_root/probe"
-rm "$shared_escape_worktree/.codex"
-ln -s "$shared_escape_root" "$shared_escape_worktree/.codex"
-printf '%s\n' 'escape' >"$shared_escape_worktree/.codex/probe/escape.txt"
+rm "$shared_escape_workspace/.codex"
+ln -s "$shared_escape_root" "$shared_escape_workspace/.codex"
+printf '%s\n' 'escape' >"$shared_escape_workspace/.codex/probe/escape.txt"
 set +e
 shared_escape_summary=$(
-  firebreak_cmd internal loop run \
-    --task-id shared-escape \
+  dev_flow_cmd loop run \
+    --workspace-id spec-006-shared-escape \
     --attempt-id shared-escape-run \
     --spec "$spec_path" \
     --plan "Exercise managed shared-root boundary" \
@@ -168,15 +168,15 @@ if ! [ -f "$shared_escape_plan_path" ] || ! [ -f "$shared_escape_audit_root/revi
   echo "loop smoke shared-escape scenario did not preserve write-scope evidence" >&2
   exit 1
 fi
-close_task shared-escape blocked
+close_workspace spec-006-shared-escape blocked
 
 runtime_branch="agent/spec-006-runtime-$branch_suffix"
-firebreak_cmd internal task create --task-id runtime-blocked --branch "$runtime_branch" --owner smoke >/dev/null
+dev_flow_cmd workspace create --workspace-id spec-006-runtime --branch "$runtime_branch" --owner smoke >/dev/null
 set +e
 runtime_summary=$(
-  FIREBREAK_LOOP_MAX_RUNTIME_SECS=1 \
-    firebreak_cmd internal loop run \
-      --task-id runtime-blocked \
+  DEV_FLOW_MAX_RUNTIME_SECS=1 \
+    dev_flow_cmd loop run \
+      --workspace-id spec-006-runtime \
       --attempt-id runtime-blocked-run \
       --spec "$spec_path" \
       --plan "Exercise runtime limit path" \
@@ -197,15 +197,15 @@ if ! [ -f "$runtime_plan_path" ] || ! [ -f "$runtime_audit_root/summary.json" ];
   echo "loop smoke runtime-blocked scenario did not preserve runtime evidence" >&2
   exit 1
 fi
-close_task runtime-blocked blocked
+close_workspace spec-006-runtime blocked
 
 parallel_branch="agent/spec-006-parallel-$branch_suffix"
-firebreak_cmd internal task create --task-id parallel-blocked --branch "$parallel_branch" --owner smoke >/dev/null
+dev_flow_cmd workspace create --workspace-id spec-006-parallel --branch "$parallel_branch" --owner smoke >/dev/null
 set +e
 parallel_summary=$(
-  FIREBREAK_LOOP_MAX_PARALLELISM=0 \
-    firebreak_cmd internal loop run \
-      --task-id parallel-blocked \
+  DEV_FLOW_MAX_PARALLELISM=0 \
+    dev_flow_cmd loop run \
+      --workspace-id spec-006-parallel \
       --attempt-id parallel-blocked-run \
       --spec "$spec_path" \
       --plan "Exercise parallelism limit path" \
@@ -226,6 +226,6 @@ if ! [ -f "$parallel_plan_path" ] || ! [ -f "$parallel_audit_root/policy.log" ];
   echo "loop smoke parallelism-blocked scenario did not preserve policy evidence" >&2
   exit 1
 fi
-close_task parallel-blocked blocked
+close_workspace spec-006-parallel blocked
 
-printf '%s\n' "Firebreak internal loop smoke test passed"
+printf '%s\n' "dev-flow loop smoke test passed"

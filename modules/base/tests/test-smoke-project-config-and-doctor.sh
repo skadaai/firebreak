@@ -72,7 +72,7 @@ cat >"$project_dir/.firebreak.env" <<EOF
 AGENT_CONFIG=host
 AGENT_CONFIG_HOST_PATH=~/shared-agent-config
 CODEX_CONFIG=workspace
-FIREBREAK_TASK_STATE_DIR=/tmp/internal-only
+DEV_FLOW_STATE_DIR=/tmp/internal-only
 EOF
 
 doctor_output=$(AGENT_CONFIG=vm firebreak_cmd doctor)
@@ -98,7 +98,7 @@ obj = json.loads(os.environ["DOCTOR_JSON"])
 project_dir = os.environ["PROJECT_DIR"]
 
 assert obj["project_config_source"] == "project-default"
-assert "FIREBREAK_TASK_STATE_DIR" in obj["ignored_config_keys"]
+assert "DEV_FLOW_STATE_DIR" in obj["ignored_config_keys"]
 assert obj["agents"]["codex"]["mode"] == "workspace"
 assert obj["agents"]["codex"]["path"] == f"{project_dir}/.codex"
 assert obj["agents"]["claude-code"]["mode"] == "vm"
@@ -121,7 +121,7 @@ assert obj["cwd_whitespace"] is False
 assert details["cwd"] == project_dir
 assert details["project_root_source"] == "cwd"
 assert details["git_common_dir"] == "unknown"
-assert "FIREBREAK_TASK_STATE_DIR" in details["ignored_keys"]
+assert "DEV_FLOW_STATE_DIR" in details["ignored_keys"]
 PY
 
 printf '%s\n' "Firebreak project-config and doctor smoke test passed"

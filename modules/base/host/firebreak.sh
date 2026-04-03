@@ -180,15 +180,14 @@ usage:
   firebreak doctor [--verbose] [--json]
   firebreak vms [--json]
   firebreak run <vm> [--shell] [-- <vm args...>]
-  firebreak internal <subcommand> ...
 
 Available commands:
   init        Interactively write Firebreak project defaults
   doctor      Explain resolved config and launch readiness
   vms         List the public Firebreak VM workloads
   run         Launch a public Firebreak VM workload
-  internal    Internal plumbing for Firebreak's self development by agents and automation
 
+Agent workflow commands live in the separate `dev-flow` CLI.
 Other human-facing commands remain reserved until they have clear user value and intuitive UX.
 EOF
 }
@@ -209,36 +208,6 @@ case "$command" in
   run)
     shift
     firebreak_run_command "$@"
-    ;;
-  internal)
-    shift
-    internal_command=${1:-}
-    case "$internal_command" in
-      validate)
-        shift
-        firebreak_exec_package "firebreak-internal-validate" "$@"
-        ;;
-      task)
-        shift
-        firebreak_exec_package "firebreak-internal-task" "$@"
-        ;;
-      loop)
-        shift
-        firebreak_exec_package "firebreak-internal-loop" "$@"
-        ;;
-      ""|--help|-h|help)
-        cat <<'EOF'
-usage:
-  firebreak internal validate run SUITE [--state-dir PATH]
-  firebreak internal task <subcommand> ...
-  firebreak internal loop run ...
-EOF
-        ;;
-      *)
-        echo "unknown firebreak internal subcommand: $internal_command" >&2
-        exit 1
-        ;;
-    esac
     ;;
   ""|--help|-h|help)
     usage

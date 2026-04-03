@@ -7,6 +7,8 @@
   mkAgentVersionSmokePackage,
   mkCloudJobPackage,
   mkCloudSmokePackage,
+  mkDevFlowCliPackage,
+  mkDevFlowCliSurfaceSmokePackage,
   mkFirebreakCliSurfaceSmokePackage,
   mkFirebreakCliPackage,
   mkLoopPackage,
@@ -14,8 +16,8 @@
   mkNpxLauncherSmokePackage,
   mkProjectConfigSmokePackage,
   mkSmokePackage,
-  mkTaskPackage,
-  mkTaskSmokePackage,
+  mkWorkspacePackage,
+  mkWorkspaceSmokePackage,
   mkValidationPackage,
   mkValidationSmokePackage,
 }:
@@ -62,35 +64,43 @@
     name = "firebreak-test-smoke-firebreak-cli-surface";
   };
 
-  firebreak-internal-validate = mkValidationPackage {
-    name = "firebreak-internal-validate";
+  dev-flow-test-smoke-cli-surface = mkDevFlowCliSurfaceSmokePackage {
+    name = "dev-flow-test-smoke-cli-surface";
+  };
+
+  dev-flow-validate = mkValidationPackage {
+    name = "dev-flow-validate";
     includeCloudSuite = hostIsLinux;
   };
 
-  firebreak-test-smoke-internal-validate = mkValidationSmokePackage {
-    name = "firebreak-test-smoke-internal-validate";
-    validatePackage = "firebreak-internal-validate";
+  dev-flow-test-smoke-validate = mkValidationSmokePackage {
+    name = "dev-flow-test-smoke-validate";
+    validatePackage = "dev-flow-validate";
   };
 
-  firebreak-internal-task = mkTaskPackage {
-    name = "firebreak-internal-task";
+  dev-flow-workspace = mkWorkspacePackage {
+    name = "dev-flow-workspace";
   };
 
-  firebreak-test-smoke-internal-task = mkTaskSmokePackage {
-    name = "firebreak-test-smoke-internal-task";
+  dev-flow-test-smoke-workspace = mkWorkspaceSmokePackage {
+    name = "dev-flow-test-smoke-workspace";
   };
 
-  firebreak-internal-loop = mkLoopPackage {
-    name = "firebreak-internal-loop";
-    taskPackage = "firebreak-internal-task";
+  dev-flow-loop = mkLoopPackage {
+    name = "dev-flow-loop";
+    workspacePackage = "dev-flow-workspace";
   };
 
-  firebreak-test-smoke-internal-loop = mkLoopSmokePackage {
-    name = "firebreak-test-smoke-internal-loop";
+  dev-flow-test-smoke-loop = mkLoopSmokePackage {
+    name = "dev-flow-test-smoke-loop";
   };
 
   firebreak = mkFirebreakCliPackage {
     name = "firebreak";
+  };
+
+  dev-flow = mkDevFlowCliPackage {
+    name = "dev-flow";
   };
 } // lib.optionalAttrs hostIsLinux {
   firebreak-internal-runner-codex-cloud = localVmArtifacts.firebreak-codex-cloud.runnerPackage;

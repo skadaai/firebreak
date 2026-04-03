@@ -11,13 +11,13 @@ Completed.
 
 ## What has landed
 
-- `firebreak internal loop run` now records a machine-readable attempt plan tied to a tracked spec and isolated task
+- `dev-flow loop run` now records a machine-readable attempt plan tied to a tracked spec and isolated workspace
 - the loop harness enforces bounded write-scope policy before validation or commit
 - the loop harness runs required validation suites through the task layer and stops with blocked audit output on blocked or failed validation
 - the loop harness performs a review pass that persists diff, status, conflict, and diff-check evidence before commit
 - the loop harness can create a bounded audit-backed commit with deterministic author metadata
-- the internal loop smoke covers successful, validation-blocked, and policy-blocked attempt paths
-- the top-level Firebreak CLI and agent guidance now document the internal loop command surface
+- the dev-flow loop smoke covers successful, validation-blocked, and policy-blocked attempt paths
+- the separate dev-flow CLI and agent guidance now document the loop command surface
 
 ## What remains open
 
@@ -32,5 +32,5 @@ Completed.
 
 ## History
 
-- 2026-03-20: Spec created to define the bounded autonomous development loop that sits above Firebreak work tasks and validation.
+- 2026-03-20: Spec created to define the bounded autonomous development loop that sits above Firebreak workspaces and validation.
 - 2026-03-21: Implemented the first bounded loop harness with audit records, policy gates, validation, review, and commit support.

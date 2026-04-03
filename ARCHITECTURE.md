@@ -4,11 +4,12 @@ Firebreak uses a module-oriented layout instead of flat `scripts/` and `tests/` 
 
 ## Terminology
 
-- `task`: an isolated host-side work attempt with its own worktree, runtime state, artifacts, and metadata
+- `attempt`: one bounded change attempt with its own plan, validation evidence, review artifacts, and disposition
+- `workspace`: an isolated host-side checkout and state root used for one spec line or other logically related sequence of work
 - `agent session`: an interactive or non-interactive agent process context launched inside a VM
 - `conversation thread`: an agent-specific memory or history object, when the agent exposes one
 
-Do not use bare `session` to mean the host-side work unit.
+Do not use bare `session` to mean either the workspace or the attempt.
 
 ## Structure
 

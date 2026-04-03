@@ -65,6 +65,8 @@
             mkAgentVersionSmokePackage
             mkCloudJobPackage
             mkCloudSmokePackage
+            mkDevFlowCliPackage
+            mkDevFlowCliSurfaceSmokePackage
             mkFirebreakCliSurfaceSmokePackage
             mkFirebreakCliPackage
             mkLoopPackage
@@ -72,8 +74,8 @@
             mkNpxLauncherSmokePackage
             mkProjectConfigSmokePackage
             mkSmokePackage
-            mkTaskPackage
-            mkTaskSmokePackage
+            mkWorkspacePackage
+            mkWorkspaceSmokePackage
             mkValidationPackage
             mkValidationSmokePackage
             ;

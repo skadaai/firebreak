@@ -1,4 +1,4 @@
 model: "openai"
 prompts:
-  short_description: "Operate inside isolated Firebreak tasks"
-  default_prompt: "Use $firebreak-work-task to start or resume a safe Firebreak work task."
+  short_description: "Operate inside isolated spec-owned workspaces"
+  default_prompt: "Use $firebreak-work-task to keep autonomous work inside a spec-owned workspace. Reuse the workspace for sequential work on the same spec, and start a new workspace when the work moves to a different spec."

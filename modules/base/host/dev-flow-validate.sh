@@ -1,6 +1,6 @@
 set -eu
 
-state_dir=${FIREBREAK_VALIDATION_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/firebreak/validation}
+state_dir=${DEV_FLOW_VALIDATION_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/firebreak_dev-flow/validation}
 command=${1:-}
 suite_name=""
 host_os=$(uname -s 2>/dev/null || printf '%s' unknown)
@@ -8,7 +8,7 @@ host_arch=$(uname -m 2>/dev/null || printf '%s' unknown)
 
 usage() {
   cat <<'EOF' >&2
-usage: firebreak internal validate run SUITE [--state-dir PATH]
+usage: dev-flow validate run SUITE [--state-dir PATH]
 
 Named suites:
   test-smoke-codex
@@ -52,7 +52,7 @@ case "$command" in
     usage
     ;;
   *)
-    echo "unknown firebreak internal validate subcommand: $command" >&2
+    echo "unknown dev-flow validate subcommand: $command" >&2
     usage
     ;;
 esac
@@ -108,8 +108,8 @@ case "$suite_name" in
     ;;
 esac
 
-if [ -n "${FIREBREAK_VALIDATION_FORCE_BLOCKED_REASON:-}" ]; then
-  missing_capability=$FIREBREAK_VALIDATION_FORCE_BLOCKED_REASON
+if [ -n "${DEV_FLOW_VALIDATION_FORCE_BLOCKED_REASON:-}" ]; then
+  missing_capability=$DEV_FLOW_VALIDATION_FORCE_BLOCKED_REASON
 else
   case "$host_os:$host_arch" in
     Linux:*)

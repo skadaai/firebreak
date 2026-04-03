@@ -1,6 +1,6 @@
 ---
 name: firebreak-validation
-description: "Use when a Firebreak task needs evidence before completion, handoff, or commit. This skill selects named Firebreak validation suites and classifies outcomes as passed, failed, or blocked."
+description: "Use when a workspace-backed change attempt needs evidence before completion, handoff, or commit. This skill selects named Firebreak validation suites and classifies outcomes as passed, failed, or blocked."
 ---
 
 # Firebreak Validation
@@ -10,7 +10,7 @@ Use the Firebreak harness, not ad hoc shell output, as the source of truth.
 ## Workflow
 
 1. Pick the smallest named suite that proves the slice.
-2. Run it through `firebreak internal validate run`.
+2. Run it through `dev-flow validate run`.
 3. Read the machine result and artifact paths.
 4. Decide the next action from the result.
 

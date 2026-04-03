@@ -1,13 +1,13 @@
 set -euf
 
-state_dir=${FIREBREAK_TASK_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/firebreak/tasks}
+state_dir=${DEV_FLOW_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/firebreak_dev-flow/workspaces}
 command=${1:-}
 
 usage() {
   cat <<'EOF' >&2
 usage:
-  firebreak internal loop run \
-    --task-id ID \
+  dev-flow loop run \
+    --workspace-id ID \
     --spec PATH \
     --plan TEXT \
     --validation-suite SUITE [--validation-suite SUITE ...] \
@@ -70,18 +70,18 @@ require_file() {
   fi
 }
 
-load_task() {
-  task_id=$1
-  task_root=$state_dir/$task_id
-  metadata_path=$task_root/metadata.json
-  require_file "$metadata_path" "task metadata"
+load_workspace() {
+  workspace_id=$1
+  workspace_state_root=$state_dir/$workspace_id
+  metadata_path=$workspace_state_root/metadata.json
+  require_file "$metadata_path" "workspace metadata"
 
-  status=$(cat "$task_root/status")
-  branch=$(cat "$task_root/branch")
-  owner=$(cat "$task_root/owner")
-  primary_checkout=$(cat "$task_root/primary-checkout")
-  worktree_path=$(cat "$task_root/worktree-path")
-  worktree_shared_root=$(cat "$task_root/worktree-shared-root")
+  status=$(cat "$workspace_state_root/status")
+  branch=$(cat "$workspace_state_root/branch")
+  owner=$(cat "$workspace_state_root/owner")
+  primary_checkout=$(cat "$workspace_state_root/primary-checkout")
+  workspace_path=$(cat "$workspace_state_root/workspace-path")
+  workspace_shared_root=$(cat "$workspace_state_root/shared-root")
 }
 
 emit_array() {
@@ -101,7 +101,7 @@ emit_plan() {
   cat >"$plan_path" <<EOF
 {
   "attempt_id": "$(json_escape "$attempt_id")",
-  "task_id": "$(json_escape "$task_id")",
+  "workspace_id": "$(json_escape "$workspace_id")",
   "branch": "$(json_escape "$branch")",
   "owner": "$(json_escape "$owner")",
   "primary_checkout": "$(json_escape "$primary_checkout")",
@@ -123,14 +123,14 @@ emit_summary() {
   cat >"$summary_path" <<EOF
 {
   "attempt_id": "$(json_escape "$attempt_id")",
-  "task_id": "$(json_escape "$task_id")",
-  "task_status": "$(json_escape "$status")",
+  "workspace_id": "$(json_escape "$workspace_id")",
+  "workspace_status": "$(json_escape "$status")",
   "branch": "$(json_escape "$branch")",
   "owner": "$(json_escape "$owner")",
   "result": "$(json_escape "$result")",
   "blocked_reason": $(if [ -n "$blocked_reason" ]; then printf '"%s"' "$(json_escape "$blocked_reason")"; else printf 'null'; fi),
   "spec_path": "$(json_escape "$spec_path")",
-  "worktree_path": "$(json_escape "$worktree_path")",
+  "workspace_path": "$(json_escape "$workspace_path")",
   "audit_root": "$(json_escape "$attempt_root")",
   "review_path": "$(json_escape "$review_path")",
   "plan_path": "$(json_escape "$plan_path")",
@@ -165,7 +165,7 @@ resolve_spec_path() {
       spec_path=$spec_ref
       ;;
     *)
-      spec_path=$worktree_path/$spec_ref
+      spec_path=$workspace_path/$spec_ref
       ;;
   esac
 
@@ -179,20 +179,20 @@ is_managed_shared_path() {
 
   case "$changed_path" in
     .codex|.codex/*)
-      managed_root=$worktree_shared_root/.codex
+      managed_root=$workspace_shared_root/.codex
       ;;
     .claude|.claude/*)
-      managed_root=$worktree_shared_root/.claude
+      managed_root=$workspace_shared_root/.claude
       ;;
     .direnv|.direnv/*)
-      managed_root=$worktree_shared_root/.direnv
+      managed_root=$workspace_shared_root/.direnv
       ;;
     *)
       return 1
       ;;
   esac
 
-  resolved_changed_path=$(realpath -m "$worktree_path/$changed_path")
+  resolved_changed_path=$(realpath -m "$workspace_path/$changed_path")
   resolved_managed_root=$(realpath -m "$managed_root")
 
   case "$resolved_changed_path" in
@@ -224,12 +224,12 @@ enforce_policy() {
         resolved_path=$(realpath -m "$write_path")
         ;;
       *)
-        resolved_path=$(realpath -m "$worktree_path/$write_path")
+        resolved_path=$(realpath -m "$workspace_path/$write_path")
         ;;
     esac
 
     case "$resolved_path" in
-      "$worktree_path"|"$worktree_path"/*)
+      "$workspace_path"|"$workspace_path"/*)
         allowed_write_roots="$allowed_write_roots $resolved_path"
         printf '%s\t%s\n' "$write_path" "$resolved_path" >>"$policy_path"
         ;;
@@ -253,7 +253,7 @@ run_validation_suites() {
     while :; do
       check_runtime_budget
       set +e
-      suite_output=$(timeout "$remaining_runtime_secs" @TASK_BIN@ validate --task-id "$task_id" "$suite_name")
+      suite_output=$(timeout "$remaining_runtime_secs" @WORKSPACE_BIN@ validate --workspace-id "$workspace_id" "$suite_name")
       suite_status=$?
       set -e
 
@@ -301,21 +301,21 @@ run_review() {
   managed_shared_paths_log=$review_dir/managed-shared-paths.log
   scope_check_log=$review_dir/write-scope.log
 
-  git -C "$worktree_path" status --porcelain >"$status_log"
-  git -C "$worktree_path" diff --stat >"$diff_stat_log"
-  git -C "$worktree_path" diff --name-only --diff-filter=U >"$conflicts_log"
+  git -C "$workspace_path" status --porcelain >"$status_log"
+  git -C "$workspace_path" diff --stat >"$diff_stat_log"
+  git -C "$workspace_path" diff --name-only --diff-filter=U >"$conflicts_log"
   {
-    git -C "$worktree_path" diff --name-only
-    git -C "$worktree_path" ls-files --others --exclude-standard
+    git -C "$workspace_path" diff --name-only
+    git -C "$workspace_path" ls-files --others --exclude-standard
     for managed_dir in .codex .claude .direnv; do
-      if [ -e "$worktree_path/$managed_dir" ]; then
-        find -L "$worktree_path/$managed_dir" -mindepth 1 -type f -printf '%P\n' | sed "s#^#$managed_dir/#"
+      if [ -e "$workspace_path/$managed_dir" ]; then
+        find -L "$workspace_path/$managed_dir" -mindepth 1 -type f -printf '%P\n' | sed "s#^#$managed_dir/#"
       fi
     done
   } | sort -u >"$changed_paths_log"
 
   set +e
-  git -C "$worktree_path" diff --check >"$diff_check_log" 2>&1
+  git -C "$workspace_path" diff --check >"$diff_check_log" 2>&1
   diff_check_status=$?
   set -e
   check_runtime_budget
@@ -347,7 +347,7 @@ run_review() {
   : >"$scope_check_log"
   while IFS= read -r changed_path; do
     [ -n "$changed_path" ] || continue
-    resolved_changed_path=$(realpath -m "$worktree_path/$changed_path")
+    resolved_changed_path=$(realpath -m "$workspace_path/$changed_path")
     changed_path_allowed=0
     for allowed_root in $allowed_write_roots; do
       case "$resolved_changed_path" in
@@ -373,7 +373,7 @@ run_review() {
 
   cat >"$review_path" <<EOF
 {
-  "task_id": "$(json_escape "$task_id")",
+  "workspace_id": "$(json_escape "$workspace_id")",
   "review_result": "$(json_escape "$review_result")",
   "diff_check_status": $diff_check_status,
   "diff_check_line_count": $diff_check_count,
@@ -411,30 +411,30 @@ create_commit() {
   fi
 
   (
-    cd "$worktree_path"
+    cd "$workspace_path"
     git add -A
-    GIT_AUTHOR_NAME=${FIREBREAK_LOOP_AUTHOR_NAME:-"Firebreak Loop"} \
-      GIT_AUTHOR_EMAIL=${FIREBREAK_LOOP_AUTHOR_EMAIL:-"firebreak@example.invalid"} \
-      GIT_COMMITTER_NAME=${FIREBREAK_LOOP_COMMITTER_NAME:-"Firebreak Loop"} \
-      GIT_COMMITTER_EMAIL=${FIREBREAK_LOOP_COMMITTER_EMAIL:-"firebreak@example.invalid"} \
+    GIT_AUTHOR_NAME=${DEV_FLOW_LOOP_AUTHOR_NAME:-"dev-flow Loop"} \
+      GIT_AUTHOR_EMAIL=${DEV_FLOW_LOOP_AUTHOR_EMAIL:-"dev-flow@example.invalid"} \
+      GIT_COMMITTER_NAME=${DEV_FLOW_LOOP_COMMITTER_NAME:-"dev-flow Loop"} \
+      GIT_COMMITTER_EMAIL=${DEV_FLOW_LOOP_COMMITTER_EMAIL:-"dev-flow@example.invalid"} \
       git commit -m "$commit_message" >/dev/null
   )
-  commit_sha=$(git -C "$worktree_path" rev-parse HEAD)
+  commit_sha=$(git -C "$workspace_path" rev-parse HEAD)
 }
 
 run_attempt() {
-  task_id=""
+  workspace_id=""
   spec_ref=""
   plan_text=""
   validation_suites=""
   write_paths=""
   commit_message=""
-  attempt_id=${FIREBREAK_LOOP_ATTEMPT_ID:-}
+  attempt_id=${DEV_FLOW_ATTEMPT_ID:-}
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      --task-id)
-        task_id=$2
+      --workspace-id)
+        workspace_id=$2
         shift 2
         ;;
       --spec)
@@ -469,23 +469,23 @@ run_attempt() {
     esac
   done
 
-  if [ -z "$task_id" ] || [ -z "$spec_ref" ] || [ -z "$plan_text" ] || [ -z "$validation_suites" ]; then
+  if [ -z "$workspace_id" ] || [ -z "$spec_ref" ] || [ -z "$plan_text" ] || [ -z "$validation_suites" ]; then
     usage
   fi
 
-  validate_token "$task_id" "task id"
+  validate_token "$workspace_id" "workspace id"
   if [ -z "$attempt_id" ]; then
     attempt_id="$(date -u +%Y%m%dT%H%M%SZ)"
   fi
   validate_token "$attempt_id" "attempt id"
 
-  load_task "$task_id"
+  load_workspace "$workspace_id"
   if [ "$status" != "active" ]; then
-    echo "cannot run loop for inactive task '$task_id' with status '$status'" >&2
+    echo "cannot run loop for inactive workspace '$workspace_id' with status '$status'" >&2
     exit 1
   fi
-  if ! [ -d "$worktree_path" ]; then
-    echo "task worktree is missing: $worktree_path" >&2
+  if ! [ -d "$workspace_path" ]; then
+    echo "workspace checkout is missing: $workspace_path" >&2
     exit 1
   fi
 
@@ -493,14 +493,14 @@ run_attempt() {
   write_paths=$(printf '%s\n' "$write_paths" | xargs)
   validation_suite_count=$(printf '%s\n' "$validation_suites" | wc -w | tr -d ' ')
   write_path_count=$(printf '%s\n' "$write_paths" | wc -w | tr -d ' ')
-  max_validation_suites=${FIREBREAK_LOOP_MAX_VALIDATION_SUITES:-8}
-  max_write_paths=${FIREBREAK_LOOP_MAX_WRITE_PATHS:-32}
-  max_parallelism=${FIREBREAK_LOOP_MAX_PARALLELISM:-1}
-  max_runtime_secs=${FIREBREAK_LOOP_MAX_RUNTIME_SECS:-3600}
-  validation_retry_budget=${FIREBREAK_LOOP_VALIDATION_RETRIES:-0}
+  max_validation_suites=${DEV_FLOW_MAX_VALIDATION_SUITES:-8}
+  max_write_paths=${DEV_FLOW_MAX_WRITE_PATHS:-32}
+  max_parallelism=${DEV_FLOW_MAX_PARALLELISM:-1}
+  max_runtime_secs=${DEV_FLOW_MAX_RUNTIME_SECS:-3600}
+  validation_retry_budget=${DEV_FLOW_VALIDATION_RETRIES:-0}
   allowed_write_roots=""
 
-  attempt_root=$task_root/loop/$attempt_id
+  attempt_root=$workspace_state_root/attempts/$attempt_id
   if [ -e "$attempt_root" ]; then
     echo "loop attempt already exists: $attempt_id" >&2
     exit 125
@@ -522,8 +522,8 @@ run_attempt() {
   resolve_spec_path
   emit_plan
 
-  active_root=$state_dir/loop-active
-  active_guard=$state_dir/loop-active.guard
+  active_root=$state_dir/attempts-active
+  active_guard=$state_dir/attempts-active.guard
   active_lock=$active_root/$attempt_id
   mkdir -p "$active_root"
   guard_acquired=0
@@ -570,7 +570,7 @@ case "$command" in
     usage
     ;;
   *)
-    echo "unknown firebreak internal loop subcommand: $command" >&2
+    echo "unknown dev-flow loop subcommand: $command" >&2
     usage
     ;;
 esac

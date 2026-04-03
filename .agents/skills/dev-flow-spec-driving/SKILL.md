@@ -7,6 +7,19 @@ description: "Use when work starts from a repo spec or an underspecified request
 
 Drive from the durable contract, then choose the next slice.
 
+## Inputs
+
+- a user request, bug report, reviewer finding, or spec-driven follow-up
+- relevant existing specs and nearby code
+- the current workspace context, if one already exists
+
+## Outputs
+
+- `owning_spec`: the existing spec to amend, a new spec to create, or `maintenance`
+- `next_slice`: one independently landable unit of work
+- `workspace_decision`: stay in the current workspace or move to another one
+- `expected_validation`: the smallest suites expected to prove the slice
+
 ## Order
 
 Use this skill before `dev-flow-workspace` and `dev-flow-change-loop`. First decide the owning spec and next slice, then decide whether that slice stays in the current workspace or needs a separate workspace.
@@ -27,6 +40,17 @@ Use this skill before `dev-flow-workspace` and `dev-flow-change-loop`. First dec
 - Avoid slices that span many modules unless the spec explicitly requires it.
 - If the right next slice is still ambiguous, narrow it further instead of guessing.
 - Keep the slice small enough that a failed validation points to one thing.
+
+## Anti-Patterns
+
+- Do not create a new spec for a small refinement of an existing contract.
+- Do not choose a slice that spans unrelated specs just because the files are nearby.
+- Do not defer the workspace decision until after editing has started.
+
+## Stop Conditions
+
+- If more than one spec plausibly owns the change, stop and resolve ownership before editing.
+- If the next slice cannot be named without “and also”, narrow it further before handing off.
 
 ## Example
 

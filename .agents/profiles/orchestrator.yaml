@@ -2,13 +2,11 @@ name: "orchestrator"
 kind: "role"
 selection: "exclusive"
 role_scope: "multi-slice"
-description: "Chooses the next dev-flow slice and coordinates its bounded execution."
-when: "Use as the active role only when more than one slice, role, or handoff must be coordinated."
+description: "Coordinates more than one dev-flow slice across specs, workspaces, roles, or handoffs."
+when: "Use as the active role only when more than one slice, workspace, role, or handoff must be coordinated."
 inherits:
   - "base"
 requires_runtime_profile: true
 runtime_overlay_group: "runtime"
 skills:
   - "dev-flow-autonomous-flow"
-  - "dev-flow-spec-driving"
-  - "dev-flow-review"

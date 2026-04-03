@@ -7,6 +7,19 @@ description: "Use when a workspace-backed change attempt needs evidence before c
 
 Use the dev-flow harness, not ad hoc shell output, as the source of truth.
 
+## Inputs
+
+- one bounded slice
+- one named validation target or smallest candidate suite
+- one workspace-backed diff or attempt under test
+
+## Outputs
+
+- `suite_name`
+- `result`
+- `artifact_paths`
+- `next_action`
+
 ## Order
 
 Use this skill after the slice is implemented and the expected scope is known. Feed its result into `dev-flow-review` instead of treating raw shell output as sufficient evidence.
@@ -30,3 +43,8 @@ Use this skill after the slice is implemented and the expected scope is known. F
 - Do not replace a missing suite with “I ran something similar” and call it complete.
 - If no suitable suite exists, report a validation gap instead of pretending success.
 - Preserve the validation summary and artifacts for review.
+
+## Stop Conditions
+
+- If no named suite can prove the slice, stop and record a validation gap.
+- If the result is `blocked`, stop and report the blocking capability or policy instead of guessing.

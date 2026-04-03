@@ -39,11 +39,12 @@ This branch uses a `dev-flow-*` internal skill surface for autonomous work. Star
 
 The corresponding profile layer under [`.agents/profiles/`](/home/zvictor/development/firebreak/dev-flow-workspace-model/.agents/profiles) is also aligned to the new names:
 
-- `planner` uses `dev-flow-spec-driving` and `dev-flow-change-loop`
-- `worker` uses `dev-flow-autonomous-flow`, `dev-flow-workspace`, `dev-flow-change-loop`, and `dev-flow-validation`
+- `planner` uses `dev-flow-spec-driving`
+- `worker` uses `dev-flow-workspace`, `dev-flow-change-loop`, and `dev-flow-validation`
 - `reviewer` uses `dev-flow-review`
 - `validator` uses `dev-flow-validation`
 - `local-operator` and `cloud-operator` use `dev-flow-runtime-profile`
+- `orchestrator` uses `dev-flow-autonomous-flow` for multi-slice coordination
 
 ## Local Workloads
 

@@ -7,6 +7,18 @@ description: "Use when deciding whether an autonomous change is safe to land. Th
 
 Review findings first. Approval is secondary.
 
+## Inputs
+
+- one bounded diff
+- validation results and artifact paths for the same attempt
+- any recorded review artifacts or policy findings
+
+## Outputs
+
+- `findings`
+- `blocking_status`
+- `evidence_gaps`
+
 ## Order
 
 Run review after validation has produced evidence or after the work is explicitly blocked from producing it. Review should consume the recorded diff, validation summary, and any review artifacts for the same workspace-backed attempt.
@@ -25,3 +37,8 @@ Run review after validation has produced evidence or after the work is explicitl
 - Do not accept shared-resource changes blindly; verify their resolved target and intent.
 - Use the recorded validation and review artifacts as the source of truth when they exist.
 - Prefer concise findings with exact file references.
+
+## Stop Conditions
+
+- If the diff does not match the intended slice, stop and send it back for re-scoping.
+- If review depends on missing validation evidence, stop and report the evidence gap instead of inferring success.

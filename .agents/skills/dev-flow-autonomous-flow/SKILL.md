@@ -5,7 +5,21 @@ description: "Use when starting or resuming non-trivial autonomous work in this 
 
 # Dev Flow Autonomous Flow
 
-Use this as the top-level skill for non-trivial autonomous work in this branch.
+Use this as the top-level skill for non-trivial autonomous work in this branch. Prefer it over manually composing lower-level skills unless the task is obviously limited to one narrow phase.
+
+## Inputs
+
+- a user request, spec change, or maintenance task that is larger than a trivial edit
+- the current workspace context, if one already exists
+- the expected runtime mode when local versus cloud behavior matters
+
+## Outputs
+
+- one owning spec or maintenance line
+- one next bounded slice
+- one workspace decision: reuse current workspace or create/resume another workspace
+- one expected validation set and review path
+- one explicit stop reason when the work cannot safely proceed
 
 ## Sequence
 
@@ -29,6 +43,7 @@ Use this as the top-level skill for non-trivial autonomous work in this branch.
 - Use `dev-flow validate run ...` for named validation suites.
 - Use `dev-flow loop run ...` only after the slice, workspace, and validation suites are explicit.
 - For concrete command shapes, see [references/commands.md](references/commands.md).
+- For workspace and branch naming shapes, see [references/naming.md](references/naming.md).
 
 ## Stop Conditions
 

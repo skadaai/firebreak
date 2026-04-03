@@ -9,7 +9,6 @@ inherits:
 requires_runtime_profile: true
 runtime_overlay_group: "runtime"
 skills:
-  - "dev-flow-autonomous-flow"
   - "dev-flow-workspace"
   - "dev-flow-change-loop"
   - "dev-flow-validation"

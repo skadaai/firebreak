@@ -44,16 +44,16 @@ rec {
           return 0
         fi
 
-        printf '%s\n' "$raw_modes" | tr ',' '\n' | while IFS= read -r mode_entry || [ -n "$mode_entry" ]; do
-          mode_entry=$(printf '%s' "$mode_entry" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
-          [ -n "$mode_entry" ] || continue
-          case "$mode_entry" in
-            ${commandName}=*)
-              printf '%s\n' "$(normalize_worker_mode "''${mode_entry#*=}")"
-              exit 0
-              ;;
-          esac
-        done
+        raw_modes=$(printf '%s' "$raw_modes" | tr '\n' ',')
+        case ",$raw_modes," in
+          *",${commandName}="*)
+            resolved_mode=''${raw_modes#*"${commandName}="}
+            resolved_mode=''${resolved_mode%%,*}
+            if [ -n "$resolved_mode" ]; then
+              printf '%s\n' "$(normalize_worker_mode "$resolved_mode")"
+            fi
+            ;;
+        esac
       }
 
       worker_mode_overrides=''${FIREBREAK_WORKER_MODES:-}
@@ -79,6 +79,11 @@ rec {
         worker_mode=$default_worker_mode
       fi
 
+      if [ "''${1:-}" = "--version" ]; then
+        printf '%s\n' ${lib.escapeShellArg versionOutput}
+        exit 0
+      fi
+
       case "$worker_mode" in
         vm)
           ;;
@@ -95,11 +100,6 @@ rec {
           exit 1
           ;;
       esac
-
-      if [ "''${1:-}" = "--version" ]; then
-        printf '%s\n' ${lib.escapeShellArg versionOutput}
-        exit 0
-      fi
 
       workspace=$PWD
       exec firebreak worker run --kind ${lib.escapeShellArg kind} --workspace "$workspace" --attach -- "$@"

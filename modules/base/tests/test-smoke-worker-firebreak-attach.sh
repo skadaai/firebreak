@@ -85,9 +85,9 @@ if [ "$worker_count" != "2" ]; then
   exit 1
 fi
 
-ordered_worker_roots=$(find "$state_dir/workers" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -n)
-first_worker_root=$(printf '%s\n' "$ordered_worker_roots" | sed -n '1s/^[^ ]* //p')
-latest_worker_root=$(printf '%s\n' "$ordered_worker_roots" | tail -n 1 | sed 's/^[^ ]* //')
+ordered_worker_roots=$(ls -1dt "$state_dir"/workers/*/ 2>/dev/null || true)
+first_worker_root=$(printf '%s\n' "$ordered_worker_roots" | tail -n 1 | sed 's:/*$::')
+latest_worker_root=$(printf '%s\n' "$ordered_worker_roots" | sed -n '1s:/*$::p')
 
 if [ -z "$first_worker_root" ] || [ -z "$latest_worker_root" ]; then
   printf '%s\n' "$ordered_worker_roots" >&2
@@ -150,25 +150,23 @@ if ! [ -f "$first_runtime_json" ] || ! [ -f "$latest_runtime_json" ]; then
   exit 1
 fi
 
-first_runner_stdout_log=$(python3 - "$first_runtime_json" <<'PY'
+get_json_field() {
+  json_path=$1
+  field_name=$2
+  python3 - "$json_path" "$field_name" <<'PY'
 import json
 import sys
-path = sys.argv[1]
-with open(path, "r", encoding="utf-8") as handle:
-    data = json.load(handle)
-print(data.get("runner_stdout_log", ""))
-PY
-)
 
-latest_runner_stdout_log=$(python3 - "$latest_runtime_json" <<'PY'
-import json
-import sys
 path = sys.argv[1]
+field_name = sys.argv[2]
 with open(path, "r", encoding="utf-8") as handle:
     data = json.load(handle)
-print(data.get("runner_stdout_log", ""))
+print(data.get(field_name, ""))
 PY
-)
+}
+
+first_runner_stdout_log=$(get_json_field "$first_runtime_json" "runner_stdout_log")
+latest_runner_stdout_log=$(get_json_field "$latest_runtime_json" "runner_stdout_log")
 
 if ! [ -n "$first_runner_stdout_log" ] || ! [ -f "$first_runner_stdout_log" ]; then
   printf '%s\n' "$first_runner_stdout_log" >&2

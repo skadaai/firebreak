@@ -1,7 +1,9 @@
+#!/usr/bin/env bash
 set -eu
 
 bridge_dir=$1
 worker_script=$2
+poll_interval=${FIREBREAK_WORKER_BRIDGE_POLL_INTERVAL:-0.25}
 
 mkdir -p "$bridge_dir/requests"
 
@@ -882,5 +884,5 @@ while :; do
     fi
     process_request "$request_dir" &
   done
-  sleep 0.1
+  sleep "$poll_interval"
 done

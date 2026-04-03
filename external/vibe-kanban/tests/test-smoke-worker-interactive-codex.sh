@@ -166,15 +166,7 @@ with open(log_path, "wb") as log_file, open(normalized_log_path, "w", encoding="
                 if not saw_worker_output and worker_output_marker in normalized:
                     saw_worker_output = True
 
-                if (
-                    not saw_codex_auth
-                    and (
-                        (
-                            codex_auth_marker in normalized
-                            and codex_continue_marker in normalized
-                        )
-                    )
-                ):
+                if not saw_codex_auth and codex_auth_marker in normalized and codex_continue_marker in normalized:
                     saw_codex_auth = True
                     interrupt_deadline = time.time() + 2
 

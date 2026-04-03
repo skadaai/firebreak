@@ -52,7 +52,11 @@ echo ""
 REMOTE_NAME=$(echo "$TARGET_BRANCH" | cut -d'/' -f1)
 if git remote | grep -q "^${REMOTE_NAME}$"; then
     echo "Fetching latest changes from $REMOTE_NAME..."
-    git fetch "$REMOTE_NAME" 2>/dev/null || echo "Warning: Could not fetch"
+    if ! git fetch "$REMOTE_NAME" 2>/dev/null; then
+        echo "ERROR: Could not fetch from $REMOTE_NAME" >&2
+        echo "Refusing to continue with a potentially stale $TARGET_BRANCH reference" >&2
+        exit 1
+    fi
     echo ""
 fi
 

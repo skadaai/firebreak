@@ -119,8 +119,7 @@ command = [
     "--",
 ]
 
-with open(log_path, "wb") as log_file:
-    normalized_log_file = open(normalized_log_path, "w", encoding="utf-8")
+with open(log_path, "wb") as log_file, open(normalized_log_path, "w", encoding="utf-8") as normalized_log_file:
     proc = subprocess.Popen(
         command,
         stdin=slave_fd,
@@ -207,7 +206,6 @@ with open(log_path, "wb") as log_file:
                 proc.wait()
             raise SystemExit(1)
     finally:
-        normalized_log_file.close()
         try:
             os.close(master_fd)
         except OSError:

@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 set -eu
 
-default_firebreak_tmpdir=${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}
+if [ -n "${XDG_CACHE_HOME:-}" ]; then
+  default_firebreak_tmpdir=$XDG_CACHE_HOME
+elif [ -n "${HOME:-}" ]; then
+  default_firebreak_tmpdir=$HOME/.cache
+else
+  default_firebreak_tmpdir=${TMPDIR:-/tmp}
+fi
 if [ -d /cache ] && [ -w /cache ]; then
   default_firebreak_tmpdir=/cache/firebreak
 fi

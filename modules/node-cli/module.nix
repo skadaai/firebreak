@@ -263,7 +263,7 @@ in {
         util-linux
       ] ++ extraBootstrapPackages;
       bootstrapScript = renderTemplate scriptVars ./guest/bootstrap.sh;
-  shellInit = renderTemplate scriptVars ./guest/shell-init.sh;
+      shellInit = renderTemplate scriptVars ./guest/shell-init.sh;
     };
 
     microvm.forwardPorts = forwardPorts;

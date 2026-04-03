@@ -20,7 +20,7 @@ session_lines_state_file=$guest_state_dir/session-lines
 attach_shell_flag=-ic
 
 json_escape() {
-  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+  printf '%s' "$1" | @PYTHON3@ -c 'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'
 }
 
 write_command_state() {
@@ -164,10 +164,10 @@ case "$session_mode" in
           cat >"'"$command_state_local"'" <<EOF
 {
   "source": "guest-command",
-  "phase": "$(printf "%s" "$command_phase" | sed '"'"'s/\\/\\\\/g; s/"/\\"/g'"'"')",
-  "status": "$(printf "%s" "$command_status" | sed '"'"'s/\\/\\\\/g; s/"/\\"/g'"'"')",
-  "detail": "$(printf "%s" "$command_detail" | sed '"'"'s/\\/\\\\/g; s/"/\\"/g'"'"')",
-  "command": "$(printf "%s" "$FIREBREAK_AGENT_COMMAND" | sed '"'"'s/\\/\\\\/g; s/"/\\"/g'"'"')",
+  "phase": "$(printf "%s" "$command_phase" | @PYTHON3@ -c '"'"'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'"'"')",
+  "status": "$(printf "%s" "$command_status" | @PYTHON3@ -c '"'"'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'"'"')",
+  "detail": "$(printf "%s" "$command_detail" | @PYTHON3@ -c '"'"'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'"'"')",
+  "command": "$(printf "%s" "$FIREBREAK_AGENT_COMMAND" | @PYTHON3@ -c '"'"'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'"'"')",
   "exit_code": $command_exit_code,
   "updated_at": "$updated_at"
 }
@@ -230,10 +230,10 @@ EOF
           cat >"'"$command_state_local"'" <<EOF
 {
   "source": "guest-command",
-  "phase": "$(printf "%s" "$command_phase" | sed '"'"'s/\\/\\\\/g; s/"/\\"/g'"'"')",
-  "status": "$(printf "%s" "$command_status" | sed '"'"'s/\\/\\\\/g; s/"/\\"/g'"'"')",
-  "detail": "$(printf "%s" "$command_detail" | sed '"'"'s/\\/\\\\/g; s/"/\\"/g'"'"')",
-  "command": "$(printf "%s" "$FIREBREAK_AGENT_COMMAND" | sed '"'"'s/\\/\\\\/g; s/"/\\"/g'"'"')",
+  "phase": "$(printf "%s" "$command_phase" | @PYTHON3@ -c '"'"'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'"'"')",
+  "status": "$(printf "%s" "$command_status" | @PYTHON3@ -c '"'"'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'"'"')",
+  "detail": "$(printf "%s" "$command_detail" | @PYTHON3@ -c '"'"'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'"'"')",
+  "command": "$(printf "%s" "$FIREBREAK_AGENT_COMMAND" | @PYTHON3@ -c '"'"'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'"'"')",
   "exit_code": $command_exit_code,
   "updated_at": "$updated_at"
 }
@@ -360,6 +360,11 @@ EOF
         handle_command_signal_requests() {
           refresh_command_job_info
           [ -r "$command_signal_stream_shared" ] || return 0
+          snapshot_size=$(wc -c <"$command_signal_stream_shared" 2>/dev/null || echo "$command_signal_offset")
+          if [ "$snapshot_size" -le "$command_signal_offset" ]; then
+            return 0
+          fi
+          signal_count=$((snapshot_size - command_signal_offset))
           while IFS= read -r signal_name; do
             case "$signal_name" in
               INT)
@@ -379,9 +384,9 @@ EOF
                 ;;
             esac
           done <<EOF
-$(tail -c +"$((command_signal_offset + 1))" "$command_signal_stream_shared" 2>/dev/null || true)
+$(dd if="$command_signal_stream_shared" bs=1 skip="$command_signal_offset" count="$signal_count" status=none 2>/dev/null || true)
 EOF
-          command_signal_offset=$(wc -c <"$command_signal_stream_shared" 2>/dev/null || echo "$command_signal_offset")
+          command_signal_offset=$snapshot_size
         }
         start_command_signal_monitor() {
           : >"$command_signal_stream_shared"

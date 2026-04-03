@@ -28,9 +28,6 @@ log_phase() {
   phase=$1
   timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   printf '%s %s\n' "[firebreak-session]" "$timestamp $phase"
-  if [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
-    printf '%s\n' "$phase" > @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
-  fi
 }
 
 sync_guest_state_files() {
@@ -45,20 +42,23 @@ sync_guest_state_files() {
   fi
 }
 
+metadata_ready=0
 for _ in $(seq 1 50); do
   if [ -d @WORKSPACE_MOUNT@ ] && [ -r "$metadata" ]; then
+    metadata_ready=1
     break
   fi
   sleep 0.1
 done
 
-log_phase prepare-agent-session-metadata-ready
-if [ -d @WORKSPACE_MOUNT@ ] && [ -r "$metadata" ]; then
+if [ "$metadata_ready" = "1" ] && [ -d @WORKSPACE_MOUNT@ ] && [ -r "$metadata" ]; then
+  log_phase prepare-agent-session-metadata-ready
   candidate=$(cat "$metadata")
   if [ -n "$candidate" ]; then
     start_dir=$candidate
   fi
 else
+  log_phase prepare-agent-session-metadata-fallback
   echo "workspace or host cwd metadata not ready; continuing with the workspace mount only"
 fi
 
@@ -89,6 +89,13 @@ fi
 log_phase prepare-agent-session-state-dir-start
 mkdir -p "$guest_state_dir"
 @CHOWN@ @DEV_USER@:@DEV_USER@ "$guest_state_dir"
+rm -f \
+  "$session_term_state_file" \
+  "$session_columns_state_file" \
+  "$session_lines_state_file" \
+  "$worker_mode_state_file" \
+  "$worker_modes_state_file" \
+  "$worker_proxy_mode_state_file"
 log_phase prepare-agent-session-state-dir-done
 if [ -r "$session_term_file" ]; then
   cat "$session_term_file" > "$session_term_state_file"

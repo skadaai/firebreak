@@ -289,6 +289,8 @@ rec {
       runtimeInputs = with pkgs; [
         bash
         coreutils
+        findutils
+        gawk
         gnused
         nix
         python3
@@ -508,6 +510,8 @@ rec {
       runtimeInputs = with pkgs; [
         bash
         coreutils
+        findutils
+        gawk
         git
         gnused
         nix

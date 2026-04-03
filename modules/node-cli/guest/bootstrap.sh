@@ -129,6 +129,19 @@ for bootstrap_dir in \
   ensure_dir "$bootstrap_dir"
 done
 
+for bootstrap_dir in \
+  "$state_root" \
+  "$local_bin" \
+  "$install_prefix" \
+  "$install_prefix/lib/node_modules" \
+  "$install_tmp" \
+  "$xdg_config_home" \
+  "$xdg_cache_home" \
+  "$xdg_state_home" \
+  "$npm_cache_dir"; do
+  chown "$dev_user:$dev_user" "$bootstrap_dir"
+done
+
 if [ -x "$local_bin/@BIN_NAME@" ] && [ -r "$state_file" ] && [ "$(cat "$state_file")" = "$install_state_id" ] && [ -r "$ready_marker" ] && wrappers_ready; then
   log_phase "toolchain-cache-hit $package_spec"
   current_bootstrap_phase=toolchain-cache-hit

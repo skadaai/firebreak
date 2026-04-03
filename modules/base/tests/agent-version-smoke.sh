@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -eu
 
 firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}

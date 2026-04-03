@@ -326,7 +326,7 @@ usage:
   firebreak init [--force] [--stdout] [--interactive] [--non-interactive]
   firebreak doctor [--verbose] [--json]
   firebreak vms [--json]
-  firebreak run <vm> [--shell] [--worker-mode <vm|local|name=vm|name=local>] [-- <vm args...>]
+  firebreak run <vm> [--shell] [--launch-mode <run|shell>] [--worker-mode <vm|local|name=vm|name=local>] [-- <vm args...>]
   firebreak worker <subcommand> ...
   firebreak internal <subcommand> ...
 

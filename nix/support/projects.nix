@@ -23,7 +23,29 @@ rec {
       #!/usr/bin/env bash
       set -eu
 
-      upstream_bin=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/.firebreak-upstream-${commandName}
+      script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+      upstream_bin=""
+      upstream_candidates=(
+        "$script_dir/.firebreak-upstream-${commandName}"
+      )
+      if [ -n "''${LOCAL_BIN:-}" ]; then
+        upstream_candidates+=("''${LOCAL_BIN}/.firebreak-upstream-${commandName}")
+      fi
+      if [ -n "''${npm_config_prefix:-}" ]; then
+        upstream_candidates+=("''${npm_config_prefix}/bin/.firebreak-upstream-${commandName}")
+      fi
+      if [ -n "''${HOME:-}" ]; then
+        upstream_candidates+=("''${HOME}/.local/bin/.firebreak-upstream-${commandName}")
+      fi
+      for upstream_candidate in "''${upstream_candidates[@]}"; do
+        if [ -x "$upstream_candidate" ]; then
+          upstream_bin=$upstream_candidate
+          break
+        fi
+      done
+      if [ -z "$upstream_bin" ]; then
+        upstream_bin="''${upstream_candidates[0]}"
+      fi
       default_worker_mode=${lib.escapeShellArg defaultWorkerMode}
       proxy_default_mode=${lib.escapeShellArg (if defaultMode == null then "" else defaultMode)}
 

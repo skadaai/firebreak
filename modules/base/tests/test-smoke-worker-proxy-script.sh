@@ -6,6 +6,7 @@ smoke_dir=$(mktemp -d "$tmp_root/firebreak-worker-proxy.XXXXXX")
 trap 'rm -rf "$smoke_dir"' EXIT INT TERM
 
 mkdir -p "$smoke_dir/bin"
+mkdir -p "$smoke_dir/local-bin"
 
 cat >"$smoke_dir/bin/firebreak" <<'EOF'
 #!/usr/bin/env bash
@@ -53,6 +54,10 @@ require_pattern "$worker_output" "--attach -- --help" "worker dispatch arguments
 
 local_output=$(FIREBREAK_WORKER_MODE=local codex --help)
 require_pattern "$local_output" "__UPSTREAM__--help" "local upstream dispatch"
+
+mv "$smoke_dir/bin/.firebreak-upstream-codex" "$smoke_dir/local-bin/.firebreak-upstream-codex"
+fallback_output=$(LOCAL_BIN="$smoke_dir/local-bin" FIREBREAK_WORKER_MODE=local codex --help)
+require_pattern "$fallback_output" "__UPSTREAM__--help" "local-bin upstream fallback dispatch"
 
 per_worker_output=$(FIREBREAK_WORKER_MODE=local FIREBREAK_WORKER_MODES=codex=vm codex --help)
 require_pattern "$per_worker_output" "__WORKER__worker run --kind codex --workspace" "per-worker override precedence"

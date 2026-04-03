@@ -42,8 +42,19 @@ require_pattern() {
   fi
 }
 
-worker_version_output=$(FIREBREAK_WORKER_MODE=vm codex --version)
-require_pattern "$worker_version_output" "codex firebreak worker proxy" "worker proxy version output"
+wrapper_info_output=$(FIREBREAK_WRAPPER_INFO=1 codex)
+require_pattern "$wrapper_info_output" '"wrapper": "firebreak"' "wrapper info identity"
+require_pattern "$wrapper_info_output" '"command": "codex"' "wrapper info command"
+require_pattern "$wrapper_info_output" '"resolved_mode": "local"' "wrapper info default mode"
+
+default_version_output=$(codex --version)
+require_pattern "$default_version_output" "__UPSTREAM__--version" "default upstream version dispatch"
+
+local_version_output=$(FIREBREAK_WORKER_MODE=local codex --version)
+require_pattern "$local_version_output" "__UPSTREAM__--version" "local upstream version dispatch"
+
+worker_wrapper_info_output=$(FIREBREAK_WORKER_MODE=vm FIREBREAK_WRAPPER_INFO=1 codex)
+require_pattern "$worker_wrapper_info_output" '"resolved_mode": "vm"' "wrapper info vm mode"
 
 default_output=$(codex --help)
 require_pattern "$default_output" "__UPSTREAM__--help" "default local dispatch"
@@ -61,6 +72,10 @@ require_pattern "$fallback_output" "__UPSTREAM__--help" "local-bin upstream fall
 
 per_worker_output=$(FIREBREAK_WORKER_MODE=local FIREBREAK_WORKER_MODES=codex=vm codex --help)
 require_pattern "$per_worker_output" "__WORKER__worker run --kind codex --workspace" "per-worker override precedence"
+
+worker_version_output=$(FIREBREAK_WORKER_MODE=vm codex --version)
+require_pattern "$worker_version_output" "__WORKER__worker run --kind codex --workspace" "worker version dispatch prefix"
+require_pattern "$worker_version_output" "--attach -- --version" "worker version dispatch arguments"
 
 set +e
 invalid_mode_output=$(FIREBREAK_WORKER_MODE=invalid codex --help 2>&1)

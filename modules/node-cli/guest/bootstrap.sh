@@ -50,6 +50,7 @@ write_bootstrap_state() {
   "detail": "$(json_escape "$bootstrap_detail")",
   "agent_bin": "@BIN_NAME@",
   "package_spec": "$(json_escape "$package_spec")",
+  "install_state_id": "$(json_escape "$install_state_id")",
   "updated_at": "$updated_at"
 }
 EOF

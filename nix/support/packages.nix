@@ -160,7 +160,6 @@ rec {
       workerProxyScript = self.lib.${system}.mkWorkerProxyScript {
         commandName = "codex";
         kind = "codex";
-        versionOutput = "codex firebreak worker proxy";
       };
     in
     pkgs.writeShellApplication {

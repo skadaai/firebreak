@@ -186,6 +186,41 @@ print(f"Firebreak bootstrap failed during {phase}: {detail}", file=sys.stderr)
 PY
       }
 
+      validate_ready_marker() {
+        READY_MARKER="$ready_marker" BOOTSTRAP_STATE_PATH="$bootstrap_state_path" python3 - <<'PY'
+import json
+import os
+import sys
+
+ready_marker_path = os.environ["READY_MARKER"]
+bootstrap_state_path = os.environ["BOOTSTRAP_STATE_PATH"]
+
+try:
+    with open(ready_marker_path, "r", encoding="utf-8") as handle:
+        ready_marker_value = handle.read().strip()
+except OSError:
+    raise SystemExit(1)
+
+if not ready_marker_value:
+    raise SystemExit(1)
+
+try:
+    with open(bootstrap_state_path, "r", encoding="utf-8") as handle:
+        bootstrap_state = json.load(handle)
+except OSError:
+    raise SystemExit(1)
+except ValueError:
+    raise SystemExit(1)
+
+expected_install_state_id = (bootstrap_state.get("install_state_id") or "").strip()
+if not expected_install_state_id:
+    raise SystemExit(1)
+
+if ready_marker_value != expected_install_state_id:
+    raise SystemExit(1)
+PY
+      }
+
       case "$timeout_seconds" in
         *[!0-9]*)
           echo "FIREBREAK_BOOTSTRAP_WAIT_TIMEOUT_SECONDS must be a non-negative integer" >&2
@@ -194,7 +229,7 @@ PY
       esac
 
       while [ "$elapsed_seconds" -lt "$timeout_seconds" ]; do
-        if [ -r "$ready_marker" ]; then
+        if validate_ready_marker; then
           exit 0
         fi
         if report_bootstrap_error; then
@@ -204,7 +239,7 @@ PY
         elapsed_seconds=$((elapsed_seconds + 1))
       done
 
-      if [ -r "$ready_marker" ]; then
+      if validate_ready_marker; then
         exit 0
       fi
 
@@ -217,6 +252,7 @@ PY
     '';
   };
   scriptVars = {
+    "@AGENT_EXEC_OUTPUT_MOUNT@" = cfg.agentExecOutputMount;
     "@BIN_NAME@" = binName;
     "@AGENT_TOOLS_MOUNT@" = toolsMount;
     "@BOOTSTRAP_READY_MARKER@" = bootstrapReadyMarker;

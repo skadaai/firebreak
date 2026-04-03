@@ -17,7 +17,6 @@ rec {
       kind,
       defaultMode ? null,
       defaultWorkerMode ? "local",
-      versionOutput ? "${kind} firebreak worker proxy",
     }:
     ''
       #!/usr/bin/env bash
@@ -58,6 +57,10 @@ rec {
             printf '%s\n' "$1"
             ;;
         esac
+      }
+
+      json_escape() {
+        printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
       }
 
       resolve_command_worker_mode() {
@@ -103,8 +106,17 @@ rec {
         worker_mode=$(normalize_worker_mode "$worker_mode")
       fi
 
-      if [ "''${1:-}" = "--version" ]; then
-        printf '%s\n' ${lib.escapeShellArg versionOutput}
+      if [ "''${FIREBREAK_WRAPPER_INFO:-}" = "1" ]; then
+        cat <<__FIREBREAK_WRAPPER_INFO__
+{
+  "wrapper": "firebreak",
+  "command": "$(json_escape ${lib.escapeShellArg commandName})",
+  "kind": "$(json_escape ${lib.escapeShellArg kind})",
+  "default_mode": "$(json_escape "$default_worker_mode")",
+  "resolved_mode": "$(json_escape "$worker_mode")",
+  "upstream_bin": "$(json_escape "$upstream_bin")"
+}
+__FIREBREAK_WRAPPER_INFO__
         exit 0
       fi
 
@@ -422,7 +434,6 @@ rec {
               kind = proxy.kind;
               defaultMode = proxy.defaultMode or null;
               inherit defaultWorkerMode;
-              versionOutput = proxy.versionOutput or "${commandName} firebreak worker proxy";
             })
           workerProxies;
 

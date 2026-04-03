@@ -2,11 +2,11 @@ name: "reviewer"
 kind: "role"
 selection: "exclusive"
 role_scope: "single-slice"
-description: "Reviews Firebreak diffs and audit artifacts for safety and completeness."
+description: "Reviews autonomous diffs and audit artifacts for safety and completeness."
 when: "Use as the active role when a slice has been implemented and needs a review verdict."
 inherits:
   - "base"
 requires_runtime_profile: true
 runtime_overlay_group: "runtime"
 skills:
-  - "firebreak-review"
+  - "dev-flow-review"

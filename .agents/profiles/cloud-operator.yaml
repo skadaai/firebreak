@@ -9,5 +9,5 @@ when: "Use as the runtime overlay when the task targets orchestrated jobs, cloud
 inherits:
   - "base"
 skills:
-  - "firebreak-runtime-profile"
+  - "dev-flow-runtime-profile"
 runtime_mode: "cloud"

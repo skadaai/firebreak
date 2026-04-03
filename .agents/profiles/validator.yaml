@@ -2,11 +2,11 @@ name: "validator"
 kind: "role"
 selection: "exclusive"
 role_scope: "single-slice"
-description: "Validates a Firebreak slice and reports evidence-backed outcomes."
+description: "Validates a dev-flow slice and reports evidence-backed outcomes."
 when: "Use as the active role when the main task is to run or interpret validation."
 inherits:
   - "base"
 requires_runtime_profile: true
 runtime_overlay_group: "runtime"
 skills:
-  - "firebreak-validation"
+  - "dev-flow-validation"

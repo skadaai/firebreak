@@ -33,6 +33,18 @@ nix run .#dev-flow -- loop run --workspace-id spec-005-main --spec specs/005-iso
 
 Use one workspace per spec line. Reuse that workspace for sequential work on the same spec, and start a new workspace when the work moves to a different spec or unrelated maintenance line.
 
+## Agent Workflow
+
+This branch uses a `dev-flow-*` internal skill surface for autonomous work. Start with [dev-flow-autonomous-flow](/home/zvictor/development/firebreak/dev-flow-workspace-model/.agents/skills/dev-flow-autonomous-flow/SKILL.md), then let it route into the narrower skills for spec selection, workspace choice, boundaries, validation, and review.
+
+The corresponding profile layer under [`.agents/profiles/`](/home/zvictor/development/firebreak/dev-flow-workspace-model/.agents/profiles) is also aligned to the new names:
+
+- `planner` uses `dev-flow-spec-driving` and `dev-flow-change-loop`
+- `worker` uses `dev-flow-autonomous-flow`, `dev-flow-workspace`, `dev-flow-change-loop`, and `dev-flow-validation`
+- `reviewer` uses `dev-flow-review`
+- `validator` uses `dev-flow-validation`
+- `local-operator` and `cloud-operator` use `dev-flow-runtime-profile`
+
 ## Local Workloads
 
 - `nix run .#firebreak-codex` launches Codex in the local Firebreak VM

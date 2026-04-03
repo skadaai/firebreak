@@ -24,11 +24,13 @@ export FIREBREAK_GUEST_STATE_DIR=/run/firebreak-agent
 export FIREBREAK_BOOTSTRAP_STATE_PATH="$FIREBREAK_GUEST_STATE_DIR/bootstrap-state.json"
 export FIREBREAK_SHARED_BOOTSTRAP_STATE_PATH="@AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json"
 export FIREBREAK_BOOTSTRAP_READY_MARKER="@BOOTSTRAP_READY_MARKER@"
+export FIREBREAK_BOOTSTRAP_LOCK_PATH="$tool_home/.firebreak-bootstrap.lock"
 shared_tool_home=0
 if [ "$tool_home" != "$DEV_HOME" ]; then
   shared_tool_home=1
 fi
 agent_wrapper_path="$LOCAL_BIN/@AGENT_BIN@"
+bootstrap_lock_acquired=0
 
 log_phase() {
   printf '[firebreak-bootstrap] %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1"
@@ -83,9 +85,25 @@ ensure_bootstrap_dir() {
   chmod 0755 "$target_path" 2>/dev/null || true
 }
 
+acquire_bootstrap_lock() {
+  exec 9>"$FIREBREAK_BOOTSTRAP_LOCK_PATH"
+  flock 9
+  bootstrap_lock_acquired=1
+}
+
+release_bootstrap_lock() {
+  if [ "$bootstrap_lock_acquired" != "1" ]; then
+    return 0
+  fi
+  flock -u 9 2>/dev/null || true
+  exec 9>&-
+  bootstrap_lock_acquired=0
+}
+
 current_bootstrap_phase=init
 bootstrap_trap() {
   exit_code=$?
+  release_bootstrap_lock
   if [ "$exit_code" -ne 0 ]; then
     rm -f "$FIREBREAK_BOOTSTRAP_READY_MARKER"
     write_bootstrap_state "$current_bootstrap_phase" "error" "bootstrap-exit:$exit_code"
@@ -97,10 +115,12 @@ trap bootstrap_trap EXIT
 log_phase "toolchain-prepare-start @AGENT_DISPLAY_NAME@"
 log_phase "tool-home $tool_home"
 log_phase "tool-ready-marker $FIREBREAK_BOOTSTRAP_READY_MARKER"
+ensure_bootstrap_dir "$tool_home"
 ensure_bootstrap_dir "$FIREBREAK_GUEST_STATE_DIR"
 ensure_bootstrap_dir "$(dirname "$FIREBREAK_BOOTSTRAP_READY_MARKER")"
 current_bootstrap_phase=toolchain-prepare-start
 write_bootstrap_state "$current_bootstrap_phase" "running" "@AGENT_DISPLAY_NAME@"
+acquire_bootstrap_lock
 
 installed_spec=""
 if [ -r "$AGENT_SPEC_MARKER_PATH" ]; then

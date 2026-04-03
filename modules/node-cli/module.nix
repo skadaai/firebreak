@@ -86,7 +86,8 @@ let
       (lib.mapAttrsToList
         (scriptName: scriptText:
           let
-            heredocName = "FIREBREAK_BIN_${lib.toUpper (builtins.replaceStrings [ "-" "." "/" ] [ "_" "_" "_" ] scriptName)}";
+            shortHash = builtins.substring 0 12 (builtins.hashString "sha256" "${scriptName}:${scriptText}");
+            heredocName = "FIREBREAK_BIN_${lib.toUpper (builtins.replaceStrings [ "-" "." "/" ] [ "_" "_" "_" ] scriptName)}_${shortHash}";
           in
           ''
             mkdir -p "$npm_config_prefix/bin"
@@ -299,6 +300,7 @@ in {
         gnugrep
         gnused
         nodejs_20
+        python3
         util-linux
       ] ++ extraBootstrapPackages;
       bootstrapScript = renderTemplate scriptVars ./guest/bootstrap.sh;

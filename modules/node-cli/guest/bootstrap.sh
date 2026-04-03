@@ -21,6 +21,8 @@ state_root="$xdg_state_home/firebreak-node-cli/@NAME@"
 state_file="$state_root/install-state"
 ready_marker=@BOOTSTRAP_READY_MARKER@
 install_state_id='@INSTALL_STATE_ID@'
+bootstrap_lock_path="$tool_home/.firebreak-bootstrap.lock"
+bootstrap_lock_acquired=0
 bootstrap_state_dir=/run/firebreak-agent
 bootstrap_state_path="$bootstrap_state_dir/bootstrap-state.json"
 shared_bootstrap_state_path="@AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json"
@@ -34,7 +36,7 @@ log_phase() {
 }
 
 json_escape() {
-  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+  python3 -c 'import json, sys; sys.stdout.write(json.dumps(sys.argv[1])[1:-1])' "$1"
 }
 
 write_bootstrap_state() {
@@ -81,6 +83,21 @@ maybe_chown_dev() {
   return 1
 }
 
+acquire_bootstrap_lock() {
+  exec 9>"$bootstrap_lock_path"
+  flock 9
+  bootstrap_lock_acquired=1
+}
+
+release_bootstrap_lock() {
+  if [ "$bootstrap_lock_acquired" != "1" ]; then
+    return 0
+  fi
+  flock -u 9 2>/dev/null || true
+  exec 9>&-
+  bootstrap_lock_acquired=0
+}
+
 write_ready_marker() {
   ready_dir=$(dirname "$ready_marker")
   ready_tmp=$(mktemp "$ready_dir/.bootstrap-ready.XXXXXX")
@@ -106,6 +123,7 @@ wrappers_ready() {
 current_bootstrap_phase=init
 bootstrap_trap() {
   exit_code=$?
+  release_bootstrap_lock
   if [ "$exit_code" -ne 0 ]; then
     rm -f "$ready_marker"
     write_bootstrap_state "$current_bootstrap_phase" "error" "bootstrap-exit:$exit_code"
@@ -117,10 +135,12 @@ trap bootstrap_trap EXIT
 log_phase "toolchain-prepare-start @DISPLAY_NAME@"
 log_phase "tool-home $tool_home"
 log_phase "tool-ready-marker $ready_marker"
+ensure_dir "$tool_home"
 ensure_dir "$bootstrap_state_dir"
 ensure_dir "$(dirname "$ready_marker")"
 current_bootstrap_phase=toolchain-prepare-start
 write_bootstrap_state "$current_bootstrap_phase" "running" "@DISPLAY_NAME@"
+acquire_bootstrap_lock
 
 for bootstrap_dir in \
   "$state_root" \

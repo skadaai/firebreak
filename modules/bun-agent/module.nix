@@ -92,6 +92,7 @@ in {
         bun
         coreutils
         nodejs
+        util-linux
       ] ++ bootstrapPackages;
       bootstrapScript = renderTemplate scriptVars ./guest/bootstrap.sh;
       shellInit = renderTemplate scriptVars ./guest/shell-init.sh;

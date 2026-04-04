@@ -15,6 +15,7 @@
   memoryMiB ? 3072,
   extraSystemPackages ? [ ],
   extraBootstrapPackages ? [ ],
+  sharedAgentConfig ? { },
   extraShellInit ? "",
 }:
 moduleArgs@{
@@ -285,6 +286,7 @@ in {
     agentVm = {
       brandingTagline = tagline;
       agentConfigEnabled = false;
+      sharedAgentConfig = sharedAgentConfig;
       agentToolsEnabled = true;
       memoryMiB = lib.mkDefault memoryMiB;
       extraSystemPackages = with pkgs; [

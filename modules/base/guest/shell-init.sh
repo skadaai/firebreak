@@ -1,5 +1,7 @@
 if [ "$USER" = "@DEV_USER@" ]; then
   export PS1='[\u@\h:\w]\$ '
+  @SHARED_AGENT_CONFIG_ENV_EXPORTS@
+  @SHARED_AGENT_WRAPPER_ENV_EXPORTS@
 
   cdw() {
     target=@WORKSPACE_MOUNT@

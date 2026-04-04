@@ -1,6 +1,6 @@
 ---
 status: completed
-last_updated: 2026-03-23
+last_updated: 2026-03-25
 ---
 
 # 009 Plan
@@ -35,7 +35,7 @@ last_updated: 2026-03-23
 
 ## Current status
 
-Implemented. Remaining validation in this workspace is limited by the broken git metadata in the checkout, which prevents normal git-aware `nix` entrypoints and git-dependent smoke scripts from running here.
+Implemented. The local workload contract now converges on one shared host config root plus stable per-agent subdirectories, and this workspace still needs path-based validation because the checkout's git metadata remains broken.
 
 ## Open questions
 

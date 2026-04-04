@@ -5,8 +5,13 @@ rec {
     agentPackage,
     agentBin,
     agentDisplayName,
-    agentConfigDirName,
+    agentConfigSubdir,
+    defaultAgentConfigHostDir,
+    workspaceBootstrapConfigHostDir,
   }:
+    let
+      agentConfigDirName = ".firebreak/${agentConfigSubdir}";
+    in
     pkgs.writeShellApplication {
       inherit name;
       runtimeInputs = with pkgs; [
@@ -19,8 +24,11 @@ rec {
       text = renderTemplate {
         "@AGENT_BIN@" = agentBin;
         "@AGENT_CONFIG_DIR_NAME@" = agentConfigDirName;
+        "@AGENT_CONFIG_SUBDIR@" = agentConfigSubdir;
         "@AGENT_DISPLAY_NAME@" = agentDisplayName;
         "@AGENT_PACKAGE@" = agentPackage;
+        "@DEFAULT_AGENT_CONFIG_HOST_DIR@" = defaultAgentConfigHostDir;
+        "@WORKSPACE_BOOTSTRAP_CONFIG_HOST_DIR@" = workspaceBootstrapConfigHostDir;
       } ../../modules/base/tests/agent-smoke.sh;
     };
 

@@ -1,6 +1,6 @@
 ---
 status: in_progress
-last_updated: 2026-03-23
+last_updated: 2026-03-25
 ---
 
 # 009 Project Config And Doctor
@@ -53,6 +53,7 @@ The intended landing shape is:
 - real environment variables override project file values
 - only documented public keys are loaded from the project file
 - agent-specific keys such as `CODEX_*` and `CLAUDE_*` override generic `AGENT_*` keys for their respective workloads
+- `host` mode resolves through one shared host root plus stable per-agent subdirectories instead of per-agent host-path variables
 - `firebreak init` writes a minimal Firebreak-native defaults file
 - `firebreak doctor` explains the resolved config and launch readiness before a workload is started
 - `FIREBREAK_LAUNCH_MODE` is the public mode selector for local launch packages
@@ -70,6 +71,10 @@ The intended landing shape is:
 - When resolving local workload config for Codex, the system shall give precedence to `CODEX_*` selectors over generic `AGENT_*` selectors for Codex-specific behavior.
 - When resolving local workload config for Claude Code, the system shall give precedence to `CLAUDE_*` selectors over generic `AGENT_*` selectors for Claude-specific behavior.
 - The system shall use `host`, `workspace`, `vm`, and `fresh` as the public config-mode vocabulary for local workload config resolution.
+- When Firebreak resolves local workload config in `host` mode, the system shall treat `AGENT_CONFIG_HOST_PATH` as one shared host config root rather than a per-agent leaf directory.
+- When Firebreak resolves Codex config in `host` mode, the system shall map that resolution to a stable `codex` subdirectory within the shared host config root.
+- When Firebreak resolves Claude Code config in `host` mode, the system shall map that resolution to a stable `claude` subdirectory within the shared host config root.
+- The system shall not require or document `CODEX_CONFIG_HOST_PATH` or `CLAUDE_CONFIG_HOST_PATH` as part of the public local config contract.
 - The system shall provide `firebreak init` to write a Firebreak-native project defaults template.
 - When `firebreak init` writes the project defaults template, the system shall use `.firebreak.env` instead of a legacy sandbox file name.
 - When `firebreak init` writes the project defaults template, the system shall keep that template minimal and focused on the stable public Firebreak knobs.
@@ -87,6 +92,7 @@ The intended landing shape is:
 - Supported public settings can be expressed the same way in the process environment and in the project defaults file.
 - Unsupported internal plumbing variables are excluded from the project defaults contract.
 - Agent-specific selectors override generic selectors for their matching workloads.
+- `host` mode resolves through one shared host root with stable per-agent subdirectories.
 - `firebreak init` emits a Firebreak-native minimal template.
 - `firebreak doctor` can explain the resolved config and readiness state before launch.
 - `FIREBREAK_LAUNCH_MODE` is the public local mode selector, and legacy mode aliases are removed from the public contract.

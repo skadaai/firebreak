@@ -127,16 +127,16 @@ firebreak_doctor_workspace_config_path() {
 firebreak_doctor_resolve_agent_state() {
   agent_label=$1
   agent_prefix=$2
-  default_host_path=$3
+  default_host_root=$3
   config_dir_name=$4
+  config_subdir=$5
 
   agent_specific_config_var=${agent_prefix}_CONFIG
-  agent_specific_host_var=${agent_prefix}_CONFIG_HOST_PATH
   agent_specific_config=${!agent_specific_config_var:-}
-  agent_specific_host=${!agent_specific_host_var:-}
 
-  agent_mode=${agent_specific_config:-${AGENT_CONFIG:-vm}}
-  agent_host_path=$(firebreak_doctor_resolve_host_dir "${agent_specific_host:-${AGENT_CONFIG_HOST_PATH:-$default_host_path}}")
+  agent_mode=${agent_specific_config:-${AGENT_CONFIG:-host}}
+  agent_host_root=$(firebreak_doctor_resolve_host_dir "${AGENT_CONFIG_HOST_PATH:-$default_host_root}")
+  agent_host_path=$agent_host_root/$config_subdir
 
   case "$agent_mode" in
     host)
@@ -149,7 +149,7 @@ firebreak_doctor_resolve_agent_state() {
       printf '%s|%s|%s|%s\n' "$agent_label" "$agent_mode" "/var/lib/dev/$config_dir_name" "$agent_specific_config_var"
       ;;
     fresh)
-      printf '%s|%s|%s|%s\n' "$agent_label" "$agent_mode" "/run/agent-config-fresh" "$agent_specific_config_var"
+      printf '%s|%s|%s|%s\n' "$agent_label" "$agent_mode" "/run/firebreak-agent-config-fresh/$config_subdir" "$agent_specific_config_var"
       ;;
     *)
       printf '%s|%s|%s|%s\n' "$agent_label" "invalid" "$agent_mode" "$agent_specific_config_var"
@@ -198,10 +198,10 @@ firebreak_doctor_command() {
   fi
 
   IFS='|' read -r codex_label codex_mode codex_path codex_source_var <<EOF
-$(firebreak_doctor_resolve_agent_state "codex" "CODEX" "$HOME/.codex" ".codex")
+$(firebreak_doctor_resolve_agent_state "codex" "CODEX" "$HOME/.firebreak" ".firebreak/codex" "codex")
 EOF
   IFS='|' read -r claude_label claude_mode claude_path claude_source_var <<EOF
-$(firebreak_doctor_resolve_agent_state "claude-code" "CLAUDE" "$HOME/.claude" ".claude")
+$(firebreak_doctor_resolve_agent_state "claude-code" "CLAUDE" "$HOME/.firebreak" ".firebreak/claude" "claude")
 EOF
   : "$codex_label" "$codex_source_var" "$claude_label" "$claude_source_var"
 

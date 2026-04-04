@@ -1,0 +1,42 @@
+---
+status: in_progress
+last_updated: 2026-03-25
+---
+
+# 014 Status
+
+## Current phase
+
+Initial implementation in progress.
+
+## What has landed
+
+- a tracked spec, plan, status record, and acceptance file for the shared agent config-root contract
+- the local profile now exposes a dedicated shared host config root transport for shared-sandbox workloads
+- the dedicated Codex and Claude Code local packages now use that same shared host root with stable `codex` and `claude` subdirectories
+- dedicated Bun-backed workloads and shared wrappers now share one guest-side config resolver instead of keeping separate path-resolution logic
+- the local host wrapper now exports one guest-readable env file for shared selector defaults instead of one metadata file per key
+- the shared base runtime now generates Firebreak-aware per-agent wrapper commands that translate Firebreak selector modes into agent-native config env vars
+- the guest mount flow for the shared host root is now part of session preparation instead of a separate dedicated mount service
+- the packaged Node CLI layer now consumes the shared runtime contract instead of owning a separate sandbox-specific implementation
+- the external agent-orchestrator recipe now declares Codex and Claude Code wrappers through that shared mechanism
+- `workspace` mode now stays project-local instead of being bootstrapped as a symlink into the shared host root
+
+## What remains open
+
+- validation coverage for the new shared config-root behavior
+- documentation for the shared host-root interface and directory naming rules
+- extending the shared wrapper mechanism cleanly to more recipes and agent families
+
+## Current sources of truth
+
+- [SPEC.md](./SPEC.md)
+- [PLAN.md](./PLAN.md)
+
+## History
+
+- 2026-03-24: Created this spec to define how one Firebreak sandbox can host multiple agent CLIs while still honoring Firebreak config selectors in `host` mode.
+- 2026-03-24: Implemented the first slice with the dedicated shared host config transport in the local profile, wrapper generation in the shared base runtime, and adoption in the external agent-orchestrator recipe.
+- 2026-03-25: Simplified the first slice to one `agentVm.sharedAgentConfig` subtree, one guest env file for selector defaults, and session-prep-owned mounting instead of a separate mount service.
+- 2026-03-25: Unified dedicated Codex and Claude Code local packages onto the same host-root-plus-subdirectory contract and removed per-agent host-path variables from the public config surface.
+- 2026-03-25: Collapsed dedicated Bun-backed workloads onto the same shared guest-side resolver used by generated wrappers, and constrained legacy config adoption to `host` mode only.

@@ -190,6 +190,20 @@ if [ "$start_dir" != "@WORKSPACE_MOUNT@" ]; then
   log_phase prepare-agent-session-bind-workspace-done
 fi
 
+if [ "@SHARED_AGENT_CONFIG_ENABLED@" = "1" ]; then
+  mkdir -p @SHARED_AGENT_CONFIG_HOST_MOUNT@ @SHARED_AGENT_CONFIG_FRESH_ROOT@
+  chown @DEV_USER@:@DEV_USER@ @SHARED_AGENT_CONFIG_FRESH_ROOT@
+  rm -f @SHARED_AGENT_CONFIG_MOUNTED_FLAG@
+
+  if mountpoint -q @SHARED_AGENT_CONFIG_HOST_MOUNT@; then
+    touch @SHARED_AGENT_CONFIG_MOUNTED_FLAG@
+  elif mount_output=$(mount -t virtiofs hostagentconfigroot @SHARED_AGENT_CONFIG_HOST_MOUNT@ 2>&1); then
+    touch @SHARED_AGENT_CONFIG_MOUNTED_FLAG@
+  else
+    printf '%s\n' "Firebreak shared agent config root is not available; continuing without host-backed config: $mount_output"
+  fi
+fi
+
 if [ "@AGENT_CONFIG_ENABLED@" != "1" ]; then
   log_phase prepare-agent-session-done
   exit 0
@@ -205,17 +219,12 @@ fi
 
 case "$mode" in
   host)
-    log_phase prepare-agent-session-agent-config-host-start
-    mkdir -p @AGENT_CONFIG_HOST_MOUNT@
-    if ! mountpoint -q @AGENT_CONFIG_HOST_MOUNT@; then
-      if ! mount -t virtiofs hostagentconfig @AGENT_CONFIG_HOST_MOUNT@; then
-        echo "failed to mount host agent config share; falling back to vm config" >&2
-        mode=vm
-      fi
-    fi
-
-    if [ "$mode" = "host" ]; then
-      resolved_dir=@AGENT_CONFIG_HOST_MOUNT@
+    if ! [ -e @SHARED_AGENT_CONFIG_MOUNTED_FLAG@ ]; then
+      echo "failed to mount host agent config share; falling back to vm config" >&2
+      mode=vm
+    else
+      resolved_dir=@SHARED_AGENT_CONFIG_HOST_MOUNT@/@AGENT_CONFIG_SUBDIR@
+      @RUNUSER@ -u @DEV_USER@ -- @MKDIR@ -p "$resolved_dir"
     fi
     log_phase prepare-agent-session-agent-config-host-done
     ;;
@@ -233,7 +242,15 @@ case "$mode" in
             resolved_target=$(dirname "$resolved_dir")/$link_target
             ;;
         esac
-        @RUNUSER@ -u @DEV_USER@ -- @MKDIR@ -p "$resolved_target"
+        case "$resolved_target" in
+          "$start_dir"|"$start_dir"/*)
+            @RUNUSER@ -u @DEV_USER@ -- @MKDIR@ -p "$resolved_target"
+            ;;
+          *)
+            echo "workspace agent config path must stay inside the workspace: $resolved_dir -> $resolved_target" >&2
+            exit 1
+            ;;
+        esac
       elif [ -e "$resolved_dir" ]; then
         echo "workspace agent config path exists but is not a directory: $resolved_dir" >&2
         exit 1
@@ -250,8 +267,7 @@ case "$mode" in
     log_phase prepare-agent-session-agent-config-vm-done
     ;;
   fresh)
-    log_phase prepare-agent-session-agent-config-fresh-start
-    resolved_dir=@AGENT_CONFIG_FRESH_DIR@
+    resolved_dir=@SHARED_AGENT_CONFIG_FRESH_ROOT@/@AGENT_CONFIG_SUBDIR@
     rm -rf "$resolved_dir"
     mkdir -p "$resolved_dir"
     chown @DEV_USER@:@DEV_USER@ "$resolved_dir"

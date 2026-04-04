@@ -10,7 +10,11 @@ export XDG_STATE_HOME="$tool_home/.local/state"
 export TMPDIR="$XDG_CACHE_HOME/tmp"
 export npm_config_cache="$XDG_CACHE_HOME/npm"
 export npm_config_prefix="$tool_home/.local"
-export PATH="$LOCAL_BIN:$PATH"
+if [ -n "${FIREBREAK_SHARED_AGENT_WRAPPER_BIN_DIR:-}" ]; then
+  export PATH="$FIREBREAK_SHARED_AGENT_WRAPPER_BIN_DIR:$LOCAL_BIN:$PATH"
+else
+  export PATH="$LOCAL_BIN:$PATH"
+fi
 @LAUNCH_ENV_EXPORTS@
 
 if [ -r /run/firebreak-agent/worker-mode ]; then

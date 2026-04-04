@@ -47,8 +47,8 @@ if [ -n "''${MICROVM_VFKIT_HOST_META_DIR:-}" ]; then
   firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_HOST_META_DIR},mountTag=hostmeta")
 fi
 
-if [ -n "''${MICROVM_VFKIT_AGENT_CONFIG_HOST_DIR:-}" ]; then
-  firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_AGENT_CONFIG_HOST_DIR},mountTag=hostagentconfig")
+if [ -n "''${MICROVM_VFKIT_SHARED_AGENT_CONFIG_DIR:-}" ]; then
+  firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_SHARED_AGENT_CONFIG_DIR},mountTag=hostagentconfigroot")
 fi
 
 if [ -n "''${MICROVM_VFKIT_AGENT_EXEC_OUTPUT_DIR:-}" ]; then
@@ -93,12 +93,16 @@ EOF
     runner,
     controlSocketName,
     defaultAgentCommand ? "",
-    agentConfigDirName,
+    agentConfigSubdir ? "agent",
     defaultAgentConfigHostDir,
+    workspaceBootstrapConfigHostDir ? "",
+    hostConfigAdoptionEnabled ? false,
     agentEnvPrefix ? "AGENT",
+    sharedAgentConfig ? { },
     workerBridgeEnabled ? false,
   }:
     let
+      agentConfigDirName = ".firebreak/${agentConfigSubdir}";
       runnerWrapper = pkgs.writeShellScript "firebreak-runner-wrapper" ''
         set -eu
         . ${runner}/bin/firebreak-runner-extra-args
@@ -124,8 +128,12 @@ EOF
         "@DEFAULT_AGENT_COMMAND@" = defaultAgentCommand;
         "@RUNNER@" = "${runnerWrapper}";
         "@AGENT_CONFIG_DIR_NAME@" = agentConfigDirName;
+        "@AGENT_CONFIG_SUBDIR@" = agentConfigSubdir;
         "@DEFAULT_AGENT_CONFIG_HOST_DIR@" = defaultAgentConfigHostDir;
+        "@WORKSPACE_BOOTSTRAP_CONFIG_HOST_DIR@" = workspaceBootstrapConfigHostDir;
+        "@HOST_CONFIG_ADOPTION_ENABLED@" = if hostConfigAdoptionEnabled then "1" else "0";
         "@AGENT_ENV_PREFIX@" = agentEnvPrefix;
+        "@SHARED_AGENT_CONFIG_ENABLED@" = if (sharedAgentConfig.enable or false) then "1" else "0";
         "@FIREBREAK_PROJECT_CONFIG_LIB@" = builtins.readFile ../../modules/base/host/firebreak-project-config.sh;
         "@FIREBREAK_FLAKE_REF@" = "path:${builtins.toString ../../.}";
         "@FIREBREAK_WORKER_LIB@" = builtins.readFile ../../modules/base/host/firebreak-worker.sh;
@@ -139,9 +147,12 @@ EOF
     runnerPackage,
     controlSocketName ? name,
     defaultAgentCommand ? "",
-    agentConfigDirName ? ".firebreak",
-    defaultAgentConfigHostDir ? "$HOME/.firebreak/${name}",
+    agentConfigSubdir ? "agent",
+    defaultAgentConfigHostDir ? "$HOME/.firebreak",
+    workspaceBootstrapConfigHostDir ? "",
+    hostConfigAdoptionEnabled ? false,
     agentEnvPrefix ? "AGENT",
+    sharedAgentConfig ? { },
     workerBridgeEnabled ? false,
   }:
     mkAgentPackage {
@@ -149,9 +160,12 @@ EOF
         name
         controlSocketName
         defaultAgentCommand
-        agentConfigDirName
+        agentConfigSubdir
         defaultAgentConfigHostDir
+        workspaceBootstrapConfigHostDir
+        hostConfigAdoptionEnabled
         agentEnvPrefix
+        sharedAgentConfig
         workerBridgeEnabled;
       runner = runnerPackage;
     };
@@ -162,9 +176,12 @@ EOF
     profileModules ? [ self.nixosModules.firebreak-local-profile ],
     controlSocketName ? name,
     defaultAgentCommand ? "",
-    agentConfigDirName ? ".firebreak",
-    defaultAgentConfigHostDir ? "$HOME/.firebreak/${name}",
+    agentConfigSubdir ? "agent",
+    defaultAgentConfigHostDir ? "$HOME/.firebreak",
+    workspaceBootstrapConfigHostDir ? "",
+    hostConfigAdoptionEnabled ? false,
     agentEnvPrefix ? "AGENT",
+    sharedAgentConfig ? { },
     workerBridgeEnabled ? false,
     workerKinds ? { },
   }:
@@ -187,9 +204,12 @@ EOF
           runnerPackage
           controlSocketName
           defaultAgentCommand
-          agentConfigDirName
+          agentConfigSubdir
           defaultAgentConfigHostDir
+          workspaceBootstrapConfigHostDir
+          hostConfigAdoptionEnabled
           agentEnvPrefix
+          sharedAgentConfig
           workerBridgeEnabled;
       };
     in {

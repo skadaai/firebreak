@@ -45,7 +45,9 @@
     agentPackage = "firebreak-codex";
     agentBin = "codex";
     agentDisplayName = "Codex";
-    agentConfigDirName = ".codex";
+    agentConfigSubdir = "codex";
+    defaultAgentConfigHostDir = "$HOME/.firebreak";
+    workspaceBootstrapConfigHostDir = "$HOME/.codex";
   };
 
   firebreak-test-smoke-codex-version = mkAgentVersionSmokePackage {
@@ -61,7 +63,9 @@
     agentPackage = "firebreak-claude-code";
     agentBin = "claude";
     agentDisplayName = "Claude Code";
-    agentConfigDirName = ".claude";
+    agentConfigSubdir = "claude";
+    defaultAgentConfigHostDir = "$HOME/.firebreak";
+    workspaceBootstrapConfigHostDir = "$HOME/.claude";
   };
 
   firebreak-interactive-echo = localVmArtifacts.firebreak-interactive-echo.package;

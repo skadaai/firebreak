@@ -8,9 +8,12 @@ in
     extraModules = [ self.nixosModules.firebreak-codex ];
     controlSocketName = "firebreak-codex";
     defaultAgentCommand = "codex";
-    agentConfigDirName = ".codex";
-    defaultAgentConfigHostDir = "$HOME/.codex";
+    agentConfigSubdir = "codex";
+    defaultAgentConfigHostDir = "$HOME/.firebreak";
+    workspaceBootstrapConfigHostDir = "$HOME/.codex";
+    hostConfigAdoptionEnabled = true;
     agentEnvPrefix = "CODEX";
+    sharedAgentConfig.enable = true;
   };
 
   firebreak-claude-code = mkLocalVmArtifacts {
@@ -18,9 +21,12 @@ in
     extraModules = [ self.nixosModules.firebreak-claude-code ];
     controlSocketName = "firebreak-claude-code";
     defaultAgentCommand = "claude";
-    agentConfigDirName = ".claude";
-    defaultAgentConfigHostDir = "$HOME/.claude";
+    agentConfigSubdir = "claude";
+    defaultAgentConfigHostDir = "$HOME/.firebreak";
+    workspaceBootstrapConfigHostDir = "$HOME/.claude";
+    hostConfigAdoptionEnabled = true;
     agentEnvPrefix = "CLAUDE";
+    sharedAgentConfig.enable = true;
   };
 
   firebreak-interactive-echo = mkLocalVmArtifacts {
@@ -28,8 +34,8 @@ in
     extraModules = [ self.nixosModules.firebreak-interactive-echo ];
     controlSocketName = "firebreak-interactive-echo";
     defaultAgentCommand = "interactive-echo";
-    agentConfigDirName = ".firebreak";
-    defaultAgentConfigHostDir = "$HOME/.firebreak/firebreak-interactive-echo";
+    agentConfigSubdir = "interactive-echo";
+    defaultAgentConfigHostDir = "$HOME/.firebreak";
   };
 
 } // lib.optionalAttrs includeCloud {

@@ -23,9 +23,8 @@ let
     "@DEV_USER@" = cfg.devUser;
     "@AGENT_CONFIG_DIR_FILE@" = cfg.agentConfigDirFile;
     "@AGENT_CONFIG_DIR_NAME@" = cfg.agentConfigDirName;
+    "@AGENT_CONFIG_SUBDIR@" = cfg.agentConfigSubdir;
     "@AGENT_CONFIG_ENABLED@" = if cfg.agentConfigEnabled then "1" else "0";
-    "@AGENT_CONFIG_FRESH_DIR@" = cfg.agentConfigFreshDir;
-    "@AGENT_CONFIG_HOST_MOUNT@" = cfg.agentConfigHostMount;
     "@AGENT_CONFIG_VM_DIR@" = "${devHome}/${cfg.agentConfigDirName}";
     "@AGENT_COMMAND@" = if cfg.agentCommand == null then "" else cfg.agentCommand;
     "@AGENT_COMMAND_FILE@" = cfg.agentCommandFile;
@@ -37,6 +36,10 @@ let
     "@ID@" = "${pkgs.coreutils}/bin/id";
     "@GROUPMOD@" = "${pkgs.shadow}/bin/groupmod";
     "@MKDIR@" = "${pkgs.coreutils}/bin/mkdir";
+    "@SHARED_AGENT_CONFIG_ENABLED@" = if cfg.sharedAgentConfig.enable then "1" else "0";
+    "@SHARED_AGENT_CONFIG_FRESH_ROOT@" = cfg.sharedAgentConfig.freshRoot;
+    "@SHARED_AGENT_CONFIG_HOST_MOUNT@" = cfg.sharedAgentConfig.hostMount;
+    "@SHARED_AGENT_CONFIG_MOUNTED_FLAG@" = cfg.sharedAgentConfig.mountedFlag;
     "@PYTHON3@" = "${pkgs.python3}/bin/python3";
     "@START_DIR_FILE@" = cfg.startDirFile;
     "@RUNUSER@" = "${pkgs.util-linux}/bin/runuser";
@@ -164,7 +167,8 @@ in {
       wantedBy = [ "multi-user.target" ];
       after = [ "adopt-host-identity.service" "prepare-agent-session.service" ]
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
-      requires = [ "adopt-host-identity.service" "prepare-agent-session.service" ];
+      requires = [ "adopt-host-identity.service" "prepare-agent-session.service" ]
+        ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
       wants = lib.optional bootstrapEnabled "dev-bootstrap.service";
       conflicts = [ "serial-getty@ttyS0.service" ];
 

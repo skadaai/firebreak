@@ -23,6 +23,20 @@ if ! mountpoint -q @AGENT_EXEC_OUTPUT_MOUNT@; then
   fi
 fi
 
+if [ "@SHARED_AGENT_CONFIG_ENABLED@" = "1" ]; then
+  mkdir -p @SHARED_AGENT_CONFIG_HOST_MOUNT@ @SHARED_AGENT_CONFIG_FRESH_ROOT@
+  chown @DEV_USER@:@DEV_USER@ @SHARED_AGENT_CONFIG_FRESH_ROOT@
+  rm -f @SHARED_AGENT_CONFIG_MOUNTED_FLAG@
+
+  if mountpoint -q @SHARED_AGENT_CONFIG_HOST_MOUNT@; then
+    touch @SHARED_AGENT_CONFIG_MOUNTED_FLAG@
+  elif mount_output=$(mount -t virtiofs hostagentconfigroot @SHARED_AGENT_CONFIG_HOST_MOUNT@ 2>&1); then
+    touch @SHARED_AGENT_CONFIG_MOUNTED_FLAG@
+  else
+    printf '%s\n' "Firebreak shared agent config root is not available; continuing without host-backed config: $mount_output"
+  fi
+fi
+
 if ! [ -r "$prompt_source" ]; then
   echo "required prompt input is missing: $prompt_source" >&2
   exit 1
@@ -31,23 +45,17 @@ fi
 @CAT@ "$prompt_source" > @AGENT_PROMPT_FILE@
 chmod 0644 @AGENT_PROMPT_FILE@
 
-if [ "@AGENT_CONFIG_ENABLED@" != "1" ]; then
-  exit 0
+if [ "@AGENT_CONFIG_ENABLED@" = "1" ]; then
+  resolved_dir=@AGENT_CONFIG_VM_DIR@
+
+  if mountpoint -q @SHARED_AGENT_CONFIG_HOST_MOUNT@; then
+    resolved_dir=@SHARED_AGENT_CONFIG_HOST_MOUNT@/@AGENT_CONFIG_SUBDIR@
+    @RUNUSER@ -u @DEV_USER@ -- mkdir -p "$resolved_dir"
+  else
+    mkdir -p "$resolved_dir"
+    @CHOWN@ @DEV_USER@:@DEV_USER@ "$resolved_dir"
+  fi
+
+  printf '%s\n' "$resolved_dir" > @AGENT_CONFIG_DIR_FILE@
+  chmod 0644 @AGENT_CONFIG_DIR_FILE@
 fi
-
-resolved_dir=@AGENT_CONFIG_VM_DIR@
-
-mkdir -p @AGENT_CONFIG_HOST_MOUNT@
-if ! mountpoint -q @AGENT_CONFIG_HOST_MOUNT@; then
-  mount -t virtiofs hostagentconfig @AGENT_CONFIG_HOST_MOUNT@ >/dev/null 2>&1 || true
-fi
-
-if mountpoint -q @AGENT_CONFIG_HOST_MOUNT@; then
-  resolved_dir=@AGENT_CONFIG_HOST_MOUNT@
-else
-  mkdir -p "$resolved_dir"
-  @CHOWN@ @DEV_USER@:@DEV_USER@ "$resolved_dir"
-fi
-
-printf '%s\n' "$resolved_dir" > @AGENT_CONFIG_DIR_FILE@
-chmod 0644 @AGENT_CONFIG_DIR_FILE@

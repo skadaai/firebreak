@@ -2,7 +2,41 @@
 let
   cfg = config.agentVm;
   devHome = "/var/lib/${cfg.devUser}";
-  agentConfigVmDir = "${devHome}/${cfg.agentConfigDirName}";
+  localBin =
+    if cfg.agentToolsEnabled then
+      "${cfg.agentToolsMount}/.local/bin"
+    else
+      "${devHome}/.local/bin";
+  sharedAgentConfigEnvFile = "${cfg.hostMetaMount}/firebreak-shared-agent.env";
+  resolveAgentConfigScript = pkgs.writeShellScript "firebreak-resolve-agent-config"
+    (builtins.readFile ./guest/resolve-agent-config.sh);
+  sharedAgentWrapperPackages = lib.mapAttrsToList
+    (wrapperName: wrapper:
+      pkgs.writeShellScriptBin wrapperName
+        (renderTemplate {
+          "@WRAPPER_NAME@" = wrapperName;
+          "@WRAPPER_DISPLAY_NAME@" = wrapper.displayName;
+          "@REAL_BIN@" = "${localBin}/${wrapper.realBinName}";
+          "@SPECIFIC_CONFIG_VAR@" = "${wrapper.selectorPrefix}_CONFIG";
+          "@CONFIG_SUBDIR@" = wrapper.configSubdir;
+          "@WORKSPACE_DIR_NAME@" = ".firebreak/${wrapper.configSubdir}";
+          "@CONFIG_ENV_EXPORTS@" = wrapper.configEnvExports;
+          "@RESOLVE_AGENT_CONFIG_BIN@" = "${resolveAgentConfigScript}";
+        } ./guest/shared-agent-wrapper.sh))
+    cfg.sharedAgentConfig.agents;
+  sharedAgentWrapperPackage =
+    if sharedAgentWrapperPackages == [ ] then
+      null
+    else
+      pkgs.symlinkJoin {
+        name = "${cfg.name}-shared-agent-wrappers";
+        paths = sharedAgentWrapperPackages;
+      };
+  sharedAgentWrapperBinDir =
+    if sharedAgentWrapperPackage == null then
+      ""
+    else
+      "${sharedAgentWrapperPackage}/bin";
   hostIsDarwin = lib.hasSuffix "-darwin" cfg.hostSystem;
   roStoreShareProto = if hostIsDarwin then "virtiofs" else "9p";
   localHypervisor = if hostIsDarwin then "vfkit" else "qemu";
@@ -16,6 +50,18 @@ let
     "@WORKER_KINDS_FILE@" = cfg.workerKindsFile;
     "@WORKER_LOCAL_STATE_DIR@" = cfg.workerLocalStateDir;
     "@WORKSPACE_MOUNT@" = cfg.workspaceMount;
+    "@SHARED_AGENT_CONFIG_ENV_EXPORTS@" = lib.optionalString cfg.sharedAgentConfig.enable ''
+      export FIREBREAK_SHARED_AGENT_CONFIG_ENABLED=1
+      export FIREBREAK_SHARED_AGENT_CONFIG_HOST_MOUNT=${lib.escapeShellArg cfg.sharedAgentConfig.hostMount}
+      export FIREBREAK_SHARED_AGENT_CONFIG_VM_ROOT=${lib.escapeShellArg cfg.sharedAgentConfig.vmRoot}
+      export FIREBREAK_SHARED_AGENT_CONFIG_FRESH_ROOT=${lib.escapeShellArg cfg.sharedAgentConfig.freshRoot}
+      export FIREBREAK_SHARED_AGENT_CONFIG_ENV_FILE=${lib.escapeShellArg sharedAgentConfigEnvFile}
+      export FIREBREAK_SHARED_AGENT_CONFIG_HOST_MOUNTED_FLAG=${lib.escapeShellArg cfg.sharedAgentConfig.mountedFlag}
+      export FIREBREAK_RESOLVE_AGENT_CONFIG_BIN=${lib.escapeShellArg "${resolveAgentConfigScript}"}
+    '';
+    "@SHARED_AGENT_WRAPPER_ENV_EXPORTS@" = lib.optionalString (sharedAgentWrapperBinDir != "") ''
+      export FIREBREAK_SHARED_AGENT_WRAPPER_BIN_DIR=${lib.escapeShellArg sharedAgentWrapperBinDir}
+    '';
   };
 
   baseShellInit = renderTemplate scriptVars ./guest/shell-init.sh;
@@ -88,22 +134,16 @@ in {
       description = "Directory name used for workspace/vm agent config resolution.";
     };
 
-    agentConfigHostMount = mkOption {
+    agentConfigSubdir = mkOption {
       type = types.str;
-      default = "/run/agent-config-host";
-      description = "Guest path used for an optional host-provided agent config share.";
+      default = "agent";
+      description = "Stable subdirectory name used under the unified host config root.";
     };
 
     agentConfigDirFile = mkOption {
       type = types.str;
       default = "/run/agent-config-dir";
       description = "World-readable file containing the resolved agent config directory for the current session.";
-    };
-
-    agentConfigFreshDir = mkOption {
-      type = types.str;
-      default = "/run/agent-config-fresh";
-      description = "Guest path used for fresh ephemeral agent config sessions.";
     };
 
     agentSessionModeFile = mkOption {
@@ -152,6 +192,79 @@ in {
       type = types.str;
       default = "/run/agent-prompt";
       description = "World-readable file containing the initial prompt for non-interactive agent execution.";
+    };
+
+    sharedAgentConfig = mkOption {
+      default = { };
+      description = "Shared agent config-root contract for sandboxes and dedicated workloads.";
+      type = types.submodule ({ ... }: {
+        options = {
+          enable = mkOption {
+            type = types.bool;
+            default = false;
+            description = "Whether the VM exposes the shared agent config-root contract.";
+          };
+
+          hostMount = mkOption {
+            type = types.str;
+            default = "/run/agent-config-host-root";
+            description = "Guest path used for the shared host-backed agent config root.";
+          };
+
+          vmRoot = mkOption {
+            type = types.str;
+            default = "${devHome}/.firebreak";
+            description = "Guest root used for persistent VM-local agent config directories.";
+          };
+
+          freshRoot = mkOption {
+            type = types.str;
+            default = "/run/firebreak-agent-config-fresh";
+            description = "Guest root used for fresh ephemeral agent config directories.";
+          };
+
+          mountedFlag = mkOption {
+            type = types.str;
+            default = "/run/firebreak-shared-agent-config-host-mounted";
+            description = "Guest file used to indicate that the shared host config root is mounted.";
+          };
+
+          agents = mkOption {
+            type = types.attrsOf (types.submodule ({ name, ... }: {
+              options = {
+                displayName = mkOption {
+                  type = types.str;
+                  default = name;
+                  description = "Human-facing wrapper name used in diagnostics.";
+                };
+
+                realBinName = mkOption {
+                  type = types.str;
+                  default = name;
+                  description = "Real binary name in the per-user local bin directory.";
+                };
+
+                selectorPrefix = mkOption {
+                  type = types.str;
+                  description = "Prefix for Firebreak selector vars such as CODEX or CLAUDE.";
+                };
+
+                configSubdir = mkOption {
+                  type = types.str;
+                  description = "Stable subdirectory name inside the resolved shared agent config root.";
+                };
+
+                configEnvExports = mkOption {
+                  type = types.lines;
+                  description = "Shell exports that map the resolved config directory into agent-native env vars.";
+                };
+              };
+            }));
+            default = { };
+            description = "Wrapper commands generated for workloads that expose agent CLIs through the shared config-root contract.";
+          };
+        };
+      });
     };
 
     varVolumeSizeMiB = mkOption {
@@ -273,7 +386,9 @@ in {
       }
     ];
 
-    environment.systemPackages = cfg.extraSystemPackages;
+    environment.systemPackages =
+      cfg.extraSystemPackages
+      ++ lib.optional (sharedAgentWrapperPackage != null) sharedAgentWrapperPackage;
 
     environment.etc.${lib.removePrefix "/etc/" cfg.workerKindsFile}.text = cfg.workerKindsJson;
 

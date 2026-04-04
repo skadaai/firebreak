@@ -73,7 +73,7 @@ nix run .#firebreak -- doctor
 Example `.firebreak.env`:
 
 ```dotenv
-AGENT_CONFIG=workspace
+AGENT_CONFIG=host
 # FIREBREAK_LAUNCH_MODE=run
 # CODEX_CONFIG=workspace
 # CLAUDE_CONFIG=workspace

@@ -397,6 +397,7 @@ __FIREBREAK_WRAPPER_INFO__
     memoryMiB ? 3072,
     runtimePackages ? [ ],
     bootstrapPackages ? null,
+    sharedAgentConfig ? { },
     extraShellInit ? "",
     extraModules ? [ ],
     workerBridgeEnabled ? false,
@@ -465,6 +466,7 @@ __FIREBREAK_WRAPPER_INFO__
     mkLocalVmArtifacts {
       inherit name;
       defaultAgentCommand = launchCommandName;
+      sharedAgentConfig = sharedAgentConfig;
       workerBridgeEnabled = effectiveWorkerBridgeEnabled;
       workerKinds = effectiveWorkerKinds;
       extraModules = [
@@ -481,6 +483,7 @@ __FIREBREAK_WRAPPER_INFO__
             postInstallScript
             readyCommandName
             memoryMiB
+            sharedAgentConfig
             extraShellInit
             ;
           installBinScripts = effectiveInstallBinScripts;

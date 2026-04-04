@@ -21,11 +21,6 @@ let
     "@CHOWN@" = "${pkgs.coreutils}/bin/chown";
     "@DEV_HOME@" = devHome;
     "@DEV_USER@" = cfg.devUser;
-    "@AGENT_CONFIG_DIR_FILE@" = cfg.agentConfigDirFile;
-    "@AGENT_CONFIG_DIR_NAME@" = cfg.agentConfigDirName;
-    "@AGENT_CONFIG_SUBDIR@" = cfg.agentConfigSubdir;
-    "@AGENT_CONFIG_ENABLED@" = if cfg.agentConfigEnabled then "1" else "0";
-    "@AGENT_CONFIG_VM_DIR@" = "${devHome}/${cfg.agentConfigDirName}";
     "@AGENT_COMMAND@" = if cfg.agentCommand == null then "" else cfg.agentCommand;
     "@AGENT_COMMAND_FILE@" = cfg.agentCommandFile;
     "@AGENT_EXEC_OUTPUT_MOUNT@" = cfg.agentExecOutputMount;
@@ -40,9 +35,14 @@ let
     "@SHARED_AGENT_CONFIG_FRESH_ROOT@" = cfg.sharedAgentConfig.freshRoot;
     "@SHARED_AGENT_CONFIG_HOST_MOUNT@" = cfg.sharedAgentConfig.hostMount;
     "@SHARED_AGENT_CONFIG_MOUNTED_FLAG@" = cfg.sharedAgentConfig.mountedFlag;
+    "@SHARED_AGENT_CONFIG_VM_ROOT@" = cfg.sharedAgentConfig.vmRoot;
+    "@SHARED_CREDENTIAL_SLOTS_ENABLED@" = if cfg.sharedCredentialSlots.enable then "1" else "0";
+    "@SHARED_CREDENTIAL_SLOTS_HOST_MOUNT@" = cfg.sharedCredentialSlots.hostMount;
+    "@SHARED_CREDENTIAL_SLOTS_MOUNTED_FLAG@" = cfg.sharedCredentialSlots.mountedFlag;
     "@PYTHON3@" = "${pkgs.python3}/bin/python3";
     "@START_DIR_FILE@" = cfg.startDirFile;
     "@RUNUSER@" = "${pkgs.util-linux}/bin/runuser";
+    "@SHARED_AGENT_WRAPPER_BIN_DIR@" = cfg.sharedAgentWrapperBinDir;
     "@USERMOD@" = "${pkgs.shadow}/bin/usermod";
     "@WORKER_BRIDGE_ENABLED@" = if cfg.workerBridgeEnabled then "1" else "0";
     "@WORKER_BRIDGE_MOUNT@" = cfg.workerBridgeMount;

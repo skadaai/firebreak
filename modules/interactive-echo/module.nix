@@ -34,7 +34,6 @@ in {
   config = {
     agentVm = {
       name = lib.mkDefault "firebreak-interactive-echo";
-      agentConfigEnabled = false;
       agentCommand = "interactive-echo";
       extraSystemPackages = [ interactiveEcho ];
       bootstrapScript = null;

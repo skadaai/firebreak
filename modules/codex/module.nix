@@ -11,4 +11,18 @@ moduleArgs@{ pkgs, ... }:
     export CODEX_HOME="$agent_config_dir"
     export CODEX_CONFIG_DIR="$agent_config_dir"
   '';
+  credentialFileBindings = [
+    {
+      slotPath = "auth.json";
+      runtimePath = "auth.json";
+    }
+  ];
+  credentialEnvBindings = [
+    {
+      slotPath = "OPENAI_API_KEY";
+      envVar = "OPENAI_API_KEY";
+    }
+  ];
+  credentialLoginArgs = [ "login" ];
+  credentialLoginMaterialization = "slot-root";
 }

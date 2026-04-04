@@ -20,6 +20,12 @@ if [ -n "${MICROVM_SHARED_AGENT_CONFIG_DIR:-}" ]; then
     -device vhost-user-fs-pci,chardev=fs-hostagentconfigroot,tag=hostagentconfigroot
 fi
 
+if [ -n "${MICROVM_SHARED_CREDENTIAL_SLOTS_DIR:-}" ]; then
+  printf '%s\n' \
+    -chardev socket,id=fs-hostcredentialslots,path="$MICROVM_SHARED_CREDENTIAL_SLOTS_SOCKET" \
+    -device vhost-user-fs-pci,chardev=fs-hostcredentialslots,tag=hostcredentialslots
+fi
+
 if [ -n "${MICROVM_AGENT_EXEC_OUTPUT_SOCKET:-}" ]; then
   printf '%s\n' \
     -chardev socket,id=fs-agentexecoutput,path="$MICROVM_AGENT_EXEC_OUTPUT_SOCKET" \

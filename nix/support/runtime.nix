@@ -51,6 +51,10 @@ if [ -n "''${MICROVM_VFKIT_SHARED_AGENT_CONFIG_DIR:-}" ]; then
   firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_SHARED_AGENT_CONFIG_DIR},mountTag=hostagentconfigroot")
 fi
 
+if [ -n "''${MICROVM_VFKIT_SHARED_CREDENTIAL_SLOTS_DIR:-}" ]; then
+  firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_SHARED_CREDENTIAL_SLOTS_DIR},mountTag=hostcredentialslots")
+fi
+
 if [ -n "''${MICROVM_VFKIT_AGENT_EXEC_OUTPUT_DIR:-}" ]; then
   firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_AGENT_EXEC_OUTPUT_DIR},mountTag=hostexecoutput")
 fi
@@ -95,14 +99,15 @@ EOF
     defaultAgentCommand ? "",
     agentConfigSubdir ? "agent",
     defaultAgentConfigHostDir,
+    defaultCredentialSlotsHostDir ? "$HOME/.firebreak/credentials",
     workspaceBootstrapConfigHostDir ? "",
     hostConfigAdoptionEnabled ? false,
     agentEnvPrefix ? "AGENT",
     sharedAgentConfig ? { },
+    sharedCredentialSlots ? { },
     workerBridgeEnabled ? false,
   }:
     let
-      agentConfigDirName = ".firebreak/${agentConfigSubdir}";
       runnerWrapper = pkgs.writeShellScript "firebreak-runner-wrapper" ''
         set -eu
         . ${runner}/bin/firebreak-runner-extra-args
@@ -127,13 +132,14 @@ EOF
         "@CONTROL_SOCKET@" = "${controlSocketName}.socket";
         "@DEFAULT_AGENT_COMMAND@" = defaultAgentCommand;
         "@RUNNER@" = "${runnerWrapper}";
-        "@AGENT_CONFIG_DIR_NAME@" = agentConfigDirName;
         "@AGENT_CONFIG_SUBDIR@" = agentConfigSubdir;
         "@DEFAULT_AGENT_CONFIG_HOST_DIR@" = defaultAgentConfigHostDir;
+        "@DEFAULT_CREDENTIAL_SLOTS_HOST_DIR@" = defaultCredentialSlotsHostDir;
         "@WORKSPACE_BOOTSTRAP_CONFIG_HOST_DIR@" = workspaceBootstrapConfigHostDir;
         "@HOST_CONFIG_ADOPTION_ENABLED@" = if hostConfigAdoptionEnabled then "1" else "0";
         "@AGENT_ENV_PREFIX@" = agentEnvPrefix;
         "@SHARED_AGENT_CONFIG_ENABLED@" = if (sharedAgentConfig.enable or false) then "1" else "0";
+        "@SHARED_CREDENTIAL_SLOTS_ENABLED@" = if (sharedCredentialSlots.enable or false) then "1" else "0";
         "@FIREBREAK_PROJECT_CONFIG_LIB@" = builtins.readFile ../../modules/base/host/firebreak-project-config.sh;
         "@FIREBREAK_FLAKE_REF@" = "path:${builtins.toString ../../.}";
         "@FIREBREAK_WORKER_LIB@" = builtins.readFile ../../modules/base/host/firebreak-worker.sh;
@@ -149,10 +155,12 @@ EOF
     defaultAgentCommand ? "",
     agentConfigSubdir ? "agent",
     defaultAgentConfigHostDir ? "$HOME/.firebreak",
+    defaultCredentialSlotsHostDir ? "$HOME/.firebreak/credentials",
     workspaceBootstrapConfigHostDir ? "",
     hostConfigAdoptionEnabled ? false,
     agentEnvPrefix ? "AGENT",
     sharedAgentConfig ? { },
+    sharedCredentialSlots ? { },
     workerBridgeEnabled ? false,
   }:
     mkAgentPackage {
@@ -162,10 +170,12 @@ EOF
         defaultAgentCommand
         agentConfigSubdir
         defaultAgentConfigHostDir
+        defaultCredentialSlotsHostDir
         workspaceBootstrapConfigHostDir
         hostConfigAdoptionEnabled
         agentEnvPrefix
         sharedAgentConfig
+        sharedCredentialSlots
         workerBridgeEnabled;
       runner = runnerPackage;
     };
@@ -178,10 +188,12 @@ EOF
     defaultAgentCommand ? "",
     agentConfigSubdir ? "agent",
     defaultAgentConfigHostDir ? "$HOME/.firebreak",
+    defaultCredentialSlotsHostDir ? "$HOME/.firebreak/credentials",
     workspaceBootstrapConfigHostDir ? "",
     hostConfigAdoptionEnabled ? false,
     agentEnvPrefix ? "AGENT",
     sharedAgentConfig ? { },
+    sharedCredentialSlots ? { },
     workerBridgeEnabled ? false,
     workerKinds ? { },
   }:
@@ -206,10 +218,12 @@ EOF
           defaultAgentCommand
           agentConfigSubdir
           defaultAgentConfigHostDir
+          defaultCredentialSlotsHostDir
           workspaceBootstrapConfigHostDir
           hostConfigAdoptionEnabled
           agentEnvPrefix
           sharedAgentConfig
+          sharedCredentialSlots
           workerBridgeEnabled;
       };
     in {

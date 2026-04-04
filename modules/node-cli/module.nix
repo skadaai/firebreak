@@ -16,6 +16,7 @@
   extraSystemPackages ? [ ],
   extraBootstrapPackages ? [ ],
   sharedAgentConfig ? { },
+  sharedCredentialSlots ? { },
   extraShellInit ? "",
 }:
 moduleArgs@{
@@ -285,8 +286,8 @@ in {
   config = {
     agentVm = {
       brandingTagline = tagline;
-      agentConfigEnabled = false;
       sharedAgentConfig = sharedAgentConfig;
+      sharedCredentialSlots = sharedCredentialSlots;
       agentToolsEnabled = true;
       memoryMiB = lib.mkDefault memoryMiB;
       extraSystemPackages = with pkgs; [

@@ -136,41 +136,6 @@ if ! [ -f "$policy_plan_path" ] || ! [ -f "$policy_audit_root/policy.log" ]; the
 fi
 close_task policy-blocked blocked
 
-shared_escape_branch="agent/spec-006-shared-escape-$branch_suffix"
-shared_escape_output=$(firebreak_cmd internal task create --task-id shared-escape --branch "$shared_escape_branch" --owner smoke)
-shared_escape_worktree=$(extract_json_field "$shared_escape_output" worktree_path)
-shared_escape_root=$loop_tmp_dir/shared-escape-root
-mkdir -p "$shared_escape_root/probe"
-mkdir -p "$shared_escape_worktree/.firebreak"
-rm -rf "$shared_escape_worktree/.firebreak/codex"
-ln -s "$shared_escape_root" "$shared_escape_worktree/.firebreak/codex"
-printf '%s\n' 'escape' >"$shared_escape_worktree/.firebreak/codex/probe/escape.txt"
-set +e
-shared_escape_summary=$(
-  firebreak_cmd internal loop run \
-    --task-id shared-escape \
-    --attempt-id shared-escape-run \
-    --spec "$spec_path" \
-    --plan "Exercise managed shared-root boundary" \
-    --validation-suite test-smoke-codex-version \
-    --write-path .
-)
-shared_escape_status=$?
-set -e
-if [ "$shared_escape_status" -eq 0 ] || ! printf '%s\n' "$shared_escape_summary" | grep -q '"blocked_reason": "policy-write-scope"'; then
-  printf '%s\n' "$shared_escape_summary" >&2
-  echo "loop smoke shared-escape scenario did not stop correctly" >&2
-  exit 1
-fi
-shared_escape_audit_root=$(extract_json_field "$shared_escape_summary" audit_root)
-shared_escape_plan_path=$(extract_json_field "$shared_escape_summary" plan_path)
-if ! [ -f "$shared_escape_plan_path" ] || ! [ -f "$shared_escape_audit_root/review/write-scope.log" ] || ! grep -q '^.firebreak/codex' "$shared_escape_audit_root/review/write-scope.log"; then
-  printf '%s\n' "$shared_escape_summary" >&2
-  echo "loop smoke shared-escape scenario did not preserve write-scope evidence" >&2
-  exit 1
-fi
-close_task shared-escape blocked
-
 runtime_branch="agent/spec-006-runtime-$branch_suffix"
 firebreak_cmd internal task create --task-id runtime-blocked --branch "$runtime_branch" --owner smoke >/dev/null
 set +e

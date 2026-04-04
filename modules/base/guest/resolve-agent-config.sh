@@ -1,21 +1,7 @@
 #!/usr/bin/env bash
 set -eu
 
-load_firebreak_shared_agent_defaults() {
-  env_file=${FIREBREAK_SHARED_AGENT_CONFIG_ENV_FILE:-/run/microvm-host-meta/firebreak-shared-agent.env}
-  if [ -r "$env_file" ]; then
-    # shellcheck disable=SC1090
-    . "$env_file"
-  fi
-}
-
-resolve_start_dir() {
-  if [ -r /run/microvm-start-dir ]; then
-    cat /run/microvm-start-dir
-  else
-    printf '%s\n' /workspace
-  fi
-}
+@FIREBREAK_SHARED_AGENT_STATE_LIB@
 
 require_env() {
   key=$1
@@ -34,7 +20,6 @@ require_env FIREBREAK_AGENT_CONFIG_SUBDIR
 specific_var=$FIREBREAK_AGENT_CONFIG_SPECIFIC_VAR
 config_subdir=$FIREBREAK_AGENT_CONFIG_SUBDIR
 display_name=${FIREBREAK_AGENT_CONFIG_DISPLAY_NAME:-agent}
-workspace_dir_name=${FIREBREAK_AGENT_CONFIG_WORKSPACE_DIR_NAME:-.firebreak/$config_subdir}
 
 mode=${!specific_var:-${AGENT_CONFIG:-host}}
 
@@ -48,7 +33,7 @@ case "$mode" in
     config_dir=${FIREBREAK_SHARED_AGENT_CONFIG_HOST_MOUNT:-/run/agent-config-host-root}/$config_subdir
     ;;
   workspace)
-    config_dir="$(resolve_start_dir)/$workspace_dir_name"
+    config_dir=$(resolve_workspace_state_dir "$config_subdir")
     ;;
   vm)
     config_dir=${FIREBREAK_SHARED_AGENT_CONFIG_VM_ROOT:-/var/lib/dev/.firebreak}/$config_subdir

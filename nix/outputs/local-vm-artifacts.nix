@@ -14,6 +14,7 @@ in
     hostConfigAdoptionEnabled = true;
     agentEnvPrefix = "CODEX";
     sharedAgentConfig.enable = true;
+    sharedCredentialSlots.enable = true;
   };
 
   firebreak-claude-code = mkLocalVmArtifacts {
@@ -27,6 +28,19 @@ in
     hostConfigAdoptionEnabled = true;
     agentEnvPrefix = "CLAUDE";
     sharedAgentConfig.enable = true;
+    sharedCredentialSlots.enable = true;
+  };
+
+  firebreak-credential-fixture = mkLocalVmArtifacts {
+    name = "firebreak-credential-fixture";
+    extraModules = [ self.nixosModules.firebreak-credential-fixture ];
+    controlSocketName = "firebreak-credential-fixture";
+    defaultAgentCommand = "credential-fixture";
+    agentConfigSubdir = "credential-fixture";
+    defaultAgentConfigHostDir = "$HOME/.firebreak";
+    agentEnvPrefix = "FIXTURE";
+    sharedAgentConfig.enable = true;
+    sharedCredentialSlots.enable = true;
   };
 
   firebreak-interactive-echo = mkLocalVmArtifacts {
@@ -56,7 +70,6 @@ in
     profileModules = [ self.nixosModules.firebreak-cloud-profile ];
     extraModules = [ {
       agentVm = {
-        agentConfigEnabled = false;
         agentPromptCommand = ''
           case "$FIREBREAK_AGENT_PROMPT" in
             "Run the timeout validation fixture")

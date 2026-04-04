@@ -8,6 +8,11 @@ moduleArgs:
   configSelectorPrefix,
   configSubdir,
   configExports,
+  credentialFileBindings ? [ ],
+  credentialEnvBindings ? [ ],
+  credentialHelperBindings ? [ ],
+  credentialLoginArgs ? [ ],
+  credentialLoginMaterialization ? "none",
   extraSystemPackages ? [ ],
   bootstrapPackages ? [ ],
 }:
@@ -15,7 +20,6 @@ let
   inherit (moduleArgs) config lib pkgs renderTemplate;
   cfg = config.agentVm;
   devHome = "/var/lib/${cfg.devUser}";
-  configDirName = ".firebreak/${configSubdir}";
   toolsMount = cfg.agentToolsMount;
   bootstrapReadyMarker =
     if cfg.agentToolsEnabled
@@ -65,7 +69,6 @@ let
   scriptVars = {
     "@DEV_HOME@" = devHome;
     "@DEV_USER@" = cfg.devUser;
-    "@AGENT_CONFIG_DIR_NAME@" = configDirName;
     "@AGENT_CONFIG_EXPORTS@" = configExports;
     "@AGENT_CONFIG_SELECTOR_VAR@" = "${configSelectorPrefix}_CONFIG";
     "@AGENT_CONFIG_SUBDIR@" = configSubdir;
@@ -79,10 +82,7 @@ in {
   config = {
     agentVm = {
       name = lib.mkDefault vmName;
-      agentConfigEnabled = true;
       agentToolsEnabled = true;
-      agentConfigDirName = configDirName;
-      agentConfigSubdir = configSubdir;
       sharedAgentConfig = {
         enable = true;
         agents.${binName} = {
@@ -90,8 +90,17 @@ in {
           selectorPrefix = configSelectorPrefix;
           configSubdir = configSubdir;
           configEnvExports = configExports;
+          credentials = {
+            slotSubdir = configSubdir;
+            fileBindings = credentialFileBindings;
+            envBindings = credentialEnvBindings;
+            helperBindings = credentialHelperBindings;
+            loginArgs = credentialLoginArgs;
+            loginMaterialization = credentialLoginMaterialization;
+          };
         };
       };
+      sharedCredentialSlots.enable = true;
       agentCommand = binName;
       agentPromptCommand = promptCommand;
       extraSystemPackages = with pkgs; [

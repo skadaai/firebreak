@@ -74,6 +74,8 @@
             mkAgentVersionSmokePackage
             mkCloudJobPackage
             mkCloudSmokePackage
+            mkCredentialSlotSmokePackage
+            mkToolCredentialSlotSmokePackage
             mkFirebreakCliSurfaceSmokePackage
             mkWorkerFirebreakBridgeProbePackage
             mkFirebreakCliPackage

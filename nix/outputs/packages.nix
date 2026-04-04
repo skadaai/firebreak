@@ -8,6 +8,8 @@
   mkAgentVersionSmokePackage,
   mkCloudJobPackage,
   mkCloudSmokePackage,
+  mkCredentialSlotSmokePackage,
+  mkToolCredentialSlotSmokePackage,
   mkFirebreakCliSurfaceSmokePackage,
   mkWorkerFirebreakBridgeProbePackage,
   mkFirebreakCliPackage,
@@ -69,6 +71,43 @@
   };
 
   firebreak-interactive-echo = localVmArtifacts.firebreak-interactive-echo.package;
+
+  firebreak-credential-fixture = localVmArtifacts.firebreak-credential-fixture.package;
+
+  firebreak-test-smoke-credential-slots = mkCredentialSlotSmokePackage {
+    name = "firebreak-test-smoke-credential-slots";
+    fixturePackage = "firebreak-credential-fixture";
+  };
+
+  firebreak-test-smoke-codex-credential-slots = mkToolCredentialSlotSmokePackage {
+    name = "firebreak-test-smoke-codex-credential-slots";
+    agentPackage = "firebreak-codex";
+    agentBin = "codex";
+    agentDisplayName = "Codex";
+    agentConfigSubdir = "codex";
+    authFile = "auth.json";
+    apiKeyFile = "OPENAI_API_KEY";
+    apiKeyEnv = "OPENAI_API_KEY";
+    configRootEnv = "CODEX_HOME";
+    credentialSlotSpecificVar = "CODEX_CREDENTIAL_SLOT";
+    loginCommand = "login";
+    loginCommandArgs = [ "login" ];
+  };
+
+  firebreak-test-smoke-claude-code-credential-slots = mkToolCredentialSlotSmokePackage {
+    name = "firebreak-test-smoke-claude-code-credential-slots";
+    agentPackage = "firebreak-claude-code";
+    agentBin = "claude";
+    agentDisplayName = "Claude Code";
+    agentConfigSubdir = "claude";
+    authFile = ".credentials.json";
+    apiKeyFile = "ANTHROPIC_API_KEY";
+    apiKeyEnv = "ANTHROPIC_API_KEY";
+    configRootEnv = "CLAUDE_CONFIG_DIR";
+    credentialSlotSpecificVar = "CLAUDE_CREDENTIAL_SLOT";
+    loginCommand = "auth login";
+    loginCommandArgs = [ "auth" "login" ];
+  };
 
   firebreak-test-smoke-project-config-and-doctor = mkProjectConfigSmokePackage {
     name = "firebreak-test-smoke-project-config-and-doctor";

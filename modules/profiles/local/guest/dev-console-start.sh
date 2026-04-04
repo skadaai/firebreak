@@ -59,6 +59,10 @@ if [ -r @AGENT_COMMAND_FILE@ ]; then
   agent_command=$(cat @AGENT_COMMAND_FILE@)
 fi
 
+if [ -n "@SHARED_AGENT_WRAPPER_BIN_DIR@" ] && [ -d "@SHARED_AGENT_WRAPPER_BIN_DIR@" ]; then
+  export PATH="@SHARED_AGENT_WRAPPER_BIN_DIR@:$PATH"
+fi
+
 case "$session_mode:$agent_command" in
   agent-attach-exec:codex|agent:codex)
     if [ -x "$agent_tools_mount/.bun/bin/codex" ]; then

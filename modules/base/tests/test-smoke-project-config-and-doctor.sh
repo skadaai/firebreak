@@ -24,6 +24,19 @@ project_dir=$smoke_tmp_dir/project
 git_repo_dir=$smoke_tmp_dir/git-repo
 mkdir -p "$project_dir"
 
+state_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    printf '%s' "$1" | sha256sum | cut -d' ' -f1
+    return 0
+  fi
+
+  printf '%s' "$1" | shasum -a 256 | cut -d' ' -f1
+}
+
+workspace_state_key=$(state_sha256 "$project_dir")
+workspace_state_key=$(printf '%.16s' "$workspace_state_key")
+expected_workspace_state_path="$HOME/shared-agent-config/workspaces/$workspace_state_key/codex"
+
 unset AGENT_CONFIG
 unset AGENT_CONFIG_HOST_PATH
 unset FIREBREAK_PROJECT_CONFIG_FILE
@@ -79,6 +92,8 @@ require_pattern "$init_template_stdout" "AGENT_CONFIG=host" "default AGENT_CONFI
 require_pattern "$init_template_stdout" "# FIREBREAK_LAUNCH_MODE=run" "default FIREBREAK_LAUNCH_MODE template entry"
 require_pattern "$init_template_stdout" "# FIREBREAK_WORKER_MODE=local" "default FIREBREAK_WORKER_MODE template entry"
 require_pattern "$init_template_stdout" "# FIREBREAK_WORKER_MODES=codex=vm,claude=local" "default FIREBREAK_WORKER_MODES template entry"
+require_pattern "$init_template_stdout" "# FIREBREAK_CREDENTIAL_SLOT=default" "default FIREBREAK_CREDENTIAL_SLOT template entry"
+require_pattern "$init_template_stdout" "# FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH=~/.firebreak/credentials" "default credential-slot root template entry"
 
 set +e
 interactive_init_output=$(
@@ -106,14 +121,20 @@ cat >"$project_dir/.firebreak.env" <<EOF
 AGENT_CONFIG=host
 AGENT_CONFIG_HOST_PATH=~/shared-agent-config
 CODEX_CONFIG=workspace
+FIREBREAK_CREDENTIAL_SLOT=default
+CODEX_CREDENTIAL_SLOT=backup
 FIREBREAK_TASK_STATE_DIR=/tmp/internal-only
 EOF
 
 doctor_output=$(AGENT_CONFIG=vm firebreak_cmd doctor)
 require_pattern "$doctor_output" "codex_config" "doctor codex summary"
-require_pattern "$doctor_output" "workspace ($project_dir/.firebreak/codex)" "Codex-specific config precedence"
+require_pattern "$doctor_output" "workspace ($expected_workspace_state_path)" "Codex-specific config precedence"
 require_pattern "$doctor_output" "claude_config" "doctor claude summary"
 require_pattern "$doctor_output" "vm (/var/lib/dev/.firebreak/claude)" "environment overrides project file for generic agent mode"
+require_pattern "$doctor_output" "codex_credentials" "doctor codex credential summary"
+require_pattern "$doctor_output" "backup ($HOME/.firebreak/credentials/backup/codex)" "Codex-specific credential slot precedence"
+require_pattern "$doctor_output" "claude_credentials" "doctor claude credential summary"
+require_pattern "$doctor_output" "default ($HOME/.firebreak/credentials/default/claude)" "default credential slot fallback"
 require_pattern "$doctor_output" "Remove unsupported keys from .firebreak.env" "doctor unsupported-key guidance"
 require_pattern "$doctor_output" "cwd_whitespace" "doctor cwd compatibility reporting"
 
@@ -123,19 +144,24 @@ require_pattern "$doctor_verbose_output" "project_root_source" "doctor verbose p
 require_pattern "$doctor_verbose_output" "git_common_dir" "doctor verbose git common dir"
 
 doctor_json=$(AGENT_CONFIG=vm firebreak_cmd doctor --json)
-DOCTOR_JSON=$doctor_json PROJECT_DIR=$project_dir python3 - <<'PY'
+DOCTOR_JSON=$doctor_json PROJECT_DIR=$project_dir WORKSPACE_STATE_KEY=$workspace_state_key python3 - <<'PY'
 import json
 import os
 import sys
 
 obj = json.loads(os.environ["DOCTOR_JSON"])
 project_dir = os.environ["PROJECT_DIR"]
+workspace_state_key = os.environ["WORKSPACE_STATE_KEY"]
 
 assert obj["project_config_source"] == "project-default"
 assert "FIREBREAK_TASK_STATE_DIR" in obj["ignored_config_keys"]
 assert obj["agents"]["codex"]["mode"] == "workspace"
-assert obj["agents"]["codex"]["path"] == f"{project_dir}/.firebreak/codex"
+assert obj["agents"]["codex"]["path"] == os.path.expanduser(f"~/shared-agent-config/workspaces/{workspace_state_key}/codex")
+assert obj["agents"]["codex"]["credential_slot"] == "backup"
+assert obj["agents"]["codex"]["credential_path"] == os.path.expanduser("~/.firebreak/credentials/backup/codex")
 assert obj["agents"]["claude-code"]["mode"] == "vm"
+assert obj["agents"]["claude-code"]["credential_slot"] == "default"
+assert obj["agents"]["claude-code"]["credential_path"] == os.path.expanduser("~/.firebreak/credentials/default/claude")
 assert obj["launch_mode"] == "run"
 PY
 

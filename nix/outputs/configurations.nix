@@ -10,6 +10,11 @@
     extraModules = [ self.nixosModules.firebreak-claude-code ];
   };
 
+  firebreak-credential-fixture = mkAgentVm {
+    name = "firebreak-credential-fixture";
+    extraModules = [ self.nixosModules.firebreak-credential-fixture ];
+  };
+
   firebreak-interactive-echo = mkAgentVm {
     name = "firebreak-interactive-echo";
     extraModules = [ self.nixosModules.firebreak-interactive-echo ];
@@ -32,7 +37,6 @@
     profileModules = [ self.nixosModules.firebreak-cloud-profile ];
     extraModules = [ {
       agentVm = {
-        agentConfigEnabled = false;
         agentPromptCommand = ''
           case "$FIREBREAK_AGENT_PROMPT" in
             "Run the timeout validation fixture")

@@ -10,5 +10,19 @@ moduleArgs@{ pkgs, ... }:
   configExports = ''
     export CLAUDE_CONFIG_DIR="$agent_config_dir"
   '';
+  credentialFileBindings = [
+    {
+      slotPath = ".credentials.json";
+      runtimePath = ".credentials.json";
+    }
+  ];
+  credentialEnvBindings = [
+    {
+      slotPath = "ANTHROPIC_API_KEY";
+      envVar = "ANTHROPIC_API_KEY";
+    }
+  ];
+  credentialLoginArgs = [ "auth" "login" ];
+  credentialLoginMaterialization = "slot-root";
   extraSystemPackages = with pkgs; [ ripgrep ];
 }

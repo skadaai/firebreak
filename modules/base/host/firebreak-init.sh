@@ -12,7 +12,8 @@ firebreak_render_project_config_template() {
 #
 # Real environment variables override values in this file.
 
-# Shared config mode for local workload VMs:
+# Shared runtime-state mode for local workload VMs.
+# Native project config such as .codex/ or .claude/ still comes from the workspace:
 AGENT_CONFIG=host
 
 # Public local launch selector:
@@ -20,13 +21,20 @@ AGENT_CONFIG=host
 # FIREBREAK_WORKER_MODE=local
 # FIREBREAK_WORKER_MODES=codex=vm,claude=local
 
-# Optional shared host config root when AGENT_CONFIG=host.
-# Firebreak resolves per-agent subdirectories under this root:
+# Optional shared host state root when AGENT_CONFIG=host or workspace.
+# Firebreak resolves per-agent and per-workspace subdirectories under this root:
 # AGENT_CONFIG_HOST_PATH=~/.firebreak
 
-# Optional per-agent overrides:
+# Optional per-agent state-mode overrides:
 # CODEX_CONFIG=workspace
 # CLAUDE_CONFIG=workspace
+
+# Optional shared credential-slot defaults.
+# Slot names are not secrets; they only select which stored credential material to use:
+# FIREBREAK_CREDENTIAL_SLOT=default
+# FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH=~/.firebreak/credentials
+# CODEX_CREDENTIAL_SLOT=backup
+# CLAUDE_CREDENTIAL_SLOT=default
 EOF
 }
 
@@ -181,10 +189,10 @@ firebreak_init_collect_agent_override() {
     firebreak_init_prompt_choice \
       "Select the default config mode for $agent_label" \
       "3" \
-      "workspace|workspace: use the project-local config directory when present" \
-      "vm|vm: keep config inside the VM" \
-      "host|host: use the shared host config root" \
-      "fresh|fresh: start from an empty runtime config each launch"
+      "workspace|workspace: isolate runtime state per project while keeping native project config from the workspace" \
+      "vm|vm: keep runtime state inside the VM" \
+      "host|host: use the shared host-side runtime state root" \
+      "fresh|fresh: start from empty runtime state each launch"
   )
   printf -v "FIREBREAK_INIT_${agent_var_prefix}_CONFIG" '%s' "$selected_mode"
 }
@@ -192,12 +200,12 @@ firebreak_init_collect_agent_override() {
 firebreak_init_collect_interactive_answers() {
   FIREBREAK_INIT_AGENT_CONFIG=$(
     firebreak_init_prompt_choice \
-      "Select the shared default config mode" \
+      "Select the shared default runtime-state mode" \
       "3" \
-      "workspace|workspace: use the project-local config directories when present" \
-      "vm|vm: keep config inside the VM" \
-      "host|host: use a shared host-side config directory" \
-      "fresh|fresh: start from an empty runtime config each launch"
+      "workspace|workspace: isolate runtime state per project while keeping native project config from the workspace" \
+      "vm|vm: keep runtime state inside the VM" \
+      "host|host: use a shared host-side runtime state root" \
+      "fresh|fresh: start from empty runtime state each launch"
   )
 
   FIREBREAK_INIT_LAUNCH_MODE=$(
@@ -216,7 +224,7 @@ firebreak_init_collect_interactive_answers() {
     # shellcheck disable=SC2088
     FIREBREAK_INIT_AGENT_CONFIG_HOST_PATH=$(
       firebreak_init_prompt_path \
-        "Enter the shared host config path" \
+        "Enter the shared host state root" \
         "~/.firebreak"
     )
   fi

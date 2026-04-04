@@ -47,6 +47,63 @@ rec {
       } ../../modules/base/tests/test-smoke-project-config-and-doctor.sh;
     };
 
+  mkCredentialSlotSmokePackage = {
+    name,
+    fixturePackage,
+  }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        coreutils
+        git
+        gnugrep
+      ];
+      text = renderTemplate {
+        "@FIXTURE_PACKAGE_BIN@" = "${self.packages.${system}.${fixturePackage}}/bin/${fixturePackage}";
+      } ../../modules/base/tests/test-smoke-credential-slots.sh;
+    };
+
+  mkToolCredentialSlotSmokePackage = {
+    name,
+    agentPackage,
+    agentBin,
+    agentDisplayName,
+    agentConfigSubdir,
+    authFile,
+    apiKeyFile,
+    apiKeyEnv,
+    configRootEnv,
+    credentialSlotSpecificVar,
+    loginCommand,
+    loginCommandArgs,
+  }:
+    let
+      renderShellArray = values:
+        builtins.concatStringsSep "\n" (map (value: "  ${builtins.toJSON value}") values);
+    in
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        bash
+        coreutils
+        git
+        gnugrep
+      ];
+      text = renderTemplate {
+        "@AGENT_PACKAGE@" = agentPackage;
+        "@AGENT_BIN@" = agentBin;
+        "@AGENT_DISPLAY_NAME@" = agentDisplayName;
+        "@AGENT_CONFIG_SUBDIR@" = agentConfigSubdir;
+        "@AUTH_FILE@" = authFile;
+        "@API_KEY_FILE@" = apiKeyFile;
+        "@API_KEY_ENV@" = apiKeyEnv;
+        "@CONFIG_ROOT_ENV@" = configRootEnv;
+        "@CREDENTIAL_SLOT_SPECIFIC_VAR@" = credentialSlotSpecificVar;
+        "@LOGIN_COMMAND@" = loginCommand;
+        "@LOGIN_COMMAND_ARGS@" = renderShellArray loginCommandArgs;
+      } ../../modules/base/tests/test-smoke-tool-credential-slots.sh;
+    };
+
   mkNpxLauncherSmokePackage = { name }:
     pkgs.writeShellApplication {
       inherit name;

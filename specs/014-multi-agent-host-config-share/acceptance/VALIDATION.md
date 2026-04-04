@@ -44,7 +44,7 @@ This guide lists the checks needed to validate [SPEC.md](../SPEC.md).
 
    Expected result:
    - smoke exits `0`
-   - workspace resolves to `.firebreak/codex`
+   - workspace resolves to `/run/agent-config-host-root/workspaces/<project-key>/codex`
    - host resolves to `/run/agent-config-host-root/codex`
    - vm resolves to `/var/lib/dev/.firebreak/codex`
    - `FIREBREAK_LAUNCH_MODE=shell` still works
@@ -58,7 +58,7 @@ This guide lists the checks needed to validate [SPEC.md](../SPEC.md).
 
    Expected result:
    - smoke exits `0`
-   - workspace resolves to `.firebreak/claude`
+   - workspace resolves to `/run/agent-config-host-root/workspaces/<project-key>/claude`
    - host resolves to `/run/agent-config-host-root/claude`
    - vm resolves to `/var/lib/dev/.firebreak/claude`
    - `FIREBREAK_LAUNCH_MODE=shell` still works
@@ -90,13 +90,14 @@ This guide lists the checks needed to validate [SPEC.md](../SPEC.md).
    - `~/.firebreak/codex -> ~/.codex` and `~/.firebreak/claude -> ~/.claude` are created
    - adoption happens only in `host` mode
 
-2. Verify `workspace` stays project-local and does not symlink into the shared host root.
+2. Verify `workspace` isolates runtime state per project while leaving native project config to the mounted workspace.
 
    Run either dedicated VM or the external orchestrator with `AGENT_CONFIG=workspace`.
 
    Confirm:
-   - `.firebreak/codex` and `.firebreak/claude` are real project-local directories
-   - they are not symlinks to `~/.firebreak`, `~/.codex`, or `~/.claude`
+   - the resolved runtime state directory lives under `/run/agent-config-host-root/workspaces/<project-key>/...`
+   - Firebreak does not create `.firebreak/codex` or `.firebreak/claude` in the project
+   - any native `.codex` or `.claude` directory already present in the repo remains the one the tool sees from cwd
 
 3. Verify the external shared sandbox honors generic and per-agent selector precedence.
 
@@ -119,4 +120,4 @@ This guide lists the checks needed to validate [SPEC.md](../SPEC.md).
 
    In a dedicated VM and in the external shared sandbox, run the agent once with `fresh` mode and confirm:
    - the resolved config directory lives under `/run/firebreak-agent-config-fresh`
-   - no data is written into `.firebreak/...` or the shared host root for that run
+   - no data is written into project-local `.firebreak/...` overlays for that run

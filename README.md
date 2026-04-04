@@ -77,7 +77,27 @@ AGENT_CONFIG=host
 # FIREBREAK_LAUNCH_MODE=run
 # CODEX_CONFIG=workspace
 # CLAUDE_CONFIG=workspace
+# FIREBREAK_CREDENTIAL_SLOT=default
+# FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH=~/.firebreak/credentials
+# CODEX_CREDENTIAL_SLOT=backup
 ```
+
+## State Roots And Credential Slots
+
+Use `AGENT_CONFIG` and per-tool overrides such as `CODEX_CONFIG` and `CLAUDE_CONFIG` to choose the runtime state root:
+
+- `host`: shared host-backed runtime state
+- `workspace`: per-project runtime state
+- `vm`: persistent VM-local runtime state
+- `fresh`: empty runtime state for each launch
+
+Credential slots are separate:
+
+- `FIREBREAK_CREDENTIAL_SLOT`: default slot name
+- `CODEX_CREDENTIAL_SLOT`, `CLAUDE_CREDENTIAL_SLOT`: per-tool overrides
+- `FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH`: shared host root that stores the named slots
+
+See [guides/state-roots-and-credential-slots.md](./guides/state-roots-and-credential-slots.md) for the full model and examples.
 
 ## Diagnostics
 
@@ -86,7 +106,8 @@ AGENT_CONFIG=host
 - project root and config-file resolution
 - host platform and selected local runtime path
 - public launch mode resolution
-- Codex and Claude Code config resolution
+- Codex and Claude Code runtime-state resolution
+- Codex and Claude Code credential-slot resolution
 - current working directory compatibility
 - KVM availability when relevant, plus primary-checkout state
 

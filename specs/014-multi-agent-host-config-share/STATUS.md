@@ -1,13 +1,12 @@
----
-status: in_progress
-last_updated: 2026-03-25
+status: completed
+last_updated: 2026-04-04
 ---
 
 # 014 Status
 
 ## Current phase
 
-Initial implementation in progress.
+Implemented.
 
 ## What has landed
 
@@ -21,12 +20,12 @@ Initial implementation in progress.
 - the packaged Node CLI layer now consumes the shared runtime contract instead of owning a separate sandbox-specific implementation
 - the external agent-orchestrator recipe now declares Codex and Claude Code wrappers through that shared mechanism
 - `workspace` mode now stays project-local instead of being bootstrapped as a symlink into the shared host root
+- automated validation now covers the dedicated Codex and Claude Code shared-root paths plus the external orchestrator evaluation path
+- user-facing docs now describe the shared-root contract in clearer language alongside the newer state-root/credential-slot model
 
 ## What remains open
 
-- validation coverage for the new shared config-root behavior
-- documentation for the shared host-root interface and directory naming rules
-- extending the shared wrapper mechanism cleanly to more recipes and agent families
+- extending the shared wrapper mechanism cleanly to more recipes and tool families
 
 ## Current sources of truth
 
@@ -40,3 +39,4 @@ Initial implementation in progress.
 - 2026-03-25: Simplified the first slice to one `agentVm.sharedAgentConfig` subtree, one guest env file for selector defaults, and session-prep-owned mounting instead of a separate mount service.
 - 2026-03-25: Unified dedicated Codex and Claude Code local packages onto the same host-root-plus-subdirectory contract and removed per-agent host-path variables from the public config surface.
 - 2026-03-25: Collapsed dedicated Bun-backed workloads onto the same shared guest-side resolver used by generated wrappers, and constrained legacy config adoption to `host` mode only.
+- 2026-04-04: Added focused validation coverage and user-facing documentation that explains the shared-root contract as part of the broader state-root model.

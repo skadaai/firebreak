@@ -1,7 +1,7 @@
 {
   "name": "firebreak",
   "version": "0.0.1",
-  "description": "Thin npx launcher for the Firebreak Nix CLI",
+  "description": "Thin npx launchers for the Firebreak and dev-flow Nix CLIs",
   "repository": {
     "type": "git",
     "url": "https://github.com/skadaai/firebreak.git"
@@ -21,7 +21,8 @@
     "ora": "^8.2.0"
   },
   "bin": {
-    "firebreak": "./bin/firebreak.js"
+    "firebreak": "./bin/firebreak.js",
+    "dev-flow": "./bin/dev-flow.js"
   },
   "files": [
     "bin",

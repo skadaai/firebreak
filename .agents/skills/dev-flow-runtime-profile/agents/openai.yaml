@@ -1,0 +1,6 @@
+interface:
+  display_name: "Dev Flow Runtime Profile"
+  short_description: "Adapt behavior to dev-flow local or cloud mode"
+  default_prompt: "Use $dev-flow-runtime-profile to choose local or cloud behavior before planning a dev-flow slice."
+policy:
+  allow_implicit_invocation: false

@@ -1,6 +1,0 @@
-interface:
-  display_name: "Firebreak Runtime Profile"
-  short_description: "Adapt behavior to Firebreak local or cloud mode"
-  default_prompt: "Use $firebreak-runtime-profile to choose local or cloud behavior before planning a Firebreak slice."
-policy:
-  allow_implicit_invocation: false

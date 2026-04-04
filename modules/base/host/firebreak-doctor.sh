@@ -295,7 +295,7 @@ EOF
       ;;
   esac
   if [ "$primary_checkout" = "no" ]; then
-    printf '%s\n' "- Run task creation from the repository primary checkout if you need 'firebreak internal task create'."
+    printf '%s\n' "- Run workspace creation from the repository primary checkout if you need 'dev-flow workspace create'."
   fi
   if [ -n "$FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS" ]; then
     printf '%s\n' "- Remove unsupported keys from .firebreak.env or keep them in the shell environment instead."

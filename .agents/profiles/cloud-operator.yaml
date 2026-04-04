@@ -4,10 +4,10 @@ selection: "overlay"
 overlay_group: "runtime"
 conflicts_with:
   - "local-operator"
-description: "Operates against Firebreak's cloud non-interactive runtime."
+description: "Operates against dev-flow's cloud non-interactive runtime."
 when: "Use as the runtime overlay when the task targets orchestrated jobs, cloud guest behavior, or remote host execution."
 inherits:
   - "base"
 skills:
-  - "firebreak-runtime-profile"
+  - "dev-flow-runtime-profile"
 runtime_mode: "cloud"

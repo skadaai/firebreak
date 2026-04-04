@@ -7,7 +7,7 @@ last_updated: 2026-03-24
 
 ## Current phase
 
-Implemented in the task worktree and validated through flake evaluation plus launcher smoke coverage. Real Apple Silicon runtime validation remains open.
+Implemented in the workspace checkout and validated through flake evaluation plus launcher smoke coverage. Real Apple Silicon runtime validation remains open.
 
 ## What has landed
 
@@ -38,4 +38,4 @@ Implemented in the task worktree and validated through flake evaluation plus lau
 ## History
 
 - 2026-03-24: Created this spec after deciding that Apple Silicon local support is the next meaningful platform feature, while generalized runner choice and cloud macOS support remain out of scope.
-- 2026-03-24: Landed the first implementation slice in the task worktree with evaluation-oriented validation and launcher smoke coverage.
+- 2026-03-24: Landed the first implementation slice in the workspace checkout with evaluation-oriented validation and launcher smoke coverage.

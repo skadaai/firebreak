@@ -74,6 +74,8 @@
             mkAgentVersionSmokePackage
             mkCloudJobPackage
             mkCloudSmokePackage
+            mkDevFlowCliPackage
+            mkDevFlowCliSurfaceSmokePackage
             mkFirebreakCliSurfaceSmokePackage
             mkWorkerFirebreakBridgeProbePackage
             mkFirebreakCliPackage
@@ -83,8 +85,8 @@
             mkProjectConfigSmokePackage
             mkRunnerPackage
             mkSmokePackage
-            mkTaskPackage
-            mkTaskSmokePackage
+            mkWorkspacePackage
+            mkWorkspaceSmokePackage
             mkValidationPackage
             mkValidationSmokePackage
             mkWorkerFirebreakAttachSmokePackage

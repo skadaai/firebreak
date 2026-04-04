@@ -23,6 +23,42 @@ state_dir=$smoke_tmp_dir/state
 firebreak_state_dir=$smoke_tmp_dir/firebreak-state
 mkdir -p "$workspace_dir" "$state_dir" "$firebreak_state_dir"
 
+run_with_clean_firebreak_env() (
+  while IFS='=' read -r env_key _; do
+    case "$env_key" in
+      AGENT_CONFIG|AGENT_CONFIG_HOST_PATH|FIREBREAK_CREDENTIAL_SLOT|FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH|*_CREDENTIAL_SLOT)
+        unset "$env_key"
+        ;;
+      *_CONFIG)
+        case "$env_key" in
+          NIX_CONFIG|FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG)
+            ;;
+          *)
+            unset "$env_key"
+            ;;
+        esac
+        ;;
+    esac
+  done <<EOF
+$(env)
+EOF
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      *=*)
+        assignment=$1
+        export "${assignment%%=*}=${assignment#*=}"
+        shift
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+  exec "$@"
+)
+
 guest_script=$workspace_dir/guest-bridge-interactive-check.sh
 cat >"$guest_script" <<'EOF'
 set -eu
@@ -131,7 +167,7 @@ EOF
 
 if ! output=$(
   cd "$workspace_dir"
-  env -u AGENT_CONFIG -u AGENT_CONFIG_HOST_PATH -u CODEX_CONFIG -u CODEX_CONFIG_HOST_PATH -u CLAUDE_CONFIG -u CLAUDE_CONFIG_HOST_PATH \
+  run_with_clean_firebreak_env \
     FIREBREAK_WORKER_STATE_DIR="$state_dir" \
     FIREBREAK_STATE_DIR="$firebreak_state_dir" \
     FIREBREAK_DEBUG_KEEP_RUNTIME=1 \

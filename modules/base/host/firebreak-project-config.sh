@@ -17,7 +17,20 @@ firebreak_reset_project_config_state() {
 
 firebreak_project_config_key_allowed() {
   case "$1" in
-    AGENT_CONFIG|AGENT_CONFIG_HOST_PATH|FIREBREAK_LAUNCH_MODE|FIREBREAK_WORKER_MODE|FIREBREAK_WORKER_MODES|CODEX_CONFIG|CLAUDE_CONFIG)
+    AGENT_CONFIG|AGENT_CONFIG_HOST_PATH|FIREBREAK_LAUNCH_MODE|FIREBREAK_WORKER_MODE|FIREBREAK_WORKER_MODES|FIREBREAK_CREDENTIAL_SLOT|FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH)
+      return 0
+      ;;
+    *_CONFIG)
+      case "$1" in
+        NIX_CONFIG|FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG)
+          return 1
+          ;;
+        *)
+          return 0
+          ;;
+      esac
+      ;;
+    *_CREDENTIAL_SLOT)
       return 0
       ;;
     *)

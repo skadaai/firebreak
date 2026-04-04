@@ -124,7 +124,7 @@ firebreak_run_command() {
   shift
 
   requested_launch_mode=${FIREBREAK_LAUNCH_MODE:-}
-  requested_worker_mode=${FIREBREAK_WORKER_MODE:-${FIREBREAK_WORKER_PROXY_MODE:-}}
+  requested_worker_mode=${FIREBREAK_WORKER_MODE:-}
   requested_worker_modes=${FIREBREAK_WORKER_MODES:-}
 
   append_worker_mode_override() {
@@ -155,7 +155,7 @@ $worker_mode_entry"
         requested_launch_mode=${1#*=}
         shift
         ;;
-      --worker-mode|--worker-proxy-mode)
+      --worker-mode)
         [ "$#" -ge 2 ] || {
           echo "missing value for --worker-mode" >&2
           run_usage 1
@@ -170,7 +170,7 @@ $worker_mode_entry"
         esac
         shift 2
         ;;
-      --worker-mode=*|--worker-proxy-mode=*)
+      --worker-mode=*)
         worker_mode_value=${1#*=}
         case "$worker_mode_value" in
           *=*)

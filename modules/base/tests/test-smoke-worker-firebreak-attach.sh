@@ -50,9 +50,8 @@ mkdir -p "$state_dir" "$firebreak_state_dir" "$workspace_dir"
 run_attach_version() {
   env \
     AGENT_CONFIG=outer-leak \
-    AGENT_CONFIG_HOST_PATH="$smoke_tmp_dir"/firebreak-worker-attach-leak \
-    CODEX_CONFIG=outer-leak \
-    CODEX_CONFIG_HOST_PATH="$smoke_tmp_dir"/firebreak-worker-codex-attach-leak \
+    FIREBREAK_CREDENTIAL_SLOT=outer-leak \
+    FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH="$smoke_tmp_dir"/firebreak-worker-credential-slot-leak \
     FIREBREAK_WORKER_STATE_DIR="$state_dir" \
     FIREBREAK_STATE_DIR="$firebreak_state_dir" \
     FIREBREAK_DEBUG_KEEP_RUNTIME=1 \

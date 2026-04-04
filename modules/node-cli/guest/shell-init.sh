@@ -21,10 +21,6 @@ if [ -r /run/firebreak-agent/worker-mode ]; then
   if worker_mode_value=$(cat /run/firebreak-agent/worker-mode); then
     export FIREBREAK_WORKER_MODE="$worker_mode_value"
   fi
-elif [ -r /run/firebreak-agent/worker-proxy-mode ]; then
-  if worker_mode_value=$(cat /run/firebreak-agent/worker-proxy-mode); then
-    export FIREBREAK_WORKER_MODE="$worker_mode_value"
-  fi
 fi
 
 if [ -r /run/firebreak-agent/worker-modes ]; then

@@ -13,7 +13,19 @@ firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}
 mkdir -p "$firebreak_tmp_root"
 host_config_dir=$(mktemp -d "$firebreak_tmp_root/agent-smoke-config.XXXXXX")
 host_config_root=$(mktemp -d "$firebreak_tmp_root/agent-smoke-root.XXXXXX")
-expected_workspace_config_dir=""
+
+state_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    printf '%s' "$1" | sha256sum | cut -d' ' -f1
+    return 0
+  fi
+
+  printf '%s' "$1" | shasum -a 256 | cut -d' ' -f1
+}
+
+workspace_state_key=$(state_sha256 "$repo_root")
+workspace_state_key=$(printf '%.16s' "$workspace_state_key")
+expected_workspace_config_dir="/run/agent-config-host-root/workspaces/$workspace_state_key/@AGENT_CONFIG_SUBDIR@"
 
 cleanup() {
   rm -rf "$host_config_dir"
@@ -24,8 +36,6 @@ trap cleanup EXIT INT TERM
 printf '%s\n' "host-smoke-marker" > "$host_config_dir/marker.txt"
 mkdir -p "$host_config_root/@AGENT_CONFIG_SUBDIR@"
 cp "$host_config_dir/marker.txt" "$host_config_root/@AGENT_CONFIG_SUBDIR@/marker.txt"
-
-expected_workspace_config_dir=$repo_root/@AGENT_CONFIG_DIR_NAME@
 
 smoke_probe_command=$(cat <<'EOF'
 printf '__SMOKE_PWD__%s\n' "$PWD"
@@ -67,6 +77,42 @@ require_line() {
   printf '%s\n' "$value"
 }
 
+run_with_clean_firebreak_env() (
+  while IFS='=' read -r env_key _; do
+    case "$env_key" in
+      AGENT_CONFIG|AGENT_CONFIG_HOST_PATH|FIREBREAK_CREDENTIAL_SLOT|FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH|*_CREDENTIAL_SLOT)
+        unset "$env_key"
+        ;;
+      *_CONFIG)
+        case "$env_key" in
+          NIX_CONFIG|FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG)
+            ;;
+          *)
+            unset "$env_key"
+            ;;
+        esac
+        ;;
+    esac
+  done <<EOF
+$(env)
+EOF
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      *=*)
+        assignment=$1
+        export "${assignment%%=*}=${assignment#*=}"
+        shift
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+  exec "$@"
+)
+
 run_scenario() {
   package_name=$1
   mode=$2
@@ -78,11 +124,7 @@ run_scenario() {
 
   set +e
   output=$(
-    env \
-      -u AGENT_CONFIG \
-      -u AGENT_CONFIG_HOST_PATH \
-      -u CODEX_CONFIG \
-      -u CLAUDE_CONFIG \
+    run_with_clean_firebreak_env \
       AGENT_CONFIG="$mode" \
       FIREBREAK_LAUNCH_MODE=shell \
       FIREBREAK_INSTANCE_EPHEMERAL=1 \
@@ -146,11 +188,7 @@ run_agent_exec_scenario() {
   printf '%s\n' "running: $scenario_label"
   set +e
   output=$(
-    env \
-      -u AGENT_CONFIG \
-      -u AGENT_CONFIG_HOST_PATH \
-      -u CODEX_CONFIG \
-      -u CLAUDE_CONFIG \
+    run_with_clean_firebreak_env \
       AGENT_CONFIG="$mode" \
       FIREBREAK_INSTANCE_EPHEMERAL=1 \
       timeout --foreground "$timeout_seconds" \
@@ -180,6 +218,10 @@ run_agent_exec_scenario() {
 
 run_agent_exec_scenario workspace "default agent entry runs @AGENT_BIN@ --version as a one-shot command" "--version"
 run_scenario @AGENT_PACKAGE@ workspace "$expected_workspace_config_dir" "shell override uses workspace config"
+if [ -e "$repo_root/@AGENT_CONFIG_DIR_NAME@" ]; then
+  echo "workspace mode should not create a Firebreak-managed project config overlay: $repo_root/@AGENT_CONFIG_DIR_NAME@" >&2
+  exit 1
+fi
 run_scenario @AGENT_PACKAGE@ vm "/var/lib/dev/@AGENT_CONFIG_DIR_NAME@" "shell override uses vm config"
 run_scenario @AGENT_PACKAGE@ host "/run/agent-config-host-root/@AGENT_CONFIG_SUBDIR@" "shell override uses host config" "$host_config_root"
 

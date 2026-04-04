@@ -14,7 +14,7 @@ agent_specific_config_var=@AGENT_ENV_PREFIX@_CONFIG
 agent_specific_config=${!agent_specific_config_var:-}
 agent_config_mode=${agent_specific_config:-${AGENT_CONFIG:-host}}
 requested_launch_mode=${FIREBREAK_LAUNCH_MODE:-run}
-requested_worker_mode=${FIREBREAK_WORKER_MODE:-${FIREBREAK_WORKER_PROXY_MODE:-}}
+requested_worker_mode=${FIREBREAK_WORKER_MODE:-}
 requested_worker_modes=${FIREBREAK_WORKER_MODES:-}
 agent_session_mode_override=${FIREBREAK_AGENT_SESSION_MODE_OVERRIDE:-}
 agent_session_mode=agent
@@ -23,8 +23,10 @@ host_system=@HOST_SYSTEM@
 agent_command_override=""
 shell_command_override=${AGENT_VM_COMMAND:-}
 shared_agent_config_host_dir=""
+shared_credential_slots_host_dir=""
 workspace_bootstrap_config_host_dir=@WORKSPACE_BOOTSTRAP_CONFIG_HOST_DIR@
 host_config_adoption_enabled=@HOST_CONFIG_ADOPTION_ENABLED@
+shared_credential_slots_enabled=@SHARED_CREDENTIAL_SLOTS_ENABLED@
 default_control_socket=@CONTROL_SOCKET@
 instance_state_dir=${FIREBREAK_INSTANCE_DIR:-}
 instance_ephemeral=${FIREBREAK_INSTANCE_EPHEMERAL:-0}
@@ -119,12 +121,33 @@ append_optional_env_default() {
   printf 'export %s\n' "$key" >> "$shared_agent_config_env_file"
 }
 
+append_matching_env_defaults() {
+  suffix_pattern=$1
+
+  while IFS= read -r env_entry; do
+    env_key=${env_entry%%=*}
+    env_value=${env_entry#*=}
+    case "$env_key" in
+      *"$suffix_pattern")
+        append_optional_env_default "$env_key" "$env_value"
+        ;;
+    esac
+  done <<EOF
+$(env)
+EOF
+}
+
 default_agent_config_host_dir=$(resolve_host_dir "${AGENT_CONFIG_HOST_PATH:-@DEFAULT_AGENT_CONFIG_HOST_DIR@}")
+default_credential_slots_host_dir=$(resolve_host_dir "${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-@DEFAULT_CREDENTIAL_SLOTS_HOST_DIR@}")
 workspace_bootstrap_target=""
 if [ -n "$workspace_bootstrap_config_host_dir" ]; then
   workspace_bootstrap_target=$(resolve_host_dir "$workspace_bootstrap_config_host_dir")
 fi
 shared_agent_config_host_dir=$default_agent_config_host_dir
+shared_credential_slots_host_dir=$default_credential_slots_host_dir
+if [ "$shared_credential_slots_enabled" != "1" ]; then
+  shared_credential_slots_host_dir=""
+fi
 
 reject_whitespace_path "$host_cwd" "current working directory"
 reject_whitespace_path "$resolved_firebreak_tmp_root" "Firebreak temporary runtime directory"
@@ -147,11 +170,13 @@ runner_stdout_log=$host_runtime_dir/runner.out
 runner_stderr_log=$host_runtime_dir/runner.err
 virtiofsd_hostcwd_log=$host_runtime_dir/v-cwd.log
 virtiofsd_shared_agent_config_log=$host_runtime_dir/v-shared-cfg.log
+virtiofsd_shared_credential_slots_log=$host_runtime_dir/v-credential-slots.log
 virtiofsd_agent_exec_log=$host_runtime_dir/v-out.log
 virtiofsd_agent_tools_log=$host_runtime_dir/v-tools.log
 virtiofsd_worker_bridge_log=$host_runtime_dir/v-worker.log
 hostcwd_socket=$host_runtime_dir/cwd.sock
 shared_agent_config_socket=$host_runtime_dir/shared-cfg.sock
+shared_credential_slots_socket=$host_runtime_dir/credential-slots.sock
 agent_exec_output_socket=$host_runtime_dir/out.sock
 agent_tools_socket=$host_runtime_dir/tools.sock
 worker_bridge_dir=$host_runtime_dir/w
@@ -194,6 +219,10 @@ case "$shared_agent_config_host_dir" in
 esac
 reject_whitespace_path "$shared_agent_config_host_dir" "Firebreak host config root"
 mkdir -p "$shared_agent_config_host_dir"
+if [ -n "$shared_credential_slots_host_dir" ]; then
+  reject_whitespace_path "$shared_credential_slots_host_dir" "Firebreak credential slot root"
+  mkdir -p "$shared_credential_slots_host_dir"
+fi
 
 if [ -n "$instance_state_dir" ]; then
   case "$instance_state_dir" in
@@ -336,6 +365,10 @@ cleanup() {
     kill "$shared_agent_config_virtiofsd_pid" 2>/dev/null || true
     wait "$shared_agent_config_virtiofsd_pid" 2>/dev/null || true
   fi
+  if [ -n "${shared_credential_slots_virtiofsd_pid:-}" ]; then
+    kill "$shared_credential_slots_virtiofsd_pid" 2>/dev/null || true
+    wait "$shared_credential_slots_virtiofsd_pid" 2>/dev/null || true
+  fi
   if [ -n "${agent_exec_output_virtiofsd_pid:-}" ]; then
     kill "$agent_exec_output_virtiofsd_pid" 2>/dev/null || true
     wait "$agent_exec_output_virtiofsd_pid" 2>/dev/null || true
@@ -390,6 +423,7 @@ cat >"$runtime_debug_file" <<EOF
   "runner_stderr_log": "$(printf '%s' "$runner_stderr_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_hostcwd_log": "$(printf '%s' "$virtiofsd_hostcwd_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_shared_agent_config_log": "$(printf '%s' "$virtiofsd_shared_agent_config_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "virtiofs_shared_credential_slots_log": "$(printf '%s' "$virtiofsd_shared_credential_slots_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_agent_exec_log": "$(printf '%s' "$virtiofsd_agent_exec_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_agent_tools_log": "$(printf '%s' "$virtiofsd_agent_tools_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_worker_bridge_log": "$(printf '%s' "$virtiofsd_worker_bridge_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
@@ -448,15 +482,15 @@ start_worker_bridge_server() {
 printf '%s\n' "$host_cwd" > "$host_meta_dir/mount-path"
 printf '%s\n' "$host_uid" > "$host_meta_dir/host-uid"
 printf '%s\n' "$host_gid" > "$host_meta_dir/host-gid"
-printf '%s\n' "$agent_config_mode" > "$host_meta_dir/agent-config-mode"
 printf '%s\n' "$agent_session_mode" > "$host_meta_dir/agent-session-mode"
 : > "$shared_agent_config_env_file"
 append_optional_env_default "AGENT_CONFIG" "${AGENT_CONFIG:-}"
 append_optional_env_default "AGENT_CONFIG_HOST_PATH" "${AGENT_CONFIG_HOST_PATH:-}"
-append_optional_env_default "CODEX_CONFIG" "${CODEX_CONFIG:-}"
-append_optional_env_default "CLAUDE_CONFIG" "${CLAUDE_CONFIG:-}"
+append_matching_env_defaults "_CONFIG"
+append_optional_env_default "FIREBREAK_CREDENTIAL_SLOT" "${FIREBREAK_CREDENTIAL_SLOT:-}"
+append_optional_env_default "FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH" "${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-}"
+append_matching_env_defaults "_CREDENTIAL_SLOT"
 printf '%s\n' "$requested_worker_mode" > "$host_meta_dir/worker-mode"
-printf '%s\n' "$requested_worker_mode" > "$host_meta_dir/worker-proxy-mode"
 printf '%s\n' "$requested_worker_modes" > "$host_meta_dir/worker-modes"
 if [ -n "$agent_term" ]; then
   printf '%s\n' "$agent_term" > "$host_meta_dir/agent-term"
@@ -480,6 +514,11 @@ if [ -n "$shared_agent_config_host_dir" ]; then
   start_virtiofsd "$shared_agent_config_host_dir" "$shared_agent_config_socket" "$virtiofsd_shared_agent_config_log"
   shared_agent_config_virtiofsd_pid=$started_virtiofsd_pid
   trace_wrapper "virtiofs-agent-config-ready"
+fi
+if [ "$shared_credential_slots_enabled" = "1" ] && [ -n "$shared_credential_slots_host_dir" ]; then
+  start_virtiofsd "$shared_credential_slots_host_dir" "$shared_credential_slots_socket" "$virtiofsd_shared_credential_slots_log"
+  shared_credential_slots_virtiofsd_pid=$started_virtiofsd_pid
+  trace_wrapper "virtiofs-credential-slots-ready"
 fi
 if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
   start_virtiofsd "$host_exec_output_dir" "$agent_exec_output_socket" "$virtiofsd_agent_exec_log"
@@ -508,6 +547,7 @@ run_runner() {
         MICROVM_VFKIT_HOST_META_DIR="$host_meta_dir" \
         MICROVM_VFKIT_HOST_CWD_DIR="$host_cwd" \
         MICROVM_VFKIT_SHARED_AGENT_CONFIG_DIR="$shared_agent_config_host_dir" \
+        MICROVM_VFKIT_SHARED_CREDENTIAL_SLOTS_DIR="$shared_credential_slots_host_dir" \
         MICROVM_VFKIT_AGENT_EXEC_OUTPUT_DIR="$host_exec_output_dir" \
         MICROVM_VFKIT_AGENT_TOOLS_DIR="$host_agent_tools_dir" \
         MICROVM_VFKIT_WORKER_BRIDGE_DIR="$worker_bridge_dir" \
@@ -517,6 +557,7 @@ run_runner() {
         MICROVM_VFKIT_HOST_META_DIR="$host_meta_dir" \
         MICROVM_VFKIT_HOST_CWD_DIR="$host_cwd" \
         MICROVM_VFKIT_SHARED_AGENT_CONFIG_DIR="$shared_agent_config_host_dir" \
+        MICROVM_VFKIT_SHARED_CREDENTIAL_SLOTS_DIR="$shared_credential_slots_host_dir" \
         MICROVM_VFKIT_AGENT_TOOLS_DIR="$host_agent_tools_dir" \
         MICROVM_VFKIT_WORKER_BRIDGE_DIR="$worker_bridge_dir" \
         @RUNNER@ "$@"
@@ -530,6 +571,8 @@ run_runner() {
       MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
       MICROVM_SHARED_AGENT_CONFIG_DIR="$shared_agent_config_host_dir" \
       MICROVM_SHARED_AGENT_CONFIG_SOCKET="$shared_agent_config_socket" \
+      MICROVM_SHARED_CREDENTIAL_SLOTS_DIR="$shared_credential_slots_host_dir" \
+      MICROVM_SHARED_CREDENTIAL_SLOTS_SOCKET="$shared_credential_slots_socket" \
       MICROVM_AGENT_EXEC_OUTPUT_SOCKET="$agent_exec_output_socket" \
       MICROVM_AGENT_TOOLS_SOCKET="$agent_tools_socket" \
       MICROVM_WORKER_BRIDGE_SOCKET="$worker_bridge_socket_env" \
@@ -540,6 +583,8 @@ run_runner() {
       MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
       MICROVM_SHARED_AGENT_CONFIG_DIR="$shared_agent_config_host_dir" \
       MICROVM_SHARED_AGENT_CONFIG_SOCKET="$shared_agent_config_socket" \
+      MICROVM_SHARED_CREDENTIAL_SLOTS_DIR="$shared_credential_slots_host_dir" \
+      MICROVM_SHARED_CREDENTIAL_SLOTS_SOCKET="$shared_credential_slots_socket" \
       MICROVM_AGENT_TOOLS_SOCKET="$agent_tools_socket" \
       MICROVM_WORKER_BRIDGE_SOCKET="$worker_bridge_socket_env" \
       @RUNNER@ "$@"
@@ -569,6 +614,8 @@ export MICROVM_HOST_META_DIR='$(printf '%s' "$host_meta_dir" | sed "s/'/'\\\\''/
 export MICROVM_HOST_CWD_SOCKET='$(printf '%s' "$hostcwd_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_SHARED_AGENT_CONFIG_DIR='$(printf '%s' "$shared_agent_config_host_dir" | sed "s/'/'\\\\''/g")'
 export MICROVM_SHARED_AGENT_CONFIG_SOCKET='$(printf '%s' "$shared_agent_config_socket" | sed "s/'/'\\\\''/g")'
+export MICROVM_SHARED_CREDENTIAL_SLOTS_DIR='$(printf '%s' "$shared_credential_slots_host_dir" | sed "s/'/'\\\\''/g")'
+export MICROVM_SHARED_CREDENTIAL_SLOTS_SOCKET='$(printf '%s' "$shared_credential_slots_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_AGENT_EXEC_OUTPUT_SOCKET='$(printf '%s' "$agent_exec_output_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_AGENT_TOOLS_SOCKET='$(printf '%s' "$agent_tools_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_WORKER_BRIDGE_SOCKET='$(printf '%s' "$worker_bridge_socket_env" | sed "s/'/'\\\\''/g")'
@@ -1551,6 +1598,9 @@ if [ "$agent_session_mode" = "agent-exec" ]; then
       if [ -s "$virtiofsd_shared_agent_config_log" ]; then
         cat "$virtiofsd_shared_agent_config_log" >&2
       fi
+      if [ -s "$virtiofsd_shared_credential_slots_log" ]; then
+        cat "$virtiofsd_shared_credential_slots_log" >&2
+      fi
       if [ -s "$virtiofsd_agent_exec_log" ]; then
         cat "$virtiofsd_agent_exec_log" >&2
       fi
@@ -1573,6 +1623,9 @@ if [ "$agent_session_mode" = "agent-exec" ]; then
   fi
   if [ -s "$virtiofsd_shared_agent_config_log" ]; then
     cat "$virtiofsd_shared_agent_config_log" >&2
+  fi
+  if [ -s "$virtiofsd_shared_credential_slots_log" ]; then
+    cat "$virtiofsd_shared_credential_slots_log" >&2
   fi
   if [ -s "$virtiofsd_agent_exec_log" ]; then
     cat "$virtiofsd_agent_exec_log" >&2

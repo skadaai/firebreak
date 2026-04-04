@@ -789,6 +789,26 @@ write_firebreak_launch_script() {
   resolved_exec=$(resolve_firebreak_worker_exec "$FIREBREAK_FLAKE_REF#$package_name" "$package_name")
   quoted_resolved_exec=$(quote_arg "$resolved_exec")
 
+  quoted_unset_env_args=""
+  while IFS='=' read -r env_key _; do
+    case "$env_key" in
+      AGENT_CONFIG|AGENT_CONFIG_HOST_PATH|FIREBREAK_CREDENTIAL_SLOT|FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH|*_CREDENTIAL_SLOT)
+        quoted_unset_env_args="$quoted_unset_env_args -u $(quote_arg "$env_key")"
+        ;;
+      *_CONFIG)
+        case "$env_key" in
+          NIX_CONFIG|FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG)
+            ;;
+          *)
+            quoted_unset_env_args="$quoted_unset_env_args -u $(quote_arg "$env_key")"
+            ;;
+        esac
+        ;;
+    esac
+  done <<EOF
+$(env)
+EOF
+
   quoted_args=""
   for arg in "$@"; do
     quoted_args="$quoted_args $(quote_arg "$arg")"
@@ -863,58 +883,43 @@ if [ "\$attach_mode" = "1" ]; then
     fi
   fi
   if [ "$forwarded_arg_count" -eq 0 ]; then
-    bash -c '
-      child_pid_path=\$1
-      shift
-      printf "%s\n" "\$BASHPID" >"\$child_pid_path"
-      exec "\$@"
-    ' bash "\$child_pid_path" \
-      env \
-      -u AGENT_CONFIG \
-      -u AGENT_CONFIG_HOST_PATH \
-      -u CODEX_CONFIG \
-      -u CODEX_CONFIG_HOST_PATH \
-      -u CLAUDE_CONFIG \
-      -u CLAUDE_CONFIG_HOST_PATH \
+    env \
+      $quoted_unset_env_args \
       \${forwarded_term:+TERM="\$forwarded_term"} \
       \${forwarded_columns:+COLUMNS="\$forwarded_columns"} \
       \${forwarded_lines:+LINES="\$forwarded_lines"} \
       FIREBREAK_INSTANCE_DIR="\$instance_dir" \
       FIREBREAK_LAUNCH_MODE="\$launch_mode" \
       FIREBREAK_AGENT_SESSION_MODE_OVERRIDE="agent-attach-exec" \
+      bash -c '
+      child_pid_path=\$1
+      shift
+      printf "%s\n" "\$BASHPID" >"\$child_pid_path"
+      exec "\$@"
+    ' bash "\$child_pid_path" \
       $quoted_resolved_exec
   else
-    bash -c '
-      child_pid_path=\$1
-      shift
-      printf "%s\n" "\$BASHPID" >"\$child_pid_path"
-      exec "\$@"
-    ' bash "\$child_pid_path" \
-      env \
-      -u AGENT_CONFIG \
-      -u AGENT_CONFIG_HOST_PATH \
-      -u CODEX_CONFIG \
-      -u CODEX_CONFIG_HOST_PATH \
-      -u CLAUDE_CONFIG \
-      -u CLAUDE_CONFIG_HOST_PATH \
+    env \
+      $quoted_unset_env_args \
       \${forwarded_term:+TERM="\$forwarded_term"} \
       \${forwarded_columns:+COLUMNS="\$forwarded_columns"} \
       \${forwarded_lines:+LINES="\$forwarded_lines"} \
       FIREBREAK_INSTANCE_DIR="\$instance_dir" \
       FIREBREAK_LAUNCH_MODE="\$launch_mode" \
       FIREBREAK_AGENT_SESSION_MODE_OVERRIDE="agent-attach-exec" \
+      bash -c '
+      child_pid_path=\$1
+      shift
+      printf "%s\n" "\$BASHPID" >"\$child_pid_path"
+      exec "\$@"
+    ' bash "\$child_pid_path" \
       $quoted_resolved_exec$quoted_args
   fi
   command_status=\$?
 else
   printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "detached-background-start" >>"\$trace_path"
   env \
-    -u AGENT_CONFIG \
-    -u AGENT_CONFIG_HOST_PATH \
-    -u CODEX_CONFIG \
-    -u CODEX_CONFIG_HOST_PATH \
-    -u CLAUDE_CONFIG \
-    -u CLAUDE_CONFIG_HOST_PATH \
+    $quoted_unset_env_args \
     FIREBREAK_INSTANCE_DIR="\$instance_dir" \
     FIREBREAK_LAUNCH_MODE="\$launch_mode" \
     $quoted_resolved_exec$quoted_args &

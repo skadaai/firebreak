@@ -23,14 +23,44 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
+run_with_clean_firebreak_env() (
+  while IFS='=' read -r env_key _; do
+    case "$env_key" in
+      AGENT_CONFIG|AGENT_CONFIG_HOST_PATH|FIREBREAK_CREDENTIAL_SLOT|FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH|*_CREDENTIAL_SLOT)
+        unset "$env_key"
+        ;;
+      *_CONFIG)
+        case "$env_key" in
+          NIX_CONFIG|FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG)
+            ;;
+          *)
+            unset "$env_key"
+            ;;
+        esac
+        ;;
+    esac
+  done <<EOF
+$(env)
+EOF
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      *=*)
+        assignment=$1
+        export "${assignment%%=*}=${assignment#*=}"
+        shift
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+  exec "$@"
+)
+
 output=$(
-  env \
-    -u AGENT_CONFIG \
-    -u AGENT_CONFIG_HOST_PATH \
-    -u CODEX_CONFIG \
-    -u CODEX_CONFIG_HOST_PATH \
-    -u CLAUDE_CONFIG \
-    -u CLAUDE_CONFIG_HOST_PATH \
+  run_with_clean_firebreak_env \
     FIREBREAK_DEBUG_KEEP_RUNTIME=1 \
     FIREBREAK_INSTANCE_EPHEMERAL=1 \
     FIREBREAK_TMPDIR="$runtime_root" \

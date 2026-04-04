@@ -88,13 +88,10 @@ rec {
 
       worker_mode=$(resolve_command_worker_mode "$worker_mode_overrides" || true)
       if [ -z "$worker_mode" ]; then
-        worker_mode=''${FIREBREAK_WORKER_MODE:-''${FIREBREAK_WORKER_PROXY_MODE:-}}
+        worker_mode=''${FIREBREAK_WORKER_MODE:-}
       fi
       if [ -z "$worker_mode" ] && [ -r /run/firebreak-agent/worker-mode ]; then
         worker_mode=$(cat /run/firebreak-agent/worker-mode)
-      fi
-      if [ -z "$worker_mode" ] && [ -r /run/firebreak-agent/worker-proxy-mode ]; then
-        worker_mode=$(cat /run/firebreak-agent/worker-proxy-mode)
       fi
       worker_mode=$(normalize_worker_mode "$worker_mode")
       if [ -z "$worker_mode" ] && [ -n "$proxy_default_mode" ]; then
@@ -296,7 +293,6 @@ __FIREBREAK_WRAPPER_INFO__
           in {
             agentVm = {
               brandingTagline = tagline;
-              agentConfigEnabled = false;
               extraSystemPackages = tools ++ [ launchScript readyScript ];
               bootstrapPackages = sharedBootstrapPackages ++ bootstrapTools;
               bootstrapScript = ''
@@ -398,6 +394,7 @@ __FIREBREAK_WRAPPER_INFO__
     runtimePackages ? [ ],
     bootstrapPackages ? null,
     sharedAgentConfig ? { },
+    sharedCredentialSlots ? { },
     extraShellInit ? "",
     extraModules ? [ ],
     workerBridgeEnabled ? false,
@@ -467,6 +464,7 @@ __FIREBREAK_WRAPPER_INFO__
       inherit name;
       defaultAgentCommand = launchCommandName;
       sharedAgentConfig = sharedAgentConfig;
+      sharedCredentialSlots = sharedCredentialSlots;
       workerBridgeEnabled = effectiveWorkerBridgeEnabled;
       workerKinds = effectiveWorkerKinds;
       extraModules = [
@@ -484,6 +482,7 @@ __FIREBREAK_WRAPPER_INFO__
             readyCommandName
             memoryMiB
             sharedAgentConfig
+            sharedCredentialSlots
             extraShellInit
             ;
           installBinScripts = effectiveInstallBinScripts;

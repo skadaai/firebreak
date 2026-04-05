@@ -1,8 +1,9 @@
-{ config, lib, pkgs, renderTemplate, ... }:
+{ config, lib, pkgs, renderTemplate, runtimeBackends, ... }:
 let
   cfg = config.workloadVm;
+  backendSpec = runtimeBackends.specFor cfg.runtimeBackend;
   devHome = "/var/lib/${cfg.devUser}";
-  hostMetaFsType = if lib.hasSuffix "-darwin" cfg.hostSystem then "virtiofs" else "9p";
+  hostMetaFsType = backendSpec.localHostMetaFsType;
 
   qemu9pOptions = [
     "nofail"
@@ -93,6 +94,12 @@ let
   bootstrapEnabled = cfg.bootstrapScript != null;
 in {
   config = {
+    workloadVm.requiredCapabilities = [
+      "interactive-console"
+      "workspace-share"
+      "host-meta-share"
+    ];
+
     users.users.root.password = "";
     users.users.${cfg.devUser}.password = "";
 

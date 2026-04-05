@@ -1,6 +1,7 @@
-{ config, lib, pkgs, renderTemplate, ... }:
+{ config, lib, pkgs, renderTemplate, runtimeBackends, ... }:
 let
   cfg = config.workloadVm;
+  backendSpec = runtimeBackends.specFor cfg.runtimeBackend;
   devHome = "/var/lib/${cfg.devUser}";
   localBin =
     if cfg.toolRuntimesEnabled then
@@ -64,9 +65,10 @@ let
       ""
     else
       "${sharedToolWrapperPackage}/bin";
-  hostIsDarwin = lib.hasSuffix "-darwin" cfg.hostSystem;
-  roStoreShareProto = if hostIsDarwin then "virtiofs" else "9p";
-  localHypervisor = if hostIsDarwin then "vfkit" else "qemu";
+  missingRequiredCapabilities =
+    builtins.filter
+      (capability: !(builtins.elem capability backendSpec.capabilities))
+      cfg.requiredCapabilities;
 
   scriptVars = {
     "@DEV_HOME@" = devHome;
@@ -131,6 +133,18 @@ in {
       type = types.str;
       default = pkgs.stdenv.hostPlatform.system;
       description = "Guest platform used for the NixOS system inside the MicroVM.";
+    };
+
+    runtimeBackend = mkOption {
+      type = types.enum runtimeBackends.supportedBackendNames;
+      default = "qemu";
+      description = "Private runtime backend that satisfies the profile capability contract.";
+    };
+
+    requiredCapabilities = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      description = "Runtime capabilities that must be provided by the selected backend.";
     };
 
     devUser = mkOption {
@@ -542,6 +556,12 @@ in {
         assertion = lib.hasPrefix "/etc/" cfg.workerKindsFile;
         message = "workloadVm.workerKindsFile must stay under /etc so Firebreak can materialize it declaratively.";
       }
+      {
+        assertion = missingRequiredCapabilities == [ ];
+        message =
+          "workloadVm.runtimeBackend `${cfg.runtimeBackend}` is missing required capabilities: "
+          + lib.concatStringsSep ", " missingRequiredCapabilities;
+      }
     ];
 
     environment.systemPackages =
@@ -598,7 +618,7 @@ in {
       } ];
       shares = [ {
         # use proto = "virtiofs" for MicroVMs that are started by systemd
-        proto = roStoreShareProto;
+        proto = backendSpec.roStoreShareProto;
         tag = "ro-store";
         # a host's /nix/store will be picked up so that no
         # squashfs/erofs will be built for it.
@@ -606,7 +626,7 @@ in {
         mountPoint = "/nix/.ro-store";
       } ];
 
-      hypervisor = localHypervisor;
+      hypervisor = backendSpec.microvmHypervisor;
       socket = cfg.controlSocket;
     };
   };

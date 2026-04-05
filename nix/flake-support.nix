@@ -9,8 +9,12 @@ let
       (builtins.attrValues vars)
       (builtins.readFile path);
 
+  runtimeBackends = import ./support/runtime-backends.nix {
+    inherit lib;
+  };
+
   runtime = import ./support/runtime.nix {
-    inherit self nixpkgs microvm system guestSystem renderTemplate;
+    inherit self nixpkgs microvm system guestSystem renderTemplate runtimeBackends;
   };
 
   projects = import ./support/projects.nix {
@@ -24,7 +28,7 @@ let
   };
 in
 runtime // projects // packages // {
-  inherit lib pkgs renderTemplate;
+  inherit lib pkgs renderTemplate runtimeBackends;
   hostIsDarwin = pkgs.stdenv.hostPlatform.isDarwin;
   hostIsLinux = pkgs.stdenv.hostPlatform.isLinux;
   hostSystem = system;

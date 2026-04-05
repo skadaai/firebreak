@@ -1,4 +1,4 @@
-{ self, nixpkgs, microvm, system, guestSystem, renderTemplate }:
+{ self, nixpkgs, microvm, system, guestSystem, renderTemplate, runtimeBackends }:
 let
   lib = nixpkgs.lib;
   pkgs = nixpkgs.legacyPackages.${system};
@@ -74,11 +74,12 @@ EOF
     name,
     extraModules ? [ ],
     profileModules ? [ self.nixosModules.firebreak-local-profile ],
+    runtimeBackend ? null,
   }:
     nixpkgs.lib.nixosSystem {
       system = guestSystem;
       specialArgs = {
-        inherit renderTemplate;
+        inherit renderTemplate runtimeBackends;
       };
       modules = [
         microvm.nixosModules.microvm
@@ -87,6 +88,12 @@ EOF
           workloadVm.name = name;
           workloadVm.hostSystem = system;
           workloadVm.guestSystem = guestSystem;
+          workloadVm.runtimeBackend = lib.mkDefault (
+            if runtimeBackend != null then
+              runtimeBackend
+            else
+              runtimeBackends.defaultLocalBackendForHost system
+          );
           microvm.vmHostPackages = pkgs;
         }
       ] ++ profileModules ++ extraModules;
@@ -184,6 +191,7 @@ EOF
     name,
     extraModules ? [ ],
     profileModules ? [ self.nixosModules.firebreak-local-profile ],
+    runtimeBackend ? null,
     controlSocketName ? name,
     defaultAgentCommand ? "",
     agentConfigSubdir ? "agent",
@@ -199,7 +207,7 @@ EOF
   }:
     let
       nixosConfiguration = mkWorkloadVm {
-        inherit name profileModules;
+        inherit name profileModules runtimeBackend;
         extraModules =
           extraModules
           ++ nixpkgs.lib.optional (workerKinds != { }) {
@@ -236,5 +244,6 @@ in {
     mkLocalVmArtifacts
     mkLocalVmPackage
     mkRunnerPackage
+    runtimeBackends
     ;
 }

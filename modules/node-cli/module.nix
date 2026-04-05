@@ -24,10 +24,12 @@ moduleArgs@{
   lib,
   pkgs,
   renderTemplate,
+  runtimeBackends,
   ...
 }:
 let
   cfg = config.workloadVm;
+  backendSpec = runtimeBackends.specFor cfg.runtimeBackend;
   devHome = "/var/lib/${cfg.devUser}";
   toolsMount = cfg.toolRuntimesMount;
   localBin = "${devHome}/.local/bin";
@@ -284,6 +286,16 @@ PY
   };
 in {
   config = {
+    assertions = [
+      {
+        assertion =
+          forwardPorts == [ ]
+          || builtins.elem "local-port-publish" backendSpec.capabilities;
+        message =
+          "workloadVm.runtimeBackend `${cfg.runtimeBackend}` does not support host port publishing required by modules/node-cli forwardPorts.";
+      }
+    ];
+
     workloadVm = {
       brandingTagline = tagline;
       sharedStateRoots = sharedStateRoots;

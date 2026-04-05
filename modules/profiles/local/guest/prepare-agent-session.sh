@@ -54,25 +54,23 @@ sync_guest_state_files() {
   fi
 }
 
-metadata_ready=0
-for _ in $(seq 1 50); do
-  if [ -d @WORKSPACE_MOUNT@ ] && [ -r "$metadata" ]; then
-    metadata_ready=1
-    break
-  fi
-  sleep 0.1
-done
-
-if [ "$metadata_ready" = "1" ] && [ -d @WORKSPACE_MOUNT@ ] && [ -r "$metadata" ]; then
-  log_phase prepare-agent-session-metadata-ready
-  candidate=$(cat "$metadata")
-  if [ -n "$candidate" ]; then
-    start_dir=$candidate
-  fi
-else
-  log_phase prepare-agent-session-metadata-fallback
-  echo "workspace or host cwd metadata not ready; continuing with the workspace mount only"
+if ! [ -d @WORKSPACE_MOUNT@ ]; then
+  echo "workspace mount is unavailable at @WORKSPACE_MOUNT@" >&2
+  exit 1
 fi
+
+if ! [ -r "$metadata" ]; then
+  echo "host cwd metadata is unavailable at $metadata" >&2
+  exit 1
+fi
+
+log_phase prepare-agent-session-metadata-ready
+candidate=$(cat "$metadata")
+if [ -z "$candidate" ]; then
+  echo "host cwd metadata file is empty: $metadata" >&2
+  exit 1
+fi
+start_dir=$candidate
 
 printf '%s\n' "$start_dir" > @START_DIR_FILE@
 chmod 0644 @START_DIR_FILE@

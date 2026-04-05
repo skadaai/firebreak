@@ -55,6 +55,7 @@ missing_nix_output=$(
     HOME="${HOME:-/tmp}" \
     PATH="$empty_bin_dir" \
     FIREBREAK_LAUNCHER_KVM_PATH="$fake_kvm_path" \
+    FIREBREAK_LAUNCHER_IP_FORWARD_STATE=enabled \
     "$node_bin" "$repo_root/bin/firebreak.js" run codex 2>&1
 )
 missing_nix_status=$?
@@ -90,6 +91,7 @@ vms_output=$(
   cd "$repo_root"
   PATH="$fake_bin_dir:$PATH" \
     FIREBREAK_LAUNCHER_KVM_PATH="$fake_kvm_path" \
+    FIREBREAK_LAUNCHER_IP_FORWARD_STATE=enabled \
     node "$repo_root/bin/firebreak.js" vms
 )
 
@@ -110,6 +112,7 @@ doctor_output=$(
   cd "$smoke_tmp_dir"
   PATH="$fake_bin_dir:$PATH" \
     FIREBREAK_LAUNCHER_KVM_PATH="$fake_kvm_path" \
+    FIREBREAK_LAUNCHER_IP_FORWARD_STATE=enabled \
     FIREBREAK_LAUNCHER_TEST_PLATFORM=linux \
     FIREBREAK_LAUNCHER_TEST_ARCH=arm64 \
     node "$repo_root/bin/firebreak.js" doctor --json
@@ -193,6 +196,7 @@ darwin_validate_output=$(
     FIREBREAK_LAUNCHER_TEST_PLATFORM=darwin \
     FIREBREAK_LAUNCHER_TEST_ARCH=arm64 \
     FIREBREAK_LAUNCHER_KVM_PATH="$smoke_tmp_dir/missing-kvm" \
+    FIREBREAK_LAUNCHER_IP_FORWARD_STATE=enabled \
     node "$repo_root/bin/firebreak.js" internal validate run test-smoke-codex 2>&1
 )
 
@@ -213,12 +217,13 @@ set +e
 missing_kvm_output=$(
   PATH="$fake_bin_dir:$PATH" \
     FIREBREAK_LAUNCHER_KVM_PATH="$smoke_tmp_dir/missing-kvm" \
+    FIREBREAK_LAUNCHER_IP_FORWARD_STATE=enabled \
     node "$repo_root/bin/firebreak.js" internal validate run test-smoke-codex 2>&1
 )
 missing_kvm_status=$?
 set -e
 
-if [ "$missing_kvm_status" -eq 0 ] || ! printf '%s\n' "$missing_kvm_output" | grep -F -q "needs KVM access"; then
+if [ "$missing_kvm_status" -eq 0 ] || ! printf '%s\n' "$missing_kvm_output" | grep -F -q "require KVM access"; then
   printf '%s\n' "$missing_kvm_output" >&2
   echo "launcher smoke did not block non-diagnostic commands when KVM was unavailable" >&2
   exit 1

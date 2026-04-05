@@ -197,7 +197,8 @@ if [ "@SHARED_STATE_ROOT_ENABLED@" = "1" ]; then
   elif mount_output=$(mount -t virtiofs hoststateroot @SHARED_STATE_ROOT_HOST_MOUNT@ 2>&1); then
     touch @SHARED_STATE_ROOT_MOUNTED_FLAG@
   else
-    printf '%s\n' "Firebreak shared state root is not available; continuing without host-backed state: $mount_output"
+    printf '%s\n' "failed to mount Firebreak shared state root: $mount_output" >&2
+    exit 1
   fi
 fi
 
@@ -210,7 +211,8 @@ if [ "@SHARED_CREDENTIAL_SLOTS_ENABLED@" = "1" ]; then
   elif mount_output=$(mount -t virtiofs hostcredentialslots @SHARED_CREDENTIAL_SLOTS_HOST_MOUNT@ 2>&1); then
     touch @SHARED_CREDENTIAL_SLOTS_MOUNTED_FLAG@
   else
-    printf '%s\n' "Firebreak shared credential slots are not available; continuing without slot-backed credentials: $mount_output"
+    printf '%s\n' "failed to mount Firebreak shared credential slots: $mount_output" >&2
+    exit 1
   fi
 fi
 log_phase prepare-agent-session-done

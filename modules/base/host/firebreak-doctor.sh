@@ -18,12 +18,9 @@ firebreak_doctor_resolve_host_dir() {
 }
 
 firebreak_doctor_json_escape() {
-  FIREBREAK_DOCTOR_JSON_VALUE=$1 python3 - <<'PY'
-import json
-import os
-
-print(json.dumps(os.environ["FIREBREAK_DOCTOR_JSON_VALUE"])[1:-1], end="")
-PY
+  value=$1
+  value=$(printf '%s' "$value" | awk 'BEGIN { ORS = "" } { gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\n/, "\\n"); print }')
+  printf '%s' "$value"
 }
 
 firebreak_doctor_json_array() {

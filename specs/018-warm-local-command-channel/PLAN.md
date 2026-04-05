@@ -7,7 +7,7 @@ last_updated: 2026-04-05
 
 ## Current status
 
-Problem definition only. No warm local command-channel implementation is landed yet.
+Warm non-interactive local command reuse is partially landed. Remaining work is validation, hardening, attached warm dispatch, and snapshots.
 
 ## Implementation slices
 

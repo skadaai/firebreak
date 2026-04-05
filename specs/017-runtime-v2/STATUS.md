@@ -21,11 +21,13 @@ Executing the Linux local runtime replacement and cold-boot reduction slices.
 - local share startup has been simplified by collapsing host metadata, exec-output, and worker-bridge into one writable runtime share
 - local `virtiofsd` startup is now parallelized rather than serialized
 - shared state-root and credential-slot mounts now fail fast instead of silently downgrading
+- local non-interactive command requests now have an explicit request/response contract instead of boot-time metadata smearing
+- Linux local now has a private warm instance controller and guest command-agent mode for repeated `agent-exec` reuse
 
 ## What remains open
 
-- warm local instance lifetime separated from per-command session execution
-- a host command channel for reusing a running local VM instead of booting a fresh one for each request
+- validation and hardening of the new warm local `agent-exec` path
+- warm attached command dispatch for `agent-attach-exec`
 - snapshot preparation and restore on the local Cloud Hypervisor backend
 - deletion of remaining stale runtime assumptions and warnings that no longer fit the accepted backend contract
 - future cloud backend selection and implementation
@@ -39,4 +41,4 @@ Executing the Linux local runtime replacement and cold-boot reduction slices.
 ## History
 
 - 2026-04-05: created Runtime v2 as a new design-definition changeset centered on aggressive replacement rather than compatibility-preserving migration
-- 2026-04-05: landed backend capability checks, Linux local Cloud Hypervisor cutover, local networking/port publishing, hot-path bootstrap reduction, runtime-share consolidation, and fail-fast share semantics
+- 2026-04-05: landed backend capability checks, Linux local Cloud Hypervisor cutover, local networking/port publishing, hot-path bootstrap reduction, runtime-share consolidation, fail-fast share semantics, explicit command requests, a guest warm command-agent mode, and a private local warm instance controller

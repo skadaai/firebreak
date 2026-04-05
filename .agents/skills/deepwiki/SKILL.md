@@ -6,7 +6,7 @@ tags:
   - documentation
   - external-tools
   - cli
-version: 2.0.0
+version: 2.1.0
 ---
 
 # DeepWiki Skill
@@ -39,8 +39,8 @@ Use DeepWiki any time you need to:
 DeepWiki has two access modes in priority order. Use the highest available mode.
 
 ```
-1. CLI (primary)   → bunx @qwadratic/deepwiki-cli  — full capability: deep, codemap, threading
-2. MCP (fallback)  → mcp.deepwiki.com             — basic ask_question, no mode selection
+1. CLI (primary)   → scripts/dw-query.sh  — full capability: deep, codemap, threading
+2. MCP (fallback)  → mcp.deepwiki.com    — basic ask_question, no mode selection
 ```
 
 **Always try the CLI first.** It calls the same underlying API as Devin's DeepWiki directly, exposes all modes (deep, fast, codemap), and does not load tool descriptions into the context window on every session turn.
@@ -49,183 +49,92 @@ DeepWiki has two access modes in priority order. Use the highest available mode.
 
 ## Mode 1 — CLI (Primary)
 
-Use via `bunx` (preferred in Nix/bun environments) or `npx`:
+Three wrapper scripts live in `skills/deepwiki/scripts/`. They each handle the `bunx` invocation and JSON extraction internally — you never need to write a raw `jq` query.
 
-```bash
-bunx @qwadratic/deepwiki-cli <command> [flags]
-# or
-npx @qwadratic/deepwiki-cli <command> [flags]
+### scripts/dw-query.sh — ask a question
+
+```
+dw-query.sh "question" owner/repo [owner/repo2 ...] [--mode deep|fast|codemap]
+             [--context "extra context"] [--id <prev-query-id>] [--mermaid]
 ```
 
-### Core command: `query`
+Prints the answer to stdout.
+
+**Always use the default mode (`deep`).** Only pass `--mode fast` when you need quick orientation and the answer is not going into code. Use `--mode codemap` for architecture, data flow, or execution path questions.
+
+#### Examples
 
 ```bash
-bunx @qwadratic/deepwiki-cli query "<question>" -r <owner/repo> [flags]
+# Standard deep query — use this for all implementation work
+./scripts/dw-query.sh "How does the plugin lifecycle work?" vitejs/vite
+
+# Quick orientation
+./scripts/dw-query.sh "What is this repo for?" withastro/starlight --mode fast
+
+# Architecture and code flow
+./scripts/dw-query.sh "Show the request lifecycle" expressjs/express --mode codemap
+
+# With Mermaid diagram output (codemap only)
+./scripts/dw-query.sh "Show how hooks execute" facebook/react --mode codemap --mermaid > diagram.mmd
+
+# Compare two libraries
+./scripts/dw-query.sh "Compare middleware approaches" expressjs/express koajs/koa
+
+# Add project-specific context
+./scripts/dw-query.sh "How should I structure this?" prisma/prisma \
+  --context "I am using a multi-tenant SaaS with row-level security"
+
+# Thread a follow-up on a previous query
+./scripts/dw-query.sh "How does auth work?" supabase/supabase | tee /tmp/dw-last.txt
+# (get the query ID from /tmp/dw-last.txt or the raw JSON if needed)
+./scripts/dw-query.sh "How does token refresh specifically work?" supabase/supabase --id <prev-id>
 ```
 
-**Always use `-m deep` by default.** Only downgrade to `fast` when you need a quick orientation and the answer is not going into code.
+### scripts/dw-sources.sh — list source files used as context
 
-#### Deep mode (default — always use this)
+```
+dw-sources.sh "question" owner/repo [owner/repo2 ...] [--mode MODE]
+               [--context TEXT] [--id ID]
+```
+
+Prints one file path per line — the exact source files DeepWiki pulled as evidence for its answer. Useful when you want to read specific implementation files directly after getting a high-level answer.
 
 ```bash
-bunx @qwadratic/deepwiki-cli query "How does the plugin lifecycle work?" -r vitejs/vite -m deep \
-  | jq -rj '.. | objects | select(.type? == "chunk" or .type? == "summary_chunk") | .data? // empty'
+./scripts/dw-sources.sh "How does the plugin lifecycle work?" vitejs/vite
+# → packages/vite/src/node/plugin.ts
+# → packages/vite/src/node/plugins/index.ts
+# → packages/vite/src/node/server/pluginContainer.ts
+# → ...
 ```
 
-Runs an agentic research loop. Thorough, contextual, accurate. Takes longer but gives answers you can trust for implementation.
+### scripts/dw-status.sh — check and warm a repo
 
-#### Fast mode (quick orientation only)
+```
+dw-status.sh owner/repo [--warm]
+```
+
+Exits 0 if indexed, 1 if not. Pass `--warm` to trigger indexing first (throttled to once per 10 min server-side).
 
 ```bash
-bunx @qwadratic/deepwiki-cli query "What is this repo for?" -r withastro/starlight -m fast \
-  | jq -rj '.. | objects | select(.type? == "chunk" or .type? == "summary_chunk") | .data? // empty'
+./scripts/dw-status.sh vitejs/vite
+./scripts/dw-status.sh withastro/starlight --warm
 ```
 
-Multi-hop RAG, faster but shallower. Use only for high-level orientation, not for implementation guidance.
+---
 
-#### Codemap mode (architecture and code flow)
+## Modes at a Glance
 
-```bash
-bunx @qwadratic/deepwiki-cli query "Show the request lifecycle" -r expressjs/express -m codemap \
-  | jq -rj '.. | objects | select(.type? == "chunk" or .type? == "summary_chunk") | .data? // empty'
-
-# With Mermaid diagram output
-bunx @qwadratic/deepwiki-cli query "Show how hooks execute" -r facebook/react -m codemap --mermaid \
-  | jq -rj '.. | objects | select(.type? == "chunk" or .type? == "summary_chunk") | .data? // empty' > diagram.mmd
-```
-
-Returns structured code traces with exact file locations. Use when you need to understand data flow, execution paths, or internal call chains.
-
-#### Multi-repo query
-
-```bash
-bunx @qwadratic/deepwiki-cli query "Compare middleware approaches" -r expressjs/express -r koajs/koa -m deep \
-  | jq -rj '.. | objects | select(.type? == "chunk" or .type? == "summary_chunk") | .data? // empty'
-```
-
-Queries multiple repos in a single call. Use when understanding how two libraries approach the same problem.
-
-#### Thread follow-up
-
-```bash
-# First query — note the query ID in the output JSON
-bunx @qwadratic/deepwiki-cli query "How does auth work?" -r supabase/supabase -m deep \
-  | tee /tmp/dw-response.json \
-  | jq -rj '.. | objects | select(.type? == "chunk" or .type? == "summary_chunk") | .data? // empty'
-
-# Follow-up using the same thread
-bunx @qwadratic/deepwiki-cli query "How does token refresh specifically work?" -r supabase/supabase --id <query-id-from-above> \
-  | jq -rj '.. | objects | select(.type? == "chunk" or .type? == "summary_chunk") | .data? // empty'
-```
-
-Reuses the research context from the previous query. Use when the first answer raises a follow-up — it is faster and more contextual than starting a new thread.
-
-#### Additional context
-
-```bash
-bunx @qwadratic/deepwiki-cli query "How should I structure this?" -r prisma/prisma -m deep \
-  -c "I am using a multi-tenant SaaS with row-level security" \
-  | jq -rj '.. | objects | select(.type? == "chunk" or .type? == "summary_chunk") | .data? // empty'
-```
-
-Injects extra context into the query. Use when your specific use case might affect the answer.
-
-### Flags reference
-
-| Flag | Description |
+| Mode | When to use |
 |---|---|
-| `-r, --repo <owner/repo>` | Repo to query. Repeatable for multi-repo queries. Required. |
-| `-m, --mode <mode>` | `deep` \| `fast` \| `codemap` (default: `deep`) |
-| `--id <queryId>` | Thread follow-up: reuse a previous query ID |
-| `-c, --context <text>` | Additional context injected into the query |
-| `--mermaid` | Output Mermaid diagram (codemap mode only) |
-| `-s, --stream` | Stream response chunks as NDJSON via WebSocket |
-| `--no-summary` | Disable summary generation |
-
-### Response format
-
-The CLI outputs a **single JSON object** to stdout. The actual schema is:
-
-```json
-{
-  "title": "...",
-  "queries": [
-    {
-      "message_id": "...",
-      "user_query": "...",
-      "engine_id": "...",
-      "repos": [{ "name": "owner/repo", "branch": "main" }],
-      "response": [
-        { "type": "file_contents", "data": ["vitejs/vite", "packages/vite/src/node/plugin.ts", "...source..."] },
-        { "type": "chunk",         "data": "# Vite Plugin Lifecycle\n\n..." },
-        { "type": "chunk",         "data": "Continuation of answer..." },
-        { "type": "reference",     "data": { "file_path": "...", "range_start": 41, "range_end": 133 } },
-        { "type": "summary_chunk", "data": "Summary text..." },
-        { "type": "summary_done",  "data": null },
-        { "type": "done",          "data": null }
-      ]
-    }
-  ]
-}
-```
-
-- `file_contents` — source files DeepWiki retrieved as context; `data` is `[repoName, filePath, sourceCode]`
-- `chunk` / `summary_chunk` — the actual answer prose, split across multiple entries; concatenate to read
-- `reference` — file + line range citations backing specific claims
-- `summary_done` / `done` — terminal markers; ignore
-
-### Extracting the answer
-
-**Always pipe through jq.** The raw JSON is unreadable without it. Use the recursive descent operator `..` so the extraction is robust to any future schema changes:
-
-```bash
-# Extract and concatenate all answer prose
-bunx @qwadratic/deepwiki-cli query "How does the plugin lifecycle work?" \
-  -r vitejs/vite -m deep \
-  | jq -rj '.. | objects | select(.type? == "chunk" or .type? == "summary_chunk") | .data? // empty'
-
-# List source files used as context
-bunx @qwadratic/deepwiki-cli query "How does auth work?" -r supabase/supabase -m deep \
-  | jq -r '.. | objects | select(.type? == "file_contents") | .data[1]? // empty'
-```
-
-### Management commands
-
-Use these before querying an unfamiliar or recently updated repo:
-
-```bash
-# Check if a repo is indexed before querying it
-bunx @qwadratic/deepwiki-cli status facebook/react
-
-# Search for indexed repos matching a keyword
-bunx @qwadratic/deepwiki-cli list react | jq '.indices[].repo_name'
-
-# Pre-warm a repo's index (throttled to once per 10 min server-side)
-bunx @qwadratic/deepwiki-cli warm withastro/starlight
-
-# Retrieve a previous query result by ID
-bunx @qwadratic/deepwiki-cli get <queryId>
-```
-
-### Modes at a glance
-
-| Mode | Engine | When to use |
-|---|---|---|
-| `deep` | Agentic research loop | Default for all implementation questions |
-| `fast` | Multi-hop RAG | Quick orientation only — never for implementation |
-| `codemap` | Structured code trace | Architecture, data flow, execution paths |
-
-### Environment variables
-
-| Variable | Default | Description |
-|---|---|---|
-| `DEEPWIKI_API_URL` | `https://api.devin.ai` | Override API base URL |
+| `deep` (default) | All implementation questions — runs an agentic research loop |
+| `fast` | Quick orientation only — multi-hop RAG, never for implementation |
+| `codemap` | Architecture, data flow, execution paths — returns file-located traces |
 
 ---
 
 ## Mode 2 — MCP (Fallback)
 
-Use when the CLI is unavailable (no shell access, bunx/npx not configured, or the CLI is broken by an upstream API change).
+Use when the CLI scripts are unavailable (no shell access, `bunx` not configured, or upstream API breakage).
 
 ### Setup
 
@@ -239,13 +148,11 @@ Use when the CLI is unavailable (no shell access, bunx/npx not configured, or th
 }
 ```
 
-Alternate endpoint if SSE fails: `https://mcp.deepwiki.com/mcp`
-
-No API key or local installation required.
+Alternate endpoint if SSE fails: `https://mcp.deepwiki.com/mcp`. No API key required.
 
 ### MCP tools
 
-#### `ask_question` — use this when falling back to MCP
+#### `ask_question` — primary MCP tool
 
 ```
 mcp__deepwiki__ask_question({
@@ -272,15 +179,15 @@ mcp__deepwiki__read_wiki_contents({ repoName: "owner/repo", topic: "authenticati
 
 ### MCP limitations vs CLI
 
-| Capability | CLI | MCP |
+| Capability | CLI scripts | MCP |
 |---|---|---|
-| Deep (agentic) mode | ✅ `-m deep` | ❌ |
-| Codemap mode | ✅ `-m codemap` | ❌ |
-| Multi-repo query | ✅ multiple `-r` flags | ❌ |
+| Deep (agentic) mode | ✅ `--mode deep` | ❌ |
+| Codemap mode | ✅ `--mode codemap` | ❌ |
+| Multi-repo query | ✅ multiple repos | ❌ |
 | Thread follow-up | ✅ `--id` | ❌ |
-| Repo index status check | ✅ `status` command | ❌ |
-| Context injection | ✅ `-c` flag | ❌ |
-| Structured output | ✅ JSON + jq | ❌ |
+| Repo index status | ✅ `dw-status.sh` | ❌ |
+| Context injection | ✅ `--context` | ❌ |
+| Source file listing | ✅ `dw-sources.sh` | ❌ |
 
 ---
 
@@ -288,12 +195,12 @@ mcp__deepwiki__read_wiki_contents({ repoName: "owner/repo", topic: "authenticati
 
 | Situation | Use |
 |---|---|
-| Implementing something using a library | CLI `-m deep` |
-| Understanding architecture or call flow | CLI `-m codemap` |
-| Quick orientation (what is this repo?) | CLI `-m fast` |
-| Following up on a previous answer | CLI `--id <prev-id>` |
-| Your use case changes the answer | CLI `-c "context here"` |
-| Comparing two libraries | CLI with multiple `-r` flags |
+| Implementing something using a library | `dw-query.sh` (default deep mode) |
+| Understanding architecture or call flow | `dw-query.sh --mode codemap` |
+| Discovering which files implement a feature | `dw-sources.sh` |
+| Quick orientation only | `dw-query.sh --mode fast` |
+| Following up on a previous answer | `dw-query.sh --id <prev-id>` |
+| Comparing two libraries | `dw-query.sh` with multiple repos |
 | CLI is unavailable | MCP `ask_question` |
 | Browsing docs without a specific question | MCP `read_wiki_structure` → `read_wiki_contents` |
 
@@ -301,7 +208,7 @@ mcp__deepwiki__read_wiki_contents({ repoName: "owner/repo", topic: "authenticati
 
 ## Resolving Repo Names
 
-The `-r` flag and MCP `repoName` both require exact `owner/repo` format.
+The scripts require exact `owner/repo` format.
 
 ### Step 1 — Check UPSTREAM_REPOS.md first
 
@@ -311,7 +218,7 @@ The project maintains `./UPSTREAM_REPOS.md` mapping technologies to their canoni
 
 1. Search the web for `{technology name} github`
 2. Confirm the repo is official (org ownership, stars, README)
-3. Run `npx @qwadratic/deepwiki-cli status {owner}/{repo}` to verify it is indexed before querying
+3. Run `./scripts/dw-status.sh {owner}/{repo}` to verify it is indexed before querying
 
 ### Step 3 — Update UPSTREAM_REPOS.md
 
@@ -321,7 +228,7 @@ After successfully querying a new technology, **add it to UPSTREAM_REPOS.md**:
 | {display name}   | {owner}/{repo}           | {optional notes}         |
 ```
 
-Add a note when the repo name is non-obvious, when a sub-package matters more than the root, or when you had to run `warm` to trigger indexing.
+Add a note when the repo name is non-obvious, when a sub-package matters more than the root, or when you had to run `dw-status.sh --warm` to trigger indexing.
 
 ---
 
@@ -335,7 +242,7 @@ Specific, action-oriented questions produce better answers in all modes.
 | "Tell me about plugins" | "What is the lifecycle order of plugin hooks, and which run during build phase only?" |
 | "How do I use this?" | "What is the minimal config needed to serve static files with custom cache headers?" |
 
-Include version context when you know it: *"In v4, how does..."* Use `-c` to add project-specific context when your use case could affect the answer.
+Include version context when you know it: *"In v4, how does..."* Use `--context` to add project-specific context when your use case could affect the answer.
 
 ---
 
@@ -346,19 +253,22 @@ Include version context when you know it: *"In v4, how does..."* Use `-c` to add
 
 2. If not found:
    - Search for the canonical GitHub repo
-   - Run: npx @qwadratic/deepwiki-cli status {owner}/{repo}
-   - If not indexed, run: npx @qwadratic/deepwiki-cli warm {owner}/{repo}
+   - Run: ./scripts/dw-status.sh {owner}/{repo}
+   - If not indexed, run: ./scripts/dw-status.sh {owner}/{repo} --warm
    - Note to update UPSTREAM_REPOS.md after use
 
 3. Query with deep mode (default):
-   npx @qwadratic/deepwiki-cli query "..." -r {owner}/{repo} -m deep
+   ./scripts/dw-query.sh "..." {owner}/{repo}
 
-4. If the answer raises follow-up questions, thread them:
-   npx @qwadratic/deepwiki-cli query "..." -r {owner}/{repo} --id <prev-id>
+4. Optionally list the source files DeepWiki used:
+   ./scripts/dw-sources.sh "..." {owner}/{repo}
 
-5. Write code based on the grounded answer, not on memory.
+5. If the answer raises follow-up questions, thread them:
+   ./scripts/dw-query.sh "..." {owner}/{repo} --id <prev-id>
 
-6. Update UPSTREAM_REPOS.md with the new entry.
+6. Write code based on the grounded answer, not on memory.
+
+7. Update UPSTREAM_REPOS.md with the new entry.
 ```
 
 ---
@@ -367,11 +277,11 @@ Include version context when you know it: *"In v4, how does..."* Use `-c` to add
 
 | Mistake | Correct behaviour |
 |---|---|
-| Using MCP when the CLI works | CLI is primary; MCP is the fallback |
-| Using `-m fast` for implementation work | Default to `-m deep`; fast is for orientation only |
+| Using MCP when the CLI works | CLI scripts are primary; MCP is the fallback |
+| Using `--mode fast` for implementation work | Default to `deep`; fast is for orientation only |
 | Starting a new query when a follow-up would do | Use `--id` to thread on the previous result |
-| Not checking `status` before querying an obscure repo | Run `status` first; `warm` if not indexed |
-| Guessing the repo name | Check UPSTREAM_REPOS.md, then verify with `status` |
+| Not checking `dw-status.sh` before querying an obscure repo | Run `dw-status.sh` first; `--warm` if not indexed |
+| Guessing the repo name | Check UPSTREAM_REPOS.md, then verify with `dw-status.sh` |
 | Skipping UPSTREAM_REPOS.md update | Always update it after a new technology is used |
 
 ---
@@ -390,8 +300,43 @@ Update this file whenever you start using a new external tool or library.
 
 | Technology          | Upstream repo                  | Use for                                  |
 |---------------------|--------------------------------|------------------------------------------|
-<!-- Add entries below, one per row -->
+<!-- Add entries below, one row per technology -->
 ```
+
+---
+
+## Advanced Mode — Raw CLI
+
+If you need to go beyond what the wrapper scripts provide (streaming, custom `jq` pipelines, saving raw JSON), call the CLI directly:
+
+```bash
+# Stream response as NDJSON
+bunx @qwadratic/deepwiki-cli query "What is React?" -r facebook/react --stream
+
+# Save full raw JSON for inspection
+bunx @qwadratic/deepwiki-cli query "How does routing work?" -r vitejs/vite -m deep \
+  > /tmp/dw-raw.json
+
+# Extract answer from raw JSON
+jq -rj '.. | objects | select(.type? == "chunk" or .type? == "summary_chunk") | .data? // empty' \
+  /tmp/dw-raw.json
+
+# Inspect the full response schema
+bunx @qwadratic/deepwiki-cli query "..." -r vitejs/vite -m fast \
+  | jq 'paths | map(tostring) | join(".")' | head -50
+
+# Retrieve a previous query by ID
+bunx @qwadratic/deepwiki-cli get <queryId>
+
+# Search indexed repos
+bunx @qwadratic/deepwiki-cli list react | jq '.indices[].repo_name'
+```
+
+The raw response schema under `.queries[0].response[]`:
+- `file_contents` — `data` is `[repoName, filePath, sourceCode]`
+- `chunk` / `summary_chunk` — answer prose split across entries; concatenate `.data`
+- `reference` — `{ file_path, range_start, range_end }` citation
+- `summary_done` / `done` — terminal markers; ignore
 
 ---
 

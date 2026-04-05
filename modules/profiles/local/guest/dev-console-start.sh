@@ -10,7 +10,6 @@ fi
 target=@WORKSPACE_MOUNT@
 session_mode=shell
 agent_command=@AGENT_COMMAND@
-agent_tools_mount=@AGENT_TOOLS_MOUNT@
 guest_state_dir=/run/firebreak-worker
 command_state_local=$guest_state_dir/command-state.json
 command_state_shared=@AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
@@ -75,14 +74,6 @@ if ! [ -r "$command_shell_init_file" ]; then
   command_shell_init_file=""
 fi
 
-case "$session_mode:$agent_command" in
-  agent-attach-exec:codex|agent:codex)
-    if [ -x "$agent_tools_mount/.bun/bin/codex" ]; then
-      agent_command="$agent_tools_mount/.bun/bin/codex"
-    fi
-    ;;
-esac
-
 if [ -r "$session_term_state_file" ]; then
   TERM=$(cat "$session_term_state_file")
   export TERM
@@ -104,41 +95,6 @@ if [ ! -d "$target" ]; then
 fi
 
 cd "$target"
-
-prepare_codex_command_wrapper() {
-  codex_runtime_dir=$guest_state_dir/codex
-  codex_home_dir=$codex_runtime_dir/home
-  codex_sqlite_dir=$codex_runtime_dir/sqlite
-  codex_config_dir=$codex_home_dir/.codex
-  codex_wrapper_path=$codex_runtime_dir/command.sh
-  mkdir -p "$codex_config_dir" "$codex_sqlite_dir"
-  cat >"$codex_config_dir/config.toml" <<EOF
-check_for_update_on_startup = false
-cli_auth_credentials_store = "ephemeral"
-
-[tui]
-alternate_screen = "never"
-EOF
-  cat >"$codex_wrapper_path" <<EOF
-#!/usr/bin/env bash
-set -eu
-export HOME='$(printf '%s' "$codex_home_dir" | sed "s/'/'\\\\''/g")'
-export CODEX_HOME='$(printf '%s' "$codex_config_dir" | sed "s/'/'\\\\''/g")'
-export CODEX_CONFIG_DIR='$(printf '%s' "$codex_config_dir" | sed "s/'/'\\\\''/g")'
-export CODEX_SQLITE_HOME='$(printf '%s' "$codex_sqlite_dir" | sed "s/'/'\\\\''/g")'
-mkdir -p "\$CODEX_HOME" "\$CODEX_SQLITE_HOME"
-cd '$(printf '%s' "$target" | sed "s/'/'\\\\''/g")'
-exec '$(printf '%s' "$agent_tools_mount/.bun/bin/codex" | sed "s/'/'\\\\''/g")' --no-alt-screen
-EOF
-  chmod 0444 "$codex_wrapper_path"
-  agent_command="@BASH@ $(printf '%s' "$codex_wrapper_path" | sed "s/'/'\\\\''/g")"
-}
-
-case "$session_mode:$agent_command" in
-  agent-attach-exec:"$agent_tools_mount"/.bun/bin/codex|agent:"$agent_tools_mount"/.bun/bin/codex)
-    prepare_codex_command_wrapper
-    ;;
-esac
 
 show_session_banner=1
 case "$session_mode" in

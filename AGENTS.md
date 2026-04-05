@@ -92,6 +92,8 @@ Pull requests should include:
 - exact commands used for validation
 - boot logs or console output when changing services, mounts, or login behavior
 
+Every PR that changes behaviour must include a documentation update. No code merge without a corresponding docs change if the public interface or user behaviour changes.
+
 ## Agent-Specific Instructions
 
 Prefer `mcp__deepwiki__ask_question` early when behavior is unclear, especially for `microvm.nix` option semantics, runner behavior, or systemd interactions. Use it as a default aid before guessing from memory.

@@ -137,6 +137,7 @@ local_controller_record_runtime_dir() {
   printf '%s\n' "${BASHPID:-$$}" > "$local_controller_pid_file"
 }
 
+# shellcheck disable=SC2329
 local_controller_clear_state() {
   local_controller_prepare_state
   rm -f "$local_controller_pid_file" "$local_controller_runtime_dir_file" "$local_controller_build_id_file"
@@ -155,6 +156,7 @@ local_controller_dispatch_lock_pid_is_alive() {
   kill -0 "$local_controller_lock_pid" 2>/dev/null
 }
 
+# shellcheck disable=SC2329
 local_controller_release_dispatch_lock() {
   local_controller_prepare_state
   if [ -d "$local_controller_dispatch_lock_dir" ]; then

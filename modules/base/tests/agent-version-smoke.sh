@@ -56,6 +56,7 @@ EOF
   exec "$@"
 )
 
+set +e
 output=$(
   run_with_clean_firebreak_env \
     FIREBREAK_DEBUG_KEEP_RUNTIME=1 \
@@ -63,6 +64,14 @@ output=$(
     FIREBREAK_TMPDIR="$runtime_root" \
     @AGENT_PACKAGE_BIN@ --version 2>&1
 )
+command_status=$?
+set -e
+
+if [ "$command_status" -ne 0 ]; then
+  printf '%s\n' "$output" >&2
+  echo "@AGENT_DISPLAY_NAME@ version smoke command failed" >&2
+  exit "$command_status"
+fi
 
 case "$output" in
   *[0-9].[0-9]* | *[0-9].[0-9].[0-9]*)

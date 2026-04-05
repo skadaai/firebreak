@@ -1,7 +1,8 @@
 cloud_hypervisor_setup_local_network() {
   [ "$runtime_backend" = "cloud-hypervisor" ] || return 0
-  case "@HOST_SYSTEM@" in
-    *-linux) ;;
+  host_kernel=$(uname -s 2>/dev/null || printf '%s' unknown)
+  case "$host_kernel" in
+    Linux) ;;
     *)
       echo "cloud-hypervisor local networking is supported only on Linux hosts" >&2
       exit 1
@@ -17,6 +18,7 @@ cloud_hypervisor_setup_local_network() {
   export MICROVM_CLOUD_HYPERVISOR_TAP_INTERFACE=$cloud_hypervisor_tap_interface
 }
 
+# shellcheck disable=SC2329
 cloud_hypervisor_cleanup_local_network() {
   if [ -n "${cloud_hypervisor_proxy_pids:-}" ]; then
     for proxy_pid in $cloud_hypervisor_proxy_pids; do

@@ -342,6 +342,7 @@ rec {
         coreutils
         git
         gnused
+        nix
       ];
       text = builtins.readFile ../../modules/base/host/dev-flow-workspace.sh;
     };

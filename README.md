@@ -37,7 +37,7 @@ Use one workspace per spec line. Reuse that workspace for sequential work on the
 
 ## Agent Workflow
 
-This branch uses a `dev-flow-*` internal skill surface for autonomous work. Start with [dev-flow-autonomous-flow](./.agents/skills/dev-flow-autonomous-flow/SKILL.md), then let it route into the narrower skills for spec selection, workspace choice, boundaries, validation, and review.
+This repository uses a `dev-flow-*` internal skill surface for autonomous work. Start with [dev-flow-autonomous-flow](./.agents/skills/dev-flow-autonomous-flow/SKILL.md), then let it route into the narrower skills for spec selection, workspace choice, boundaries, validation, and review.
 
 The corresponding profile layer under [`.agents/profiles/`](./.agents/profiles) is also aligned to the new names:
 

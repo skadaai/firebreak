@@ -11,7 +11,7 @@ Firebreak is converging on a human-facing control plane, but its user-facing con
 
 Today, local launch behavior is controlled mostly through environment variables, there is no project-local defaults file, there is no `firebreak init` bootstrap, and there is no `firebreak doctor` command that explains the resolved state before launch.
 
-At the same time, Firebreak also uses many internal environment variables for task, validation, loop, and cloud-job plumbing. If those are not separated from the user-facing surface, the product contract will drift and users will not know which knobs are stable.
+At the same time, Firebreak also uses many internal environment variables for dev-flow workspace, validation, loop, and cloud-job plumbing. If those are not separated from the user-facing surface, the product contract will drift and users will not know which knobs are stable.
 
 Without a defined config and diagnostics contract, operators have to memorize implementation details, copy shell snippets by hand, and debug launch surprises after the fact instead of before the fact.
 
@@ -66,7 +66,7 @@ The intended landing shape is:
 - When both a real environment variable and the project defaults file define the same supported key, the system shall give precedence to the real environment variable.
 - When the project defaults file contains an unsupported key, the system shall ignore that key rather than treating it as part of the public Firebreak config contract.
 - The system shall define an allowlist of documented user-facing keys that may be loaded from the project defaults file.
-- The system shall not treat internal plumbing variables for task, validation, loop, or cloud-job execution as part of the project defaults contract.
+- The system shall not treat internal plumbing variables for dev-flow workspace, validation, loop, or cloud-job execution as part of the project defaults contract.
 - When resolving local workload config for Codex, the system shall give precedence to `CODEX_*` selectors over generic `AGENT_*` selectors for Codex-specific behavior.
 - When resolving local workload config for Claude Code, the system shall give precedence to `CLAUDE_*` selectors over generic `AGENT_*` selectors for Claude-specific behavior.
 - The system shall use `host`, `workspace`, `vm`, and `fresh` as the public config-mode vocabulary for local workload config resolution.

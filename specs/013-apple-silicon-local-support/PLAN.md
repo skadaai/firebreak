@@ -64,7 +64,7 @@ This MVP is intentionally narrower than full platform parity. It is the first pr
 
 ## Current status
 
-Implemented in the bounded workspace checkout, with flake evaluation and launcher smoke validation completed. Real Apple Silicon runtime validation on hardware remains open.
+Implemented in the workspace checkout, with flake evaluation and launcher smoke validation completed. Real Apple Silicon runtime validation on hardware remains open.
 
 ## Open questions
 

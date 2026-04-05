@@ -63,28 +63,47 @@ require_primary_checkout() {
   fi
 }
 
+workspace_sync_is_excluded_path() {
+  case "$1" in
+    .codex|.codex/*|.claude|.claude/*|.direnv|.direnv/*|.agent-sandbox.env|result|result/*|*.img|*.socket)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 sync_primary_checkout_to_workspace() {
   repo_root=$1
   target_workspace=$2
+  sync_tmp_root=$(mktemp -d "${TMPDIR:-/tmp}/dev-flow-workspace-sync.XXXXXX")
+  source_set_root=$sync_tmp_root/source-set
 
   (
+    trap 'rm -rf "$sync_tmp_root"' EXIT INT TERM
     cd "$repo_root"
-
-    git ls-files --deleted -z |
-      while IFS= read -r -d '' path; do
-        rm -f "$target_workspace/$path"
-      done
 
     git ls-files --cached --modified --others --exclude-standard -z |
       while IFS= read -r -d '' path; do
-        case "$path" in
-          .codex|.codex/*|.claude|.claude/*|.direnv|.direnv/*|.agent-sandbox.env|result|result/*|*.img|*.socket)
-            continue
-            ;;
-        esac
+        if workspace_sync_is_excluded_path "$path"; then
+          continue
+        fi
 
+        mkdir -p "$source_set_root/$(dirname "$path")"
+        : >"$source_set_root/$path"
         mkdir -p "$(dirname "$target_workspace/$path")"
         cp -a "$path" "$target_workspace/$path"
+      done
+
+    git -C "$target_workspace" ls-files -z |
+      while IFS= read -r -d '' path; do
+        if workspace_sync_is_excluded_path "$path"; then
+          continue
+        fi
+        if ! [ -e "$source_set_root/$path" ]; then
+          rm -f "$target_workspace/$path"
+        fi
       done
   )
 }
@@ -181,6 +200,32 @@ write_metadata() {
   emit_metadata >"$metadata_path"
 }
 
+rollback_workspace_creation() {
+  if [ "${create_workspace_success:-0}" = "1" ]; then
+    return 0
+  fi
+
+  if [ -n "${workspace_path:-}" ] && [ -e "$workspace_path" ]; then
+    if [ "${worktree_registered:-0}" = "1" ] && [ -n "${repo_root:-}" ]; then
+      git -C "$repo_root" worktree remove --force "$workspace_path" >/dev/null 2>&1 || rm -rf "$workspace_path"
+    else
+      rm -rf "$workspace_path"
+    fi
+  fi
+
+  if [ -n "${workspace_shared_root:-}" ] && [ -e "$workspace_shared_root" ]; then
+    rm -rf "$workspace_shared_root"
+  fi
+
+  if [ -n "${workspace_state_root:-}" ] && [ -e "$workspace_state_root" ]; then
+    rm -rf "$workspace_state_root"
+  fi
+
+  if [ -n "${runtime_root:-}" ] && [ -e "$runtime_root" ]; then
+    rm -rf "$runtime_root"
+  fi
+}
+
 create_workspace() {
   workspace_id=""
   branch=""
@@ -257,12 +302,29 @@ create_workspace() {
   fi
 
   workspace_shared_root=$shared_root/shared/$workspace_id
+  validation_root=""
+  runtime_root=""
+  vm_state_root=""
+  artifact_root=""
+  tmp_root=""
+  cloud_state_root=""
+  primary_checkout=""
+  created_at=""
+  status=""
+  reuse_or_create=""
+  shared_path_constraints=""
+  disposition=""
+  closed_at=""
+  worktree_registered=0
+  create_workspace_success=0
+  trap 'rollback_workspace_creation' EXIT INT TERM
 
   DEV_FLOW_STATE_DIR="$state_dir" \
     DEV_FLOW_WORKSPACE_ROOT="$workspace_root" \
     DEV_FLOW_SHARED_ROOT="$workspace_shared_root" \
     DEV_FLOW_BASE_REF="$base_ref" \
     "$repo_root/scripts/new-worktree.sh" "$branch" "$workspace_id" >/dev/null
+  worktree_registered=1
   sync_primary_checkout_to_workspace "$repo_root" "$workspace_path"
 
   validation_root=$workspace_state_root/validation
@@ -282,7 +344,8 @@ create_workspace() {
 
   write_metadata
   printf '%s\n' "$base_ref" >"$workspace_state_root/base-ref"
-
+  create_workspace_success=1
+  trap - EXIT INT TERM
   cat "$metadata_path"
 }
 
@@ -411,12 +474,18 @@ close_workspace() {
   fi
 
   load_workspace "$workspace_id"
+  final_disposition_path=$workspace_state_root/review/final-disposition.json
+  if [ "$status" = "closed" ] && { [ -n "$closed_at" ] || [ -f "$final_disposition_path" ]; }; then
+    cat "$metadata_path"
+    return 0
+  fi
+
   status="closed"
   disposition=$requested_disposition
   closed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   write_metadata
 
-  cat >"$workspace_state_root/review/final-disposition.json" <<EOF
+  cat >"$final_disposition_path" <<EOF
 {
   "workspace_id": "$(json_escape "$workspace_id")",
   "disposition": "$(json_escape "$disposition")",

@@ -100,7 +100,7 @@ Prefer `mcp__deepwiki__ask_question` early when behavior is unclear, especially 
 
 Check [`UPSTREAM_REPOS.md`](./UPSTREAM_REPOS.md) first when choosing which upstream repository to query with `ask_question`.
 
-For non-trivial autonomous work in this branch, prefer the `dev-flow` workflow surface over ad hoc task language:
+For non-trivial autonomous work in this repository, prefer the `dev-flow` workflow surface over ad hoc task language:
 
 - Start from [`dev-flow-autonomous-flow`](./.agents/skills/dev-flow-autonomous-flow/SKILL.md) when the work spans spec selection, workspace choice, validation, and review.
 - Use one workspace per spec line. Reuse it for sequential work on the same spec, and start another workspace when the work moves to a different spec or unrelated maintenance line.

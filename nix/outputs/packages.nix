@@ -5,6 +5,7 @@
   lib,
   localVmArtifacts,
   mkWorkloadPackage,
+  mkWorkloadWarmReuseSmokePackage,
   mkWorkloadVersionSmokePackage,
   mkCloudJobPackage,
   mkCloudSmokePackage,
@@ -55,6 +56,12 @@
 
   firebreak-test-smoke-codex-version = mkWorkloadVersionSmokePackage {
     name = "firebreak-test-smoke-codex-version";
+    agentPackage = "firebreak-codex";
+    agentDisplayName = "Codex";
+  };
+
+  firebreak-test-smoke-codex-warm-reuse = mkWorkloadWarmReuseSmokePackage {
+    name = "firebreak-test-smoke-codex-warm-reuse";
     agentPackage = "firebreak-codex";
     agentDisplayName = "Codex";
   };

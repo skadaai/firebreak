@@ -25,10 +25,11 @@ Executing the Linux local runtime replacement and cold-boot reduction slices.
 - Linux local now has a private warm instance controller and guest command-agent mode for repeated `agent-exec` reuse
 - warm local controller requests are now serialized per instance, stale warm daemons are invalidated on build changes, and controller lifecycle tracing exists in the wrapper logs
 - the runtime now has a cheap host-side warm-controller smoke suite that can be run through flake checks and internal validation without booting a VM
+- the runtime now also exposes a real `test-smoke-codex-warm-reuse` suite for repeated stable local commands against one controller-owned VM lifetime
 
 ## What remains open
 
-- validation and hardening of the new warm local `agent-exec` path
+- execution and hardening of the new warm local `agent-exec` reuse smoke on a prepared Linux host
 - warm attached command dispatch for `agent-attach-exec`
 - snapshot preparation and restore on the local Cloud Hypervisor backend
 - deletion of remaining stale runtime assumptions and warnings that no longer fit the accepted backend contract

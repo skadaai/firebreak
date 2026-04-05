@@ -14,6 +14,7 @@ Named suites:
   test-smoke-local-controller
   test-smoke-codex
   test-smoke-codex-version
+  test-smoke-codex-warm-reuse
   test-smoke-claude-code
 @CLOUD_SUITE_USAGE@
 EOF
@@ -102,6 +103,9 @@ case "$suite_name" in
     ;;
   test-smoke-codex-version)
     suite_command="@CODEX_VERSION_BIN@"
+    ;;
+  test-smoke-codex-warm-reuse)
+    suite_command="@CODEX_WARM_REUSE_BIN@"
     ;;
   test-smoke-claude-code)
     suite_command="@CLAUDE_SMOKE_BIN@"

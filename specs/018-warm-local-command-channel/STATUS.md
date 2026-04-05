@@ -20,10 +20,11 @@ Executing the warm local command-channel slices.
 - warm controller reuse is now build-aware; stale daemons from older Firebreak builds are stopped instead of being silently reused
 - warm controller lifecycle now emits explicit wrapper trace events for spawn, readiness, dispatch, locking, and stale-build replacement
 - a cheap host-side `test-smoke-local-controller` suite now exercises the controller lock and stale-build invalidation without requiring a VM boot
+- the repo now has a real `test-smoke-codex-warm-reuse` suite for the stable local path, asserting repeated commands reuse one controller/runtime instead of silently rotating to a new instance
 
 ## What remains open
 
-- validation and hardening of the new warm controller path under real VM smoke
+- execution of the new warm-reuse smoke on a prepared Linux host with Cloud Hypervisor networking permissions
 - attached warm command dispatch; `agent-attach-exec` still follows the older one-shot path
 - snapshot prepare/restore against a ready command-agent state
 

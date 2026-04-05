@@ -71,6 +71,7 @@
             hostIsLinux
             lib
             mkWorkloadPackage
+            mkWorkloadWarmReuseSmokePackage
             mkWorkloadVersionSmokePackage
             mkCloudJobPackage
             mkCloudSmokePackage

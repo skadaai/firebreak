@@ -13,6 +13,7 @@
   firebreak-interactive-echo-system = localVmArtifacts.firebreak-interactive-echo.nixosConfiguration.config.system.build.toplevel;
   firebreak-test-smoke-firebreak-cli-surface = self.packages.${system}.firebreak-test-smoke-firebreak-cli-surface;
   firebreak-test-smoke-worker-proxy-script = self.packages.${system}.firebreak-test-smoke-worker-proxy-script;
+  firebreak-test-smoke-local-controller = self.packages.${system}.firebreak-test-smoke-local-controller;
   firebreak-test-smoke-npx-launcher = self.packages.${system}.firebreak-test-smoke-npx-launcher;
   firebreak-test-smoke-project-config-and-doctor = self.packages.${system}.firebreak-test-smoke-project-config-and-doctor;
   firebreak-test-smoke-internal-loop = self.packages.${system}.firebreak-test-smoke-internal-loop;

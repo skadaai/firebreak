@@ -239,6 +239,19 @@ rec {
       } ../../modules/base/tests/test-smoke-worker-proxy-script.sh;
     };
 
+  mkLocalControllerSmokePackage = { name }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        bash
+        coreutils
+        gnused
+      ];
+      text = renderTemplate {
+        "@LOCAL_CONTROLLER_LIB@" = builtins.toString ../../modules/profiles/local/host/local-instance-controller.sh;
+      } ../../modules/profiles/local/tests/test-smoke-local-controller.sh;
+    };
+
   mkCloudJobPackage = {
     name,
     runnerName,

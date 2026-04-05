@@ -78,6 +78,7 @@
             mkToolCredentialSlotSmokePackage
             mkFirebreakCliSurfaceSmokePackage
             mkWorkerFirebreakBridgeProbePackage
+            mkLocalControllerSmokePackage
             mkFirebreakCliPackage
             mkLoopPackage
             mkLoopSmokePackage

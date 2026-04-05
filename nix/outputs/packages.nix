@@ -12,6 +12,7 @@
   mkToolCredentialSlotSmokePackage,
   mkFirebreakCliSurfaceSmokePackage,
   mkWorkerFirebreakBridgeProbePackage,
+  mkLocalControllerSmokePackage,
   mkFirebreakCliPackage,
   mkLoopPackage,
   mkLoopSmokePackage,
@@ -127,6 +128,10 @@
 
   firebreak-test-smoke-worker-proxy-script = mkWorkerProxyScriptSmokePackage {
     name = "firebreak-test-smoke-worker-proxy-script";
+  };
+
+  firebreak-test-smoke-local-controller = mkLocalControllerSmokePackage {
+    name = "firebreak-test-smoke-local-controller";
   };
 
   firebreak-internal-validate = mkValidationPackage {

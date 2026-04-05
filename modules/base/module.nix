@@ -256,7 +256,7 @@ in {
                 };
 
                 realBinName = mkOption {
-                  type = types.str;
+                  type = types.strMatching "[A-Za-z0-9][A-Za-z0-9._+-]*";
                   default = name;
                   description = "Real binary name in the per-user local bin directory.";
                 };
@@ -268,12 +268,12 @@ in {
                 };
 
                 selectorPrefix = mkOption {
-                  type = types.str;
+                  type = types.strMatching "[A-Z][A-Z0-9_]*";
                   description = "Prefix for Firebreak selector vars such as CODEX or CLAUDE.";
                 };
 
                 configSubdir = mkOption {
-                  type = types.str;
+                  type = types.strMatching "[A-Za-z0-9][A-Za-z0-9._-]*";
                   description = "Stable subdirectory name inside the resolved shared state root.";
                 };
 
@@ -297,13 +297,13 @@ in {
                         type = types.listOf (types.submodule ({ config, ... }: {
                           options = {
                             slotPath = mkOption {
-                              type = types.str;
+                              type = types.strMatching "[^\t\n]+";
                               default = config.runtimePath;
                               description = "Relative file path inside the selected slot. Defaults to runtimePath.";
                             };
 
                             runtimePath = mkOption {
-                              type = types.str;
+                              type = types.strMatching "[^\t\n]+";
                               description = "Relative file path inside the resolved runtime state root.";
                             };
 
@@ -328,13 +328,13 @@ in {
                         type = types.listOf (types.submodule ({ config, ... }: {
                           options = {
                             slotPath = mkOption {
-                              type = types.str;
+                              type = types.strMatching "[^\t\n]+";
                               default = config.envVar;
                               description = "Relative file path inside the selected slot. Defaults to envVar.";
                             };
 
                             envVar = mkOption {
-                              type = types.str;
+                              type = types.strMatching "[A-Z][A-Z0-9_]*";
                               description = "Env var populated from the slot file content.";
                             };
 
@@ -353,17 +353,17 @@ in {
                         type = types.listOf (types.submodule ({ ... }: {
                           options = {
                             slotPath = mkOption {
-                              type = types.str;
+                              type = types.strMatching "[^\t\n]+";
                               description = "Relative file path inside the selected slot.";
                             };
 
                             helperName = mkOption {
-                              type = types.str;
+                              type = types.strMatching "[A-Za-z0-9][A-Za-z0-9._+-]*";
                               description = "Generated helper script name.";
                             };
 
                             envVar = mkOption {
-                              type = types.str;
+                              type = types.strMatching "[A-Z][A-Z0-9_]*";
                               description = "Env var pointing at the generated helper script.";
                             };
 

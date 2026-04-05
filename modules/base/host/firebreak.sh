@@ -46,11 +46,21 @@ EOF
 
 firebreak_run_nix() {
   stderr_log=$(mktemp "${TMPDIR:-/tmp}/firebreak-nix-stderr.XXXXXX")
-  if "$@" 2> >(tee "$stderr_log" >&2); then
+  stderr_fifo=$(mktemp -u "${TMPDIR:-/tmp}/firebreak-nix-stderr-fifo.XXXXXX")
+  mkfifo "$stderr_fifo"
+  tee "$stderr_log" <"$stderr_fifo" >&2 &
+  tee_pid=$!
+  if "$@" 2>"$stderr_fifo"; then
+    status=0
+  else
+    status=$?
+  fi
+  rm -f "$stderr_fifo"
+  wait "$tee_pid" 2>/dev/null || true
+  if [ "$status" -eq 0 ]; then
     rm -f "$stderr_log"
     return 0
   fi
-  status=$?
   firebreak_maybe_print_flake_config_hint "$stderr_log"
   rm -f "$stderr_log"
   exit "$status"
@@ -388,7 +398,7 @@ EOF
     exit 1
   fi
 
-  IFS="$(printf '\t')" read -r resolved_workload_name resolved_workload_description resolved_workload_launcher <<EOF
+  IFS="$(printf '\t')" read -r _resolved_workload_name _resolved_workload_description resolved_workload_launcher <<EOF
 $workload_entry
 EOF
 

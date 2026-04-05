@@ -36,6 +36,12 @@ Firebreak selects this with the state-mode env vars:
 - `CODEX_STATE_MODE`
 - `CLAUDE_STATE_MODE`
 
+Precedence rule:
+
+- tool-specific selectors win over the global selector
+- `CODEX_STATE_MODE` overrides `FIREBREAK_STATE_MODE`
+- `CLAUDE_STATE_MODE` overrides `FIREBREAK_STATE_MODE`
+
 Supported modes:
 
 - `host`: shared host-backed runtime state
@@ -61,6 +67,12 @@ Firebreak selects these with:
 - `CODEX_CREDENTIAL_SLOT`
 - `CLAUDE_CREDENTIAL_SLOT`
 
+Precedence rule:
+
+- tool-specific selectors win over the global selector
+- `CODEX_CREDENTIAL_SLOT` overrides `FIREBREAK_CREDENTIAL_SLOT`
+- `CLAUDE_CREDENTIAL_SLOT` overrides `FIREBREAK_CREDENTIAL_SLOT`
+
 The shared host root defaults to:
 
 - `~/.firebreak/credentials`
@@ -69,12 +81,14 @@ Override it with:
 
 - `FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH`
 
+When you override the host path, replace `~/.firebreak/credentials` in the examples below with `${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH}`.
+
 Each selected slot is just a named subdirectory under that root.
 
 Examples:
 
-- `~/.firebreak/credentials/default/codex/auth.json`
-- `~/.firebreak/credentials/backup/claude/.credentials.json`
+- `${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-~/.firebreak/credentials}/default/codex/auth.json`
+- `${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-~/.firebreak/credentials}/backup/claude/.credentials.json`
 
 ## What `workspace` means
 
@@ -168,8 +182,10 @@ Firebreak detects the native login command and temporarily materializes the sele
 After a successful login, the credential file should live at:
 
 ```sh
-~/.firebreak/credentials/default/codex/auth.json
+${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-~/.firebreak/credentials}/default/codex/auth.json
 ```
+
+If you override the host credential root, replace `~/.firebreak/credentials` with `${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH}`.
 
 ### Claude Code login into a slot
 
@@ -199,8 +215,10 @@ claude auth login
 After a successful login, the credential file should live at:
 
 ```sh
-~/.firebreak/credentials/backup/claude/.credentials.json
+${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-~/.firebreak/credentials}/backup/claude/.credentials.json
 ```
+
+If you override the host credential root, replace `~/.firebreak/credentials` with `${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH}`.
 
 ### API-key slot flow
 
@@ -210,16 +228,20 @@ Write the key into the selected slot file, then launch the tool with that slot s
 Examples:
 
 ```sh
-mkdir -p ~/.firebreak/credentials/default/codex
-printf '%s\n' 'sk-...' > ~/.firebreak/credentials/default/codex/OPENAI_API_KEY
-chmod 600 ~/.firebreak/credentials/default/codex/OPENAI_API_KEY
+mkdir -p "${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-$HOME/.firebreak/credentials}/default/codex"
+printf '%s\n' 'sk-...' > "${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-$HOME/.firebreak/credentials}/default/codex/OPENAI_API_KEY"
+chmod 600 "${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-$HOME/.firebreak/credentials}/default/codex/OPENAI_API_KEY"
 ```
 
+If you override the host credential root, use `${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH}` instead of `~/.firebreak/credentials`.
+
 ```sh
-mkdir -p ~/.firebreak/credentials/backup/claude
-printf '%s\n' 'sk-ant-...' > ~/.firebreak/credentials/backup/claude/ANTHROPIC_API_KEY
-chmod 600 ~/.firebreak/credentials/backup/claude/ANTHROPIC_API_KEY
+mkdir -p "${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-$HOME/.firebreak/credentials}/backup/claude"
+printf '%s\n' 'sk-ant-...' > "${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-$HOME/.firebreak/credentials}/backup/claude/ANTHROPIC_API_KEY"
+chmod 600 "${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-$HOME/.firebreak/credentials}/backup/claude/ANTHROPIC_API_KEY"
 ```
+
+If you override the host credential root, use `${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH}` instead of `~/.firebreak/credentials`.
 
 Then launch with the matching slot:
 
@@ -233,9 +255,11 @@ CLAUDE_CREDENTIAL_SLOT=backup nix run .#firebreak-claude-code
 After logging in, you can inspect the selected slot on the host:
 
 ```sh
-find ~/.firebreak/credentials/default -maxdepth 3 -type f | sort
-find ~/.firebreak/credentials/backup -maxdepth 3 -type f | sort
+find "${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-$HOME/.firebreak/credentials}/default" -maxdepth 3 -type f | sort
+find "${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-$HOME/.firebreak/credentials}/backup" -maxdepth 3 -type f | sort
 ```
+
+If you override the host credential root, these commands will automatically use `${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH}`.
 
 ## Practical rule
 

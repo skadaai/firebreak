@@ -217,6 +217,8 @@ append_optional_env_default() {
 append_matching_env_defaults() {
   suffix_pattern=$1
 
+  # Suffix-only matching is intentional so new tool-specific selectors can flow
+  # through the shared state env file without changing Firebreak core.
   while IFS= read -r env_entry; do
     env_key=${env_entry%%=*}
     env_value=${env_entry#*=}
@@ -635,21 +637,21 @@ if [ "$host_system" != "aarch64-darwin" ]; then
   hostcwd_virtiofsd_pid=$started_virtiofsd_pid
   trace_wrapper "virtiofs-hostcwd-ready"
 
-if [ -n "$shared_state_root_host_dir" ]; then
-  start_virtiofsd "$shared_state_root_host_dir" "$shared_state_root_socket" "$virtiofsd_shared_state_root_log"
-  shared_state_root_virtiofsd_pid=$started_virtiofsd_pid
-  trace_wrapper "virtiofs-state-root-ready"
-fi
-if [ "$shared_credential_slots_enabled" = "1" ] && [ -n "$shared_credential_slots_host_dir" ]; then
-  start_virtiofsd "$shared_credential_slots_host_dir" "$shared_credential_slots_socket" "$virtiofsd_shared_credential_slots_log"
-  shared_credential_slots_virtiofsd_pid=$started_virtiofsd_pid
-  trace_wrapper "virtiofs-credential-slots-ready"
-fi
-if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
-  start_virtiofsd "$host_exec_output_dir" "$agent_exec_output_socket" "$virtiofsd_agent_exec_log"
-  agent_exec_output_virtiofsd_pid=$started_virtiofsd_pid
-  trace_wrapper "virtiofs-agent-exec-ready"
-fi
+  if [ -n "$shared_state_root_host_dir" ]; then
+    start_virtiofsd "$shared_state_root_host_dir" "$shared_state_root_socket" "$virtiofsd_shared_state_root_log"
+    shared_state_root_virtiofsd_pid=$started_virtiofsd_pid
+    trace_wrapper "virtiofs-state-root-ready"
+  fi
+  if [ "$shared_credential_slots_enabled" = "1" ] && [ -n "$shared_credential_slots_host_dir" ]; then
+    start_virtiofsd "$shared_credential_slots_host_dir" "$shared_credential_slots_socket" "$virtiofsd_shared_credential_slots_log"
+    shared_credential_slots_virtiofsd_pid=$started_virtiofsd_pid
+    trace_wrapper "virtiofs-credential-slots-ready"
+  fi
+  if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
+    start_virtiofsd "$host_exec_output_dir" "$agent_exec_output_socket" "$virtiofsd_agent_exec_log"
+    agent_exec_output_virtiofsd_pid=$started_virtiofsd_pid
+    trace_wrapper "virtiofs-agent-exec-ready"
+  fi
   start_virtiofsd "$host_agent_tools_dir" "$agent_tools_socket" "$virtiofsd_agent_tools_log"
   agent_tools_virtiofsd_pid=$started_virtiofsd_pid
   trace_wrapper "virtiofs-agent-tools-ready"

@@ -248,7 +248,7 @@ apply_env_bindings() {
     if [ -r "$slot_path" ]; then
       env_value=$(cat "$slot_path")
       printf -v "$env_var_name" '%s' "$env_value"
-      export "$env_var_name"
+      export "${env_var_name?}"
     elif [ "$binding_required" = "1" ]; then
       printf '%s\n' "missing required Firebreak credential value for @WRAPPER_DISPLAY_NAME@: $slot_path" >&2
       exit 1
@@ -280,7 +280,7 @@ apply_helper_bindings() {
     helper_path=$helper_root/$helper_name
     render_helper_script "$helper_path" "$slot_path" "@WRAPPER_DISPLAY_NAME@"
     printf -v "$env_var_name" '%s' "$helper_path"
-    export "$env_var_name"
+    export "${env_var_name?}"
   done <<EOF
 $credential_helper_bindings
 EOF

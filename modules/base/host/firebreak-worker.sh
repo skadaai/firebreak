@@ -650,12 +650,19 @@ EOF
 
 firebreak_worker_capture_nix_stdout() {
   stderr_log=$(mktemp "${TMPDIR:-/tmp}/firebreak-worker-nix-stderr.XXXXXX")
-  if output=$("$@" 2> >(tee "$stderr_log" >&2)); then
+  if output=$("$@" 2>"$stderr_log"); then
+    status=0
+  else
+    status=$?
+  fi
+  if [ -s "$stderr_log" ]; then
+    cat "$stderr_log" >&2
+  fi
+  if [ "$status" -eq 0 ]; then
     rm -f "$stderr_log"
     printf '%s\n' "$output"
     return 0
   fi
-  status=$?
   firebreak_worker_maybe_print_flake_config_hint "$stderr_log"
   rm -f "$stderr_log"
   return "$status"

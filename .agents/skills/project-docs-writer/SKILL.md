@@ -212,7 +212,7 @@ Description: what this option controls and why someone would change it.
 
 ### API Reference
 
-For library APIs, REST APIs, CLI interfaces, or any public contract.
+For library APIs, REST APIs, CLIs, or any public contract.
 
 **For each method / endpoint / command, document:**
 

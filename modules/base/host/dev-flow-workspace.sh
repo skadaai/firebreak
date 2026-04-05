@@ -63,6 +63,18 @@ require_primary_checkout() {
   fi
 }
 
+require_flag_value() {
+  flag_name=$1
+  flag_value=${2:-}
+  case "$flag_value" in
+    ""|-*)
+      echo "missing value for $flag_name" >&2
+      usage
+      ;;
+  esac
+  printf '%s\n' "$flag_value"
+}
+
 workspace_sync_is_excluded_path() {
   case "$1" in
     .codex|.codex/*|.claude|.claude/*|.direnv|.direnv/*|.agent-sandbox.env|result|result/*|*.img|*.socket)
@@ -72,6 +84,26 @@ workspace_sync_is_excluded_path() {
       return 1
       ;;
   esac
+}
+
+remove_target_path() {
+  target_path=$1
+  if [ -d "$target_path" ] && ! [ -L "$target_path" ]; then
+    rm -rf "$target_path"
+  else
+    rm -f "$target_path"
+  fi
+}
+
+ensure_copy_target_parent() {
+  target_path=$1
+  target_parent=$(dirname "$target_path")
+
+  if [ -e "$target_parent" ] && ! [ -d "$target_parent" ]; then
+    remove_target_path "$target_parent"
+  fi
+
+  mkdir -p "$target_parent"
 }
 
 sync_primary_checkout_to_workspace() {
@@ -92,8 +124,6 @@ sync_primary_checkout_to_workspace() {
 
         mkdir -p "$source_set_root/$(dirname "$path")"
         : >"$source_set_root/$path"
-        mkdir -p "$(dirname "$target_workspace/$path")"
-        cp -a "$path" "$target_workspace/$path"
       done
 
     git -C "$target_workspace" ls-files -z |
@@ -102,8 +132,37 @@ sync_primary_checkout_to_workspace() {
           continue
         fi
         if ! [ -e "$source_set_root/$path" ]; then
-          rm -f "$target_workspace/$path"
+          remove_target_path "$target_workspace/$path"
         fi
+      done
+
+    git ls-files --cached --modified --others --exclude-standard -z |
+      while IFS= read -r -d '' path; do
+        if workspace_sync_is_excluded_path "$path"; then
+          continue
+        fi
+        if ! [ -e "$path" ] && ! [ -L "$path" ]; then
+          continue
+        fi
+
+        target_path=$target_workspace/$path
+        if [ -d "$target_path" ] && ! [ -d "$path" ]; then
+          remove_target_path "$target_path"
+        elif [ -e "$target_path" ] && ! [ -d "$target_path" ] && [ -d "$path" ]; then
+          remove_target_path "$target_path"
+        fi
+
+        ensure_copy_target_parent "$target_path"
+        if [ -d "$path" ]; then
+          if [ -e "$target_path" ] && ! [ -d "$target_path" ]; then
+            remove_target_path "$target_path"
+          fi
+        elif [ -d "$target_path" ]; then
+          remove_target_path "$target_path"
+        fi
+
+        mkdir -p "$(dirname "$target_workspace/$path")"
+        cp -a "$path" "$target_path"
       done
   )
 }
@@ -226,6 +285,12 @@ rollback_workspace_creation() {
   fi
 }
 
+cleanup_workspace_checkout() {
+  if [ -d "$workspace_path" ]; then
+    git -C "$primary_checkout" worktree remove --force "$workspace_path"
+  fi
+}
+
 create_workspace() {
   workspace_id=""
   branch=""
@@ -236,19 +301,19 @@ create_workspace() {
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --workspace-id)
-        workspace_id=$2
+        workspace_id=$(require_flag_value "$1" "${2:-}")
         shift 2
         ;;
       --branch)
-        branch=$2
+        branch=$(require_flag_value "$1" "${2:-}")
         shift 2
         ;;
       --owner)
-        owner=$2
+        owner=$(require_flag_value "$1" "${2:-}")
         shift 2
         ;;
       --base-ref)
-        base_ref=$2
+        base_ref=$(require_flag_value "$1" "${2:-}")
         shift 2
         ;;
       --resume)
@@ -354,7 +419,7 @@ show_workspace() {
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --workspace-id)
-        workspace_id=$2
+        workspace_id=$(require_flag_value "$1" "${2:-}")
         shift 2
         ;;
       *)
@@ -379,7 +444,7 @@ validate_workspace() {
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --workspace-id)
-        workspace_id=$2
+        workspace_id=$(require_flag_value "$1" "${2:-}")
         shift 2
         ;;
       -*)
@@ -452,11 +517,11 @@ close_workspace() {
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --workspace-id)
-        workspace_id=$2
+        workspace_id=$(require_flag_value "$1" "${2:-}")
         shift 2
         ;;
       --disposition)
-        requested_disposition=$2
+        requested_disposition=$(require_flag_value "$1" "${2:-}")
         shift 2
         ;;
       --cleanup-workspace)
@@ -476,6 +541,9 @@ close_workspace() {
   load_workspace "$workspace_id"
   final_disposition_path=$workspace_state_root/review/final-disposition.json
   if [ "$status" = "closed" ] && { [ -n "$closed_at" ] || [ -f "$final_disposition_path" ]; }; then
+    if [ "$cleanup_workspace" = "1" ]; then
+      cleanup_workspace_checkout
+    fi
     cat "$metadata_path"
     return 0
   fi
@@ -494,8 +562,8 @@ close_workspace() {
 }
 EOF
 
-  if [ "$cleanup_workspace" = "1" ] && [ -d "$workspace_path" ]; then
-    git -C "$primary_checkout" worktree remove --force "$workspace_path"
+  if [ "$cleanup_workspace" = "1" ]; then
+    cleanup_workspace_checkout
   fi
 
   cat "$metadata_path"

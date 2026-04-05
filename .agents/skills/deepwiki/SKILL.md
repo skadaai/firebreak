@@ -1,20 +1,19 @@
 ---
 name: deepwiki
-description: Use DeepWiki to build up-to-date, accurate understanding of any external tool, library, or framework before using it. Prefer deep AI-powered queries over surface reads. Use it as a default aid before guessing from memory.
+description: Use DeepWiki to build up-to-date, accurate understanding of any external tool, library, or framework before using it. Consider Deepwiki your first line of research before writing code that uses an external dependency or tool, and use it aggressively and early in the development process.
 tags:
   - research
   - documentation
   - external-tools
-  - mcp
-version: 1.0.0
-author: Agent
+  - cli
+version: 2.0.0
 ---
 
 # DeepWiki Skill
 
 ## Overview
 
-DeepWiki (deepwiki.com) provides AI-generated wikis and semantic Q&A over any public GitHub repository. It is free, requires no authentication, and reflects the actual current state of the codebase — not your training data.
+DeepWiki (deepwiki.com) provides AI-generated wikis and semantic Q&A over any public GitHub repository. It is free, requires no authentication for public repos, and reflects the actual current state of the codebase — not your training data.
 
 Use it **aggressively and early**. Whenever you are about to use an external library, framework, CLI tool, or API, consult DeepWiki first. Do not rely on memorised knowledge for external tools; it may be stale, wrong, or version-mismatched.
 
@@ -37,188 +36,325 @@ Use DeepWiki any time you need to:
 
 ## Two Access Modes
 
-DeepWiki can be accessed in two ways. Use MCP when available; fall back to webfetch if MCP is not configured.
+DeepWiki has two access modes in priority order. Use the highest available mode.
 
-### Mode 1 — MCP (Preferred)
+```
+1. CLI (primary)   → bunx @qwadratic/deepwiki-cli  — full capability: deep, codemap, threading
+2. MCP (fallback)  → mcp.deepwiki.com             — basic ask_question, no mode selection
+```
 
-The official DeepWiki MCP server is available at two endpoints:
+**Always try the CLI first.** It calls the same underlying API as Devin's DeepWiki directly, exposes all modes (deep, fast, codemap), and does not load tool descriptions into the context window on every session turn.
 
-| Endpoint | Transport | Use when |
+---
+
+## Mode 1 — CLI (Primary)
+
+Use via `bunx` (preferred in Nix/bun environments) or `npx`:
+
+```bash
+bunx @qwadratic/deepwiki-cli <command> [flags]
+# or
+npx @qwadratic/deepwiki-cli <command> [flags]
+```
+
+### Core command: `query`
+
+```bash
+bunx @qwadratic/deepwiki-cli query "<question>" -r <owner/repo> [flags]
+```
+
+**Always use `-m deep` by default.** Only downgrade to `fast` when you need a quick orientation and the answer is not going into code.
+
+#### Deep mode (default — always use this)
+
+```bash
+bunx @qwadratic/deepwiki-cli query "How does the plugin lifecycle work?" -r vitejs/vite -m deep \
+  | jq -rj '.. | objects | select(.type? == "chunk" or .type? == "summary_chunk") | .data? // empty'
+```
+
+Runs an agentic research loop. Thorough, contextual, accurate. Takes longer but gives answers you can trust for implementation.
+
+#### Fast mode (quick orientation only)
+
+```bash
+bunx @qwadratic/deepwiki-cli query "What is this repo for?" -r withastro/starlight -m fast \
+  | jq -rj '.. | objects | select(.type? == "chunk" or .type? == "summary_chunk") | .data? // empty'
+```
+
+Multi-hop RAG, faster but shallower. Use only for high-level orientation, not for implementation guidance.
+
+#### Codemap mode (architecture and code flow)
+
+```bash
+bunx @qwadratic/deepwiki-cli query "Show the request lifecycle" -r expressjs/express -m codemap \
+  | jq -rj '.. | objects | select(.type? == "chunk" or .type? == "summary_chunk") | .data? // empty'
+
+# With Mermaid diagram output
+bunx @qwadratic/deepwiki-cli query "Show how hooks execute" -r facebook/react -m codemap --mermaid \
+  | jq -rj '.. | objects | select(.type? == "chunk" or .type? == "summary_chunk") | .data? // empty' > diagram.mmd
+```
+
+Returns structured code traces with exact file locations. Use when you need to understand data flow, execution paths, or internal call chains.
+
+#### Multi-repo query
+
+```bash
+bunx @qwadratic/deepwiki-cli query "Compare middleware approaches" -r expressjs/express -r koajs/koa -m deep \
+  | jq -rj '.. | objects | select(.type? == "chunk" or .type? == "summary_chunk") | .data? // empty'
+```
+
+Queries multiple repos in a single call. Use when understanding how two libraries approach the same problem.
+
+#### Thread follow-up
+
+```bash
+# First query — note the query ID in the output JSON
+bunx @qwadratic/deepwiki-cli query "How does auth work?" -r supabase/supabase -m deep \
+  | tee /tmp/dw-response.json \
+  | jq -rj '.. | objects | select(.type? == "chunk" or .type? == "summary_chunk") | .data? // empty'
+
+# Follow-up using the same thread
+bunx @qwadratic/deepwiki-cli query "How does token refresh specifically work?" -r supabase/supabase --id <query-id-from-above> \
+  | jq -rj '.. | objects | select(.type? == "chunk" or .type? == "summary_chunk") | .data? // empty'
+```
+
+Reuses the research context from the previous query. Use when the first answer raises a follow-up — it is faster and more contextual than starting a new thread.
+
+#### Additional context
+
+```bash
+bunx @qwadratic/deepwiki-cli query "How should I structure this?" -r prisma/prisma -m deep \
+  -c "I am using a multi-tenant SaaS with row-level security" \
+  | jq -rj '.. | objects | select(.type? == "chunk" or .type? == "summary_chunk") | .data? // empty'
+```
+
+Injects extra context into the query. Use when your specific use case might affect the answer.
+
+### Flags reference
+
+| Flag | Description |
+|---|---|
+| `-r, --repo <owner/repo>` | Repo to query. Repeatable for multi-repo queries. Required. |
+| `-m, --mode <mode>` | `deep` \| `fast` \| `codemap` (default: `deep`) |
+| `--id <queryId>` | Thread follow-up: reuse a previous query ID |
+| `-c, --context <text>` | Additional context injected into the query |
+| `--mermaid` | Output Mermaid diagram (codemap mode only) |
+| `-s, --stream` | Stream response chunks as NDJSON via WebSocket |
+| `--no-summary` | Disable summary generation |
+
+### Response format
+
+The CLI outputs a **single JSON object** to stdout. The actual schema is:
+
+```json
+{
+  "title": "...",
+  "queries": [
+    {
+      "message_id": "...",
+      "user_query": "...",
+      "engine_id": "...",
+      "repos": [{ "name": "owner/repo", "branch": "main" }],
+      "response": [
+        { "type": "file_contents", "data": ["vitejs/vite", "packages/vite/src/node/plugin.ts", "...source..."] },
+        { "type": "chunk",         "data": "# Vite Plugin Lifecycle\n\n..." },
+        { "type": "chunk",         "data": "Continuation of answer..." },
+        { "type": "reference",     "data": { "file_path": "...", "range_start": 41, "range_end": 133 } },
+        { "type": "summary_chunk", "data": "Summary text..." },
+        { "type": "summary_done",  "data": null },
+        { "type": "done",          "data": null }
+      ]
+    }
+  ]
+}
+```
+
+- `file_contents` — source files DeepWiki retrieved as context; `data` is `[repoName, filePath, sourceCode]`
+- `chunk` / `summary_chunk` — the actual answer prose, split across multiple entries; concatenate to read
+- `reference` — file + line range citations backing specific claims
+- `summary_done` / `done` — terminal markers; ignore
+
+### Extracting the answer
+
+**Always pipe through jq.** The raw JSON is unreadable without it. Use the recursive descent operator `..` so the extraction is robust to any future schema changes:
+
+```bash
+# Extract and concatenate all answer prose
+bunx @qwadratic/deepwiki-cli query "How does the plugin lifecycle work?" \
+  -r vitejs/vite -m deep \
+  | jq -rj '.. | objects | select(.type? == "chunk" or .type? == "summary_chunk") | .data? // empty'
+
+# List source files used as context
+bunx @qwadratic/deepwiki-cli query "How does auth work?" -r supabase/supabase -m deep \
+  | jq -r '.. | objects | select(.type? == "file_contents") | .data[1]? // empty'
+```
+
+### Management commands
+
+Use these before querying an unfamiliar or recently updated repo:
+
+```bash
+# Check if a repo is indexed before querying it
+bunx @qwadratic/deepwiki-cli status facebook/react
+
+# Search for indexed repos matching a keyword
+bunx @qwadratic/deepwiki-cli list react | jq '.indices[].repo_name'
+
+# Pre-warm a repo's index (throttled to once per 10 min server-side)
+bunx @qwadratic/deepwiki-cli warm withastro/starlight
+
+# Retrieve a previous query result by ID
+bunx @qwadratic/deepwiki-cli get <queryId>
+```
+
+### Modes at a glance
+
+| Mode | Engine | When to use |
 |---|---|---|
-| `https://mcp.deepwiki.com/sse` | SSE (legacy) | Default; most compatible with Claude and Cursor |
-| `https://mcp.deepwiki.com/mcp` | Streamable HTTP | If SSE fails or you are in an edge/Cloudflare environment |
+| `deep` | Agentic research loop | Default for all implementation questions |
+| `fast` | Multi-hop RAG | Quick orientation only — never for implementation |
+| `codemap` | Structured code trace | Architecture, data flow, execution paths |
 
-The MCP server exposes three tools:
+### Environment variables
 
-#### `ask_question` — Deep mode (preferred)
+| Variable | Default | Description |
+|---|---|---|
+| `DEEPWIKI_API_URL` | `https://api.devin.ai` | Override API base URL |
 
-The most powerful tool. Submits a natural language question and returns a contextually grounded, AI-generated answer sourced from the repository's code and documentation. Internally uses DeepWiki's semantic search and the "Ask Devin" reasoning capability.
+---
 
-**Always prefer this tool over `read_wiki_contents` for understanding.** It reasons across the entire codebase, not just one page.
+## Mode 2 — MCP (Fallback)
 
-```javascript
+Use when the CLI is unavailable (no shell access, bunx/npx not configured, or the CLI is broken by an upstream API change).
+
+### Setup
+
+```json
+{
+  "mcpServers": {
+    "deepwiki": {
+      "url": "https://mcp.deepwiki.com/sse"
+    }
+  }
+}
+```
+
+Alternate endpoint if SSE fails: `https://mcp.deepwiki.com/mcp`
+
+No API key or local installation required.
+
+### MCP tools
+
+#### `ask_question` — use this when falling back to MCP
+
+```
 mcp__deepwiki__ask_question({
   repoName: "owner/repo",
   question: "How does X work?"
 })
 ```
 
-Examples:
+#### `read_wiki_structure` — navigation only
 
-```javascript
-mcp__deepwiki__ask_question({
-  repoName: "withastro/starlight",
-  question: "How do I add a custom sidebar component that persists state across pages?"
-})
+Returns the table of contents. Use to survey what documentation exists before asking.
 
-mcp__deepwiki__ask_question({
-  repoName: "vitejs/vite",
-  question: "What is the plugin execution order and how do enforce hooks work?"
-})
-
-mcp__deepwiki__ask_question({
-  repoName: "prisma/prisma",
-  question: "How does Prisma handle transactions and what are the isolation level guarantees?"
-})
+```
+mcp__deepwiki__read_wiki_structure({ repoName: "owner/repo" })
 ```
 
-#### `read_wiki_structure` — Fast mode (navigation only)
+#### `read_wiki_contents` — page read
 
-Returns the table of contents for a repository's DeepWiki. Use this when you want to understand the documentation landscape before deciding what to ask, or when you need to find the name of a specific topic to fetch.
+Returns the full text of a specific wiki page.
 
-```javascript
-mcp__deepwiki__read_wiki_structure({
-  repoName: "owner/repo"
-})
+```
+mcp__deepwiki__read_wiki_contents({ repoName: "owner/repo", topic: "authentication" })
 ```
 
-#### `read_wiki_contents` — Fast mode (page read)
+### MCP limitations vs CLI
 
-Returns the full text of a specific wiki page. Use this for reference reading when you already know which page you want, or for retrieving a complete section to include in context.
-
-```javascript
-mcp__deepwiki__read_wiki_contents({
-  repoName: "owner/repo",
-  topic: "authentication"
-})
-```
-
-### Mode 2 — Webfetch (Fallback)
-
-If MCP is not available, fetch the DeepWiki page directly using your web fetch tool.
-
-URL format:
-```
-https://deepwiki.com/{owner}/{repo}
-https://deepwiki.com/{owner}/{repo}/{page-slug}
-```
-
-Examples:
-```
-https://deepwiki.com/withastro/starlight
-https://deepwiki.com/vitejs/vite
-https://deepwiki.com/prisma/prisma/query-engine
-```
-
-When using webfetch, fetch the main repo page first to see available sections, then fetch the specific page that is most relevant. Read the full page content, not just a summary snippet. If the page contains links to sub-pages, follow the ones that are directly relevant to your question.
+| Capability | CLI | MCP |
+|---|---|---|
+| Deep (agentic) mode | ✅ `-m deep` | ❌ |
+| Codemap mode | ✅ `-m codemap` | ❌ |
+| Multi-repo query | ✅ multiple `-r` flags | ❌ |
+| Thread follow-up | ✅ `--id` | ❌ |
+| Repo index status check | ✅ `status` command | ❌ |
+| Context injection | ✅ `-c` flag | ❌ |
+| Structured output | ✅ JSON + jq | ❌ |
 
 ---
 
-## Error Handling
-
-- **Repository not found**: If `mcp__deepwiki__ask_question`, `mcp__deepwiki__read_wiki_structure`, or `mcp__deepwiki__read_wiki_contents` fails because the repo name is wrong, verify the `owner/repo`, read the GitHub `README.md` directly, follow README links to docs or monorepos, and fall back to web search if the official repo is still unclear.
-- **Service unavailable**: If both the MCP tools and the webfetch URL patterns (`https://deepwiki.com/{owner}/{repo}` and `https://deepwiki.com/{owner}/{repo}/{page-slug}`) fail, use the repository’s own docs, README, and linked documentation, then state briefly that DeepWiki was unavailable and what source you used instead.
-- **Rate limits / courteous usage**: Batch related questions when possible, avoid repeating the same query after you already have the answer in context, and back off instead of hammering the MCP endpoints or DeepWiki pages if requests start failing intermittently.
-
----
-
-## Deep vs Fast — When to Use Which
-
-Always default to deep (`ask_question`) unless one of these conditions applies:
+## Choosing a Query Mode
 
 | Situation | Use |
 |---|---|
-| You have a specific question about behaviour, architecture, or usage | `ask_question` (deep) |
-| You want to browse what documentation exists before asking | `read_wiki_structure` (fast) |
-| You need a full reference section verbatim (e.g., a config schema) | `read_wiki_contents` (fast) |
-| MCP unavailable, need to survey what pages exist | Webfetch main repo page (fast) |
-| MCP unavailable, need to understand something specific | Webfetch specific sub-page (deep) |
-
-When in doubt: use `ask_question`. It is smarter, more contextual, and more likely to give you a directly useful answer than reading a wiki page and interpreting it yourself.
+| Implementing something using a library | CLI `-m deep` |
+| Understanding architecture or call flow | CLI `-m codemap` |
+| Quick orientation (what is this repo?) | CLI `-m fast` |
+| Following up on a previous answer | CLI `--id <prev-id>` |
+| Your use case changes the answer | CLI `-c "context here"` |
+| Comparing two libraries | CLI with multiple `-r` flags |
+| CLI is unavailable | MCP `ask_question` |
+| Browsing docs without a specific question | MCP `read_wiki_structure` → `read_wiki_contents` |
 
 ---
 
 ## Resolving Repo Names
 
-The `repoName` parameter must be the exact `owner/repo` format used on GitHub. Before calling any DeepWiki tool, confirm you have the right repo.
+The `-r` flag and MCP `repoName` both require exact `owner/repo` format.
 
 ### Step 1 — Check UPSTREAM_REPOS.md first
 
-The project maintains a file at `./UPSTREAM_REPOS.md` that maps technologies to their canonical GitHub repository names. **Always check this file first** when you are not fully certain of the repo name.
+The project maintains `./UPSTREAM_REPOS.md` mapping technologies to their canonical GitHub repo names. **Always check this file first** when you are not fully certain of the repo name.
 
-```markdown
-<!-- Example UPSTREAM_REPOS.md -->
-| Technology       | Upstream repo            | Use for                                  |
-|------------------|--------------------------|------------------------------------------|
-| Astro Starlight  | withastro/starlight      | Starlight docs and integration questions |
-| Vite             | vitejs/vite              | Vite core behavior and plugin questions  |
-| Prisma           | prisma/prisma            | Prisma schema and engine questions       |
-| Fumadocs         | fuma-nama/fumadocs       | Fumadocs framework and UI questions      |
-```
+### Step 2 — If not listed
 
-### Step 2 — If not in UPSTREAM_REPOS.md
-
-If the technology is not listed, resolve the repo name by:
-
-1. Searching the web for `{technology name} GitHub` to find the canonical repository
-2. Confirming the repo exists and is the official one (check stars, org ownership, pinned README)
-3. Using that name in your DeepWiki query
+1. Search the web for `{technology name} github`
+2. Confirm the repo is official (org ownership, stars, README)
+3. Run `npx @qwadratic/deepwiki-cli status {owner}/{repo}` to verify it is indexed before querying
 
 ### Step 3 — Update UPSTREAM_REPOS.md
 
-After successfully using DeepWiki for a new technology, **add it to UPSTREAM_REPOS.md** so future queries can skip the resolution step. Use this format:
+After successfully querying a new technology, **add it to UPSTREAM_REPOS.md**:
 
 ```markdown
-| Technology       | Upstream repo            | Use for                                |
-|------------------|--------------------------|----------------------------------------|
-| {display name}   | {owner}/{repo}           | {what this repo should answer}         |
+| {display name}   | {owner}/{repo}           | {optional notes}         |
 ```
 
-Use the `Use for` column to capture contextual guidance whenever the right repo is non-obvious, multiple official repos exist, or only a specific package/subtree should be queried.
+Add a note when the repo name is non-obvious, when a sub-package matters more than the root, or when you had to run `warm` to trigger indexing.
 
 ---
 
 ## Query Quality
 
-A good `ask_question` query is specific, action-oriented, and includes relevant context. A vague question produces a vague answer.
+Specific, action-oriented questions produce better answers in all modes.
 
 | Vague (avoid) | Specific (prefer) |
 |---|---|
 | "How does auth work?" | "What OAuth flows does this library support and how do I configure the callback URL?" |
-| "Tell me about plugins" | "What is the lifecycle order of plugin hooks, and which hooks run during the build phase only?" |
-| "How do I use this?" | "What is the minimal configuration needed to serve static files with custom cache headers?" |
-| "What are the options?" | "What configuration options affect connection pooling, and what are the recommended defaults for a high-concurrency API?" |
+| "Tell me about plugins" | "What is the lifecycle order of plugin hooks, and which run during build phase only?" |
+| "How do I use this?" | "What is the minimal config needed to serve static files with custom cache headers?" |
 
-Include version context in your question if you know it: *"In v4, how does..."* This helps DeepWiki anchor its answer to the right codebase state.
+Include version context when you know it: *"In v4, how does..."* Use `-c` to add project-specific context when your use case could affect the answer.
 
 ---
 
-## Workflow Example
-
-When you are about to use an unfamiliar or partially familiar external tool:
+## Workflow
 
 ```
 1. Check UPSTREAM_REPOS.md for the repo name.
 
 2. If not found:
    - Search for the canonical GitHub repo
-   - Confirm it is the right one
-   - Plan to update UPSTREAM_REPOS.md after use
+   - Run: npx @qwadratic/deepwiki-cli status {owner}/{repo}
+   - If not indexed, run: npx @qwadratic/deepwiki-cli warm {owner}/{repo}
+   - Note to update UPSTREAM_REPOS.md after use
 
-3. Call ask_question with a targeted question about what you need to do.
+3. Query with deep mode (default):
+   npx @qwadratic/deepwiki-cli query "..." -r {owner}/{repo} -m deep
 
-4. If the answer references other concepts you do not understand,
-   ask follow-up questions before writing any code.
+4. If the answer raises follow-up questions, thread them:
+   npx @qwadratic/deepwiki-cli query "..." -r {owner}/{repo} --id <prev-id>
 
 5. Write code based on the grounded answer, not on memory.
 
@@ -231,36 +367,12 @@ When you are about to use an unfamiliar or partially familiar external tool:
 
 | Mistake | Correct behaviour |
 |---|---|
-| Using `read_wiki_contents` when you have an actual question | Use `ask_question` instead |
-| Guessing the repo name as `{name}/{name}` or `{name}/docs` | Check UPSTREAM_REPOS.md, then verify on GitHub |
-| Asking one broad question for an entire technology | Ask one focused question per concept or task |
-| Only using DeepWiki when stuck | Use DeepWiki proactively, before writing code |
-| Not updating UPSTREAM_REPOS.md after a new tech is used | Always update it — the next agent (or you later) will thank you |
-
----
-
-## Configuration Reference
-
-### MCP setup (Claude Desktop / Cursor)
-
-```json
-{
-  "mcpServers": {
-    "deepwiki": {
-      "url": "https://mcp.deepwiki.com/sse"
-    }
-  }
-}
-```
-
-No API key, no authentication, no local installation required.
-
-### Fallback endpoint
-
-If `https://mcp.deepwiki.com/sse` is unreachable, switch to:
-```
-https://mcp.deepwiki.com/mcp
-```
+| Using MCP when the CLI works | CLI is primary; MCP is the fallback |
+| Using `-m fast` for implementation work | Default to `-m deep`; fast is for orientation only |
+| Starting a new query when a follow-up would do | Use `--id` to thread on the previous result |
+| Not checking `status` before querying an obscure repo | Run `status` first; `warm` if not indexed |
+| Guessing the repo name | Check UPSTREAM_REPOS.md, then verify with `status` |
+| Skipping UPSTREAM_REPOS.md update | Always update it after a new technology is used |
 
 ---
 
@@ -281,4 +393,8 @@ Update this file whenever you start using a new external tool or library.
 <!-- Add entries below, one per row -->
 ```
 
-The file is append-only in normal usage. Do not remove entries. If a repo moves or is deprecated, update the `Use for` guidance to explain the new source rather than deleting the row.
+---
+
+## Disclaimer
+
+This tool uses reverse-engineered, undocumented API endpoints from `api.devin.ai`. It may break at any time if Cognition changes their API. No auth is required for public repos, but rate limits may apply. If the CLI stops working, fall back to the MCP server.

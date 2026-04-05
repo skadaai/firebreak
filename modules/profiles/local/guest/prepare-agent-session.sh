@@ -83,15 +83,11 @@ printf '%s\n' "$session_mode" > @AGENT_SESSION_MODE_FILE@
 chmod 0644 @AGENT_SESSION_MODE_FILE@
 
 if [ "$session_mode" = "agent-exec" ] || [ "$session_mode" = "agent-attach-exec" ]; then
-  log_phase prepare-agent-session-mount-exec-output-start
-  mkdir -p @AGENT_EXEC_OUTPUT_MOUNT@
-  if ! mountpoint -q @AGENT_EXEC_OUTPUT_MOUNT@; then
-    if ! mount -t virtiofs hostexecoutput @AGENT_EXEC_OUTPUT_MOUNT@; then
-      echo "failed to mount agent exec output share" >&2
-      exit 1
-    fi
+  log_phase prepare-agent-session-exec-output-ready-check
+  if ! [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
+    echo "agent exec output share is unavailable at @AGENT_EXEC_OUTPUT_MOUNT@" >&2
+    exit 1
   fi
-  log_phase prepare-agent-session-mount-exec-output-done
   sync_guest_state_files
   printf '%s\n' "prepare-agent-session-mounted-exec-output" > @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
 fi
@@ -146,15 +142,11 @@ if [ "$agent_tools_enabled" = "1" ]; then
 fi
 
 if [ "$worker_bridge_enabled" = "1" ]; then
-  log_phase prepare-agent-session-mount-worker-bridge-start
-  mkdir -p @WORKER_BRIDGE_MOUNT@
-  if ! mountpoint -q @WORKER_BRIDGE_MOUNT@; then
-    if ! mount -t virtiofs hostworkerbridge @WORKER_BRIDGE_MOUNT@; then
-      echo "failed to mount Firebreak worker bridge share" >&2
-      exit 1
-    fi
+  log_phase prepare-agent-session-worker-bridge-ready-check
+  if ! [ -d @WORKER_BRIDGE_MOUNT@ ]; then
+    echo "Firebreak worker bridge share is unavailable at @WORKER_BRIDGE_MOUNT@" >&2
+    exit 1
   fi
-  log_phase prepare-agent-session-mount-worker-bridge-done
 fi
 
 if [ -r "$session_command_file" ]; then

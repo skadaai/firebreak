@@ -21,12 +21,10 @@ case "$runtime_backend" in
     emit_cloud_hypervisor_net "${MICROVM_CLOUD_HYPERVISOR_TAP_INTERFACE:-}" "@NETWORK_MAC@"
     emit_cloud_hypervisor_fs "ro-store" "${MICROVM_RO_STORE_SOCKET:-}"
     emit_cloud_hypervisor_fs "hostcwd" "${MICROVM_HOST_CWD_SOCKET:-}"
-    emit_cloud_hypervisor_fs "hostmeta" "${MICROVM_HOST_META_SOCKET:-}"
+    emit_cloud_hypervisor_fs "hostruntime" "${MICROVM_HOST_RUNTIME_SOCKET:-}"
     emit_cloud_hypervisor_fs "hoststateroot" "${MICROVM_SHARED_STATE_ROOT_SOCKET:-}"
     emit_cloud_hypervisor_fs "hostcredentialslots" "${MICROVM_SHARED_CREDENTIAL_SLOTS_SOCKET:-}"
-    emit_cloud_hypervisor_fs "hostexecoutput" "${MICROVM_AGENT_EXEC_OUTPUT_SOCKET:-}"
     emit_cloud_hypervisor_fs "hostagenttools" "${MICROVM_AGENT_TOOLS_SOCKET:-}"
-    emit_cloud_hypervisor_fs "hostworkerbridge" "${MICROVM_WORKER_BRIDGE_SOCKET:-}"
     ;;
   *)
     echo "unsupported local runtime backend for runtime-extra-args: $runtime_backend" >&2

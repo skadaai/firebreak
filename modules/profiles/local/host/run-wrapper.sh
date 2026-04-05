@@ -20,7 +20,6 @@ requested_worker_modes=${FIREBREAK_WORKER_MODES:-}
 agent_session_mode_override=${FIREBREAK_AGENT_SESSION_MODE_OVERRIDE:-}
 agent_session_mode=agent
 default_agent_command=@DEFAULT_AGENT_COMMAND@
-host_system=@HOST_SYSTEM@
 runtime_backend=@RUNTIME_BACKEND@
 agent_command_override=""
 shell_command_override=${AGENT_VM_COMMAND:-}
@@ -241,8 +240,9 @@ fi
 firebreak_tmp_root=$resolved_firebreak_tmp_root
 mkdir -p "$firebreak_tmp_root"
 host_runtime_dir=$(mktemp -d "$firebreak_tmp_root/r.XXXXXX")
-host_meta_dir=$host_runtime_dir/m
-host_exec_output_dir=$host_runtime_dir/o
+host_runtime_share_dir=$host_runtime_dir/runtime
+host_meta_dir=$host_runtime_share_dir/meta
+host_exec_output_dir=$host_runtime_share_dir/exec-output
 host_agent_tools_dir=$firebreak_state_root/tools/${default_control_socket%.socket}
 default_host_agent_tools_dir=$default_firebreak_state_root/tools/${default_control_socket%.socket}
 host_instance_dir=$host_runtime_dir/instance
@@ -250,22 +250,17 @@ runner_stdout_log=$host_runtime_dir/runner.out
 runner_stderr_log=$host_runtime_dir/runner.err
 virtiofsd_hostcwd_log=$host_runtime_dir/v-cwd.log
 virtiofsd_ro_store_log=$host_runtime_dir/v-ro-store.log
-virtiofsd_hostmeta_log=$host_runtime_dir/v-meta.log
+virtiofsd_hostruntime_log=$host_runtime_dir/v-runtime.log
 virtiofsd_shared_state_root_log=$host_runtime_dir/v-shared-cfg.log
 virtiofsd_shared_credential_slots_log=$host_runtime_dir/v-credential-slots.log
-virtiofsd_agent_exec_log=$host_runtime_dir/v-out.log
 virtiofsd_agent_tools_log=$host_runtime_dir/v-tools.log
-virtiofsd_worker_bridge_log=$host_runtime_dir/v-worker.log
 hostcwd_socket=$host_runtime_dir/cwd.sock
 ro_store_socket=$host_runtime_dir/ro-store.sock
-hostmeta_socket=$host_runtime_dir/meta.sock
+hostruntime_socket=$host_runtime_dir/runtime.sock
 shared_state_root_socket=$host_runtime_dir/shared-cfg.sock
 shared_credential_slots_socket=$host_runtime_dir/credential-slots.sock
-agent_exec_output_socket=$host_runtime_dir/out.sock
 agent_tools_socket=$host_runtime_dir/tools.sock
-worker_bridge_dir=$host_runtime_dir/w
-worker_bridge_socket=$host_runtime_dir/worker.sock
-worker_bridge_socket_env=""
+worker_bridge_dir=$host_runtime_share_dir/worker-bridge
 worker_bridge_server_log=$host_runtime_dir/worker-bridge.log
 worker_bridge_server_script=$host_runtime_dir/firebreak-worker-bridge-host.sh
 worker_helper_script=$host_runtime_dir/firebreak-worker.sh
@@ -450,9 +445,9 @@ cleanup() {
     kill "$hostcwd_virtiofsd_pid" 2>/dev/null || true
     wait "$hostcwd_virtiofsd_pid" 2>/dev/null || true
   fi
-  if [ -n "${hostmeta_virtiofsd_pid:-}" ]; then
-    kill "$hostmeta_virtiofsd_pid" 2>/dev/null || true
-    wait "$hostmeta_virtiofsd_pid" 2>/dev/null || true
+  if [ -n "${hostruntime_virtiofsd_pid:-}" ]; then
+    kill "$hostruntime_virtiofsd_pid" 2>/dev/null || true
+    wait "$hostruntime_virtiofsd_pid" 2>/dev/null || true
   fi
   if [ -n "${shared_state_root_virtiofsd_pid:-}" ]; then
     kill "$shared_state_root_virtiofsd_pid" 2>/dev/null || true
@@ -462,17 +457,9 @@ cleanup() {
     kill "$shared_credential_slots_virtiofsd_pid" 2>/dev/null || true
     wait "$shared_credential_slots_virtiofsd_pid" 2>/dev/null || true
   fi
-  if [ -n "${agent_exec_output_virtiofsd_pid:-}" ]; then
-    kill "$agent_exec_output_virtiofsd_pid" 2>/dev/null || true
-    wait "$agent_exec_output_virtiofsd_pid" 2>/dev/null || true
-  fi
   if [ -n "${agent_tools_virtiofsd_pid:-}" ]; then
     kill "$agent_tools_virtiofsd_pid" 2>/dev/null || true
     wait "$agent_tools_virtiofsd_pid" 2>/dev/null || true
-  fi
-  if [ -n "${worker_bridge_virtiofsd_pid:-}" ]; then
-    kill "$worker_bridge_virtiofsd_pid" 2>/dev/null || true
-    wait "$worker_bridge_virtiofsd_pid" 2>/dev/null || true
   fi
   if [ -n "${worker_bridge_server_pid:-}" ]; then
     kill "$worker_bridge_server_pid" 2>/dev/null || true
@@ -490,6 +477,7 @@ trap cleanup EXIT INT TERM
 mkdir -p "$host_meta_dir"
 mkdir -p "$host_exec_output_dir"
 mkdir -p "$host_agent_tools_dir"
+mkdir -p "$worker_bridge_dir/requests"
 if [ "$host_agent_tools_dir" != "$default_host_agent_tools_dir" ] \
   && ! [ -e "$host_agent_tools_dir/bootstrap-ready" ] \
   && [ -e "$default_host_agent_tools_dir/bootstrap-ready" ]; then
@@ -497,7 +485,6 @@ if [ "$host_agent_tools_dir" != "$default_host_agent_tools_dir" ] \
   cp -a "$default_host_agent_tools_dir"/. "$host_agent_tools_dir"/
   trace_wrapper "agent-tools-seeded"
 fi
-mkdir -p "$worker_bridge_dir/requests"
 rm -f "$control_socket"
 shared_state_root_env_file=$host_meta_dir/firebreak-shared-state.env
 : >"$wrapper_trace_log"
@@ -515,12 +502,14 @@ cat >"$runtime_debug_file" <<EOF
   "runner_stdout_log": "$(printf '%s' "$runner_stdout_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "runner_stderr_log": "$(printf '%s' "$runner_stderr_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_hostcwd_log": "$(printf '%s' "$virtiofsd_hostcwd_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
-  "virtiofs_hostmeta_log": "$(printf '%s' "$virtiofsd_hostmeta_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "virtiofs_hostruntime_log": "$(printf '%s' "$virtiofsd_hostruntime_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "virtiofs_hostmeta_log": "$(printf '%s' "$virtiofsd_hostruntime_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "virtiofs_agent_config_log": "$(printf '%s' "$virtiofsd_hostruntime_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_shared_state_root_log": "$(printf '%s' "$virtiofsd_shared_state_root_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_shared_credential_slots_log": "$(printf '%s' "$virtiofsd_shared_credential_slots_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
-  "virtiofs_agent_exec_log": "$(printf '%s' "$virtiofsd_agent_exec_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "virtiofs_agent_exec_log": "$(printf '%s' "$virtiofsd_hostruntime_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_agent_tools_log": "$(printf '%s' "$virtiofsd_agent_tools_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
-  "virtiofs_worker_bridge_log": "$(printf '%s' "$virtiofsd_worker_bridge_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "virtiofs_worker_bridge_log": "$(printf '%s' "$virtiofsd_hostruntime_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "worker_bridge_server_log": "$(printf '%s' "$worker_bridge_server_log" | sed 's/\\/\\\\/g; s/"/\\"/g')"
 }
 EOF
@@ -611,9 +600,9 @@ case "$runtime_backend" in
     hostcwd_virtiofsd_pid=$started_virtiofsd_pid
     trace_wrapper "virtiofs-hostcwd-ready"
 
-    start_virtiofsd "$host_meta_dir" "$hostmeta_socket" "$virtiofsd_hostmeta_log"
-    hostmeta_virtiofsd_pid=$started_virtiofsd_pid
-    trace_wrapper "virtiofs-hostmeta-ready"
+    start_virtiofsd "$host_runtime_share_dir" "$hostruntime_socket" "$virtiofsd_hostruntime_log"
+    hostruntime_virtiofsd_pid=$started_virtiofsd_pid
+    trace_wrapper "virtiofs-hostruntime-ready"
 
     if [ -n "$shared_state_root_host_dir" ]; then
       start_virtiofsd "$shared_state_root_host_dir" "$shared_state_root_socket" "$virtiofsd_shared_state_root_log"
@@ -625,20 +614,9 @@ case "$runtime_backend" in
       shared_credential_slots_virtiofsd_pid=$started_virtiofsd_pid
       trace_wrapper "virtiofs-credential-slots-ready"
     fi
-    if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
-      start_virtiofsd "$host_exec_output_dir" "$agent_exec_output_socket" "$virtiofsd_agent_exec_log"
-      agent_exec_output_virtiofsd_pid=$started_virtiofsd_pid
-      trace_wrapper "virtiofs-agent-exec-ready"
-    fi
     start_virtiofsd "$host_agent_tools_dir" "$agent_tools_socket" "$virtiofsd_agent_tools_log"
     agent_tools_virtiofsd_pid=$started_virtiofsd_pid
     trace_wrapper "virtiofs-agent-tools-ready"
-
-    if [ "$worker_bridge_enabled" = "1" ]; then
-      start_virtiofsd "$worker_bridge_dir" "$worker_bridge_socket" "$virtiofsd_worker_bridge_log"
-      worker_bridge_virtiofsd_pid=$started_virtiofsd_pid
-      worker_bridge_socket_env=$worker_bridge_socket
-    fi
     ;;
   vfkit)
     ;;
@@ -686,30 +664,25 @@ run_runner() {
     env \
       MICROVM_RO_STORE_SOCKET="$ro_store_socket" \
       MICROVM_CLOUD_HYPERVISOR_TAP_INTERFACE="$cloud_hypervisor_tap_interface" \
-      MICROVM_HOST_META_DIR="$host_meta_dir" \
-      MICROVM_HOST_META_SOCKET="$hostmeta_socket" \
+      MICROVM_HOST_RUNTIME_SOCKET="$hostruntime_socket" \
       MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
       MICROVM_SHARED_STATE_ROOT_DIR="$shared_state_root_host_dir" \
       MICROVM_SHARED_STATE_ROOT_SOCKET="$shared_state_root_socket" \
       MICROVM_SHARED_CREDENTIAL_SLOTS_DIR="$shared_credential_slots_host_dir" \
       MICROVM_SHARED_CREDENTIAL_SLOTS_SOCKET="$shared_credential_slots_socket" \
-      MICROVM_AGENT_EXEC_OUTPUT_SOCKET="$agent_exec_output_socket" \
       MICROVM_AGENT_TOOLS_SOCKET="$agent_tools_socket" \
-      MICROVM_WORKER_BRIDGE_SOCKET="$worker_bridge_socket_env" \
       @RUNNER@ "$@"
   else
     env \
       MICROVM_RO_STORE_SOCKET="$ro_store_socket" \
       MICROVM_CLOUD_HYPERVISOR_TAP_INTERFACE="$cloud_hypervisor_tap_interface" \
-      MICROVM_HOST_META_DIR="$host_meta_dir" \
-      MICROVM_HOST_META_SOCKET="$hostmeta_socket" \
+      MICROVM_HOST_RUNTIME_SOCKET="$hostruntime_socket" \
       MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
       MICROVM_SHARED_STATE_ROOT_DIR="$shared_state_root_host_dir" \
       MICROVM_SHARED_STATE_ROOT_SOCKET="$shared_state_root_socket" \
       MICROVM_SHARED_CREDENTIAL_SLOTS_DIR="$shared_credential_slots_host_dir" \
       MICROVM_SHARED_CREDENTIAL_SLOTS_SOCKET="$shared_credential_slots_socket" \
       MICROVM_AGENT_TOOLS_SOCKET="$agent_tools_socket" \
-      MICROVM_WORKER_BRIDGE_SOCKET="$worker_bridge_socket_env" \
       @RUNNER@ "$@"
   fi
 }
@@ -733,18 +706,15 @@ elif [ "$agent_session_mode" = "agent-attach-exec" ]; then
   cat >"$attach_runner_script" <<EOF
 set -eu
 cd '$(printf '%s' "$runner_workdir" | sed "s/'/'\\''/g")'
-export MICROVM_HOST_META_DIR='$(printf '%s' "$host_meta_dir" | sed "s/'/'\\\\''/g")'
 export MICROVM_RO_STORE_SOCKET='$(printf '%s' "$ro_store_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_CLOUD_HYPERVISOR_TAP_INTERFACE='$(printf '%s' "$cloud_hypervisor_tap_interface" | sed "s/'/'\\\\''/g")'
-export MICROVM_HOST_META_SOCKET='$(printf '%s' "$hostmeta_socket" | sed "s/'/'\\\\''/g")'
+export MICROVM_HOST_RUNTIME_SOCKET='$(printf '%s' "$hostruntime_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_HOST_CWD_SOCKET='$(printf '%s' "$hostcwd_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_SHARED_STATE_ROOT_DIR='$(printf '%s' "$shared_state_root_host_dir" | sed "s/'/'\\\\''/g")'
 export MICROVM_SHARED_STATE_ROOT_SOCKET='$(printf '%s' "$shared_state_root_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_SHARED_CREDENTIAL_SLOTS_DIR='$(printf '%s' "$shared_credential_slots_host_dir" | sed "s/'/'\\\\''/g")'
 export MICROVM_SHARED_CREDENTIAL_SLOTS_SOCKET='$(printf '%s' "$shared_credential_slots_socket" | sed "s/'/'\\\\''/g")'
-export MICROVM_AGENT_EXEC_OUTPUT_SOCKET='$(printf '%s' "$agent_exec_output_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_AGENT_TOOLS_SOCKET='$(printf '%s' "$agent_tools_socket" | sed "s/'/'\\\\''/g")'
-export MICROVM_WORKER_BRIDGE_SOCKET='$(printf '%s' "$worker_bridge_socket_env" | sed "s/'/'\\\\''/g")'
 exec @RUNNER@$quoted_runner_args
 EOF
   chmod 0555 "$attach_runner_script"
@@ -1727,11 +1697,8 @@ if [ "$agent_session_mode" = "agent-exec" ]; then
       if [ -s "$virtiofsd_shared_credential_slots_log" ]; then
         cat "$virtiofsd_shared_credential_slots_log" >&2
       fi
-      if [ -s "$virtiofsd_agent_exec_log" ]; then
-        cat "$virtiofsd_agent_exec_log" >&2
-      fi
-      if [ -s "$virtiofsd_worker_bridge_log" ]; then
-        cat "$virtiofsd_worker_bridge_log" >&2
+      if [ -s "$virtiofsd_hostruntime_log" ]; then
+        cat "$virtiofsd_hostruntime_log" >&2
       fi
       if [ -s "$worker_bridge_server_log" ]; then
         cat "$worker_bridge_server_log" >&2
@@ -1753,11 +1720,8 @@ if [ "$agent_session_mode" = "agent-exec" ]; then
   if [ -s "$virtiofsd_shared_credential_slots_log" ]; then
     cat "$virtiofsd_shared_credential_slots_log" >&2
   fi
-  if [ -s "$virtiofsd_agent_exec_log" ]; then
-    cat "$virtiofsd_agent_exec_log" >&2
-  fi
-  if [ -s "$virtiofsd_worker_bridge_log" ]; then
-    cat "$virtiofsd_worker_bridge_log" >&2
+  if [ -s "$virtiofsd_hostruntime_log" ]; then
+    cat "$virtiofsd_hostruntime_log" >&2
   fi
   if [ -s "$worker_bridge_server_log" ]; then
     cat "$worker_bridge_server_log" >&2

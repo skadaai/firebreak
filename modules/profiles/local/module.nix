@@ -3,6 +3,10 @@ let
   cfg = config.workloadVm;
   backendSpec = runtimeBackends.specFor cfg.runtimeBackend;
   devHome = "/var/lib/${cfg.devUser}";
+  runtimeHostMount = "/run/firebreak-host-runtime";
+  hostMetaMount = "${runtimeHostMount}/meta";
+  workerExecOutputMount = "${runtimeHostMount}/exec-output";
+  workerBridgeMount = "${runtimeHostMount}/worker-bridge";
   hostMetaFsType = backendSpec.localHostMetaFsType;
 
   scriptVars = {
@@ -112,12 +116,15 @@ in {
 
     networking.useDHCP = lib.mkForce (cfg.runtimeBackend != "cloud-hypervisor");
 
-    fileSystems.${cfg.hostMetaMount} = {
-      device = "hostmeta";
+    workloadVm.hostMetaMount = lib.mkDefault hostMetaMount;
+    workloadVm.workerExecOutputMount = lib.mkDefault workerExecOutputMount;
+    workloadVm.workerBridgeMount = lib.mkDefault workerBridgeMount;
+
+    fileSystems.${runtimeHostMount} = {
+      device = "hostruntime";
       fsType = hostMetaFsType;
       options = [
         "defaults"
-        "ro"
         "x-systemd.after=systemd-modules-load.service"
       ];
     };

@@ -204,8 +204,8 @@ PY
   while IFS=$'\t' read -r host_address host_port guest_port; do
     [ -n "$host_address" ] || continue
     socat \
-      TCP-LISTEN:${host_port},bind=${host_address},reuseaddr,fork \
-      TCP:${cloud_hypervisor_guest_ipv4}:${guest_port} >"$host_runtime_dir/port-${host_port}.log" 2>&1 &
+      "TCP-LISTEN:${host_port},bind=${host_address},reuseaddr,fork" \
+      "TCP:${cloud_hypervisor_guest_ipv4}:${guest_port}" >"$host_runtime_dir/port-${host_port}.log" 2>&1 &
     proxy_pid=$!
     sleep 0.2
     if ! kill -0 "$proxy_pid" 2>/dev/null; then

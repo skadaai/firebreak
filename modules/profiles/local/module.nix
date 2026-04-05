@@ -25,6 +25,7 @@ let
     "@AGENT_TOOLS_ENABLED@" = if cfg.toolRuntimesEnabled then "1" else "0";
     "@AGENT_TOOLS_MOUNT@" = cfg.toolRuntimesMount;
     "@AGENT_SESSION_MODE_FILE@" = cfg.workerSessionModeFile;
+    "@FIREBREAK_AGENT_COMMAND_STATE_LIB@" = builtins.readFile ./guest/agent-command-state.sh;
     "@HOST_META_MOUNT@" = cfg.hostMetaMount;
     "@ID@" = "${pkgs.coreutils}/bin/id";
     "@GROUPMOD@" = "${pkgs.shadow}/bin/groupmod";

@@ -7,12 +7,11 @@ else
   export PATH="/run/current-system/sw/bin"
 fi
 
+@FIREBREAK_AGENT_COMMAND_STATE_LIB@
+
 target=@WORKSPACE_MOUNT@
 session_mode=shell
 agent_command=@AGENT_COMMAND@
-guest_state_dir=/run/firebreak-worker
-command_state_local=$guest_state_dir/command-state.json
-command_state_shared=@AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
 command_process_local=$guest_state_dir/command-processes.txt
 command_process_shared=@AGENT_EXEC_OUTPUT_MOUNT@/command-processes.txt
 command_tty_local=$guest_state_dir/command-tty.txt
@@ -26,33 +25,6 @@ session_lines_state_file=$guest_state_dir/session-lines
 command_shell_init_file=@COMMAND_SHELL_INIT_FILE@
 attach_shell_flag=-ic
 attach_shell_flag=-lc
-
-json_escape() {
-  printf '%s' "$1" | @PYTHON3@ -c 'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'
-}
-
-write_command_state() {
-  command_phase=$1
-  command_status=$2
-  command_detail=$3
-  command_exit_code=$4
-  updated_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  mkdir -p "$guest_state_dir"
-  cat >"$command_state_local" <<EOF
-{
-  "source": "guest-command",
-  "phase": "$(json_escape "$command_phase")",
-  "status": "$(json_escape "$command_status")",
-  "detail": "$(json_escape "$command_detail")",
-  "command": "$(json_escape "$agent_command")",
-  "exit_code": $command_exit_code,
-  "updated_at": "$updated_at"
-}
-EOF
-  if [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
-    cp "$command_state_local" "$command_state_shared" 2>/dev/null || true
-  fi
-}
 
 if [ -r @START_DIR_FILE@ ]; then
   target=$(cat @START_DIR_FILE@)

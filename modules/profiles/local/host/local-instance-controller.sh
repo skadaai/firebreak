@@ -1,5 +1,11 @@
 local_controller_mode=${FIREBREAK_LOCAL_CONTROLLER_MODE:-client}
 
+local_controller_trace() {
+  if type trace_wrapper >/dev/null 2>&1; then
+    trace_wrapper "$1"
+  fi
+}
+
 local_controller_prepare_state() {
   local_controller_state_dir=$runner_workdir/.firebreak-local
   local_controller_pid_file=$local_controller_state_dir/daemon.pid
@@ -59,6 +65,7 @@ local_controller_wait_for_ready() {
     if [ -n "$controller_runtime_dir" ] \
       && [ -r "$controller_runtime_dir/o/command-agent-ready" ] \
       && [ -S "$control_socket" ]; then
+      local_controller_trace "warm-controller-ready:$controller_runtime_dir"
       return 0
     fi
     sleep 0.2
@@ -79,6 +86,7 @@ local_controller_stop_running() {
     return 0
   fi
 
+  local_controller_trace "warm-controller-stop:${local_controller_pid}"
   kill "$local_controller_pid" 2>/dev/null || true
   for _ in $(seq 1 50); do
     if ! local_controller_pid_is_alive; then
@@ -98,6 +106,7 @@ local_controller_ensure_running() {
 
   if local_controller_pid_is_alive; then
     if ! local_controller_matches_build_id; then
+      local_controller_trace "warm-controller-build-mismatch"
       local_controller_stop_running
     fi
   fi
@@ -108,6 +117,7 @@ local_controller_ensure_running() {
   fi
 
   rm -f "$local_controller_pid_file" "$local_controller_runtime_dir_file" "$local_controller_build_id_file"
+  local_controller_trace "warm-controller-spawn"
   setsid env \
     FIREBREAK_INSTANCE_DIR="$runner_workdir" \
     FIREBREAK_AGENT_SESSION_MODE_OVERRIDE=agent-service \
@@ -159,6 +169,7 @@ local_controller_acquire_dispatch_lock() {
   for _ in $(seq 1 7200); do
     if mkdir "$local_controller_dispatch_lock_dir" 2>/dev/null; then
       printf '%s\n' "${BASHPID:-$$}" > "$local_controller_dispatch_lock_pid_file"
+      local_controller_trace "warm-controller-lock-acquired"
       return 0
     fi
 
@@ -248,6 +259,7 @@ local_controller_dispatch_request() {
   local_controller_ensure_running
   local_controller_acquire_dispatch_lock
   trap 'local_controller_release_dispatch_lock' EXIT INT TERM
+  local_controller_trace "warm-controller-dispatch-start"
 
   controller_runtime_dir=$(local_controller_runtime_dir)
   controller_exec_output_dir=$controller_runtime_dir/o
@@ -258,6 +270,7 @@ local_controller_dispatch_request() {
 
   local_controller_write_request "$controller_exec_output_dir"
   local_controller_wait_for_response "$controller_exec_output_dir"
+  local_controller_trace "warm-controller-dispatch-done:$controller_request_id"
 
   if [ -f "$controller_exec_output_dir/stdout" ]; then
     cat "$controller_exec_output_dir/stdout"

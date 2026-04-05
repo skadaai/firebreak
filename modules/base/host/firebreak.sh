@@ -2,7 +2,9 @@ set -eu
 
 firebreak_libexec_dir=${FIREBREAK_LIBEXEC_DIR:-}
 if [ -z "$firebreak_libexec_dir" ]; then
-  firebreak_libexec_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+  firebreak_libexec_dir=$(
+    CDPATH='' cd -- "$(dirname -- "$0")" && pwd
+  )
 fi
 
 command=${1:-}
@@ -10,6 +12,8 @@ command=${1:-}
 . "$firebreak_libexec_dir/firebreak-project-config.sh"
 . "$firebreak_libexec_dir/firebreak-init.sh"
 . "$firebreak_libexec_dir/firebreak-doctor.sh"
+
+firebreak_workload_registry=${FIREBREAK_WORKLOAD_REGISTRY:-}
 
 firebreak_exec_libexec() {
   script_name=$1
@@ -24,26 +28,88 @@ firebreak_require_flake_ref() {
   fi
 }
 
+firebreak_maybe_print_flake_config_hint() {
+  stderr_log=$1
+
+  if grep -F -q "Pass '--accept-flake-config' to trust it" "$stderr_log" 2>/dev/null \
+    || grep -F -q "untrusted flake configuration setting" "$stderr_log" 2>/dev/null; then
+    cat >&2 <<'EOF'
+firebreak: Nix refused this flake's configuration.
+Rerun with:
+  nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run ...
+
+If you are launching Firebreak from another Firebreak command, export:
+  FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG=1
+EOF
+  fi
+}
+
+firebreak_run_nix() {
+  stderr_log=$(mktemp "${TMPDIR:-/tmp}/firebreak-nix-stderr.XXXXXX")
+  if "$@" 2> >(tee "$stderr_log" >&2); then
+    rm -f "$stderr_log"
+    return 0
+  fi
+  status=$?
+  firebreak_maybe_print_flake_config_hint "$stderr_log"
+  rm -f "$stderr_log"
+  exit "$status"
+}
+
 firebreak_exec_package() {
   package_name=$1
   shift
 
   firebreak_require_flake_ref
   if [ "${FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG:-}" = "1" ] && [ -n "${FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES:-}" ]; then
-    exec nix --accept-flake-config --extra-experimental-features "$FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES" \
+    firebreak_run_nix nix --accept-flake-config --extra-experimental-features "$FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES" \
       run "$FIREBREAK_FLAKE_REF#$package_name" -- "$@"
+    exit 0
   fi
 
   if [ "${FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG:-}" = "1" ]; then
-    exec nix --accept-flake-config run "$FIREBREAK_FLAKE_REF#$package_name" -- "$@"
+    firebreak_run_nix nix --accept-flake-config run "$FIREBREAK_FLAKE_REF#$package_name" -- "$@"
+    exit 0
   fi
 
   if [ -n "${FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES:-}" ]; then
-    exec nix --extra-experimental-features "$FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES" \
+    firebreak_run_nix nix --extra-experimental-features "$FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES" \
       run "$FIREBREAK_FLAKE_REF#$package_name" -- "$@"
+    exit 0
   fi
 
-  exec nix run "$FIREBREAK_FLAKE_REF#$package_name" -- "$@"
+  firebreak_run_nix nix run "$FIREBREAK_FLAKE_REF#$package_name" -- "$@"
+  exit 0
+}
+
+firebreak_require_workload_registry() {
+  if [ -z "$firebreak_workload_registry" ] || ! [ -r "$firebreak_workload_registry" ]; then
+    echo "FIREBREAK_WORKLOAD_REGISTRY is required for public Firebreak VM commands" >&2
+    exit 1
+  fi
+}
+
+firebreak_each_workload() {
+  firebreak_require_workload_registry
+
+  while IFS="$(printf '\t')" read -r workload_name workload_description workload_launcher || [ -n "${workload_name:-}" ]; do
+    [ -n "${workload_name:-}" ] || continue
+    printf '%s\t%s\t%s\n' "$workload_name" "$workload_description" "$workload_launcher"
+  done <"$firebreak_workload_registry"
+}
+
+firebreak_find_workload() {
+  requested_workload=$1
+
+  while IFS="$(printf '\t')" read -r workload_name workload_description workload_launcher || [ -n "${workload_name:-}" ]; do
+    [ -n "${workload_name:-}" ] || continue
+    if [ "$workload_name" = "$requested_workload" ]; then
+      printf '%s\t%s\t%s\n' "$workload_name" "$workload_description" "$workload_launcher"
+      return 0
+    fi
+  done <"$firebreak_workload_registry"
+
+  return 1
 }
 
 vms_usage() {
@@ -81,26 +147,38 @@ firebreak_vms_command() {
   done
 
   if [ "$vms_output" = "json" ]; then
-    cat <<'EOF'
-[
-  {
-    "name": "codex",
-    "description": "Codex local Firebreak VM"
-  },
-  {
-    "name": "claude-code",
-    "description": "Claude Code local Firebreak VM"
-  }
-]
+    printf '%s\n' '['
+    first_entry=1
+    while IFS="$(printf '\t')" read -r workload_name workload_description workload_launcher; do
+      [ -n "$workload_name" ] || continue
+      if [ "$first_entry" = "1" ]; then
+        first_entry=0
+      else
+        printf '%s\n' ','
+      fi
+      python3 - "$workload_name" "$workload_description" <<'PY'
+import json
+import sys
+
+name = sys.argv[1]
+description = sys.argv[2]
+print(json.dumps({"name": name, "description": description}, indent=2), end="")
+PY
+    done <<EOF
+$(firebreak_each_workload)
 EOF
+    printf '\n%s\n' ']'
     return 0
   fi
 
+  printf '%s\n\n' "Available Firebreak VMs"
+  while IFS="$(printf '\t')" read -r workload_name workload_description workload_launcher; do
+    [ -n "$workload_name" ] || continue
+    printf '  %-12s %s\n' "$workload_name" "$workload_description"
+  done <<EOF
+$(firebreak_each_workload)
+EOF
   cat <<'EOF'
-Available Firebreak VMs
-
-  codex        Codex local Firebreak VM
-  claude-code  Claude Code local Firebreak VM
 
 Examples:
   firebreak run codex
@@ -275,47 +353,51 @@ EOF
     requested_worker_modes=$normalized_worker_modes
   fi
 
-  dispatch_run_package() {
-    package_name=$1
+  dispatch_run_workload() {
+    workload_launcher=$1
     shift
 
     if [ -n "$requested_launch_mode" ] && { [ -n "$requested_worker_mode" ] || [ -n "$requested_worker_modes" ]; }; then
       FIREBREAK_LAUNCH_MODE="$requested_launch_mode" \
       FIREBREAK_WORKER_MODE="$requested_worker_mode" \
       FIREBREAK_WORKER_MODES="$requested_worker_modes" \
-      firebreak_exec_package "$package_name" "$@"
+      exec "$workload_launcher" "$@"
       return
     fi
 
     if [ -n "$requested_launch_mode" ]; then
       FIREBREAK_LAUNCH_MODE="$requested_launch_mode" \
-      firebreak_exec_package "$package_name" "$@"
+      exec "$workload_launcher" "$@"
       return
     fi
 
     if [ -n "$requested_worker_mode" ] || [ -n "$requested_worker_modes" ]; then
       FIREBREAK_WORKER_MODE="$requested_worker_mode" \
       FIREBREAK_WORKER_MODES="$requested_worker_modes" \
-      firebreak_exec_package "$package_name" "$@"
+      exec "$workload_launcher" "$@"
       return
     fi
 
-    firebreak_exec_package "$package_name" "$@"
+    exec "$workload_launcher" "$@"
   }
 
-  case "$vm_name" in
-    codex)
-      dispatch_run_package "firebreak-codex" "$@"
-      ;;
-    claude-code)
-      dispatch_run_package "firebreak-claude-code" "$@"
-      ;;
-    *)
-      echo "unknown Firebreak VM: $vm_name" >&2
-      echo "run 'firebreak vms' to list available VMs" >&2
-      exit 1
-      ;;
-  esac
+  workload_entry=$(firebreak_find_workload "$vm_name" || true)
+  if [ -z "$workload_entry" ]; then
+    echo "unknown Firebreak VM: $vm_name" >&2
+    echo "run 'firebreak vms' to list available VMs" >&2
+    exit 1
+  fi
+
+  IFS="$(printf '\t')" read -r resolved_workload_name resolved_workload_description resolved_workload_launcher <<EOF
+$workload_entry
+EOF
+
+  if ! [ -x "$resolved_workload_launcher" ]; then
+    echo "configured Firebreak workload launcher is not executable: $resolved_workload_launcher" >&2
+    exit 1
+  fi
+
+  dispatch_run_workload "$resolved_workload_launcher" "$@"
 }
 
 usage() {

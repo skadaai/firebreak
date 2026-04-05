@@ -195,6 +195,18 @@
 
   firebreak = mkFirebreakCliPackage {
     name = "firebreak";
+    publicWorkloads = [
+      {
+        name = "codex";
+        description = "Codex local Firebreak VM";
+        launcher = "${self.packages.${system}.firebreak-codex}/bin/firebreak-codex";
+      }
+      {
+        name = "claude-code";
+        description = "Claude Code local Firebreak VM";
+        launcher = "${self.packages.${system}.firebreak-claude-code}/bin/firebreak-claude-code";
+      }
+    ];
   };
 } // lib.optionalAttrs hostIsLinux {
   firebreak-internal-runner-codex-cloud = localVmArtifacts.firebreak-codex-cloud.runnerPackage;

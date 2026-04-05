@@ -5,14 +5,6 @@ let
   devHome = "/var/lib/${cfg.devUser}";
   hostMetaFsType = backendSpec.localHostMetaFsType;
 
-  qemu9pOptions = [
-    "nofail"
-    "trans=virtio"
-    "version=9p2000.L"
-    "msize=65536"
-    "x-systemd.after=systemd-modules-load.service"
-  ];
-
   scriptVars = {
     "@AGENT_VM_NAME@" = cfg.name;
     "@BASH@" = "${pkgs.bashInteractive}/bin/bash";
@@ -107,15 +99,11 @@ in {
     fileSystems.${cfg.hostMetaMount} = {
       device = "hostmeta";
       fsType = hostMetaFsType;
-      options =
-        if hostMetaFsType == "virtiofs" then
-          [
-            "defaults"
-            "ro"
-            "x-systemd.after=systemd-modules-load.service"
-          ]
-        else
-          qemu9pOptions ++ [ "ro" ];
+      options = [
+        "defaults"
+        "ro"
+        "x-systemd.after=systemd-modules-load.service"
+      ];
     };
     fileSystems."/nix/.ro-store" = lib.mkIf (cfg.runtimeBackend != "vfkit") {
       device = "ro-store";

@@ -24,12 +24,7 @@ case "$runtime_backend" in
     emit_qemu_virtiofs_share "fs-ro-store" "${MICROVM_RO_STORE_SOCKET:-}" "ro-store"
     [ -n "${MICROVM_HOST_CWD_SOCKET:-}" ] || exit 0
     emit_qemu_virtiofs_share "fs-hostcwd" "${MICROVM_HOST_CWD_SOCKET:-}" "hostcwd"
-
-    if [ -n "${MICROVM_HOST_META_DIR:-}" ]; then
-      printf '%s\n' \
-        "-fsdev" "local,id=fs-hostmeta,path=${MICROVM_HOST_META_DIR},security_model=none,readonly=true" \
-        "-device" "virtio-9p-pci,fsdev=fs-hostmeta,mount_tag=hostmeta"
-    fi
+    emit_qemu_virtiofs_share "fs-hostmeta" "${MICROVM_HOST_META_SOCKET:-}" "hostmeta"
 
     emit_qemu_virtiofs_share "fs-hoststateroot" "${MICROVM_SHARED_STATE_ROOT_SOCKET:-}" "hoststateroot"
     emit_qemu_virtiofs_share "fs-hostcredentialslots" "${MICROVM_SHARED_CREDENTIAL_SLOTS_SOCKET:-}" "hostcredentialslots"

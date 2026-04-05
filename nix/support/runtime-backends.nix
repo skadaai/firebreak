@@ -3,7 +3,7 @@ let
   backendSpecs = {
     qemu = {
       microvmHypervisor = "qemu";
-      localHostMetaFsType = "9p";
+      localHostMetaFsType = "virtiofs";
       roStoreShareProto = "9p";
       capabilities = [
         "interactive-console"

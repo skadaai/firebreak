@@ -602,11 +602,9 @@ case "$runtime_backend" in
     hostcwd_virtiofsd_pid=$started_virtiofsd_pid
     trace_wrapper "virtiofs-hostcwd-ready"
 
-    if [ "$runtime_backend" = "cloud-hypervisor" ]; then
-      start_virtiofsd "$host_meta_dir" "$hostmeta_socket" "$virtiofsd_hostmeta_log"
-      hostmeta_virtiofsd_pid=$started_virtiofsd_pid
-      trace_wrapper "virtiofs-hostmeta-ready"
-    fi
+    start_virtiofsd "$host_meta_dir" "$hostmeta_socket" "$virtiofsd_hostmeta_log"
+    hostmeta_virtiofsd_pid=$started_virtiofsd_pid
+    trace_wrapper "virtiofs-hostmeta-ready"
 
     if [ -n "$shared_state_root_host_dir" ]; then
       start_virtiofsd "$shared_state_root_host_dir" "$shared_state_root_socket" "$virtiofsd_shared_state_root_log"

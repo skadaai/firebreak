@@ -129,34 +129,7 @@ case "$session_mode" in
     ;;
   agent-exec)
     if [ -n "$agent_command" ]; then
-      if [ -n "$command_shell_init_file" ]; then
-        # shellcheck disable=SC1090
-        . "$command_shell_init_file"
-      fi
-      export FIREBREAK_AGENT_COMMAND="$agent_command"
-      status=0
-      stdout_path=@AGENT_EXEC_OUTPUT_MOUNT@/stdout
-      stderr_path=@AGENT_EXEC_OUTPUT_MOUNT@/stderr
-      exit_code_path=@AGENT_EXEC_OUTPUT_MOUNT@/exit_code
-      rm -f "$stdout_path" "$stderr_path" "$exit_code_path"
-      if command -v firebreak-bootstrap-wait >/dev/null 2>&1; then
-        write_command_state bootstrap-wait running agent-exec 0
-        if firebreak-bootstrap-wait; then
-          :
-        else
-          status=$?
-          write_command_state bootstrap-wait error agent-exec "$status"
-          printf "%s\n" "$status" >"$exit_code_path"
-          sudo poweroff >/dev/null 2>&1 || true
-          exit "$status"
-        fi
-      fi
-      write_command_state command-start running agent-exec 0
-      eval "$FIREBREAK_AGENT_COMMAND" >"$stdout_path" 2>"$stderr_path" || status=$?
-      write_command_state command-exit completed agent-exec "$status"
-      printf "%s\n" "$status" >"$exit_code_path"
-      sudo poweroff >/dev/null 2>&1 || true
-      exit "$status"
+      exec env FIREBREAK_AGENT_COMMAND="$agent_command" @RUN_AGENT_EXEC_SCRIPT@
     fi
     exec @BASH@ -i
     ;;

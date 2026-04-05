@@ -38,6 +38,7 @@ let
     "@SHARED_CREDENTIAL_SLOTS_HOST_MOUNT@" = cfg.sharedCredentialSlots.hostMount;
     "@SHARED_CREDENTIAL_SLOTS_MOUNTED_FLAG@" = cfg.sharedCredentialSlots.mountedFlag;
     "@PYTHON3@" = "${pkgs.python3}/bin/python3";
+    "@RUN_AGENT_EXEC_SCRIPT@" = "firebreak-run-agent-exec";
     "@START_DIR_FILE@" = cfg.startDirFile;
     "@RUNUSER@" = "${pkgs.util-linux}/bin/runuser";
     "@SHARED_AGENT_WRAPPER_BIN_DIR@" = cfg.sharedToolWrapperBinDir;
@@ -89,6 +90,8 @@ let
   };
   devConsoleStartScript = pkgs.writeShellScript "dev-console-start"
     (renderTemplate scriptVars ./guest/dev-console-start.sh);
+  runAgentExecScript = pkgs.writeShellScript "firebreak-run-agent-exec"
+    (renderTemplate scriptVars ./guest/run-agent-exec.sh);
   bootstrapEnabled = cfg.bootstrapScript != null;
 in {
   config = {
@@ -210,10 +213,14 @@ in {
 
     systemd.services."serial-getty@ttyS0".enable = false;
 
-    environment.systemPackages = lib.mkIf cfg.workerBridgeEnabled [
-      firebreakWorkerBridgeCli
-      firebreakWorkerLocalHelper
-    ];
+    environment.systemPackages =
+      lib.optionals cfg.workerBridgeEnabled [
+        firebreakWorkerBridgeCli
+        firebreakWorkerLocalHelper
+      ]
+      ++ [
+        runAgentExecScript
+      ];
 
     systemd.services.dev-console = {
       description = "Interactive dev shell on ttyS0";

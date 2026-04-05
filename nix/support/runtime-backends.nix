@@ -40,12 +40,14 @@ let
       roStoreShareProto = "virtiofs";
       capabilities = [
         "interactive-console"
+        "local-networking"
         "workspace-share"
         "host-meta-share"
         "shared-state-root"
         "shared-credential-slots"
         "tool-runtimes"
         "worker-bridge"
+        "local-port-publish"
         "snapshot"
         "vsock"
       ];

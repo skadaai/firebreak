@@ -110,6 +110,7 @@ EOF
     runner,
     runtimeBackend,
     controlSocketName,
+    networkMac,
     defaultAgentCommand ? "",
     agentConfigSubdir ? "agent",
     defaultAgentConfigHostDir,
@@ -120,6 +121,7 @@ EOF
     sharedStateRoots ? { },
     sharedCredentialSlots ? { },
     workerBridgeEnabled ? false,
+    localPublishedHostPortsJson ? "[]",
   }:
     let
       runnerWrapper = pkgs.writeShellScript "firebreak-runner-wrapper" ''
@@ -139,12 +141,20 @@ EOF
           gnused
           nix
           python3
+          sudo
           util-linux
-        ] ++ lib.optional pkgs.stdenv.hostPlatform.isLinux virtiofsd;
+        ]
+        ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+          iproute2
+          iptables
+          socat
+          virtiofsd
+        ];
       text = renderTemplate {
         "@HOST_SYSTEM@" = system;
         "@RUNTIME_BACKEND@" = runtimeBackend;
         "@CONTROL_SOCKET@" = "${controlSocketName}.socket";
+        "@NETWORK_MAC@" = networkMac;
         "@DEFAULT_AGENT_COMMAND@" = defaultAgentCommand;
         "@RUNNER@" = "${runnerWrapper}";
         "@STATE_SUBDIR@" = agentConfigSubdir;
@@ -155,10 +165,12 @@ EOF
         "@AGENT_ENV_PREFIX@" = agentEnvPrefix;
         "@SHARED_STATE_ROOT_ENABLED@" = if (sharedStateRoots.enable or false) then "1" else "0";
         "@SHARED_CREDENTIAL_SLOTS_ENABLED@" = if (sharedCredentialSlots.enable or false) then "1" else "0";
+        "@LOCAL_PUBLISHED_HOST_PORTS_JSON@" = localPublishedHostPortsJson;
         "@FIREBREAK_PROJECT_CONFIG_LIB@" = builtins.readFile ../../modules/base/host/firebreak-project-config.sh;
         "@FIREBREAK_FLAKE_REF@" = "path:${builtins.toString ../../.}";
         "@FIREBREAK_WORKER_LIB@" = builtins.readFile ../../modules/base/host/firebreak-worker.sh;
         "@FIREBREAK_WORKER_BRIDGE_HOST_LIB@" = builtins.readFile ../../modules/profiles/local/host/firebreak-worker-bridge-host.sh;
+        "@FIREBREAK_CLOUD_HYPERVISOR_NETWORK_LIB@" = builtins.readFile ../../modules/profiles/local/host/cloud-hypervisor-network.sh;
         "@WORKER_BRIDGE_ENABLED@" = if workerBridgeEnabled then "1" else "0";
       } ../../modules/profiles/local/host/run-wrapper.sh;
     };
@@ -168,6 +180,7 @@ EOF
     runnerPackage,
     runtimeBackend,
     controlSocketName ? name,
+    networkMac,
     defaultAgentCommand ? "",
     agentConfigSubdir ? "agent",
     defaultAgentConfigHostDir ? "$HOME/.firebreak",
@@ -178,12 +191,14 @@ EOF
     sharedStateRoots ? { },
     sharedCredentialSlots ? { },
     workerBridgeEnabled ? false,
+    localPublishedHostPortsJson ? "[]",
   }:
     mkWorkloadPackage {
       inherit
         name
         runtimeBackend
         controlSocketName
+        networkMac
         defaultAgentCommand
         agentConfigSubdir
         defaultAgentConfigHostDir
@@ -193,7 +208,8 @@ EOF
         agentEnvPrefix
         sharedStateRoots
         sharedCredentialSlots
-        workerBridgeEnabled;
+        workerBridgeEnabled
+        localPublishedHostPortsJson;
       runner = runnerPackage;
     };
 
@@ -244,6 +260,8 @@ EOF
           sharedCredentialSlots
           workerBridgeEnabled;
         runtimeBackend = nixosConfiguration.config.workloadVm.runtimeBackend;
+        networkMac = nixosConfiguration.config.workloadVm.macAddress;
+        localPublishedHostPortsJson = nixosConfiguration.config.workloadVm.localPublishedHostPortsJson;
       };
     in {
       inherit nixosConfiguration package runnerPackage;

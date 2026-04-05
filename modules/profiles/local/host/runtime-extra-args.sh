@@ -9,6 +9,13 @@ emit_cloud_hypervisor_fs() {
   printf '%s\n' "--fs" "tag=${tag},socket=${socket_path}"
 }
 
+emit_cloud_hypervisor_net() {
+  tap_interface=$1
+  mac_address=$2
+  [ -n "$tap_interface" ] || return 0
+  printf '%s\n' "--net" "tap=${tap_interface},mac=${mac_address}"
+}
+
 emit_qemu_virtiofs_share() {
   share_id=$1
   socket_path=$2
@@ -33,6 +40,7 @@ case "$runtime_backend" in
     emit_qemu_virtiofs_share "fs-workerbridge" "${MICROVM_WORKER_BRIDGE_SOCKET:-}" "hostworkerbridge"
     ;;
   cloud-hypervisor)
+    emit_cloud_hypervisor_net "${MICROVM_CLOUD_HYPERVISOR_TAP_INTERFACE:-}" "@NETWORK_MAC@"
     emit_cloud_hypervisor_fs "ro-store" "${MICROVM_RO_STORE_SOCKET:-}"
     emit_cloud_hypervisor_fs "hostcwd" "${MICROVM_HOST_CWD_SOCKET:-}"
     emit_cloud_hypervisor_fs "hostmeta" "${MICROVM_HOST_META_SOCKET:-}"

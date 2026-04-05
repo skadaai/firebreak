@@ -55,6 +55,8 @@ let
     '';
   prepareAgentSessionScript = pkgs.writeShellScript "prepare-agent-session"
     (renderTemplate scriptVars ./guest/prepare-agent-session.sh);
+  configureRuntimeNetworkScript = pkgs.writeShellScript "configure-runtime-network"
+    (renderTemplate scriptVars ./guest/configure-runtime-network.sh);
   firebreakWorkerEngineScript = pkgs.writeShellScript "firebreak-worker-engine"
     (builtins.readFile ../../base/host/firebreak-worker.sh);
   firebreakWorkerEngineRuntimeInputs = with pkgs; [
@@ -95,6 +97,8 @@ in {
 
     users.users.root.password = "";
     users.users.${cfg.devUser}.password = "";
+
+    networking.useDHCP = lib.mkForce (cfg.runtimeBackend != "cloud-hypervisor");
 
     fileSystems.${cfg.hostMetaMount} = {
       device = "hostmeta";
@@ -156,9 +160,33 @@ in {
       };
     };
 
-    systemd.services.dev-bootstrap = lib.mkIf bootstrapEnabled {
+    systemd.services.configure-runtime-network = lib.mkIf (cfg.runtimeBackend == "cloud-hypervisor") {
+      description = "Configure runtime networking for the local Cloud Hypervisor backend";
+      wantedBy = [ "multi-user.target" ];
+      before = [ "dev-console.service" ] ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
       after = [ "prepare-agent-session.service" ];
       requires = [ "prepare-agent-session.service" ];
+
+      path = with pkgs; [
+        coreutils
+        gawk
+        iproute2
+      ];
+
+      serviceConfig = {
+        ExecStart = configureRuntimeNetworkScript;
+        Type = "oneshot";
+        RemainAfterExit = true;
+        StandardOutput = "journal+console";
+        StandardError = "journal+console";
+      };
+    };
+
+    systemd.services.dev-bootstrap = lib.mkIf bootstrapEnabled {
+      after = [ "prepare-agent-session.service" ]
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service";
+      requires = [ "prepare-agent-session.service" ]
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service";
     };
 
     systemd.services."serial-getty@ttyS0".enable = false;
@@ -172,8 +200,10 @@ in {
       description = "Interactive dev shell on ttyS0";
       wantedBy = [ "multi-user.target" ];
       after = [ "adopt-host-identity.service" "prepare-agent-session.service" ]
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
       requires = [ "adopt-host-identity.service" "prepare-agent-session.service" ]
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
       wants = [ ];
       conflicts = [ "serial-getty@ttyS0.service" ];

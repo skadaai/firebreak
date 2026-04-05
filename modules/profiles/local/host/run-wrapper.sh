@@ -1,6 +1,7 @@
 set -eu
 
 @FIREBREAK_PROJECT_CONFIG_LIB@
+@FIREBREAK_CLOUD_HYPERVISOR_NETWORK_LIB@
 
 host_cwd=$PWD
 host_uid=$(id -u)
@@ -338,6 +339,11 @@ else
 fi
 
 runtime_debug_file=$runner_workdir/.firebreak-runtime.json
+cloud_hypervisor_tap_interface=""
+cloud_hypervisor_host_ipv4=""
+cloud_hypervisor_guest_ipv4=""
+cloud_hypervisor_subnet_cidr=""
+cloud_hypervisor_outbound_interface=""
 
 case "$requested_launch_mode" in
   run)
@@ -435,6 +441,7 @@ fi
 
 # shellcheck disable=SC2329
 cleanup() {
+  cloud_hypervisor_cleanup_local_network
   if [ -n "${ro_store_virtiofsd_pid:-}" ]; then
     kill "$ro_store_virtiofsd_pid" 2>/dev/null || true
     wait "$ro_store_virtiofsd_pid" 2>/dev/null || true
@@ -592,6 +599,8 @@ if [ -n "$agent_command_override" ]; then
   printf '%s\n' "$agent_command_override" > "$host_meta_dir/worker-command"
 fi
 
+cloud_hypervisor_setup_local_network
+
 case "$runtime_backend" in
   qemu|cloud-hypervisor)
     start_virtiofsd "/nix/store" "$ro_store_socket" "$virtiofsd_ro_store_log"
@@ -676,6 +685,7 @@ run_runner() {
   if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
     env \
       MICROVM_RO_STORE_SOCKET="$ro_store_socket" \
+      MICROVM_CLOUD_HYPERVISOR_TAP_INTERFACE="$cloud_hypervisor_tap_interface" \
       MICROVM_HOST_META_DIR="$host_meta_dir" \
       MICROVM_HOST_META_SOCKET="$hostmeta_socket" \
       MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
@@ -690,6 +700,7 @@ run_runner() {
   else
     env \
       MICROVM_RO_STORE_SOCKET="$ro_store_socket" \
+      MICROVM_CLOUD_HYPERVISOR_TAP_INTERFACE="$cloud_hypervisor_tap_interface" \
       MICROVM_HOST_META_DIR="$host_meta_dir" \
       MICROVM_HOST_META_SOCKET="$hostmeta_socket" \
       MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
@@ -724,6 +735,7 @@ set -eu
 cd '$(printf '%s' "$runner_workdir" | sed "s/'/'\\''/g")'
 export MICROVM_HOST_META_DIR='$(printf '%s' "$host_meta_dir" | sed "s/'/'\\\\''/g")'
 export MICROVM_RO_STORE_SOCKET='$(printf '%s' "$ro_store_socket" | sed "s/'/'\\\\''/g")'
+export MICROVM_CLOUD_HYPERVISOR_TAP_INTERFACE='$(printf '%s' "$cloud_hypervisor_tap_interface" | sed "s/'/'\\\\''/g")'
 export MICROVM_HOST_META_SOCKET='$(printf '%s' "$hostmeta_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_HOST_CWD_SOCKET='$(printf '%s' "$hostcwd_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_SHARED_STATE_ROOT_DIR='$(printf '%s' "$shared_state_root_host_dir" | sed "s/'/'\\\\''/g")'

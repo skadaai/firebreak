@@ -136,6 +136,10 @@ let
   guestUdpPorts =
     lib.unique (map (forward: forward.guest.port)
       (builtins.filter (forward: (forward.proto or "tcp") == "udp") forwardPorts));
+  unsupportedCloudHypervisorForwards =
+    builtins.filter
+      (forward: (forward.from or "host") != "host" || (forward.proto or "tcp") != "tcp")
+      forwardPorts;
   launchScript = pkgs.writeShellApplication {
     name = launchCommandName;
     runtimeInputs = with pkgs; [ bash coreutils ];
@@ -345,10 +349,20 @@ in {
         message =
           "workloadVm.runtimeBackend `${cfg.runtimeBackend}` does not support host port publishing required by modules/node-cli forwardPorts.";
       }
+      {
+        assertion =
+          cfg.runtimeBackend != "cloud-hypervisor"
+          || unsupportedCloudHypervisorForwards == [ ];
+        message =
+          "modules/node-cli forwardPorts on cloud-hypervisor currently support only host-originated TCP publishing.";
+      }
     ];
 
     workloadVm = {
       brandingTagline = tagline;
+      localPublishedHostPortsJson = builtins.toJSON (
+        builtins.filter (forward: (forward.from or "host") == "host") forwardPorts
+      );
       sharedStateRoots = sharedStateRoots;
       sharedCredentialSlots = sharedCredentialSlots;
       toolRuntimesEnabled = true;

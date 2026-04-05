@@ -473,6 +473,12 @@ in {
       description = "Stable MAC address for the MicroVM network interface.";
     };
 
+    localPublishedHostPortsJson = mkOption {
+      type = types.str;
+      default = "[]";
+      description = "Machine-readable host-to-guest port publishing declarations consumed by the local runtime wrapper.";
+    };
+
     extraSystemPackages = mkOption {
       type = types.listOf types.package;
       default = [ ];
@@ -620,11 +626,11 @@ in {
     microvm = {
       optimize.enable = true;
       mem = cfg.memoryMiB;
-      interfaces = [ {
+      interfaces = lib.optional (cfg.runtimeBackend != "cloud-hypervisor") {
         type = "user";
         id = "vm-user";
         mac = cfg.macAddress;
-      } ];
+      };
       volumes = [ {
         mountPoint = "/var";
         image = cfg.varVolumeImage;

@@ -12,13 +12,11 @@ moduleArgs@{ pkgs, ... }:
   '';
   credentialFileBindings = [
     {
-      slotPath = ".credentials.json";
       runtimePath = ".credentials.json";
     }
   ];
   credentialEnvBindings = [
     {
-      slotPath = "ANTHROPIC_API_KEY";
       envVar = "ANTHROPIC_API_KEY";
     }
   ];

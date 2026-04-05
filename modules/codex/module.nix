@@ -13,13 +13,11 @@ moduleArgs@{ pkgs, ... }:
   '';
   credentialFileBindings = [
     {
-      slotPath = "auth.json";
       runtimePath = "auth.json";
     }
   ];
   credentialEnvBindings = [
     {
-      slotPath = "OPENAI_API_KEY";
       envVar = "OPENAI_API_KEY";
     }
   ];

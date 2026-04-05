@@ -294,11 +294,12 @@ in {
                       };
 
                       fileBindings = mkOption {
-                        type = types.listOf (types.submodule ({ ... }: {
+                        type = types.listOf (types.submodule ({ config, ... }: {
                           options = {
                             slotPath = mkOption {
                               type = types.str;
-                              description = "Relative file path inside the selected slot.";
+                              default = config.runtimePath;
+                              description = "Relative file path inside the selected slot. Defaults to runtimePath.";
                             };
 
                             runtimePath = mkOption {
@@ -318,11 +319,12 @@ in {
                       };
 
                       envBindings = mkOption {
-                        type = types.listOf (types.submodule ({ ... }: {
+                        type = types.listOf (types.submodule ({ config, ... }: {
                           options = {
                             slotPath = mkOption {
                               type = types.str;
-                              description = "Relative file path inside the selected slot.";
+                              default = config.envVar;
+                              description = "Relative file path inside the selected slot. Defaults to envVar.";
                             };
 
                             envVar = mkOption {

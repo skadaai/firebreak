@@ -69,6 +69,13 @@ Override it with:
 
 - `FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH`
 
+Each selected slot is just a named subdirectory under that root.
+
+Examples:
+
+- `~/.firebreak/credentials/default/codex/auth.json`
+- `~/.firebreak/credentials/backup/claude/.credentials.json`
+
 ## What `workspace` means
 
 `workspace` does not mean "put all tool state inside `.codex/` or `.claude/` in the repo".
@@ -123,6 +130,111 @@ Inside that guest:
 ```sh
 codex --version
 claude --version
+```
+
+## Full login cycle
+
+The important rule is: log into the selected slot directly through Firebreak.
+
+Do not run a login outside Firebreak and then manually copy files into place unless you have to.
+
+### Codex login into a slot
+
+Select a slot and run the native Codex login through Firebreak:
+
+```sh
+FIREBREAK_STATE_MODE=host \
+FIREBREAK_CREDENTIAL_SLOT=default \
+nix run .#firebreak-codex -- login
+```
+
+Or open the VM first and then log in inside it:
+
+```sh
+FIREBREAK_STATE_MODE=host \
+FIREBREAK_CREDENTIAL_SLOT=default \
+FIREBREAK_LAUNCH_MODE=shell \
+nix run .#firebreak-codex
+```
+
+Inside the VM:
+
+```sh
+codex login
+```
+
+Firebreak detects the native login command and temporarily materializes the selected slot as the login target.
+
+After a successful login, the credential file should live at:
+
+```sh
+~/.firebreak/credentials/default/codex/auth.json
+```
+
+### Claude Code login into a slot
+
+Use the selected slot and run Claude's native login through Firebreak:
+
+```sh
+FIREBREAK_STATE_MODE=host \
+FIREBREAK_CREDENTIAL_SLOT=backup \
+nix run .#firebreak-claude-code -- auth login
+```
+
+Or from an interactive Firebreak shell:
+
+```sh
+FIREBREAK_STATE_MODE=host \
+FIREBREAK_CREDENTIAL_SLOT=backup \
+FIREBREAK_LAUNCH_MODE=shell \
+nix run .#firebreak-claude-code
+```
+
+Inside the VM:
+
+```sh
+claude auth login
+```
+
+After a successful login, the credential file should live at:
+
+```sh
+~/.firebreak/credentials/backup/claude/.credentials.json
+```
+
+### API-key slot flow
+
+API-key tools do not need a browser login flow.
+Write the key into the selected slot file, then launch the tool with that slot selected.
+
+Examples:
+
+```sh
+mkdir -p ~/.firebreak/credentials/default/codex
+printf '%s\n' 'sk-...' > ~/.firebreak/credentials/default/codex/OPENAI_API_KEY
+chmod 600 ~/.firebreak/credentials/default/codex/OPENAI_API_KEY
+```
+
+```sh
+mkdir -p ~/.firebreak/credentials/backup/claude
+printf '%s\n' 'sk-ant-...' > ~/.firebreak/credentials/backup/claude/ANTHROPIC_API_KEY
+chmod 600 ~/.firebreak/credentials/backup/claude/ANTHROPIC_API_KEY
+```
+
+Then launch with the matching slot:
+
+```sh
+CODEX_CREDENTIAL_SLOT=default nix run .#firebreak-codex
+CLAUDE_CREDENTIAL_SLOT=backup nix run .#firebreak-claude-code
+```
+
+### Verify the result
+
+After logging in, you can inspect the selected slot on the host:
+
+```sh
+find ~/.firebreak/credentials/default -maxdepth 3 -type f | sort
+find ~/.firebreak/credentials/backup -maxdepth 3 -type f | sort
 ```
 
 ## Practical rule

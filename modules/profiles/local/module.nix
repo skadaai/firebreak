@@ -24,6 +24,7 @@ let
     "@AGENT_EXEC_OUTPUT_MOUNT@" = cfg.workerExecOutputMount;
     "@AGENT_TOOLS_ENABLED@" = if cfg.toolRuntimesEnabled then "1" else "0";
     "@AGENT_TOOLS_MOUNT@" = cfg.toolRuntimesMount;
+    "@FIREBREAK_AGENT_COMMAND_REQUEST_LIB@" = builtins.readFile ./guest/agent-command-request.sh;
     "@AGENT_SESSION_MODE_FILE@" = cfg.workerSessionModeFile;
     "@FIREBREAK_AGENT_COMMAND_STATE_LIB@" = builtins.readFile ./guest/agent-command-state.sh;
     "@HOST_META_MOUNT@" = cfg.hostMetaMount;
@@ -39,7 +40,6 @@ let
     "@SHARED_CREDENTIAL_SLOTS_HOST_MOUNT@" = cfg.sharedCredentialSlots.hostMount;
     "@SHARED_CREDENTIAL_SLOTS_MOUNTED_FLAG@" = cfg.sharedCredentialSlots.mountedFlag;
     "@PYTHON3@" = "${pkgs.python3}/bin/python3";
-    "@RUN_AGENT_EXEC_SCRIPT@" = "firebreak-run-agent-exec";
     "@START_DIR_FILE@" = cfg.startDirFile;
     "@RUNUSER@" = "${pkgs.util-linux}/bin/runuser";
     "@SHARED_AGENT_WRAPPER_BIN_DIR@" = cfg.sharedToolWrapperBinDir;
@@ -89,10 +89,19 @@ let
     ];
     text = renderTemplate scriptVars ./guest/firebreak-worker-cli.sh;
   };
+  runAgentExecScript = pkgs.writeShellApplication {
+    name = "firebreak-run-agent-exec";
+    runtimeInputs = with pkgs; [
+      bash
+      coreutils
+      sudo
+    ];
+    text = renderTemplate scriptVars ./guest/run-agent-exec.sh;
+  };
   devConsoleStartScript = pkgs.writeShellScript "dev-console-start"
-    (renderTemplate scriptVars ./guest/dev-console-start.sh);
-  runAgentExecScript = pkgs.writeShellScript "firebreak-run-agent-exec"
-    (renderTemplate scriptVars ./guest/run-agent-exec.sh);
+    (renderTemplate (scriptVars // {
+      "@RUN_AGENT_EXEC_SCRIPT@" = "${runAgentExecScript}/bin/firebreak-run-agent-exec";
+    }) ./guest/dev-console-start.sh);
   bootstrapEnabled = cfg.bootstrapScript != null;
 in {
   config = {

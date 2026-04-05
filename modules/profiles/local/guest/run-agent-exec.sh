@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -eu
 
+@FIREBREAK_AGENT_COMMAND_REQUEST_LIB@
 @FIREBREAK_AGENT_COMMAND_STATE_LIB@
 
 command_shell_init_file=@COMMAND_SHELL_INIT_FILE@
@@ -10,8 +11,12 @@ if ! [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
   exit 1
 fi
 
-if [ -z "${FIREBREAK_AGENT_COMMAND:-}" ]; then
-  echo "FIREBREAK_AGENT_COMMAND is required for firebreak-run-agent-exec" >&2
+ensure_command_request_loaded
+FIREBREAK_AGENT_COMMAND=${command_request_command:-}
+export FIREBREAK_AGENT_COMMAND
+
+if [ -z "$FIREBREAK_AGENT_COMMAND" ]; then
+  echo "command request did not provide a command for firebreak-run-agent-exec" >&2
   exit 1
 fi
 

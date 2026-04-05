@@ -7,6 +7,7 @@ else
   export PATH="/run/current-system/sw/bin"
 fi
 
+@FIREBREAK_AGENT_COMMAND_REQUEST_LIB@
 @FIREBREAK_AGENT_COMMAND_STATE_LIB@
 
 target=@WORKSPACE_MOUNT@
@@ -37,6 +38,13 @@ fi
 if [ -r @AGENT_COMMAND_FILE@ ]; then
   agent_command=$(cat @AGENT_COMMAND_FILE@)
 fi
+
+case "$session_mode" in
+  agent-exec|agent-attach-exec)
+    ensure_command_request_loaded
+    agent_command=$command_request_command
+    ;;
+esac
 
 shared_tool_wrapper_bin_dir="@SHARED_AGENT_WRAPPER_BIN_DIR@"
 if [ -n "$shared_tool_wrapper_bin_dir" ] && [ -d "$shared_tool_wrapper_bin_dir" ]; then
@@ -101,7 +109,7 @@ case "$session_mode" in
     ;;
   agent-exec)
     if [ -n "$agent_command" ]; then
-      exec env FIREBREAK_AGENT_COMMAND="$agent_command" @RUN_AGENT_EXEC_SCRIPT@
+      exec @RUN_AGENT_EXEC_SCRIPT@
     fi
     exec @BASH@ -i
     ;;
@@ -109,7 +117,7 @@ case "$session_mode" in
     mkdir -p @AGENT_EXEC_OUTPUT_MOUNT@
     printf '%s\n' "dev-console-start" > @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
     if [ -n "$agent_command" ]; then
-      exec env FIREBREAK_AGENT_COMMAND="$agent_command" @BASH@ "$attach_shell_flag" '
+      exec env FIREBREAK_AGENT_COMMAND="$agent_command" FIREBREAK_AGENT_REQUEST_ID="${FIREBREAK_AGENT_REQUEST_ID:-}" @BASH@ "$attach_shell_flag" '
         status=0
         set +m
         stage_path=@AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
@@ -138,6 +146,7 @@ case "$session_mode" in
           cat >"'"$command_state_local"'" <<EOF
 {
   "source": "guest-command",
+  "request_id": "$(printf "%s" "${FIREBREAK_AGENT_REQUEST_ID:-}" | @PYTHON3@ -c '"'"'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'"'"')",
   "phase": "$(printf "%s" "$command_phase" | @PYTHON3@ -c '"'"'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'"'"')",
   "status": "$(printf "%s" "$command_status" | @PYTHON3@ -c '"'"'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'"'"')",
   "detail": "$(printf "%s" "$command_detail" | @PYTHON3@ -c '"'"'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'"'"')",

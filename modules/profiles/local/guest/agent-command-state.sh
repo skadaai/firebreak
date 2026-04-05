@@ -16,6 +16,7 @@ write_command_state() {
   cat >"$command_state_local" <<EOF
 {
   "source": "guest-command",
+  "request_id": "$(json_escape "${FIREBREAK_AGENT_REQUEST_ID:-}")",
   "phase": "$(json_escape "$command_phase")",
   "status": "$(json_escape "$command_status")",
   "detail": "$(json_escape "$command_detail")",

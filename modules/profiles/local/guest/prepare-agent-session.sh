@@ -1,5 +1,7 @@
 set -eu
 
+@FIREBREAK_AGENT_COMMAND_REQUEST_LIB@
+
 metadata=@HOST_META_MOUNT@/mount-path
 session_mode=agent
 session_command_file=@HOST_META_MOUNT@/worker-command
@@ -21,6 +23,7 @@ session_columns_state_file=$guest_state_dir/session-columns
 session_lines_state_file=$guest_state_dir/session-lines
 worker_mode_state_file=$guest_state_dir/worker-mode
 worker_modes_state_file=$guest_state_dir/worker-modes
+request_command_present=0
 
 export FIREBREAK_SHARED_STATE_ROOT_HOST_MOUNT=@SHARED_STATE_ROOT_HOST_MOUNT@
 export FIREBREAK_SHARED_STATE_ROOT_VM_ROOT=@SHARED_STATE_ROOT_VM_ROOT@
@@ -72,12 +75,21 @@ if [ -z "$candidate" ]; then
 fi
 start_dir=$candidate
 
-printf '%s\n' "$start_dir" > @START_DIR_FILE@
-chmod 0644 @START_DIR_FILE@
-
 if [ -r "$session_mode_file" ]; then
   session_mode=$(cat "$session_mode_file")
 fi
+
+if [ "$session_mode" = "agent-exec" ] || [ "$session_mode" = "agent-attach-exec" ]; then
+  ensure_command_request_loaded
+  request_command_present=1
+  session_mode=$command_request_session_mode
+  if [ -n "$command_request_start_dir" ]; then
+    start_dir=$command_request_start_dir
+  fi
+fi
+
+printf '%s\n' "$start_dir" > @START_DIR_FILE@
+chmod 0644 @START_DIR_FILE@
 
 printf '%s\n' "$session_mode" > @AGENT_SESSION_MODE_FILE@
 chmod 0644 @AGENT_SESSION_MODE_FILE@
@@ -108,15 +120,24 @@ rm -f \
   "$worker_mode_state_file" \
   "$worker_modes_state_file"
 log_phase prepare-agent-session-state-dir-done
-if [ -r "$session_term_file" ]; then
+if [ "$request_command_present" = "1" ] && [ -n "${command_request_term:-}" ]; then
+  printf '%s\n' "$command_request_term" > "$session_term_state_file"
+  chmod 0644 "$session_term_state_file"
+elif [ -r "$session_term_file" ]; then
   cat "$session_term_file" > "$session_term_state_file"
   chmod 0644 "$session_term_state_file"
 fi
-if [ -r "$session_columns_file" ]; then
+if [ "$request_command_present" = "1" ] && [ -n "${command_request_columns:-}" ]; then
+  printf '%s\n' "$command_request_columns" > "$session_columns_state_file"
+  chmod 0644 "$session_columns_state_file"
+elif [ -r "$session_columns_file" ]; then
   cat "$session_columns_file" > "$session_columns_state_file"
   chmod 0644 "$session_columns_state_file"
 fi
-if [ -r "$session_lines_file" ]; then
+if [ "$request_command_present" = "1" ] && [ -n "${command_request_lines:-}" ]; then
+  printf '%s\n' "$command_request_lines" > "$session_lines_state_file"
+  chmod 0644 "$session_lines_state_file"
+elif [ -r "$session_lines_file" ]; then
   cat "$session_lines_file" > "$session_lines_state_file"
   chmod 0644 "$session_lines_state_file"
 fi
@@ -149,7 +170,16 @@ if [ "$worker_bridge_enabled" = "1" ]; then
   fi
 fi
 
-if [ -r "$session_command_file" ]; then
+if [ "$request_command_present" = "1" ]; then
+  log_phase prepare-agent-session-command-request-start
+  printf '%s\n' "$command_request_command" > @AGENT_COMMAND_FILE@
+  chmod 0644 @AGENT_COMMAND_FILE@
+  sync_guest_state_files
+  if [ "$session_mode" = "agent-attach-exec" ]; then
+    printf '%s\n' "prepare-agent-session-command-ready" > @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
+  fi
+  log_phase prepare-agent-session-command-request-done
+elif [ -r "$session_command_file" ]; then
   log_phase prepare-agent-session-command-file-start
   cat "$session_command_file" > @AGENT_COMMAND_FILE@
   chmod 0644 @AGENT_COMMAND_FILE@

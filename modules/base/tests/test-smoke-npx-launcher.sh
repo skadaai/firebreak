@@ -191,6 +191,31 @@ assert_no_nix_invocation "the ip_forward warning path"
 
 rm -f "$nix_args_path" "$nix_cwd_path"
 
+sudo_warning_output=$(
+  cd "$repo_root"
+  PATH="$fake_bin_dir:$PATH" \
+    FIREBREAK_LAUNCHER_KVM_PATH="$fake_kvm_path" \
+    FIREBREAK_LAUNCHER_IP_FORWARD_STATE=enabled \
+    FIREBREAK_LAUNCHER_SUDO_NETWORKING_STATE=networking-denied \
+    node "$repo_root/bin/firebreak.js" vms 2>&1
+)
+
+if ! printf '%s\n' "$sudo_warning_output" | grep -F -q "passwordless sudo"; then
+  printf '%s\n' "$sudo_warning_output" >&2
+  echo "launcher smoke did not warn clearly when sudo networking was unavailable for local-only commands" >&2
+  exit 1
+fi
+
+if ! printf '%s\n' "$sudo_warning_output" | grep -F -q "codex"; then
+  printf '%s\n' "$sudo_warning_output" >&2
+  echo "launcher smoke did not continue through the local-only command when sudo networking was unavailable" >&2
+  exit 1
+fi
+
+assert_no_nix_invocation "the sudo networking warning path"
+
+rm -f "$nix_args_path" "$nix_cwd_path"
+
 darwin_validate_output=$(
   PATH="$fake_bin_dir:$PATH" \
     FIREBREAK_LAUNCHER_TEST_PLATFORM=darwin \
@@ -255,6 +280,30 @@ fi
 if [ -f "$nix_args_path" ]; then
   cat "$nix_args_path" >&2
   echo "launcher smoke should not invoke nix when ip_forward preflight fails" >&2
+  exit 1
+fi
+
+rm -f "$nix_args_path" "$nix_cwd_path"
+set +e
+missing_sudo_networking_output=$(
+  PATH="$fake_bin_dir:$PATH" \
+    FIREBREAK_LAUNCHER_KVM_PATH="$fake_kvm_path" \
+    FIREBREAK_LAUNCHER_IP_FORWARD_STATE=enabled \
+    FIREBREAK_LAUNCHER_SUDO_NETWORKING_STATE=networking-denied \
+    node "$repo_root/bin/firebreak.js" internal validate run test-smoke-codex 2>&1
+)
+missing_sudo_networking_status=$?
+set -e
+
+if [ "$missing_sudo_networking_status" -eq 0 ] || ! printf '%s\n' "$missing_sudo_networking_output" | grep -F -q "passwordless sudo"; then
+  printf '%s\n' "$missing_sudo_networking_output" >&2
+  echo "launcher smoke did not block non-diagnostic commands when sudo networking was unavailable" >&2
+  exit 1
+fi
+
+if [ -f "$nix_args_path" ]; then
+  cat "$nix_args_path" >&2
+  echo "launcher smoke should not invoke nix when sudo networking preflight fails" >&2
   exit 1
 fi
 

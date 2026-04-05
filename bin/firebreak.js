@@ -24,6 +24,7 @@ const topLevelCommand = args[0] || "";
 const forcedLocalRoot = process.env.FIREBREAK_LAUNCHER_PACKAGE_ROOT || "";
 const kvmPath = process.env.FIREBREAK_LAUNCHER_KVM_PATH || "/dev/kvm";
 const forcedIpForwardState = process.env.FIREBREAK_LAUNCHER_IP_FORWARD_STATE || "";
+const forcedSudoNetworkingState = process.env.FIREBREAK_LAUNCHER_SUDO_NETWORKING_STATE || "";
 const nixHelpersDisabled = process.env.FIREBREAK_LAUNCHER_DISABLE_NIX_HELPERS === "1"
 const launcherPlatform = process.env.FIREBREAK_LAUNCHER_TEST_PLATFORM || process.platform
 const launcherArch = process.env.FIREBREAK_LAUNCHER_TEST_ARCH || process.arch
@@ -175,6 +176,57 @@ const ipForwardFailureReason = () => {
   }
 }
 
+const commandExists = (command, argsForCheck) => {
+  const result = spawnSync(command, argsForCheck, {
+    stdio: "ignore"
+  })
+
+  return !result.error || result.error.code !== "ENOENT"
+}
+
+const sudoNetworkingFailureReason = () => {
+  if (forcedSudoNetworkingState) {
+    switch (forcedSudoNetworkingState) {
+      case "enabled":
+        return null
+      case "missing-tools":
+        return "host networking tools ip and iptables are required"
+      case "missing-sudo":
+        return "passwordless sudo is required for Firebreak host networking commands"
+      case "networking-denied":
+        return "passwordless sudo is required for Firebreak host networking commands"
+      case "firewall-denied":
+        return "passwordless sudo is required for Firebreak host firewall commands"
+      default:
+        return `invalid FIREBREAK_LAUNCHER_SUDO_NETWORKING_STATE: ${forcedSudoNetworkingState}`
+    }
+  }
+
+  if (!commandExists("ip", ["link", "show"]) || !commandExists("iptables", ["--version"])) {
+    return "host networking tools ip and iptables are required"
+  }
+
+  if (!commandExists("sudo", ["-n", "true"])) {
+    return "passwordless sudo is required for Firebreak host networking commands"
+  }
+
+  const sudoIp = spawnSync("sudo", ["-n", "ip", "link", "show"], {
+    stdio: "ignore"
+  })
+  if (sudoIp.status !== 0) {
+    return "passwordless sudo is required for Firebreak host networking commands"
+  }
+
+  const sudoIptables = spawnSync("sudo", ["-n", "iptables", "-w", "-L"], {
+    stdio: "ignore"
+  })
+  if (sudoIptables.status !== 0) {
+    return "passwordless sudo is required for Firebreak host firewall commands"
+  }
+
+  return null
+}
+
 const runCommandRequiresNix = () => {
   if (topLevelCommand !== "run") {
     return false;
@@ -228,7 +280,7 @@ const checkLinuxLocalHost = () => {
     return;
   }
 
-  const failure = kvmFailureReason() || ipForwardFailureReason()
+  const failure = kvmFailureReason() || ipForwardFailureReason() || sudoNetworkingFailureReason()
   if (!failure) {
     return;
   }
@@ -238,7 +290,7 @@ const checkLinuxLocalHost = () => {
     return;
   }
 
-  fail(`${failure}. Firebreak local Linux workloads require KVM access and net.ipv4.ip_forward=1.`)
+  fail(`${failure}. Firebreak local Linux workloads require KVM access, net.ipv4.ip_forward=1, and passwordless sudo for host networking commands.`)
 }
 
 const checkWorkspacePath = () => {

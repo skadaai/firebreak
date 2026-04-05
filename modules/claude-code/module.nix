@@ -8,7 +8,7 @@ moduleArgs@{ pkgs, ... }:
   configSelectorPrefix = "CLAUDE";
   configSubdir = "claude";
   configExports = ''
-    export CLAUDE_CONFIG_DIR="$agent_config_dir"
+    export CLAUDE_CONFIG_DIR="$tool_state_dir"
   '';
   credentialFileBindings = [
     {

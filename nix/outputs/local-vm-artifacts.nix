@@ -13,7 +13,7 @@ in
     workspaceBootstrapConfigHostDir = "$HOME/.codex";
     hostConfigAdoptionEnabled = true;
     agentEnvPrefix = "CODEX";
-    sharedAgentConfig.enable = true;
+    sharedStateRoots.enable = true;
     sharedCredentialSlots.enable = true;
   };
 
@@ -27,7 +27,7 @@ in
     workspaceBootstrapConfigHostDir = "$HOME/.claude";
     hostConfigAdoptionEnabled = true;
     agentEnvPrefix = "CLAUDE";
-    sharedAgentConfig.enable = true;
+    sharedStateRoots.enable = true;
     sharedCredentialSlots.enable = true;
   };
 
@@ -39,7 +39,7 @@ in
     agentConfigSubdir = "credential-fixture";
     defaultAgentConfigHostDir = "$HOME/.firebreak";
     agentEnvPrefix = "FIXTURE";
-    sharedAgentConfig.enable = true;
+    sharedStateRoots.enable = true;
     sharedCredentialSlots.enable = true;
   };
 
@@ -69,8 +69,8 @@ in
     name = "firebreak-cloud-smoke";
     profileModules = [ self.nixosModules.firebreak-cloud-profile ];
     extraModules = [ {
-      agentVm = {
-        agentPromptCommand = ''
+      workloadVm = {
+        promptCommand = ''
           case "$FIREBREAK_AGENT_PROMPT" in
             "Run the timeout validation fixture")
               ./timeout-fixture.sh

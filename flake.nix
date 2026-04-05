@@ -46,7 +46,7 @@
 
       lib = lib.genAttrs supportedHostSystems (system: {
         inherit (supports.${system})
-          mkAgentVm
+          mkWorkloadVm
           mkLocalVmArtifacts
           mkLocalVmPackage
           mkPackagedNodeCliArtifacts
@@ -70,8 +70,8 @@
           inherit (supports.${system})
             hostIsLinux
             lib
-            mkAgentPackage
-            mkAgentVersionSmokePackage
+            mkWorkloadPackage
+            mkWorkloadVersionSmokePackage
             mkCloudJobPackage
             mkCloudSmokePackage
             mkCredentialSlotSmokePackage

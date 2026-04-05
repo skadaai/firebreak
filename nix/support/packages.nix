@@ -23,11 +23,11 @@ rec {
       ];
       text = renderTemplate {
         "@AGENT_BIN@" = agentBin;
-        "@AGENT_CONFIG_DIR_NAME@" = agentConfigDirName;
-        "@AGENT_CONFIG_SUBDIR@" = agentConfigSubdir;
+        "@STATE_DIR_NAME@" = agentConfigDirName;
+        "@STATE_SUBDIR@" = agentConfigSubdir;
         "@AGENT_DISPLAY_NAME@" = agentDisplayName;
         "@AGENT_PACKAGE@" = agentPackage;
-        "@DEFAULT_AGENT_CONFIG_HOST_DIR@" = defaultAgentConfigHostDir;
+        "@DEFAULT_STATE_ROOT@" = defaultAgentConfigHostDir;
         "@WORKSPACE_BOOTSTRAP_CONFIG_HOST_DIR@" = workspaceBootstrapConfigHostDir;
       } ../../modules/base/tests/agent-smoke.sh;
     };
@@ -93,7 +93,7 @@ rec {
         "@AGENT_PACKAGE@" = agentPackage;
         "@AGENT_BIN@" = agentBin;
         "@AGENT_DISPLAY_NAME@" = agentDisplayName;
-        "@AGENT_CONFIG_SUBDIR@" = agentConfigSubdir;
+        "@STATE_SUBDIR@" = agentConfigSubdir;
         "@AUTH_FILE@" = authFile;
         "@API_KEY_FILE@" = apiKeyFile;
         "@API_KEY_ENV@" = apiKeyEnv;
@@ -309,7 +309,7 @@ rec {
       } ../../modules/base/host/firebreak-validate.sh;
     };
 
-  mkAgentVersionSmokePackage = {
+  mkWorkloadVersionSmokePackage = {
     name,
     agentPackage,
     agentDisplayName,
@@ -497,7 +497,7 @@ rec {
         };
         extraModules = [
           ({ pkgs, ... }: {
-            agentVm.extraSystemPackages = with pkgs; [
+            workloadVm.extraSystemPackages = with pkgs; [
               gnugrep
               gnused
               python3

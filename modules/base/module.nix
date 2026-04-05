@@ -1,13 +1,13 @@
 { config, lib, pkgs, renderTemplate, ... }:
 let
-  cfg = config.agentVm;
+  cfg = config.workloadVm;
   devHome = "/var/lib/${cfg.devUser}";
   localBin =
-    if cfg.agentToolsEnabled then
-      "${cfg.agentToolsMount}/.local/bin"
+    if cfg.toolRuntimesEnabled then
+      "${cfg.toolRuntimesMount}/.local/bin"
     else
       "${devHome}/.local/bin";
-  sharedAgentConfigEnvFile = "${cfg.hostMetaMount}/firebreak-shared-agent.env";
+  sharedStateRootsEnvFile = "${cfg.hostMetaMount}/firebreak-shared-state.env";
   renderCredentialFileBindings = bindings:
     lib.concatStringsSep "\n" (map
       (binding: "${binding.slotPath}\t${binding.runtimePath}\t${if binding.required then "1" else "0"}")
@@ -22,24 +22,24 @@ let
       bindings);
   renderShellArray = values:
     lib.concatMapStringsSep "\n" (value: "  ${lib.escapeShellArg value}") values;
-  resolveAgentConfigScript = pkgs.writeShellScript "firebreak-resolve-agent-config"
+  resolveStateRootScript = pkgs.writeShellScript "firebreak-resolve-state-root"
     (renderTemplate {
-      "@FIREBREAK_SHARED_AGENT_STATE_LIB@" = builtins.readFile ./guest/shared-state-roots.sh;
-    } ./guest/resolve-agent-config.sh);
-  sharedAgentWrapperPackages = lib.mapAttrsToList
+      "@FIREBREAK_SHARED_STATE_ROOT_LIB@" = builtins.readFile ./guest/shared-state-roots.sh;
+    } ./guest/resolve-state-root.sh);
+  sharedToolWrapperPackages = lib.mapAttrsToList
     (wrapperName: wrapper:
       pkgs.writeShellScriptBin wrapperName
         (renderTemplate {
-          "@FIREBREAK_SHARED_AGENT_STATE_LIB@" = builtins.readFile ./guest/shared-state-roots.sh;
+          "@FIREBREAK_SHARED_STATE_ROOT_LIB@" = builtins.readFile ./guest/shared-state-roots.sh;
           "@FIREBREAK_SHARED_CREDENTIAL_SLOT_LIB@" = builtins.readFile ./guest/shared-credential-slots.sh;
           "@WRAPPER_NAME@" = wrapperName;
           "@WRAPPER_DISPLAY_NAME@" = wrapper.displayName;
           "@REAL_BIN_NAME@" = wrapper.realBinName;
           "@REAL_BIN_PATH@" = wrapper.realBinPath;
-          "@REAL_BIN_TOOLS_FALLBACK@" = "${cfg.agentToolsMount}/.local/bin/${wrapper.realBinName}";
+          "@REAL_BIN_TOOLS_FALLBACK@" = "${cfg.toolRuntimesMount}/.local/bin/${wrapper.realBinName}";
           "@REAL_BIN_HOME_FALLBACK@" = "${devHome}/.local/bin/${wrapper.realBinName}";
-          "@SPECIFIC_CONFIG_VAR@" = "${wrapper.selectorPrefix}_CONFIG";
-          "@CONFIG_SUBDIR@" = wrapper.configSubdir;
+          "@SPECIFIC_STATE_MODE_VAR@" = "${wrapper.selectorPrefix}_STATE_MODE";
+          "@STATE_SUBDIR@" = wrapper.configSubdir;
           "@CONFIG_ENV_EXPORTS@" = wrapper.configEnvExports;
           "@CREDENTIAL_SLOT_SPECIFIC_VAR@" = "${wrapper.selectorPrefix}_CREDENTIAL_SLOT";
           "@CREDENTIAL_SLOT_SUBDIR@" = wrapper.credentials.slotSubdir;
@@ -48,22 +48,22 @@ let
           "@CREDENTIAL_HELPER_BINDINGS@" = renderCredentialHelperBindings wrapper.credentials.helperBindings;
           "@CREDENTIAL_LOGIN_ARGS@" = renderShellArray wrapper.credentials.loginArgs;
           "@CREDENTIAL_LOGIN_MATERIALIZATION@" = wrapper.credentials.loginMaterialization;
-          "@RESOLVE_AGENT_CONFIG_BIN@" = "${resolveAgentConfigScript}";
-        } ./guest/shared-agent-wrapper.sh))
-    cfg.sharedAgentConfig.agents;
-  sharedAgentWrapperPackage =
-    if sharedAgentWrapperPackages == [ ] then
+          "@RESOLVE_STATE_ROOT_BIN@" = "${resolveStateRootScript}";
+        } ./guest/shared-tool-wrapper.sh))
+    cfg.sharedStateRoots.tools;
+  sharedToolWrapperPackage =
+    if sharedToolWrapperPackages == [ ] then
       null
     else
       pkgs.symlinkJoin {
-        name = "${cfg.name}-shared-agent-wrappers";
-        paths = sharedAgentWrapperPackages;
+        name = "${cfg.name}-shared-tool-wrappers";
+        paths = sharedToolWrapperPackages;
       };
-  sharedAgentWrapperBinDir =
-    if sharedAgentWrapperPackage == null then
+  sharedToolWrapperBinDir =
+    if sharedToolWrapperPackage == null then
       ""
     else
-      "${sharedAgentWrapperPackage}/bin";
+      "${sharedToolWrapperPackage}/bin";
   hostIsDarwin = lib.hasSuffix "-darwin" cfg.hostSystem;
   roStoreShareProto = if hostIsDarwin then "virtiofs" else "9p";
   localHypervisor = if hostIsDarwin then "vfkit" else "qemu";
@@ -75,33 +75,33 @@ let
     "@WORKER_KINDS_FILE@" = cfg.workerKindsFile;
     "@WORKER_LOCAL_STATE_DIR@" = cfg.workerLocalStateDir;
     "@WORKSPACE_MOUNT@" = cfg.workspaceMount;
-    "@SHARED_AGENT_CONFIG_ENV_EXPORTS@" = lib.optionalString cfg.sharedAgentConfig.enable ''
-      export FIREBREAK_SHARED_AGENT_CONFIG_ENABLED=1
-      export FIREBREAK_SHARED_AGENT_CONFIG_HOST_MOUNT=${lib.escapeShellArg cfg.sharedAgentConfig.hostMount}
-      export FIREBREAK_SHARED_AGENT_CONFIG_VM_ROOT=${lib.escapeShellArg cfg.sharedAgentConfig.vmRoot}
-      export FIREBREAK_SHARED_AGENT_CONFIG_FRESH_ROOT=${lib.escapeShellArg cfg.sharedAgentConfig.freshRoot}
-      export FIREBREAK_SHARED_AGENT_CONFIG_ENV_FILE=${lib.escapeShellArg sharedAgentConfigEnvFile}
-      export FIREBREAK_SHARED_AGENT_CONFIG_HOST_MOUNTED_FLAG=${lib.escapeShellArg cfg.sharedAgentConfig.mountedFlag}
-      export FIREBREAK_RESOLVE_AGENT_CONFIG_BIN=${lib.escapeShellArg "${resolveAgentConfigScript}"}
+    "@SHARED_STATE_ROOT_ENV_EXPORTS@" = lib.optionalString cfg.sharedStateRoots.enable ''
+      export FIREBREAK_SHARED_STATE_ROOT_ENABLED=1
+      export FIREBREAK_SHARED_STATE_ROOT_HOST_MOUNT=${lib.escapeShellArg cfg.sharedStateRoots.hostMount}
+      export FIREBREAK_SHARED_STATE_ROOT_VM_ROOT=${lib.escapeShellArg cfg.sharedStateRoots.vmRoot}
+      export FIREBREAK_SHARED_STATE_ROOT_FRESH_ROOT=${lib.escapeShellArg cfg.sharedStateRoots.freshRoot}
+      export FIREBREAK_SHARED_STATE_ROOT_ENV_FILE=${lib.escapeShellArg sharedStateRootsEnvFile}
+      export FIREBREAK_SHARED_STATE_ROOT_HOST_MOUNTED_FLAG=${lib.escapeShellArg cfg.sharedStateRoots.mountedFlag}
+      export FIREBREAK_RESOLVE_STATE_ROOT_BIN=${lib.escapeShellArg "${resolveStateRootScript}"}
     '';
     "@SHARED_CREDENTIAL_SLOT_ENV_EXPORTS@" = lib.optionalString cfg.sharedCredentialSlots.enable ''
       export FIREBREAK_SHARED_CREDENTIAL_SLOTS_ENABLED=1
       export FIREBREAK_SHARED_CREDENTIAL_SLOTS_HOST_MOUNT=${lib.escapeShellArg cfg.sharedCredentialSlots.hostMount}
-      export FIREBREAK_SHARED_CREDENTIAL_SLOTS_ENV_FILE=${lib.escapeShellArg sharedAgentConfigEnvFile}
+      export FIREBREAK_SHARED_CREDENTIAL_SLOTS_ENV_FILE=${lib.escapeShellArg sharedStateRootsEnvFile}
       export FIREBREAK_SHARED_CREDENTIAL_SLOTS_MOUNTED_FLAG=${lib.escapeShellArg cfg.sharedCredentialSlots.mountedFlag}
     '';
-    "@SHARED_AGENT_WRAPPER_ENV_EXPORTS@" = lib.optionalString (sharedAgentWrapperBinDir != "") ''
-      export FIREBREAK_SHARED_AGENT_WRAPPER_BIN_DIR=${lib.escapeShellArg sharedAgentWrapperBinDir}
+    "@SHARED_TOOL_WRAPPER_ENV_EXPORTS@" = lib.optionalString (sharedToolWrapperBinDir != "") ''
+      export FIREBREAK_SHARED_TOOL_WRAPPER_BIN_DIR=${lib.escapeShellArg sharedToolWrapperBinDir}
     '';
   };
 
   baseShellInit = renderTemplate scriptVars ./guest/shell-init.sh;
   bootstrapEnabled = cfg.bootstrapScript != null;
 in {
-  options.agentVm = with lib; {
+  options.workloadVm = with lib; {
     name = mkOption {
       type = types.str;
-      default = "agent-vm";
+      default = "workload-vm";
       description = "MicroVM hostname and primary identity.";
     };
 
@@ -153,90 +153,90 @@ in {
       description = "World-readable file containing the resolved guest start directory.";
     };
 
-    agentSessionModeFile = mkOption {
+    workerSessionModeFile = mkOption {
       type = types.str;
-      default = "/run/agent-session-mode";
+      default = "/run/worker-session-mode";
       description = "World-readable file containing the requested interactive session mode.";
     };
 
-    agentCommandFile = mkOption {
+    workerCommandFile = mkOption {
       type = types.str;
-      default = "/run/agent-command";
-      description = "World-readable file containing the agent command selected for the current session.";
+      default = "/run/worker-command";
+      description = "World-readable file containing the command selected for the current session.";
     };
 
-    agentExecOutputMount = mkOption {
+    workerExecOutputMount = mkOption {
       type = types.str;
-      default = "/run/agent-exec-output";
+      default = "/run/worker-exec-output";
       description = "Guest path for a host-shared directory used to persist one-shot command stdout, stderr, and exit code.";
     };
 
-    agentToolsEnabled = mkOption {
+    toolRuntimesEnabled = mkOption {
       type = types.bool;
       default = false;
-      description = "Whether the VM mounts a host-shared persistent tools directory for bootstrap-managed agent runtimes.";
+      description = "Whether the VM mounts a host-shared persistent tools directory for bootstrap-managed tool runtimes.";
     };
 
-    agentToolsMount = mkOption {
+    toolRuntimesMount = mkOption {
       type = types.str;
-      default = "/run/agent-tools-host";
-      description = "Guest path for an optional host-shared directory used to persist bootstrap-managed agent tools across VM launches.";
+      default = "/run/tool-runtimes-host";
+      description = "Guest path for an optional host-shared directory used to persist bootstrap-managed tool runtimes across VM launches.";
     };
 
-    agentCommand = mkOption {
+    defaultCommand = mkOption {
       type = types.nullOr types.str;
       default = null;
-      description = "Default agent command to launch in the interactive session.";
+      description = "Default command to launch in the interactive session.";
     };
 
-    agentPromptCommand = mkOption {
+    promptCommand = mkOption {
       type = types.nullOr types.str;
       default = null;
-      description = "Shell command used to start a non-interactive agent session from FIREBREAK_AGENT_PROMPT.";
+      description = "Shell command used to start a non-interactive worker session from FIREBREAK_AGENT_PROMPT.";
     };
 
-    agentPromptFile = mkOption {
+    promptFile = mkOption {
       type = types.str;
-      default = "/run/agent-prompt";
-      description = "World-readable file containing the initial prompt for non-interactive agent execution.";
+      default = "/run/worker-prompt";
+      description = "World-readable file containing the initial prompt for non-interactive worker execution.";
     };
 
-    sharedAgentConfig = mkOption {
+    sharedStateRoots = mkOption {
       default = { };
-      description = "Shared agent config-root contract for sandboxes and dedicated workloads.";
+      description = "Shared state-root contract for sandboxes and dedicated workloads.";
       type = types.submodule ({ ... }: {
         options = {
           enable = mkOption {
             type = types.bool;
             default = false;
-            description = "Whether the VM exposes the shared agent config-root contract.";
+            description = "Whether the VM exposes the shared state-root contract.";
           };
 
           hostMount = mkOption {
             type = types.str;
-            default = "/run/agent-config-host-root";
-            description = "Guest path used for the shared host-backed agent config root.";
+            default = "/run/firebreak-state-root";
+            description = "Guest path used for the shared host-backed state root.";
           };
 
           vmRoot = mkOption {
             type = types.str;
             default = "${devHome}/.firebreak";
-            description = "Guest root used for persistent VM-local agent config directories.";
+            description = "Guest root used for persistent VM-local state directories.";
           };
 
           freshRoot = mkOption {
             type = types.str;
-            default = "/run/firebreak-agent-config-fresh";
-            description = "Guest root used for fresh ephemeral agent config directories.";
+            default = "/run/firebreak-state-fresh";
+            description = "Guest root used for fresh ephemeral state directories.";
           };
 
           mountedFlag = mkOption {
             type = types.str;
-            default = "/run/firebreak-shared-agent-config-host-mounted";
-            description = "Guest file used to indicate that the shared host config root is mounted.";
+            default = "/run/firebreak-shared-state-root-mounted";
+            description = "Guest file used to indicate that the shared host state root is mounted.";
           };
 
-          agents = mkOption {
+          tools = mkOption {
             type = types.attrsOf (types.submodule ({ name, ... }: {
               options = {
                 displayName = mkOption {
@@ -264,12 +264,12 @@ in {
 
                 configSubdir = mkOption {
                   type = types.str;
-                  description = "Stable subdirectory name inside the resolved shared agent config root.";
+                  description = "Stable subdirectory name inside the resolved shared state root.";
                 };
 
                 configEnvExports = mkOption {
                   type = types.lines;
-                  description = "Shell exports that map the resolved config directory into agent-native env vars.";
+                  description = "Shell exports that map the resolved state directory into tool-native env vars.";
                 };
 
                 credentials = mkOption {
@@ -377,7 +377,7 @@ in {
               };
             }));
             default = { };
-            description = "Wrapper commands generated for workloads that expose agent CLIs through the shared config-root contract.";
+            description = "Wrapper commands generated for workloads that expose tool CLIs through the shared state-root contract.";
           };
         };
       });
@@ -503,7 +503,7 @@ in {
       description = "Guest-owned state directory for guest-local process workers.";
     };
 
-    sharedAgentWrapperBinDir = mkOption {
+    sharedToolWrapperBinDir = mkOption {
       type = types.str;
       default = "";
       description = "Internal wrapper-bin path used to prefer generated Firebreak wrappers over raw tool binaries.";
@@ -530,15 +530,15 @@ in {
     assertions = [
       {
         assertion = lib.hasPrefix "/etc/" cfg.workerKindsFile;
-        message = "agentVm.workerKindsFile must stay under /etc so Firebreak can materialize it declaratively.";
+        message = "workloadVm.workerKindsFile must stay under /etc so Firebreak can materialize it declaratively.";
       }
     ];
 
     environment.systemPackages =
       cfg.extraSystemPackages
-      ++ lib.optional (sharedAgentWrapperPackage != null) sharedAgentWrapperPackage;
+      ++ lib.optional (sharedToolWrapperPackage != null) sharedToolWrapperPackage;
 
-    agentVm.sharedAgentWrapperBinDir = sharedAgentWrapperBinDir;
+    workloadVm.sharedToolWrapperBinDir = sharedToolWrapperBinDir;
 
     environment.etc.${lib.removePrefix "/etc/" cfg.workerKindsFile}.text = cfg.workerKindsJson;
 

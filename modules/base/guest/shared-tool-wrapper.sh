@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -eu
 
-@FIREBREAK_SHARED_AGENT_STATE_LIB@
+@FIREBREAK_SHARED_STATE_ROOT_LIB@
 @FIREBREAK_SHARED_CREDENTIAL_SLOT_LIB@
 
-export FIREBREAK_AGENT_CONFIG_SPECIFIC_VAR='@SPECIFIC_CONFIG_VAR@'
-export FIREBREAK_AGENT_CONFIG_SUBDIR='@CONFIG_SUBDIR@'
-export FIREBREAK_AGENT_CONFIG_DISPLAY_NAME='@WRAPPER_DISPLAY_NAME@'
+export FIREBREAK_STATE_MODE_SPECIFIC_VAR='@SPECIFIC_STATE_MODE_VAR@'
+export FIREBREAK_STATE_SUBDIR='@STATE_SUBDIR@'
+export FIREBREAK_STATE_DISPLAY_NAME='@WRAPPER_DISPLAY_NAME@'
 
 credential_file_bindings=$(cat <<'EOF'
 @CREDENTIAL_FILE_BINDINGS@
@@ -108,7 +108,7 @@ apply_file_bindings() {
   while IFS="$tab" read -r slot_rel_path runtime_rel_path binding_required || [ -n "$slot_rel_path" ]; do
     [ -n "$slot_rel_path" ] || continue
     slot_path=$selected_slot_root/$slot_rel_path
-    runtime_path=$agent_config_dir/$runtime_rel_path
+    runtime_path=$tool_state_dir/$runtime_rel_path
 
     if [ "$runtime_path" = "$slot_path" ]; then
       continue
@@ -134,7 +134,7 @@ sync_file_bindings_back() {
   while IFS="$tab" read -r slot_rel_path runtime_rel_path _binding_required || [ -n "$slot_rel_path" ]; do
     [ -n "$slot_rel_path" ] || continue
     slot_path=$selected_slot_root/$slot_rel_path
-    runtime_path=$agent_config_dir/$runtime_rel_path
+    runtime_path=$tool_state_dir/$runtime_rel_path
 
     if [ "$runtime_path" = "$slot_path" ]; then
       continue
@@ -208,19 +208,19 @@ cleanup_helper_root() {
 trap cleanup_helper_root EXIT
 
 load_firebreak_shared_credential_defaults
-state_config_dir=$(@RESOLVE_AGENT_CONFIG_BIN@)
+state_root_dir=$(@RESOLVE_STATE_ROOT_BIN@)
 selected_slot=$(resolve_selected_credential_slot '@CREDENTIAL_SLOT_SPECIFIC_VAR@')
 selected_slot_root=""
 if [ -n "$selected_slot" ]; then
   selected_slot_root=$(resolve_selected_credential_slot_root "$selected_slot" '@CREDENTIAL_SLOT_SUBDIR@')
 fi
 
-agent_config_dir=$state_config_dir
+tool_state_dir=$state_root_dir
 if is_login_command "$@" && [ -n "$selected_slot_root" ] && [ '@CREDENTIAL_LOGIN_MATERIALIZATION@' = 'slot-root' ]; then
-  agent_config_dir=$selected_slot_root
+  tool_state_dir=$selected_slot_root
 fi
 
-export AGENT_CONFIG_DIR="$agent_config_dir"
+export FIREBREAK_TOOL_STATE_DIR="$tool_state_dir"
 apply_file_bindings
 apply_env_bindings
 apply_helper_bindings

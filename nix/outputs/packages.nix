@@ -4,8 +4,8 @@
   hostIsLinux,
   lib,
   localVmArtifacts,
-  mkAgentPackage,
-  mkAgentVersionSmokePackage,
+  mkWorkloadPackage,
+  mkWorkloadVersionSmokePackage,
   mkCloudJobPackage,
   mkCloudSmokePackage,
   mkCredentialSlotSmokePackage,
@@ -52,7 +52,7 @@
     workspaceBootstrapConfigHostDir = "$HOME/.codex";
   };
 
-  firebreak-test-smoke-codex-version = mkAgentVersionSmokePackage {
+  firebreak-test-smoke-codex-version = mkWorkloadVersionSmokePackage {
     name = "firebreak-test-smoke-codex-version";
     agentPackage = "firebreak-codex";
     agentDisplayName = "Codex";

@@ -15,7 +15,7 @@
   memoryMiB ? 3072,
   extraSystemPackages ? [ ],
   extraBootstrapPackages ? [ ],
-  sharedAgentConfig ? { },
+  sharedStateRoots ? { },
   sharedCredentialSlots ? { },
   extraShellInit ? "",
 }:
@@ -27,9 +27,9 @@ moduleArgs@{
   ...
 }:
 let
-  cfg = config.agentVm;
+  cfg = config.workloadVm;
   devHome = "/var/lib/${cfg.devUser}";
-  toolsMount = cfg.agentToolsMount;
+  toolsMount = cfg.toolRuntimesMount;
   localBin = "${devHome}/.local/bin";
   xdgConfigHome = "${devHome}/.config";
   xdgCacheHome = "${devHome}/.cache";
@@ -39,7 +39,7 @@ let
   installPrefix = "${devHome}/.local";
   packageNodeModules = "${installPrefix}/lib/node_modules/${packageSpec}";
   bootstrapReadyMarker =
-    if cfg.agentToolsEnabled
+    if cfg.toolRuntimesEnabled
     then "${toolsMount}/bootstrap-ready"
     else "${devHome}/.cache/firebreak-tools/${vmName}/bootstrap-ready";
   installStateId = builtins.hashString "sha256" (builtins.toJSON {
@@ -161,7 +161,7 @@ let
       set -eu
 
       ready_marker='${bootstrapReadyMarker}'
-      bootstrap_state_path=''${FIREBREAK_BOOTSTRAP_STATE_PATH:-/run/firebreak-agent/bootstrap-state.json}
+      bootstrap_state_path=''${FIREBREAK_BOOTSTRAP_STATE_PATH:-/run/firebreak-worker/bootstrap-state.json}
       timeout_seconds=''${FIREBREAK_BOOTSTRAP_WAIT_TIMEOUT_SECONDS:-300}
       elapsed_seconds=0
 
@@ -255,7 +255,7 @@ PY
     '';
   };
   scriptVars = {
-    "@AGENT_EXEC_OUTPUT_MOUNT@" = cfg.agentExecOutputMount;
+    "@AGENT_EXEC_OUTPUT_MOUNT@" = cfg.workerExecOutputMount;
     "@BIN_NAME@" = binName;
     "@AGENT_TOOLS_MOUNT@" = toolsMount;
     "@BOOTSTRAP_READY_MARKER@" = bootstrapReadyMarker;
@@ -284,11 +284,11 @@ PY
   };
 in {
   config = {
-    agentVm = {
+    workloadVm = {
       brandingTagline = tagline;
-      sharedAgentConfig = sharedAgentConfig;
+      sharedStateRoots = sharedStateRoots;
       sharedCredentialSlots = sharedCredentialSlots;
-      agentToolsEnabled = true;
+      toolRuntimesEnabled = true;
       memoryMiB = lib.mkDefault memoryMiB;
       extraSystemPackages = with pkgs; [
         nodejs_20

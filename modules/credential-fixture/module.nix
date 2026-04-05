@@ -3,7 +3,7 @@ let
   credentialFixtureScript = ''
       set -eu
 
-      fixture_home=''${FIXTURE_HOME:-''${AGENT_CONFIG_DIR:-$HOME/.firebreak/credential-fixture}}
+      fixture_home=''${FIXTURE_HOME:-''${FIREBREAK_TOOL_STATE_DIR:-$HOME/.firebreak/credential-fixture}}
       fixture_name=''${FIXTURE_NAME:-credential-fixture}
 
       case "''${1:-status}" in
@@ -53,19 +53,19 @@ let
   };
 in {
   config = {
-    agentVm = {
+    workloadVm = {
       name = lib.mkDefault "firebreak-credential-fixture";
-      agentCommand = "credential-fixture";
-      sharedAgentConfig = {
+      defaultCommand = "credential-fixture";
+      sharedStateRoots = {
         enable = true;
-        agents.credential-fixture = {
+        tools.credential-fixture = {
           displayName = "Credential Fixture";
           selectorPrefix = "FIXTURE";
           realBinPath = lib.getExe credentialFixture;
           configSubdir = "credential-fixture";
           configEnvExports = ''
             export FIXTURE_NAME="credential-fixture"
-            export FIXTURE_HOME="$agent_config_dir"
+            export FIXTURE_HOME="$tool_state_dir"
           '';
           credentials = {
             slotSubdir = "credential-fixture";
@@ -92,7 +92,7 @@ in {
             loginMaterialization = "slot-root";
           };
         };
-        agents.credential-fixture-peer = {
+        tools.credential-fixture-peer = {
           displayName = "Credential Fixture Peer";
           selectorPrefix = "PEER";
           realBinName = "credential-fixture-peer";
@@ -100,7 +100,7 @@ in {
           configSubdir = "credential-fixture-peer";
           configEnvExports = ''
             export FIXTURE_NAME="credential-fixture-peer"
-            export FIXTURE_HOME="$agent_config_dir"
+            export FIXTURE_HOME="$tool_state_dir"
           '';
           credentials = {
             slotSubdir = "credential-fixture-peer";

@@ -8,7 +8,7 @@
 
 # Firebreak
 
-Firebreak is a VM-first control plane for running coding agents with a small public interface.
+Firebreak is a VM-first control plane for running tools and workloads with a small public interface.
 
 ## Firebreak CLI
 
@@ -73,10 +73,10 @@ nix run .#firebreak -- doctor
 Example `.firebreak.env`:
 
 ```dotenv
-AGENT_CONFIG=host
+FIREBREAK_STATE_MODE=host
 # FIREBREAK_LAUNCH_MODE=run
-# CODEX_CONFIG=workspace
-# CLAUDE_CONFIG=workspace
+# CODEX_STATE_MODE=workspace
+# CLAUDE_STATE_MODE=workspace
 # FIREBREAK_CREDENTIAL_SLOT=default
 # FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH=~/.firebreak/credentials
 # CODEX_CREDENTIAL_SLOT=backup
@@ -84,7 +84,7 @@ AGENT_CONFIG=host
 
 ## State Roots And Credential Slots
 
-Use `AGENT_CONFIG` and per-tool overrides such as `CODEX_CONFIG` and `CLAUDE_CONFIG` to choose the runtime state root:
+Use `FIREBREAK_STATE_MODE` and per-tool overrides such as `CODEX_STATE_MODE` and `CLAUDE_STATE_MODE` to choose the runtime state root:
 
 - `host`: shared host-backed runtime state
 - `workspace`: per-project runtime state

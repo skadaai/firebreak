@@ -27,8 +27,8 @@ last_updated: 2026-04-04
 ## Dependencies
 
 - runtime path resolution in [modules/profiles/local/host/run-wrapper.sh](../../modules/profiles/local/host/run-wrapper.sh)
-- guest config/state resolution in [modules/base/guest/resolve-agent-config.sh](../../modules/base/guest/resolve-agent-config.sh)
-- shared wrapper behavior in [modules/base/guest/shared-agent-wrapper.sh](../../modules/base/guest/shared-agent-wrapper.sh)
+- guest state resolution in [modules/base/guest/resolve-state-root.sh](../../modules/base/guest/resolve-state-root.sh)
+- shared wrapper behavior in [modules/base/guest/shared-tool-wrapper.sh](../../modules/base/guest/shared-tool-wrapper.sh)
 - shipped package declarations in [nix/outputs/local-vm-artifacts.nix](../../nix/outputs/local-vm-artifacts.nix)
 - shared package helpers in [nix/support/runtime.nix](../../nix/support/runtime.nix)
 

@@ -1,5 +1,5 @@
-load_firebreak_shared_agent_defaults() {
-  env_file=${FIREBREAK_SHARED_AGENT_CONFIG_ENV_FILE:-/run/microvm-host-meta/firebreak-shared-agent.env}
+load_firebreak_shared_state_defaults() {
+  env_file=${FIREBREAK_SHARED_STATE_ROOT_ENV_FILE:-/run/microvm-host-meta/firebreak-shared-state.env}
   if [ -r "$env_file" ]; then
     # shellcheck disable=SC1090
     . "$env_file"
@@ -46,10 +46,10 @@ resolve_workspace_state_dir() {
   project_key=$(firebreak_state_sha256 "$project_root")
   project_key=$(printf '%.16s' "$project_key")
 
-  workspace_state_root=${FIREBREAK_SHARED_AGENT_CONFIG_VM_ROOT:-/var/lib/dev/.firebreak}
-  mounted_flag=${FIREBREAK_SHARED_AGENT_CONFIG_HOST_MOUNTED_FLAG:-/run/firebreak-shared-agent-config-host-mounted}
+  workspace_state_root=${FIREBREAK_SHARED_STATE_ROOT_VM_ROOT:-/var/lib/dev/.firebreak}
+  mounted_flag=${FIREBREAK_SHARED_STATE_ROOT_HOST_MOUNTED_FLAG:-/run/firebreak-shared-state-root-mounted}
   if [ -e "$mounted_flag" ]; then
-    workspace_state_root=${FIREBREAK_SHARED_AGENT_CONFIG_HOST_MOUNT:-/run/agent-config-host-root}
+    workspace_state_root=${FIREBREAK_SHARED_STATE_ROOT_HOST_MOUNT:-/run/firebreak-state-root}
   fi
 
   printf '%s\n' "$workspace_state_root/workspaces/$project_key/$config_subdir"

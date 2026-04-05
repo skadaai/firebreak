@@ -792,10 +792,10 @@ write_firebreak_launch_script() {
   quoted_unset_env_args=""
   while IFS='=' read -r env_key _; do
     case "$env_key" in
-      AGENT_CONFIG|AGENT_CONFIG_HOST_PATH|FIREBREAK_CREDENTIAL_SLOT|FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH|*_CREDENTIAL_SLOT)
+      FIREBREAK_STATE_MODE|FIREBREAK_STATE_ROOT|FIREBREAK_CREDENTIAL_SLOT|FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH|*_CREDENTIAL_SLOT)
         quoted_unset_env_args="$quoted_unset_env_args -u $(quote_arg "$env_key")"
         ;;
-      *_CONFIG)
+      *_STATE_MODE)
         case "$env_key" in
           NIX_CONFIG|FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG)
             ;;

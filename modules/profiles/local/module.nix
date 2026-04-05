@@ -1,6 +1,6 @@
 { config, lib, pkgs, renderTemplate, ... }:
 let
-  cfg = config.agentVm;
+  cfg = config.workloadVm;
   devHome = "/var/lib/${cfg.devUser}";
   hostMetaFsType = if lib.hasSuffix "-darwin" cfg.hostSystem then "virtiofs" else "9p";
 
@@ -21,28 +21,28 @@ let
     "@CHOWN@" = "${pkgs.coreutils}/bin/chown";
     "@DEV_HOME@" = devHome;
     "@DEV_USER@" = cfg.devUser;
-    "@AGENT_COMMAND@" = if cfg.agentCommand == null then "" else cfg.agentCommand;
-    "@AGENT_COMMAND_FILE@" = cfg.agentCommandFile;
-    "@AGENT_EXEC_OUTPUT_MOUNT@" = cfg.agentExecOutputMount;
-    "@AGENT_TOOLS_ENABLED@" = if cfg.agentToolsEnabled then "1" else "0";
-    "@AGENT_TOOLS_MOUNT@" = cfg.agentToolsMount;
-    "@AGENT_SESSION_MODE_FILE@" = cfg.agentSessionModeFile;
+    "@AGENT_COMMAND@" = if cfg.defaultCommand == null then "" else cfg.defaultCommand;
+    "@AGENT_COMMAND_FILE@" = cfg.workerCommandFile;
+    "@AGENT_EXEC_OUTPUT_MOUNT@" = cfg.workerExecOutputMount;
+    "@AGENT_TOOLS_ENABLED@" = if cfg.toolRuntimesEnabled then "1" else "0";
+    "@AGENT_TOOLS_MOUNT@" = cfg.toolRuntimesMount;
+    "@AGENT_SESSION_MODE_FILE@" = cfg.workerSessionModeFile;
     "@HOST_META_MOUNT@" = cfg.hostMetaMount;
     "@ID@" = "${pkgs.coreutils}/bin/id";
     "@GROUPMOD@" = "${pkgs.shadow}/bin/groupmod";
     "@MKDIR@" = "${pkgs.coreutils}/bin/mkdir";
-    "@SHARED_AGENT_CONFIG_ENABLED@" = if cfg.sharedAgentConfig.enable then "1" else "0";
-    "@SHARED_AGENT_CONFIG_FRESH_ROOT@" = cfg.sharedAgentConfig.freshRoot;
-    "@SHARED_AGENT_CONFIG_HOST_MOUNT@" = cfg.sharedAgentConfig.hostMount;
-    "@SHARED_AGENT_CONFIG_MOUNTED_FLAG@" = cfg.sharedAgentConfig.mountedFlag;
-    "@SHARED_AGENT_CONFIG_VM_ROOT@" = cfg.sharedAgentConfig.vmRoot;
+    "@SHARED_STATE_ROOT_ENABLED@" = if cfg.sharedStateRoots.enable then "1" else "0";
+    "@SHARED_STATE_ROOT_FRESH_ROOT@" = cfg.sharedStateRoots.freshRoot;
+    "@SHARED_STATE_ROOT_HOST_MOUNT@" = cfg.sharedStateRoots.hostMount;
+    "@SHARED_STATE_ROOT_MOUNTED_FLAG@" = cfg.sharedStateRoots.mountedFlag;
+    "@SHARED_STATE_ROOT_VM_ROOT@" = cfg.sharedStateRoots.vmRoot;
     "@SHARED_CREDENTIAL_SLOTS_ENABLED@" = if cfg.sharedCredentialSlots.enable then "1" else "0";
     "@SHARED_CREDENTIAL_SLOTS_HOST_MOUNT@" = cfg.sharedCredentialSlots.hostMount;
     "@SHARED_CREDENTIAL_SLOTS_MOUNTED_FLAG@" = cfg.sharedCredentialSlots.mountedFlag;
     "@PYTHON3@" = "${pkgs.python3}/bin/python3";
     "@START_DIR_FILE@" = cfg.startDirFile;
     "@RUNUSER@" = "${pkgs.util-linux}/bin/runuser";
-    "@SHARED_AGENT_WRAPPER_BIN_DIR@" = cfg.sharedAgentWrapperBinDir;
+    "@SHARED_AGENT_WRAPPER_BIN_DIR@" = cfg.sharedToolWrapperBinDir;
     "@USERMOD@" = "${pkgs.shadow}/bin/usermod";
     "@WORKER_BRIDGE_ENABLED@" = if cfg.workerBridgeEnabled then "1" else "0";
     "@WORKER_BRIDGE_MOUNT@" = cfg.workerBridgeMount;

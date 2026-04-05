@@ -1,43 +1,43 @@
-{ self, mkAgentVm, pkgs }:
+{ self, mkWorkloadVm, pkgs }:
 {
-  firebreak-codex = mkAgentVm {
+  firebreak-codex = mkWorkloadVm {
     name = "firebreak-codex";
     extraModules = [ self.nixosModules.firebreak-codex ];
   };
 
-  firebreak-claude-code = mkAgentVm {
+  firebreak-claude-code = mkWorkloadVm {
     name = "firebreak-claude-code";
     extraModules = [ self.nixosModules.firebreak-claude-code ];
   };
 
-  firebreak-credential-fixture = mkAgentVm {
+  firebreak-credential-fixture = mkWorkloadVm {
     name = "firebreak-credential-fixture";
     extraModules = [ self.nixosModules.firebreak-credential-fixture ];
   };
 
-  firebreak-interactive-echo = mkAgentVm {
+  firebreak-interactive-echo = mkWorkloadVm {
     name = "firebreak-interactive-echo";
     extraModules = [ self.nixosModules.firebreak-interactive-echo ];
   };
 
-  firebreak-codex-cloud = mkAgentVm {
+  firebreak-codex-cloud = mkWorkloadVm {
     name = "firebreak-codex-cloud";
     profileModules = [ self.nixosModules.firebreak-cloud-profile ];
     extraModules = [ self.nixosModules.firebreak-codex ];
   };
 
-  firebreak-claude-code-cloud = mkAgentVm {
+  firebreak-claude-code-cloud = mkWorkloadVm {
     name = "firebreak-claude-code-cloud";
     profileModules = [ self.nixosModules.firebreak-cloud-profile ];
     extraModules = [ self.nixosModules.firebreak-claude-code ];
   };
 
-  firebreak-cloud-smoke = mkAgentVm {
+  firebreak-cloud-smoke = mkWorkloadVm {
     name = "firebreak-cloud-smoke";
     profileModules = [ self.nixosModules.firebreak-cloud-profile ];
     extraModules = [ {
-      agentVm = {
-        agentPromptCommand = ''
+      workloadVm = {
+        promptCommand = ''
           case "$FIREBREAK_AGENT_PROMPT" in
             "Run the timeout validation fixture")
               ./timeout-fixture.sh

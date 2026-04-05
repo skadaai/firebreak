@@ -127,7 +127,7 @@ Run these from the `ao` checkout root.
    Preconditions:
    - create a repo with a real native project config folder such as `.codex/` or `.claude/`
 
-   Run a dedicated VM with `AGENT_CONFIG=workspace`.
+   Run a dedicated VM with `FIREBREAK_STATE_MODE=workspace`.
 
    Confirm:
    - the tool still sees the native project folder from the mounted workspace
@@ -135,7 +135,7 @@ Run these from the `ao` checkout root.
 
 2. Verify `workspace` isolates runtime state without changing project config semantics.
 
-   Launch the same tool in two different repos with `AGENT_CONFIG=workspace`.
+   Launch the same tool in two different repos with `FIREBREAK_STATE_MODE=workspace`.
 
    Confirm:
    - runtime state resolves to different project-hashed directories under the shared state root

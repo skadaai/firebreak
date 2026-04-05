@@ -1,5 +1,5 @@
 load_firebreak_shared_credential_defaults() {
-  env_file=${FIREBREAK_SHARED_CREDENTIAL_SLOTS_ENV_FILE:-/run/microvm-host-meta/firebreak-shared-agent.env}
+  env_file=${FIREBREAK_SHARED_CREDENTIAL_SLOTS_ENV_FILE:-/run/microvm-host-meta/firebreak-shared-state.env}
   if [ -r "$env_file" ]; then
     # shellcheck disable=SC1090
     . "$env_file"

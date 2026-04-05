@@ -14,20 +14,20 @@ firebreak_render_project_config_template() {
 
 # Shared runtime-state mode for local workload VMs.
 # Native project config such as .codex/ or .claude/ still comes from the workspace:
-AGENT_CONFIG=host
+FIREBREAK_STATE_MODE=host
 
 # Public local launch selector:
 # FIREBREAK_LAUNCH_MODE=run
 # FIREBREAK_WORKER_MODE=local
 # FIREBREAK_WORKER_MODES=codex=vm,claude=local
 
-# Optional shared host state root when AGENT_CONFIG=host or workspace.
-# Firebreak resolves per-agent and per-workspace subdirectories under this root:
-# AGENT_CONFIG_HOST_PATH=~/.firebreak
+# Optional shared host state root when FIREBREAK_STATE_MODE=host or workspace.
+# Firebreak resolves per-tool and per-workspace subdirectories under this root:
+# FIREBREAK_STATE_ROOT=~/.firebreak
 
-# Optional per-agent state-mode overrides:
-# CODEX_CONFIG=workspace
-# CLAUDE_CONFIG=workspace
+# Optional per-tool state-mode overrides:
+# CODEX_STATE_MODE=workspace
+# CLAUDE_STATE_MODE=workspace
 
 # Optional shared credential-slot defaults.
 # Slot names are not secrets; they only select which stored credential material to use:
@@ -46,23 +46,23 @@ firebreak_render_project_config_from_answers() {
 # Real environment variables override values in this file.
 EOF
   printf '\n'
-  printf 'AGENT_CONFIG=%s\n' "$FIREBREAK_INIT_AGENT_CONFIG"
+  printf 'FIREBREAK_STATE_MODE=%s\n' "$FIREBREAK_INIT_STATE_MODE"
   printf 'FIREBREAK_LAUNCH_MODE=%s\n' "$FIREBREAK_INIT_LAUNCH_MODE"
 
-  if [ -n "${FIREBREAK_INIT_AGENT_CONFIG_HOST_PATH:-}" ]; then
-    printf 'AGENT_CONFIG_HOST_PATH=%s\n' "$FIREBREAK_INIT_AGENT_CONFIG_HOST_PATH"
+  if [ -n "${FIREBREAK_INIT_STATE_ROOT:-}" ]; then
+    printf 'FIREBREAK_STATE_ROOT=%s\n' "$FIREBREAK_INIT_STATE_ROOT"
   fi
 
-  if [ -n "${FIREBREAK_INIT_CODEX_CONFIG:-}" ] || [ -n "${FIREBREAK_INIT_CLAUDE_CONFIG:-}" ]; then
+  if [ -n "${FIREBREAK_INIT_CODEX_STATE_MODE:-}" ] || [ -n "${FIREBREAK_INIT_CLAUDE_STATE_MODE:-}" ]; then
     printf '\n'
   fi
 
-  if [ -n "${FIREBREAK_INIT_CODEX_CONFIG:-}" ]; then
-    printf 'CODEX_CONFIG=%s\n' "$FIREBREAK_INIT_CODEX_CONFIG"
+  if [ -n "${FIREBREAK_INIT_CODEX_STATE_MODE:-}" ]; then
+    printf 'CODEX_STATE_MODE=%s\n' "$FIREBREAK_INIT_CODEX_STATE_MODE"
   fi
 
-  if [ -n "${FIREBREAK_INIT_CLAUDE_CONFIG:-}" ]; then
-    printf 'CLAUDE_CONFIG=%s\n' "$FIREBREAK_INIT_CLAUDE_CONFIG"
+  if [ -n "${FIREBREAK_INIT_CLAUDE_STATE_MODE:-}" ]; then
+    printf 'CLAUDE_STATE_MODE=%s\n' "$FIREBREAK_INIT_CLAUDE_STATE_MODE"
   fi
 }
 
@@ -177,28 +177,28 @@ firebreak_init_prompt_path() {
   done
 }
 
-firebreak_init_collect_agent_override() {
-  agent_label=$1
-  agent_var_prefix=$2
-  add_override=$(firebreak_init_prompt_yes_no "Add a $agent_label-specific override?" "n")
+firebreak_init_collect_tool_override() {
+  tool_label=$1
+  tool_var_prefix=$2
+  add_override=$(firebreak_init_prompt_yes_no "Add a $tool_label-specific override?" "n")
   if [ "$add_override" != "y" ]; then
     return 0
   fi
 
   selected_mode=$(
     firebreak_init_prompt_choice \
-      "Select the default config mode for $agent_label" \
+      "Select the default state mode for $tool_label" \
       "3" \
       "workspace|workspace: isolate runtime state per project while keeping native project config from the workspace" \
       "vm|vm: keep runtime state inside the VM" \
       "host|host: use the shared host-side runtime state root" \
       "fresh|fresh: start from empty runtime state each launch"
   )
-  printf -v "FIREBREAK_INIT_${agent_var_prefix}_CONFIG" '%s' "$selected_mode"
+  printf -v "FIREBREAK_INIT_${tool_var_prefix}_STATE_MODE" '%s' "$selected_mode"
 }
 
 firebreak_init_collect_interactive_answers() {
-  FIREBREAK_INIT_AGENT_CONFIG=$(
+  FIREBREAK_INIT_STATE_MODE=$(
     firebreak_init_prompt_choice \
       "Select the shared default runtime-state mode" \
       "3" \
@@ -216,21 +216,21 @@ firebreak_init_collect_interactive_answers() {
       "shell|shell: enter the maintenance shell by default"
   )
 
-  FIREBREAK_INIT_AGENT_CONFIG_HOST_PATH=""
-  FIREBREAK_INIT_CODEX_CONFIG=""
-  FIREBREAK_INIT_CLAUDE_CONFIG=""
+  FIREBREAK_INIT_STATE_ROOT=""
+  FIREBREAK_INIT_CODEX_STATE_MODE=""
+  FIREBREAK_INIT_CLAUDE_STATE_MODE=""
 
-  if [ "$FIREBREAK_INIT_AGENT_CONFIG" = "host" ]; then
+  if [ "$FIREBREAK_INIT_STATE_MODE" = "host" ]; then
     # shellcheck disable=SC2088
-    FIREBREAK_INIT_AGENT_CONFIG_HOST_PATH=$(
+    FIREBREAK_INIT_STATE_ROOT=$(
       firebreak_init_prompt_path \
         "Enter the shared host state root" \
         "~/.firebreak"
     )
   fi
 
-  firebreak_init_collect_agent_override "Codex" "CODEX"
-  firebreak_init_collect_agent_override "Claude Code" "CLAUDE"
+  firebreak_init_collect_tool_override "Codex" "CODEX"
+  firebreak_init_collect_tool_override "Claude Code" "CLAUDE"
 }
 
 firebreak_init_command() {

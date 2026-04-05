@@ -18,11 +18,11 @@ moduleArgs:
 }:
 let
   inherit (moduleArgs) config lib pkgs renderTemplate;
-  cfg = config.agentVm;
+  cfg = config.workloadVm;
   devHome = "/var/lib/${cfg.devUser}";
-  toolsMount = cfg.agentToolsMount;
+  toolsMount = cfg.toolRuntimesMount;
   bootstrapReadyMarker =
-    if cfg.agentToolsEnabled
+    if cfg.toolRuntimesEnabled
     then "${toolsMount}/bootstrap-ready"
     else "${devHome}/.cache/firebreak-tools/${vmName}/bootstrap-ready";
   bootstrapWaitScript = pkgs.writeShellApplication {
@@ -32,7 +32,7 @@ let
       set -eu
 
       ready_marker='${bootstrapReadyMarker}'
-      state_path='/run/firebreak-agent/bootstrap-state.json'
+      state_path='/run/firebreak-worker/bootstrap-state.json'
       timeout_seconds=''${FIREBREAK_BOOTSTRAP_WAIT_TIMEOUT_SECONDS:-300}
       elapsed_seconds=0
 
@@ -69,23 +69,24 @@ let
   scriptVars = {
     "@DEV_HOME@" = devHome;
     "@DEV_USER@" = cfg.devUser;
-    "@AGENT_CONFIG_EXPORTS@" = configExports;
-    "@AGENT_CONFIG_SELECTOR_VAR@" = "${configSelectorPrefix}_CONFIG";
-    "@AGENT_CONFIG_SUBDIR@" = configSubdir;
-    "@AGENT_DISPLAY_NAME@" = displayName;
-    "@AGENT_EXEC_OUTPUT_MOUNT@" = cfg.agentExecOutputMount;
+    "@AGENT_BIN@" = binName;
     "@AGENT_PACKAGE_SPEC@" = packageSpec;
+    "@STATE_ENV_EXPORTS@" = configExports;
+    "@STATE_MODE_SELECTOR_VAR@" = "${configSelectorPrefix}_STATE_MODE";
+    "@STATE_SUBDIR@" = configSubdir;
+    "@AGENT_DISPLAY_NAME@" = displayName;
+    "@AGENT_EXEC_OUTPUT_MOUNT@" = cfg.workerExecOutputMount;
     "@AGENT_TOOLS_MOUNT@" = toolsMount;
     "@BOOTSTRAP_READY_MARKER@" = bootstrapReadyMarker;
   };
 in {
   config = {
-    agentVm = {
+    workloadVm = {
       name = lib.mkDefault vmName;
-      agentToolsEnabled = true;
-      sharedAgentConfig = {
+      toolRuntimesEnabled = true;
+      sharedStateRoots = {
         enable = true;
-        agents.${binName} = {
+        tools.${binName} = {
           displayName = displayName;
           selectorPrefix = configSelectorPrefix;
           configSubdir = configSubdir;
@@ -101,8 +102,8 @@ in {
         };
       };
       sharedCredentialSlots.enable = true;
-      agentCommand = binName;
-      agentPromptCommand = promptCommand;
+      defaultCommand = binName;
+      promptCommand = promptCommand;
       extraSystemPackages = with pkgs; [
         bun
         bootstrapWaitScript

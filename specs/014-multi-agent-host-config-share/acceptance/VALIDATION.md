@@ -44,8 +44,8 @@ This guide lists the checks needed to validate [SPEC.md](../SPEC.md).
 
    Expected result:
    - smoke exits `0`
-   - workspace resolves to `/run/agent-config-host-root/workspaces/<project-key>/codex`
-   - host resolves to `/run/agent-config-host-root/codex`
+   - workspace resolves to `/run/firebreak-state-root/workspaces/<project-key>/codex`
+   - host resolves to `/run/firebreak-state-root/codex`
    - vm resolves to `/var/lib/dev/.firebreak/codex`
    - `FIREBREAK_LAUNCH_MODE=shell` still works
 
@@ -58,8 +58,8 @@ This guide lists the checks needed to validate [SPEC.md](../SPEC.md).
 
    Expected result:
    - smoke exits `0`
-   - workspace resolves to `/run/agent-config-host-root/workspaces/<project-key>/claude`
-   - host resolves to `/run/agent-config-host-root/claude`
+   - workspace resolves to `/run/firebreak-state-root/workspaces/<project-key>/claude`
+   - host resolves to `/run/firebreak-state-root/claude`
    - vm resolves to `/var/lib/dev/.firebreak/claude`
    - `FIREBREAK_LAUNCH_MODE=shell` still works
 
@@ -74,13 +74,13 @@ This guide lists the checks needed to validate [SPEC.md](../SPEC.md).
    Run:
 
    ```sh
-   AGENT_CONFIG=host FIREBREAK_LAUNCH_MODE=shell \
+   FIREBREAK_STATE_MODE=host FIREBREAK_LAUNCH_MODE=shell \
    nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
      "path:$PWD#firebreak-codex"
    ```
 
    ```sh
-   AGENT_CONFIG=host FIREBREAK_LAUNCH_MODE=shell \
+   FIREBREAK_STATE_MODE=host FIREBREAK_LAUNCH_MODE=shell \
    nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
      "path:$PWD#firebreak-claude-code"
    ```
@@ -92,32 +92,32 @@ This guide lists the checks needed to validate [SPEC.md](../SPEC.md).
 
 2. Verify `workspace` isolates runtime state per project while leaving native project config to the mounted workspace.
 
-   Run either dedicated VM or the external orchestrator with `AGENT_CONFIG=workspace`.
+   Run either dedicated VM or the external orchestrator with `FIREBREAK_STATE_MODE=workspace`.
 
    Confirm:
-   - the resolved runtime state directory lives under `/run/agent-config-host-root/workspaces/<project-key>/...`
+   - the resolved runtime state directory lives under `/run/firebreak-state-root/workspaces/<project-key>/...`
    - Firebreak does not create `.firebreak/codex` or `.firebreak/claude` in the project
    - any native `.codex` or `.claude` directory already present in the repo remains the one the tool sees from cwd
 
-3. Verify the external shared sandbox honors generic and per-agent selector precedence.
+3. Verify the external shared sandbox honors generic and per-tool selector precedence.
 
    Launch:
 
    ```sh
-   AGENT_CONFIG=host AGENT_CONFIG_HOST_PATH=/tmp/firebreak-agent-share FIREBREAK_LAUNCH_MODE=shell \
+   FIREBREAK_STATE_MODE=host FIREBREAK_STATE_ROOT=/tmp/firebreak-state-root FIREBREAK_LAUNCH_MODE=shell \
    nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
      "path:$PWD/external/agent-orchestrator" \
      --override-input firebreak "path:$PWD"
    ```
 
    Inside the VM, confirm:
-   - `AGENT_CONFIG=host codex --version` uses `/run/agent-config-host-root/codex`
-   - `AGENT_CONFIG=host claude --version` uses `/run/agent-config-host-root/claude`
-   - `AGENT_CONFIG=vm CODEX_CONFIG=workspace codex --version` keeps the Codex override
-   - `AGENT_CONFIG=vm CLAUDE_CONFIG=workspace claude --version` keeps the Claude override
+   - `FIREBREAK_STATE_MODE=host codex --version` uses `/run/firebreak-state-root/codex`
+   - `FIREBREAK_STATE_MODE=host claude --version` uses `/run/firebreak-state-root/claude`
+   - `FIREBREAK_STATE_MODE=vm CODEX_STATE_MODE=workspace codex --version` keeps the Codex override
+   - `FIREBREAK_STATE_MODE=vm CLAUDE_STATE_MODE=workspace claude --version` keeps the Claude override
 
 4. Verify `fresh` mode is isolated.
 
    In a dedicated VM and in the external shared sandbox, run the agent once with `fresh` mode and confirm:
-   - the resolved config directory lives under `/run/firebreak-agent-config-fresh`
+   - the resolved config directory lives under `/run/firebreak-state-fresh`
    - no data is written into project-local `.firebreak/...` overlays for that run

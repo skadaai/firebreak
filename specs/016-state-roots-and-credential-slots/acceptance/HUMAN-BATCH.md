@@ -33,15 +33,15 @@ git -C "$repo_b" init -q
 
    Confirm:
    - the template uses `.firebreak.env`
-   - the template defaults to `AGENT_CONFIG=host`
+   - the template defaults to `FIREBREAK_STATE_MODE=host`
    - the template includes credential-slot examples
    - the template does not mention `CODEX_CONFIG_HOST_PATH` or `CLAUDE_CONFIG_HOST_PATH`
 
 2. Inspect doctor output.
 
    ```sh
-   AGENT_CONFIG=host \
-   AGENT_CONFIG_HOST_PATH="$HOME/.firebreak" \
+   FIREBREAK_STATE_MODE=host \
+   FIREBREAK_STATE_ROOT="$HOME/.firebreak" \
    FIREBREAK_CREDENTIAL_SLOT=default \
    nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
      '.#firebreak' -- doctor --verbose
@@ -68,7 +68,7 @@ git -C "$repo_b" init -q
    ```sh
    (
      cd "$repo_a"
-     AGENT_CONFIG=workspace FIREBREAK_LAUNCH_MODE=shell \
+     FIREBREAK_STATE_MODE=workspace FIREBREAK_LAUNCH_MODE=shell \
      nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
        'path:/home/zvictor/development/firebreak/ao#firebreak-codex'
    )
@@ -78,7 +78,7 @@ git -C "$repo_b" init -q
    - `pwd` is the repo path
    - `test -f .codex/firebreak-marker.txt`
    - `printf '%s\n' "$CODEX_HOME"`
-   - `printf '%s\n' "$AGENT_CONFIG_DIR"`
+   - `printf '%s\n' "$FIREBREAK_TOOL_STATE_DIR"`
    - neither path is `.codex`
    - `test ! -e .firebreak/codex`
 
@@ -87,7 +87,7 @@ git -C "$repo_b" init -q
    ```sh
    (
      cd "$repo_a"
-     AGENT_CONFIG=workspace FIREBREAK_LAUNCH_MODE=shell \
+     FIREBREAK_STATE_MODE=workspace FIREBREAK_LAUNCH_MODE=shell \
      nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
        'path:/home/zvictor/development/firebreak/ao#firebreak-claude-code'
    )
@@ -96,7 +96,7 @@ git -C "$repo_b" init -q
    Inside the VM, confirm:
    - `test -f .claude/firebreak-marker.txt`
    - `printf '%s\n' "$CLAUDE_CONFIG_DIR"`
-   - `printf '%s\n' "$AGENT_CONFIG_DIR"`
+   - `printf '%s\n' "$FIREBREAK_TOOL_STATE_DIR"`
    - neither path is `.claude`
    - `test ! -e .firebreak/claude`
 
@@ -107,7 +107,7 @@ git -C "$repo_b" init -q
    ```sh
    (
      cd "$repo_a"
-     AGENT_CONFIG=workspace FIREBREAK_LAUNCH_MODE=shell \
+     FIREBREAK_STATE_MODE=workspace FIREBREAK_LAUNCH_MODE=shell \
      nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
        'path:/home/zvictor/development/firebreak/ao#firebreak-codex'
    )
@@ -116,7 +116,7 @@ git -C "$repo_b" init -q
    ```sh
    (
      cd "$repo_b"
-     AGENT_CONFIG=workspace FIREBREAK_LAUNCH_MODE=shell \
+     FIREBREAK_STATE_MODE=workspace FIREBREAK_LAUNCH_MODE=shell \
      nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
        'path:/home/zvictor/development/firebreak/ao#firebreak-codex'
    )
@@ -140,7 +140,7 @@ git -C "$repo_b" init -q
    Run:
 
    ```sh
-   AGENT_CONFIG=host FIREBREAK_LAUNCH_MODE=shell \
+   FIREBREAK_STATE_MODE=host FIREBREAK_LAUNCH_MODE=shell \
    nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
      'path:/home/zvictor/development/firebreak/ao#firebreak-codex'
    ```
@@ -158,7 +158,7 @@ git -C "$repo_b" init -q
    Run:
 
    ```sh
-   AGENT_CONFIG=host FIREBREAK_LAUNCH_MODE=shell \
+   FIREBREAK_STATE_MODE=host FIREBREAK_LAUNCH_MODE=shell \
    nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
      'path:/home/zvictor/development/firebreak/ao#firebreak-claude-code'
    ```
@@ -183,7 +183,7 @@ git -C "$repo_b" init -q
    ```sh
    (
      cd "$repo_a"
-     AGENT_CONFIG=workspace \
+     FIREBREAK_STATE_MODE=workspace \
      FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH="$slot_root" \
      FIREBREAK_CREDENTIAL_SLOT=default \
      FIREBREAK_LAUNCH_MODE=shell \
@@ -195,7 +195,7 @@ git -C "$repo_b" init -q
    ```sh
    (
      cd "$repo_a"
-     AGENT_CONFIG=workspace \
+     FIREBREAK_STATE_MODE=workspace \
      FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH="$slot_root" \
      CODEX_CREDENTIAL_SLOT=backup \
      FIREBREAK_LAUNCH_MODE=shell \

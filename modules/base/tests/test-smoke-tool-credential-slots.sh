@@ -15,8 +15,8 @@ trap 'rm -rf "$smoke_tmp_dir"' EXIT INT TERM
 credential_root=$smoke_tmp_dir/credentials
 workspace_dir=$smoke_tmp_dir/workspace
 mkdir -p \
-  "$credential_root/default/@AGENT_CONFIG_SUBDIR@" \
-  "$credential_root/alternate/@AGENT_CONFIG_SUBDIR@" \
+  "$credential_root/default/@STATE_SUBDIR@" \
+  "$credential_root/alternate/@STATE_SUBDIR@" \
   "$workspace_dir"
 
 require_pattern() {
@@ -34,10 +34,10 @@ require_pattern() {
 run_with_clean_firebreak_env() (
   while IFS='=' read -r env_key _; do
     case "$env_key" in
-      AGENT_CONFIG|AGENT_CONFIG_HOST_PATH|FIREBREAK_CREDENTIAL_SLOT|FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH|*_CREDENTIAL_SLOT)
+      FIREBREAK_STATE_MODE|FIREBREAK_STATE_ROOT|FIREBREAK_CREDENTIAL_SLOT|FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH|*_CREDENTIAL_SLOT)
         unset "$env_key"
         ;;
-      *_CONFIG)
+      *_STATE_MODE)
         case "$env_key" in
           NIX_CONFIG|FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG)
             ;;
@@ -82,16 +82,16 @@ state_sha256() {
   exit 1
 }
 
-cat >"$credential_root/default/@AGENT_CONFIG_SUBDIR@/@AUTH_FILE@" <<'EOF'
+cat >"$credential_root/default/@STATE_SUBDIR@/@AUTH_FILE@" <<'EOF'
 default-auth
 EOF
-cat >"$credential_root/default/@AGENT_CONFIG_SUBDIR@/@API_KEY_FILE@" <<'EOF'
+cat >"$credential_root/default/@STATE_SUBDIR@/@API_KEY_FILE@" <<'EOF'
 default-api-key
 EOF
-cat >"$credential_root/alternate/@AGENT_CONFIG_SUBDIR@/@AUTH_FILE@" <<'EOF'
+cat >"$credential_root/alternate/@STATE_SUBDIR@/@AUTH_FILE@" <<'EOF'
 alternate-auth
 EOF
-cat >"$credential_root/alternate/@AGENT_CONFIG_SUBDIR@/@API_KEY_FILE@" <<'EOF'
+cat >"$credential_root/alternate/@STATE_SUBDIR@/@API_KEY_FILE@" <<'EOF'
 alternate-api-key
 EOF
 
@@ -102,10 +102,14 @@ EOF
 
 project_key=$(state_sha256 "$workspace_dir")
 project_key=$(printf '%.16s' "$project_key")
-expected_workspace_root="/run/agent-config-host-root/workspaces/$project_key/@AGENT_CONFIG_SUBDIR@"
+expected_workspace_root="/run/firebreak-state-root/workspaces/$project_key/@STATE_SUBDIR@"
 
 make_fake_real_bin_command=$(cat <<'EOF'
 mkdir -p "$LOCAL_BIN"
+cleanup_fake_real_bin() {
+  rm -f "$LOCAL_BIN/@AGENT_BIN@"
+}
+trap cleanup_fake_real_bin EXIT
 cat >"$LOCAL_BIN/@AGENT_BIN@" <<'EOS'
 #!/usr/bin/env bash
 set -eu
@@ -130,7 +134,7 @@ is_login_command() {
   return 0
 }
 
-config_root="${@CONFIG_ROOT_ENV@:-${AGENT_CONFIG_DIR:-}}"
+config_root="${@CONFIG_ROOT_ENV@:-${FIREBREAK_TOOL_STATE_DIR:-}}"
 
 if is_login_command "$@"; then
   eval "token=\${$(( ${#login_args[@]} + 1 )):-smoke-login-token}"
@@ -162,7 +166,7 @@ run_shell_scenario() {
       run_with_clean_firebreak_env \
         FIREBREAK_INSTANCE_EPHEMERAL=1 \
         FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH="$credential_root" \
-        AGENT_CONFIG=workspace \
+        FIREBREAK_STATE_MODE=workspace \
         FIREBREAK_CREDENTIAL_SLOT="$slot_name" \
         "$extra_env_key=$extra_env_value" \
         AGENT_VM_COMMAND="$command_body" \
@@ -176,7 +180,7 @@ run_shell_scenario() {
       run_with_clean_firebreak_env \
         FIREBREAK_INSTANCE_EPHEMERAL=1 \
         FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH="$credential_root" \
-        AGENT_CONFIG=workspace \
+        FIREBREAK_STATE_MODE=workspace \
         FIREBREAK_CREDENTIAL_SLOT="$slot_name" \
         AGENT_VM_COMMAND="$command_body" \
         FIREBREAK_LAUNCH_MODE=shell \
@@ -202,8 +206,8 @@ require_pattern "$override_output" "API_KEY=alternate-api-key" "override slot AP
 
 login_output=$(run_shell_scenario "$make_fake_real_bin_command
 @AGENT_BIN@ @LOGIN_COMMAND@ direct-login-auth" login-slot)
-require_pattern "$login_output" "LOGIN_ROOT=/run/credential-slots-host-root/login-slot/@AGENT_CONFIG_SUBDIR@" "slot-root login materialization"
-if [ "$(cat "$credential_root/login-slot/@AGENT_CONFIG_SUBDIR@/@AUTH_FILE@")" != "direct-login-auth" ]; then
+require_pattern "$login_output" "LOGIN_ROOT=/run/credential-slots-host-root/login-slot/@STATE_SUBDIR@" "slot-root login materialization"
+if [ "$(cat "$credential_root/login-slot/@STATE_SUBDIR@/@AUTH_FILE@")" != "direct-login-auth" ]; then
   echo "@AGENT_DISPLAY_NAME@ credential smoke did not write the login result into the selected slot" >&2
   exit 1
 fi

@@ -77,16 +77,16 @@ EOF
 )
 project_key=$(state_sha256 "$workspace_dir")
 project_key=$(printf '%.16s' "$project_key")
-expected_workspace_root="/run/agent-config-host-root/workspaces/$project_key"
+expected_workspace_root="/run/firebreak-state-root/workspaces/$project_key"
 
 run_fixture() {
   env \
-    -u AGENT_CONFIG_HOST_PATH \
-    -u CODEX_CONFIG \
-    -u CLAUDE_CONFIG \
+    -u FIREBREAK_STATE_ROOT \
+    -u CODEX_STATE_MODE \
+    -u CLAUDE_STATE_MODE \
     FIREBREAK_INSTANCE_EPHEMERAL=1 \
     FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH="$credential_root" \
-    AGENT_CONFIG=workspace \
+    FIREBREAK_STATE_MODE=workspace \
     FIREBREAK_CREDENTIAL_SLOT=default \
     "$@"
 }
@@ -118,10 +118,10 @@ fi
 login_output=$(
   cd "$workspace_dir"
   env \
-    -u AGENT_CONFIG_HOST_PATH \
+    -u FIREBREAK_STATE_ROOT \
     FIREBREAK_INSTANCE_EPHEMERAL=1 \
     FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH="$credential_root" \
-    AGENT_CONFIG=workspace \
+    FIREBREAK_STATE_MODE=workspace \
     FIXTURE_CREDENTIAL_SLOT=login-slot \
     @FIXTURE_PACKAGE_BIN@ login direct-login-auth
 )
@@ -134,10 +134,10 @@ fi
 multi_tool_output=$(
   cd "$workspace_dir"
   env \
-    -u AGENT_CONFIG_HOST_PATH \
+    -u FIREBREAK_STATE_ROOT \
     FIREBREAK_INSTANCE_EPHEMERAL=1 \
     FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH="$credential_root" \
-    AGENT_CONFIG=workspace \
+    FIREBREAK_STATE_MODE=workspace \
     FIREBREAK_CREDENTIAL_SLOT=default \
     PEER_CREDENTIAL_SLOT=alternate \
     AGENT_VM_COMMAND='credential-fixture status && credential-fixture-peer status' \

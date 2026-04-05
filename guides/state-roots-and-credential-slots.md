@@ -4,7 +4,7 @@ Firebreak adds isolation and credential switching on top of tools such as Codex 
 
 That is useful, but it can be mentally confusing because the tools already have their own project-level config model.
 
-This guide is the source of truth for the split.
+This guide is the source of truth for the split between native tool behavior, Firebreak-managed state, and Firebreak-managed credentials.
 
 ## The three layers
 
@@ -32,9 +32,9 @@ This is the long-lived state that should be movable or isolatable without rewrit
 
 Firebreak selects this with the state-mode env vars:
 
-- `AGENT_CONFIG`
-- `CODEX_CONFIG`
-- `CLAUDE_CONFIG`
+- `FIREBREAK_STATE_MODE`
+- `CODEX_STATE_MODE`
+- `CLAUDE_STATE_MODE`
 
 Supported modes:
 
@@ -96,7 +96,7 @@ It does not change the meaning of native project config in the repo.
 Use host-backed runtime state and the default credential slot:
 
 ```sh
-AGENT_CONFIG=host \
+FIREBREAK_STATE_MODE=host \
 FIREBREAK_CREDENTIAL_SLOT=default \
 nix run .#firebreak-codex
 ```
@@ -104,7 +104,7 @@ nix run .#firebreak-codex
 Keep the same project-local runtime state but switch only Codex credentials:
 
 ```sh
-AGENT_CONFIG=workspace \
+FIREBREAK_STATE_MODE=workspace \
 CODEX_CREDENTIAL_SLOT=backup \
 nix run .#firebreak-codex
 ```

@@ -8,8 +8,8 @@ moduleArgs@{ pkgs, ... }:
   configSelectorPrefix = "CODEX";
   configSubdir = "codex";
   configExports = ''
-    export CODEX_HOME="$agent_config_dir"
-    export CODEX_CONFIG_DIR="$agent_config_dir"
+    export CODEX_HOME="$tool_state_dir"
+    export CODEX_CONFIG_DIR="$tool_state_dir"
   '';
   credentialFileBindings = [
     {

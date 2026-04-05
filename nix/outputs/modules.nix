@@ -3,7 +3,7 @@
   firebreak-vm-base = import ../../modules/base/module.nix;
   firebreak-local-profile = import ../../modules/profiles/local/module.nix;
   firebreak-cloud-profile = import ../../modules/profiles/cloud/module.nix;
-  agent-vm-base = {
+  workload-vm-base = {
     imports = [
       self.nixosModules.firebreak-vm-base
       self.nixosModules.firebreak-local-profile

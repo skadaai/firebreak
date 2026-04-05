@@ -7,7 +7,7 @@ last_updated: 2026-04-04
 
 ## Problem
 
-Firebreak currently treats agent config selection as if one resolved directory can stand in for the full runtime state of a tool.
+Firebreak currently treats state-mode selection as if one resolved directory can stand in for the full runtime state of a tool.
 
 That was sufficient while Firebreak only needed to choose between `host`, `workspace`, `vm`, and `fresh` paths for a single agent-shaped config root.
 
@@ -135,7 +135,7 @@ The intended landing shape is:
 - [spec 009](../009-project-config-and-doctor/SPEC.md)
 - [spec 014](../014-multi-agent-host-config-share/SPEC.md)
 - current [modules/profiles/local/host/run-wrapper.sh](../../modules/profiles/local/host/run-wrapper.sh)
-- current [modules/base/guest/resolve-agent-config.sh](../../modules/base/guest/resolve-agent-config.sh)
+- current [modules/base/guest/resolve-state-root.sh](../../modules/base/guest/resolve-state-root.sh)
 
 ### Risks
 

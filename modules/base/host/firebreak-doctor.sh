@@ -131,34 +131,34 @@ firebreak_doctor_workspace_state_path() {
   printf '%s\n' "$host_root/workspaces/$project_key/$config_subdir"
 }
 
-firebreak_doctor_resolve_agent_state() {
-  agent_label=$1
-  agent_prefix=$2
+firebreak_doctor_resolve_tool_state() {
+  tool_label=$1
+  tool_prefix=$2
   default_host_root=$3
-  config_subdir=$4
+  state_subdir=$4
 
-  agent_specific_config_var=${agent_prefix}_CONFIG
-  agent_specific_config=${!agent_specific_config_var:-}
+  tool_specific_state_var=${tool_prefix}_STATE_MODE
+  tool_specific_state=${!tool_specific_state_var:-}
 
-  agent_mode=${agent_specific_config:-${AGENT_CONFIG:-host}}
-  agent_host_root=$(firebreak_doctor_resolve_host_dir "${AGENT_CONFIG_HOST_PATH:-$default_host_root}")
-  agent_host_path=$agent_host_root/$config_subdir
+  tool_mode=${tool_specific_state:-${FIREBREAK_STATE_MODE:-host}}
+  tool_host_root=$(firebreak_doctor_resolve_host_dir "${FIREBREAK_STATE_ROOT:-$default_host_root}")
+  tool_host_path=$tool_host_root/$state_subdir
 
-  case "$agent_mode" in
+  case "$tool_mode" in
     host)
-      printf '%s|%s|%s|%s\n' "$agent_label" "$agent_mode" "$agent_host_path" "$agent_specific_config_var"
+      printf '%s|%s|%s|%s\n' "$tool_label" "$tool_mode" "$tool_host_path" "$tool_specific_state_var"
       ;;
     workspace)
-      printf '%s|%s|%s|%s\n' "$agent_label" "$agent_mode" "$(firebreak_doctor_workspace_state_path "$agent_host_root" "$config_subdir")" "$agent_specific_config_var"
+      printf '%s|%s|%s|%s\n' "$tool_label" "$tool_mode" "$(firebreak_doctor_workspace_state_path "$tool_host_root" "$state_subdir")" "$tool_specific_state_var"
       ;;
     vm)
-      printf '%s|%s|%s|%s\n' "$agent_label" "$agent_mode" "/var/lib/dev/.firebreak/$config_subdir" "$agent_specific_config_var"
+      printf '%s|%s|%s|%s\n' "$tool_label" "$tool_mode" "/var/lib/dev/.firebreak/$state_subdir" "$tool_specific_state_var"
       ;;
     fresh)
-      printf '%s|%s|%s|%s\n' "$agent_label" "$agent_mode" "/run/firebreak-agent-config-fresh/$config_subdir" "$agent_specific_config_var"
+      printf '%s|%s|%s|%s\n' "$tool_label" "$tool_mode" "/run/firebreak-state-fresh/$state_subdir" "$tool_specific_state_var"
       ;;
     *)
-      printf '%s|%s|%s|%s\n' "$agent_label" "invalid" "$agent_mode" "$agent_specific_config_var"
+      printf '%s|%s|%s|%s\n' "$tool_label" "invalid" "$tool_mode" "$tool_specific_state_var"
       ;;
   esac
 }
@@ -222,10 +222,10 @@ firebreak_doctor_command() {
   fi
 
   IFS='|' read -r codex_label codex_mode codex_path codex_source_var <<EOF
-$(firebreak_doctor_resolve_agent_state "codex" "CODEX" "$HOME/.firebreak" "codex")
+$(firebreak_doctor_resolve_tool_state "codex" "CODEX" "$HOME/.firebreak" "codex")
 EOF
   IFS='|' read -r claude_label claude_mode claude_path claude_source_var <<EOF
-$(firebreak_doctor_resolve_agent_state "claude-code" "CLAUDE" "$HOME/.firebreak" "claude")
+$(firebreak_doctor_resolve_tool_state "claude-code" "CLAUDE" "$HOME/.firebreak" "claude")
 EOF
   IFS='|' read -r _codex_slot_label codex_slot codex_slot_path codex_slot_source_var <<EOF
 $(firebreak_doctor_resolve_credential_slot "codex" "CODEX" "$HOME/.firebreak/credentials" "codex")
@@ -265,7 +265,7 @@ EOF
   "primary_checkout": "$(firebreak_doctor_json_escape "$primary_checkout")",
   "kvm": "$(firebreak_doctor_json_escape "$kvm_state")",
   "ignored_config_keys": [$(firebreak_doctor_json_array "$FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS")],
-  "agents": {
+  "tools": {
     "codex": {
       "mode": "$(firebreak_doctor_json_escape "$codex_mode")",
       "path": "$(firebreak_doctor_json_escape "$codex_path")",
@@ -294,8 +294,8 @@ EOF
   firebreak_doctor_report_line "cwd_whitespace" "$cwd_whitespace"
   firebreak_doctor_report_line "primary_checkout" "$primary_checkout"
   firebreak_doctor_report_line "kvm" "$kvm_state"
-  firebreak_doctor_report_line "codex_config" "$codex_mode ($codex_path)"
-  firebreak_doctor_report_line "claude_config" "$claude_mode ($claude_path)"
+  firebreak_doctor_report_line "codex_state" "$codex_mode ($codex_path)"
+  firebreak_doctor_report_line "claude_state" "$claude_mode ($claude_path)"
   firebreak_doctor_report_line "codex_credentials" "$codex_slot ($codex_slot_path)"
   firebreak_doctor_report_line "claude_credentials" "$claude_slot ($claude_slot_path)"
 

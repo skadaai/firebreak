@@ -10,7 +10,7 @@ last_updated: 2026-03-25
 1. Define the public project config contract, precedence rules, and stable key allowlist.
 2. Implement `.firebreak.env` discovery and loading for the human-facing Firebreak surface.
 3. Remove public compatibility aliases for local mode selection so `FIREBREAK_LAUNCH_MODE` is the only documented selector.
-4. Tighten local wrapper config resolution so agent-specific selectors override generic selectors for their matching workloads.
+4. Tighten local wrapper state resolution so tool-specific selectors override generic selectors for their matching workloads.
 5. Implement `firebreak init` with a minimal Firebreak-native template.
 6. Implement `firebreak doctor` with summary, verbose, and JSON output modes.
 7. Add acceptance coverage for config loading, precedence, agent-specific overrides, and diagnostics output.
@@ -20,7 +20,7 @@ last_updated: 2026-03-25
 
 - run acceptance coverage for `firebreak init` template generation
 - run acceptance coverage for project-config loading and env-overrides-file precedence
-- run acceptance coverage for agent-specific selector precedence
+- run acceptance coverage for tool-specific selector precedence
 - run acceptance coverage for `firebreak doctor` summary and JSON output
 - run existing local smoke coverage for Codex and Claude Code packages
 - run `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' flake check`
@@ -35,7 +35,7 @@ last_updated: 2026-03-25
 
 ## Current status
 
-Implemented. The local workload contract now converges on one shared host config root plus stable per-agent subdirectories, and this workspace still needs path-based validation because the checkout's git metadata remains broken.
+Implemented. The local workload contract now converges on one shared host state root plus stable per-tool subdirectories, and this workspace still needs path-based validation because the checkout's git metadata remains broken.
 
 ## Open questions
 

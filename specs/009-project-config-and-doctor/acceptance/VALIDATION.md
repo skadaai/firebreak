@@ -58,13 +58,13 @@ Run these from the repository parent or with `path:` installables so they do not
 
    Confirm:
    - the output uses `.firebreak.env`
-   - the template defaults to `AGENT_CONFIG=host`
+   - the template defaults to `FIREBREAK_STATE_MODE=host`
    - the template does not mention `FIREBREAK_AGENT_MODE`, `AGENT_VM_ENTRYPOINT`, `CODEX_CONFIG_HOST_PATH`, or `CLAUDE_CONFIG_HOST_PATH`
 
 2. Verify `firebreak doctor` reflects the resolved host-root-plus-subdir model.
 
    ```sh
-   AGENT_CONFIG=host AGENT_CONFIG_HOST_PATH=~/.firebreak \
+   FIREBREAK_STATE_MODE=host FIREBREAK_STATE_ROOT=~/.firebreak \
    nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
      "path:$PWD#firebreak" -- doctor --verbose
    ```

@@ -1,11 +1,6 @@
 {
   description = "Skada Firebreak: reliable isolation for high-trust automation";
 
-  nixConfig = {
-    extra-substituters = [ "https://microvm.cachix.org" ];
-    extra-trusted-public-keys = [ "microvm.cachix.org-1:oXnBc6hRE3eX5rSYdRyMYXnfzcCxC7yKPTbZXALsqys=" ];
-  };
-
   inputs.nixpkgs.url = "nixpkgs";
   inputs.microvm = {
     url = "github:microvm-nix/microvm.nix";

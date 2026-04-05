@@ -43,6 +43,9 @@ firebreak_refresh_cli() {
 
   printf "Removing local binary...\n"
   sudo rm -f "$LOCAL_BIN/@BIN_NAME@"
+  for upstream_name in @PROXY_LOCAL_UPSTREAM_NAMES@; do
+    sudo rm -f "$LOCAL_BIN/.firebreak-upstream-$upstream_name"
+  done
 
   printf "Restarting dev-bootstrap service...\n"
   sudo systemctl restart dev-bootstrap.service && @READY_COMMAND_NAME@

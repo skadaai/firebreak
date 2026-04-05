@@ -2,12 +2,12 @@
 rec {
   workerProxyLocalUpstreamsByPackage = {
     firebreak-codex = {
-      packageSpec = "@openai/codex@latest";
       binName = "codex";
+      package = pkgs.codex;
     };
     firebreak-claude-code = {
-      packageSpec = "@anthropic-ai/claude-code@latest";
       binName = "claude";
+      package = pkgs.claude-code;
     };
   };
 
@@ -453,9 +453,16 @@ __FIREBREAK_WRAPPER_INFO__
                 if packageName != null && builtins.hasAttr packageName workerProxyLocalUpstreamsByPackage
                 then builtins.getAttr packageName workerProxyLocalUpstreamsByPackage
                 else { };
-            in {
+              upstreamBinName = knownUpstream.binName or commandName;
+            in
+            lib.filterAttrs (_: value: value != null) {
               packageSpec = knownUpstream.packageSpec or null;
-              binName = knownUpstream.binName or commandName;
+              binName = upstreamBinName;
+              package = knownUpstream.package or null;
+              realBinPath =
+                if knownUpstream ? package
+                then "${knownUpstream.package}/bin/${upstreamBinName}"
+                else null;
             })
           workerProxies;
 

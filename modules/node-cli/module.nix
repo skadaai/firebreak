@@ -58,6 +58,11 @@ let
       lib.filter (value: value != null)
         (lib.mapAttrsToList (_commandName: upstream: upstream.packageSpec or null) proxyLocalUpstreams)
     );
+  proxyLocalUpstreamSystemPackages =
+    lib.unique (
+      lib.filter (value: value != null)
+        (lib.mapAttrsToList (_commandName: upstream: upstream.package or null) proxyLocalUpstreams)
+    );
   installBinNames = builtins.attrNames installBinScripts;
   proxyLocalUpstreamNames = builtins.attrNames proxyLocalUpstreams;
   proxyLocalUpstreamInstallArgs = lib.escapeShellArgs proxyLocalUpstreamSpecs;
@@ -76,10 +81,18 @@ let
               if proxyLocalUpstream != null
               then proxyLocalUpstream.binName or scriptName
               else scriptName;
+            upstreamBinPath =
+              if proxyLocalUpstream != null
+              then proxyLocalUpstream.realBinPath or null
+              else null;
+            upstreamBinPathArg = lib.escapeShellArg (if upstreamBinPath != null then upstreamBinPath else "");
           in
           ''
+            upstream_bin_path=${upstreamBinPathArg}
             if [ -e "$npm_config_prefix/bin/${upstreamBinName}" ]; then
               mv "$npm_config_prefix/bin/${upstreamBinName}" "$npm_config_prefix/bin/.firebreak-upstream-${scriptName}"
+            elif [ -n "$upstream_bin_path" ]; then
+              ln -sfn "$upstream_bin_path" "$npm_config_prefix/bin/.firebreak-upstream-${scriptName}"
             else
               rm -f "$npm_config_prefix/bin/.firebreak-upstream-${scriptName}"
             fi
@@ -345,7 +358,7 @@ in {
         bootstrapWaitScript
         launchScript
         readyScript
-      ] ++ extraSystemPackages;
+      ] ++ proxyLocalUpstreamSystemPackages ++ extraSystemPackages;
       bootstrapPackages = with pkgs; [
         bash
         coreutils

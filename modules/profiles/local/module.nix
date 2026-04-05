@@ -161,16 +161,6 @@ in {
         "x-systemd.after=systemd-modules-load.service"
       ];
     };
-    fileSystems."/nix/.ro-store" = lib.mkIf (cfg.runtimeBackend != "vfkit") {
-      device = "ro-store";
-      fsType = "virtiofs";
-      options = [
-        "defaults"
-        "ro"
-        "x-systemd.after=systemd-modules-load.service"
-      ];
-    };
-
     systemd.services.adopt-host-identity = {
       description = "Align guest development user with the host user identity";
       wantedBy = [ "multi-user.target" ];

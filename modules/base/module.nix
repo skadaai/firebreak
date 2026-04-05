@@ -637,15 +637,16 @@ in {
         image = cfg.varVolumeImage;
         size = cfg.varVolumeSizeMiB;
       } ];
-      shares = lib.optional (!cfg.runtimeManagedRoStore) {
-        # use proto = "virtiofs" for MicroVMs that are started by systemd
+      shares = [ {
+        # keep a declared host store share so microvm.nix can derive the guest
+        # /nix/store mount logic without building a separate store disk image.
         proto = backendSpec.roStoreShareProto;
         tag = "ro-store";
-        # a host's /nix/store will be picked up so that no
-        # squashfs/erofs will be built for it.
+        socket = "ro-store.sock";
         source = "/nix/store";
         mountPoint = "/nix/.ro-store";
-      };
+        readOnly = true;
+      } ];
 
       hypervisor = backendSpec.microvmHypervisor;
       socket = cfg.controlSocket;

@@ -189,45 +189,15 @@ local_controller_acquire_dispatch_lock() {
 
 local_controller_write_request() {
   controller_exec_output_dir=$1
-  controller_request_path=$controller_exec_output_dir/request.json
-  controller_request_id=$(date -u +%Y%m%dT%H%M%SZ)-${BASHPID:-$$}
-
-  rm -f \
-    "$controller_request_path" \
-    "$controller_exec_output_dir/attach_stage" \
-    "$controller_exec_output_dir/exit_code" \
-    "$controller_exec_output_dir/stdout" \
-    "$controller_exec_output_dir/stderr" \
-    "$controller_exec_output_dir/command-signals.stream" \
-    "$controller_exec_output_dir/command-processes.txt" \
-    "$controller_exec_output_dir/command-tty.txt"
-
-  REQUEST_PATH=$controller_request_path \
-  REQUEST_ID=$controller_request_id \
-  REQUEST_SESSION_MODE=agent-exec \
-  REQUEST_COMMAND=$agent_command_override \
-  REQUEST_START_DIR=$host_cwd \
-  REQUEST_TERM=$agent_term \
-  REQUEST_COLUMNS=$agent_columns \
-  REQUEST_LINES=$agent_lines \
-  python3 - <<'PY'
-import json
-import os
-
-payload = {
-    "request_id": os.environ["REQUEST_ID"],
-    "session_mode": os.environ["REQUEST_SESSION_MODE"],
-    "command": os.environ["REQUEST_COMMAND"],
-    "start_dir": os.environ["REQUEST_START_DIR"],
-    "term": os.environ["REQUEST_TERM"],
-    "columns": os.environ["REQUEST_COLUMNS"],
-    "lines": os.environ["REQUEST_LINES"],
-}
-
-with open(os.environ["REQUEST_PATH"], "w", encoding="utf-8") as handle:
-    json.dump(payload, handle, indent=2, sort_keys=True)
-    handle.write("\n")
-PY
+  firebreak_write_command_request \
+    "$controller_exec_output_dir" \
+    "agent-exec" \
+    "$agent_command_override" \
+    "$host_cwd" \
+    "$agent_term" \
+    "$agent_columns" \
+    "$agent_lines"
+  controller_request_id=$command_request_id
 }
 
 local_controller_wait_for_response() {

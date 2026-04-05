@@ -171,6 +171,7 @@ EOF
         "@FIREBREAK_WORKER_LIB@" = builtins.readFile ../../modules/base/host/firebreak-worker.sh;
         "@FIREBREAK_WORKER_BRIDGE_HOST_LIB@" = builtins.readFile ../../modules/profiles/local/host/firebreak-worker-bridge-host.sh;
         "@FIREBREAK_CLOUD_HYPERVISOR_NETWORK_LIB@" = builtins.readFile ../../modules/profiles/local/host/cloud-hypervisor-network.sh;
+        "@FIREBREAK_LOCAL_COMMAND_REQUEST_LIB@" = builtins.readFile ../../modules/profiles/local/host/command-request.sh;
         "@FIREBREAK_LOCAL_INSTANCE_CONTROLLER_LIB@" = builtins.readFile ../../modules/profiles/local/host/local-instance-controller.sh;
         "@WORKER_BRIDGE_ENABLED@" = if workerBridgeEnabled then "1" else "0";
       } ../../modules/profiles/local/host/run-wrapper.sh;

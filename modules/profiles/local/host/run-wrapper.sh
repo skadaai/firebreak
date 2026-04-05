@@ -2,6 +2,7 @@ set -eu
 
 @FIREBREAK_PROJECT_CONFIG_LIB@
 @FIREBREAK_CLOUD_HYPERVISOR_NETWORK_LIB@
+@FIREBREAK_LOCAL_COMMAND_REQUEST_LIB@
 @FIREBREAK_LOCAL_INSTANCE_CONTROLLER_LIB@
 
 host_cwd=$PWD
@@ -245,7 +246,6 @@ host_runtime_dir=$(mktemp -d "$firebreak_tmp_root/r.XXXXXX")
 host_runtime_share_dir=$host_runtime_dir/runtime
 host_meta_dir=$host_runtime_share_dir/meta
 host_exec_output_dir=$host_runtime_share_dir/exec-output
-command_request_path=$host_exec_output_dir/request.json
 host_agent_tools_dir=$firebreak_state_root/tools/${default_control_socket%.socket}
 default_host_agent_tools_dir=$default_firebreak_state_root/tools/${default_control_socket%.socket}
 host_instance_dir=$host_runtime_dir/instance
@@ -587,43 +587,15 @@ start_worker_bridge_server() {
 }
 
 write_command_request() {
-  request_id=$(date -u +%Y%m%dT%H%M%SZ)-${BASHPID:-$$}
-  rm -f \
-    "$command_request_path" \
-    "$host_exec_output_dir/attach_stage" \
-    "$host_exec_output_dir/exit_code" \
-    "$host_exec_output_dir/stdout" \
-    "$host_exec_output_dir/stderr" \
-    "$host_exec_output_dir/command-signals.stream" \
-    "$host_exec_output_dir/command-processes.txt" \
-    "$host_exec_output_dir/command-tty.txt"
-  REQUEST_PATH=$command_request_path \
-  REQUEST_ID=$request_id \
-  REQUEST_SESSION_MODE=$agent_session_mode \
-  REQUEST_COMMAND=$agent_command_override \
-  REQUEST_START_DIR=$host_cwd \
-  REQUEST_TERM=$agent_term \
-  REQUEST_COLUMNS=$agent_columns \
-  REQUEST_LINES=$agent_lines \
-  python3 - <<'PY'
-import json
-import os
-
-payload = {
-    "request_id": os.environ["REQUEST_ID"],
-    "session_mode": os.environ["REQUEST_SESSION_MODE"],
-    "command": os.environ["REQUEST_COMMAND"],
-    "start_dir": os.environ["REQUEST_START_DIR"],
-    "term": os.environ["REQUEST_TERM"],
-    "columns": os.environ["REQUEST_COLUMNS"],
-    "lines": os.environ["REQUEST_LINES"],
-}
-
-with open(os.environ["REQUEST_PATH"], "w", encoding="utf-8") as handle:
-    json.dump(payload, handle, indent=2, sort_keys=True)
-    handle.write("\n")
-PY
-  trace_wrapper "command-request-ready:$request_id"
+  firebreak_write_command_request \
+    "$host_exec_output_dir" \
+    "$agent_session_mode" \
+    "$agent_command_override" \
+    "$host_cwd" \
+    "$agent_term" \
+    "$agent_columns" \
+    "$agent_lines"
+  trace_wrapper "command-request-ready:$command_request_id"
 }
 
 printf '%s\n' "$host_cwd" > "$host_meta_dir/mount-path"

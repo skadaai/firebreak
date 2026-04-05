@@ -5,6 +5,8 @@ local_controller_prepare_state() {
   local_controller_pid_file=$local_controller_state_dir/daemon.pid
   local_controller_runtime_dir_file=$local_controller_state_dir/runtime-dir
   local_controller_spawn_log=$local_controller_state_dir/spawn.log
+  local_controller_dispatch_lock_dir=$local_controller_state_dir/dispatch.lock
+  local_controller_dispatch_lock_pid_file=$local_controller_dispatch_lock_dir/pid
 }
 
 local_controller_runtime_dir() {
@@ -90,6 +92,48 @@ local_controller_clear_state() {
   rm -f "$local_controller_pid_file" "$local_controller_runtime_dir_file"
 }
 
+local_controller_dispatch_lock_pid_is_alive() {
+  if ! [ -r "$local_controller_dispatch_lock_pid_file" ]; then
+    return 1
+  fi
+  local_controller_lock_pid=$(cat "$local_controller_dispatch_lock_pid_file" 2>/dev/null || true)
+  case "$local_controller_lock_pid" in
+    ''|*[!0-9]*)
+      return 1
+      ;;
+  esac
+  kill -0 "$local_controller_lock_pid" 2>/dev/null
+}
+
+local_controller_release_dispatch_lock() {
+  local_controller_prepare_state
+  if [ -d "$local_controller_dispatch_lock_dir" ]; then
+    rm -rf "$local_controller_dispatch_lock_dir"
+  fi
+}
+
+local_controller_acquire_dispatch_lock() {
+  local_controller_prepare_state
+  mkdir -p "$local_controller_state_dir"
+
+  for _ in $(seq 1 7200); do
+    if mkdir "$local_controller_dispatch_lock_dir" 2>/dev/null; then
+      printf '%s\n' "${BASHPID:-$$}" > "$local_controller_dispatch_lock_pid_file"
+      return 0
+    fi
+
+    if ! local_controller_dispatch_lock_pid_is_alive; then
+      rm -rf "$local_controller_dispatch_lock_dir"
+      continue
+    fi
+
+    sleep 0.1
+  done
+
+  echo "warm local controller timed out waiting for dispatch lock for $runner_workdir" >&2
+  exit 1
+}
+
 local_controller_write_request() {
   controller_exec_output_dir=$1
   controller_request_path=$controller_exec_output_dir/request.json
@@ -162,6 +206,8 @@ local_controller_wait_for_response() {
 local_controller_dispatch_request() {
   local_controller_prepare_state
   local_controller_ensure_running
+  local_controller_acquire_dispatch_lock
+  trap 'local_controller_release_dispatch_lock' EXIT INT TERM
 
   controller_runtime_dir=$(local_controller_runtime_dir)
   controller_exec_output_dir=$controller_runtime_dir/o

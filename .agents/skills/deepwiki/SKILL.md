@@ -56,7 +56,7 @@ The most powerful tool. Submits a natural language question and returns a contex
 
 **Always prefer this tool over `read_wiki_contents` for understanding.** It reasons across the entire codebase, not just one page.
 
-```
+```javascript
 mcp__deepwiki__ask_question({
   repoName: "owner/repo",
   question: "How does X work?"
@@ -65,7 +65,7 @@ mcp__deepwiki__ask_question({
 
 Examples:
 
-```
+```javascript
 mcp__deepwiki__ask_question({
   repoName: "withastro/starlight",
   question: "How do I add a custom sidebar component that persists state across pages?"
@@ -86,7 +86,7 @@ mcp__deepwiki__ask_question({
 
 Returns the table of contents for a repository's DeepWiki. Use this when you want to understand the documentation landscape before deciding what to ask, or when you need to find the name of a specific topic to fetch.
 
-```
+```javascript
 mcp__deepwiki__read_wiki_structure({
   repoName: "owner/repo"
 })
@@ -96,7 +96,7 @@ mcp__deepwiki__read_wiki_structure({
 
 Returns the full text of a specific wiki page. Use this for reference reading when you already know which page you want, or for retrieving a complete section to include in context.
 
-```
+```javascript
 mcp__deepwiki__read_wiki_contents({
   repoName: "owner/repo",
   topic: "authentication"
@@ -121,6 +121,14 @@ https://deepwiki.com/prisma/prisma/query-engine
 ```
 
 When using webfetch, fetch the main repo page first to see available sections, then fetch the specific page that is most relevant. Read the full page content, not just a summary snippet. If the page contains links to sub-pages, follow the ones that are directly relevant to your question.
+
+---
+
+## Error Handling
+
+- **Repository not found**: If `mcp__deepwiki__ask_question`, `mcp__deepwiki__read_wiki_structure`, or `mcp__deepwiki__read_wiki_contents` fails because the repo name is wrong, verify the `owner/repo`, read the GitHub `README.md` directly, follow README links to docs or monorepos, and fall back to web search if the official repo is still unclear.
+- **Service unavailable**: If both the MCP tools and the webfetch URL patterns (`https://deepwiki.com/{owner}/{repo}` and `https://deepwiki.com/{owner}/{repo}/{page-slug}`) fail, use the repository’s own docs, README, and linked documentation, then state briefly that DeepWiki was unavailable and what source you used instead.
+- **Rate limits / courteous usage**: Batch related questions when possible, avoid repeating the same query after you already have the answer in context, and back off instead of hammering the MCP endpoints or DeepWiki pages if requests start failing intermittently.
 
 ---
 
@@ -150,19 +158,19 @@ The project maintains a file at `./UPSTREAM_REPOS.md` that maps technologies to 
 
 ```markdown
 <!-- Example UPSTREAM_REPOS.md -->
-| Technology       | GitHub Repo              | Notes                        |
-|------------------|--------------------------|------------------------------|
-| Astro Starlight  | withastro/starlight      |                              |
-| Vite             | vitejs/vite              |                              |
-| Prisma           | prisma/prisma            |                              |
-| Fumadocs         | fuma-nama/fumadocs       |                              |
+| Technology       | Upstream repo            | Use for                                  |
+|------------------|--------------------------|------------------------------------------|
+| Astro Starlight  | withastro/starlight      | Starlight docs and integration questions |
+| Vite             | vitejs/vite              | Vite core behavior and plugin questions  |
+| Prisma           | prisma/prisma            | Prisma schema and engine questions       |
+| Fumadocs         | fuma-nama/fumadocs       | Fumadocs framework and UI questions      |
 ```
 
 ### Step 2 — If not in UPSTREAM_REPOS.md
 
 If the technology is not listed, resolve the repo name by:
 
-1. Searching the web for `{technology name} github` to find the canonical repository
+1. Searching the web for `{technology name} GitHub` to find the canonical repository
 2. Confirming the repo exists and is the official one (check stars, org ownership, pinned README)
 3. Using that name in your DeepWiki query
 
@@ -171,12 +179,12 @@ If the technology is not listed, resolve the repo name by:
 After successfully using DeepWiki for a new technology, **add it to UPSTREAM_REPOS.md** so future queries can skip the resolution step. Use this format:
 
 ```markdown
-| Technology       | GitHub Repo              | Notes                        |
-|------------------|--------------------------|------------------------------|
-| {display name}   | {owner}/{repo}           | {optional: version, notes}   |
+| Technology       | Upstream repo            | Use for                                |
+|------------------|--------------------------|----------------------------------------|
+| {display name}   | {owner}/{repo}           | {what this repo should answer}         |
 ```
 
-Add a note if the repo name is non-obvious, if there are multiple official repos (e.g., a monorepo with a separate docs repo), or if a specific sub-package is more relevant than the root.
+Use the `Use for` column to capture contextual guidance whenever the right repo is non-obvious, multiple official repos exist, or only a specific package/subtree should be queried.
 
 ---
 
@@ -268,9 +276,9 @@ repository names for use with DeepWiki queries.
 
 Update this file whenever you start using a new external tool or library.
 
-| Technology          | GitHub Repo                    | Notes                                    |
+| Technology          | Upstream repo                  | Use for                                  |
 |---------------------|--------------------------------|------------------------------------------|
 <!-- Add entries below, one per row -->
 ```
 
-The file is append-only in normal usage. Do not remove entries. If a repo moves or is deprecated, add a note in the Notes column rather than deleting the row.
+The file is append-only in normal usage. Do not remove entries. If a repo moves or is deprecated, update the `Use for` guidance to explain the new source rather than deleting the row.

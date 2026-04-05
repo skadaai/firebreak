@@ -388,7 +388,7 @@ in {
       shellInit = renderTemplate scriptVars ./guest/shell-init.sh;
     };
 
-    microvm.forwardPorts = forwardPorts;
+    microvm.forwardPorts = lib.mkIf (cfg.runtimeBackend == "qemu") forwardPorts;
 
     networking.firewall.allowedTCPPorts = guestTcpPorts;
     networking.firewall.allowedUDPPorts = guestUdpPorts;

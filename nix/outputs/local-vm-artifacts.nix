@@ -55,18 +55,21 @@ in
 } // lib.optionalAttrs includeCloud {
   firebreak-codex-cloud = mkLocalVmArtifacts {
     name = "firebreak-codex-cloud";
+    runtimeBackend = "qemu";
     profileModules = [ self.nixosModules.firebreak-cloud-profile ];
     extraModules = [ self.nixosModules.firebreak-codex ];
   };
 
   firebreak-claude-code-cloud = mkLocalVmArtifacts {
     name = "firebreak-claude-code-cloud";
+    runtimeBackend = "qemu";
     profileModules = [ self.nixosModules.firebreak-cloud-profile ];
     extraModules = [ self.nixosModules.firebreak-claude-code ];
   };
 
   firebreak-cloud-smoke = mkLocalVmArtifacts {
     name = "firebreak-cloud-smoke";
+    runtimeBackend = "qemu";
     profileModules = [ self.nixosModules.firebreak-cloud-profile ];
     extraModules = [ {
       workloadVm = {

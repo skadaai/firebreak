@@ -60,7 +60,7 @@ firebreak_doctor_host_platform() {
 firebreak_doctor_local_runtime() {
   case "$(uname -s 2>/dev/null || printf '%s' unknown):$(uname -m 2>/dev/null || printf '%s' unknown)" in
     Linux:*)
-      printf '%s\n' "qemu"
+      printf '%s\n' "cloud-hypervisor"
       ;;
     Darwin:arm64|Darwin:aarch64)
       printf '%s\n' "vfkit"
@@ -84,6 +84,46 @@ firebreak_doctor_detect_kvm() {
   else
     printf '%s\n' "ok"
   fi
+}
+
+firebreak_doctor_detect_ip_forward() {
+  if ! [ -r /proc/sys/net/ipv4/ip_forward ]; then
+    printf '%s\n' "unknown"
+    return 0
+  fi
+
+  if [ "$(cat /proc/sys/net/ipv4/ip_forward)" = "1" ]; then
+    printf '%s\n' "ok"
+  else
+    printf '%s\n' "disabled"
+  fi
+}
+
+firebreak_doctor_detect_passwordless_sudo() {
+  ip_command=$(command -v ip 2>/dev/null || true)
+  iptables_command=$(command -v iptables 2>/dev/null || true)
+
+  if [ -z "$ip_command" ] || [ -z "$iptables_command" ]; then
+    printf '%s\n' "missing-tools"
+    return 0
+  fi
+
+  if ! command -v sudo >/dev/null 2>&1; then
+    printf '%s\n' "missing-sudo"
+    return 0
+  fi
+
+  if ! sudo -n "$ip_command" link show >/dev/null 2>&1; then
+    printf '%s\n' "networking-denied"
+    return 0
+  fi
+
+  if ! sudo -n "$iptables_command" -w -L >/dev/null 2>&1; then
+    printf '%s\n' "firewall-denied"
+    return 0
+  fi
+
+  printf '%s\n' "ok"
 }
 
 firebreak_doctor_git_common_dir() {
@@ -218,8 +258,12 @@ firebreak_doctor_command() {
   primary_checkout=$(firebreak_doctor_primary_checkout_state "$git_common_dir")
   host_platform=$(firebreak_doctor_host_platform)
   local_runtime=$(firebreak_doctor_local_runtime)
-  if [ "$local_runtime" = "qemu" ]; then
+  ip_forward_state="not-applicable"
+  sudo_networking_state="not-applicable"
+  if [ "$local_runtime" = "cloud-hypervisor" ]; then
     kvm_state=$(firebreak_doctor_detect_kvm)
+    ip_forward_state=$(firebreak_doctor_detect_ip_forward)
+    sudo_networking_state=$(firebreak_doctor_detect_passwordless_sudo)
   else
     kvm_state="not-applicable"
   fi
@@ -267,6 +311,8 @@ EOF
   "git_common_dir": "$(firebreak_doctor_json_escape "${git_common_dir:-unknown}")",
   "primary_checkout": "$(firebreak_doctor_json_escape "$primary_checkout")",
   "kvm": "$(firebreak_doctor_json_escape "$kvm_state")",
+  "ip_forward": "$(firebreak_doctor_json_escape "$ip_forward_state")",
+  "sudo_networking": "$(firebreak_doctor_json_escape "$sudo_networking_state")",
   "ignored_config_keys": [$(firebreak_doctor_json_array "$FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS")],
   "tools": {
     "codex": {
@@ -297,6 +343,8 @@ EOF
   firebreak_doctor_report_line "cwd_whitespace" "$cwd_whitespace"
   firebreak_doctor_report_line "primary_checkout" "$primary_checkout"
   firebreak_doctor_report_line "kvm" "$kvm_state"
+  firebreak_doctor_report_line "ip_forward" "$ip_forward_state"
+  firebreak_doctor_report_line "sudo_networking" "$sudo_networking_state"
   firebreak_doctor_report_line "codex_state" "$codex_mode ($codex_path)"
   firebreak_doctor_report_line "claude_state" "$claude_mode ($claude_path)"
   firebreak_doctor_report_line "codex_credentials" "$codex_slot ($codex_slot_path)"
@@ -327,6 +375,22 @@ EOF
       printf '%s\n' "- Fix /dev/kvm access if you want validation suites that require KVM to pass instead of blocking."
       ;;
   esac
+  case "$ip_forward_state" in
+    ok|not-applicable)
+      :
+      ;;
+    *)
+      printf '%s\n' "- Enable net.ipv4.ip_forward=1 before running the local Cloud Hypervisor backend."
+      ;;
+  esac
+  case "$sudo_networking_state" in
+    ok|not-applicable)
+      :
+      ;;
+    *)
+      printf '%s\n' "- Configure passwordless sudo for Firebreak host networking commands. See guides/cloud-hypervisor-local-linux.md."
+      ;;
+  esac
   case "$local_runtime" in
     unsupported-intel-mac)
       printf '%s\n' "- Firebreak local support on macOS is Apple Silicon only. Use an Apple Silicon Mac or a supported Linux host."
@@ -341,7 +405,12 @@ EOF
   if [ -n "$FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS" ]; then
     printf '%s\n' "- Remove unsupported keys from .firebreak.env or keep them in the shell environment instead."
   fi
-  if [ "$cwd_whitespace" != "yes" ] && [ "$primary_checkout" != "no" ] && [ -z "$FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS" ] && { [ "$kvm_state" = "ok" ] || [ "$kvm_state" = "not-applicable" ]; }; then
+  if [ "$cwd_whitespace" != "yes" ] \
+    && [ "$primary_checkout" != "no" ] \
+    && [ -z "$FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS" ] \
+    && { [ "$kvm_state" = "ok" ] || [ "$kvm_state" = "not-applicable" ]; } \
+    && { [ "$ip_forward_state" = "ok" ] || [ "$ip_forward_state" = "not-applicable" ]; } \
+    && { [ "$sudo_networking_state" = "ok" ] || [ "$sudo_networking_state" = "not-applicable" ]; }; then
     printf '%s\n' "- No obvious launch blockers detected."
   fi
 }

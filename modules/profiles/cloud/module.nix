@@ -54,6 +54,13 @@ let
   bootstrapEnabled = cfg.bootstrapScript != null;
 in {
   config = {
+    assertions = [
+      {
+        assertion = cfg.runtimeBackend == "qemu";
+        message = "firebreak cloud profile currently supports only the `qemu` backend.";
+      }
+    ];
+
     fileSystems.${cfg.hostMetaMount} = {
       device = "hostmeta";
       fsType = "9p";

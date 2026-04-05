@@ -113,11 +113,23 @@ if [ -n "${FIREBREAK_VALIDATION_FORCE_BLOCKED_REASON:-}" ]; then
 else
   case "$host_os:$host_arch" in
     Linux:*)
-      required_capability="kvm"
+      required_capability="cloud-hypervisor-local-host"
       if ! [ -r /dev/kvm ]; then
         missing_capability="kvm-unavailable"
       elif ! [ -w /dev/kvm ]; then
         missing_capability="kvm-not-writable"
+      elif ! [ -r /proc/sys/net/ipv4/ip_forward ] || [ "$(cat /proc/sys/net/ipv4/ip_forward)" != "1" ]; then
+        missing_capability="ip-forward-disabled"
+      elif ! command -v sudo >/dev/null 2>&1; then
+        missing_capability="sudo-missing"
+      elif ! command -v ip >/dev/null 2>&1; then
+        missing_capability="ip-tool-missing"
+      elif ! command -v iptables >/dev/null 2>&1; then
+        missing_capability="iptables-tool-missing"
+      elif ! sudo -n "$(command -v ip)" link show >/dev/null 2>&1; then
+        missing_capability="sudo-networking-denied"
+      elif ! sudo -n "$(command -v iptables)" -w -L >/dev/null 2>&1; then
+        missing_capability="sudo-firewall-denied"
       fi
       ;;
     Darwin:arm64|Darwin:aarch64)

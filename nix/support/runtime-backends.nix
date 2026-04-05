@@ -73,7 +73,7 @@ in {
     if lib.hasSuffix "-darwin" hostSystem then
       "vfkit"
     else
-      "qemu";
+      "cloud-hypervisor";
 
   specFor = backendName:
     backendSpecs.${backendName} or (throw "unsupported Firebreak runtime backend: ${backendName}");

@@ -602,7 +602,7 @@ fi
 cloud_hypervisor_setup_local_network
 
 case "$runtime_backend" in
-  qemu|cloud-hypervisor)
+  cloud-hypervisor)
     start_virtiofsd "/nix/store" "$ro_store_socket" "$virtiofsd_ro_store_log"
     ro_store_virtiofsd_pid=$started_virtiofsd_pid
     trace_wrapper "virtiofs-ro-store-ready"
@@ -677,7 +677,7 @@ run_runner() {
     return
   fi
 
-  if [ "$runtime_backend" != "qemu" ] && [ "$runtime_backend" != "cloud-hypervisor" ]; then
+  if [ "$runtime_backend" != "cloud-hypervisor" ]; then
     echo "unsupported local runtime backend: $runtime_backend" >&2
     exit 1
   fi

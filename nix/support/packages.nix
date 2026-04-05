@@ -294,6 +294,9 @@ rec {
       runtimeInputs = with pkgs; [
         coreutils
         gnused
+        iproute2
+        iptables
+        sudo
       ];
       text = renderTemplate {
         "@CODEX_SMOKE_BIN@" = "${self.packages.${system}.firebreak-test-smoke-codex}/bin/firebreak-test-smoke-codex";
@@ -593,8 +596,11 @@ rec {
         gawk
         git
         gnused
+        iproute2
+        iptables
         nix
         python3
+        sudo
       ];
       text = ''
         export FIREBREAK_LIBEXEC_DIR='${firebreakLibexec}/libexec'

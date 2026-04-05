@@ -88,6 +88,18 @@ let
   bootstrapEnabled = cfg.bootstrapScript != null;
 in {
   config = {
+    assertions = [
+      {
+        assertion =
+          if lib.hasSuffix "-darwin" cfg.hostSystem then
+            cfg.runtimeBackend == "vfkit"
+          else
+            cfg.runtimeBackend == "cloud-hypervisor";
+        message =
+          "firebreak local profile supports only `vfkit` on Darwin and `cloud-hypervisor` on Linux.";
+      }
+    ];
+
     workloadVm.requiredCapabilities = [
       "interactive-console"
       "local-networking"

@@ -16,29 +16,7 @@ emit_cloud_hypervisor_net() {
   printf '%s\n' "--net" "tap=${tap_interface},mac=${mac_address}"
 }
 
-emit_qemu_virtiofs_share() {
-  share_id=$1
-  socket_path=$2
-  tag=$3
-  [ -n "$socket_path" ] || return 0
-  printf '%s\n' \
-    "-chardev" "socket,id=${share_id},path=${socket_path}" \
-    "-device" "vhost-user-fs-pci,chardev=${share_id},tag=${tag}"
-}
-
 case "$runtime_backend" in
-  qemu)
-    emit_qemu_virtiofs_share "fs-ro-store" "${MICROVM_RO_STORE_SOCKET:-}" "ro-store"
-    [ -n "${MICROVM_HOST_CWD_SOCKET:-}" ] || exit 0
-    emit_qemu_virtiofs_share "fs-hostcwd" "${MICROVM_HOST_CWD_SOCKET:-}" "hostcwd"
-    emit_qemu_virtiofs_share "fs-hostmeta" "${MICROVM_HOST_META_SOCKET:-}" "hostmeta"
-
-    emit_qemu_virtiofs_share "fs-hoststateroot" "${MICROVM_SHARED_STATE_ROOT_SOCKET:-}" "hoststateroot"
-    emit_qemu_virtiofs_share "fs-hostcredentialslots" "${MICROVM_SHARED_CREDENTIAL_SLOTS_SOCKET:-}" "hostcredentialslots"
-    emit_qemu_virtiofs_share "fs-agentexecoutput" "${MICROVM_AGENT_EXEC_OUTPUT_SOCKET:-}" "hostexecoutput"
-    emit_qemu_virtiofs_share "fs-agenttools" "${MICROVM_AGENT_TOOLS_SOCKET:-}" "hostagenttools"
-    emit_qemu_virtiofs_share "fs-workerbridge" "${MICROVM_WORKER_BRIDGE_SOCKET:-}" "hostworkerbridge"
-    ;;
   cloud-hypervisor)
     emit_cloud_hypervisor_net "${MICROVM_CLOUD_HYPERVISOR_TAP_INTERFACE:-}" "@NETWORK_MAC@"
     emit_cloud_hypervisor_fs "ro-store" "${MICROVM_RO_STORE_SOCKET:-}"

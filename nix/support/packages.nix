@@ -312,6 +312,7 @@ rec {
         sudo
       ];
       text = renderTemplate {
+        "@LOCAL_CONTROLLER_SMOKE_BIN@" = "${self.packages.${system}.firebreak-test-smoke-local-controller}/bin/firebreak-test-smoke-local-controller";
         "@CODEX_SMOKE_BIN@" = "${self.packages.${system}.firebreak-test-smoke-codex}/bin/firebreak-test-smoke-codex";
         "@CODEX_VERSION_BIN@" = "${self.packages.${system}.firebreak-test-smoke-codex-version}/bin/firebreak-test-smoke-codex-version";
         "@CLAUDE_SMOKE_BIN@" = "${self.packages.${system}.firebreak-test-smoke-claude-code}/bin/firebreak-test-smoke-claude-code";

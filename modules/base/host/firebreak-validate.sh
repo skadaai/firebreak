@@ -11,6 +11,7 @@ usage() {
 usage: firebreak internal validate run SUITE [--state-dir PATH]
 
 Named suites:
+  test-smoke-local-controller
   test-smoke-codex
   test-smoke-codex-version
   test-smoke-claude-code
@@ -92,6 +93,10 @@ required_capability="local-hypervisor"
 missing_capability=""
 
 case "$suite_name" in
+  test-smoke-local-controller)
+    suite_command="@LOCAL_CONTROLLER_SMOKE_BIN@"
+    required_capability="host-shell"
+    ;;
   test-smoke-codex)
     suite_command="@CODEX_SMOKE_BIN@"
     ;;
@@ -111,38 +116,40 @@ esac
 if [ -n "${FIREBREAK_VALIDATION_FORCE_BLOCKED_REASON:-}" ]; then
   missing_capability=$FIREBREAK_VALIDATION_FORCE_BLOCKED_REASON
 else
-  case "$host_os:$host_arch" in
-    Linux:*)
-      required_capability="cloud-hypervisor-local-host"
-      if ! [ -r /dev/kvm ]; then
-        missing_capability="kvm-unavailable"
-      elif ! [ -w /dev/kvm ]; then
-        missing_capability="kvm-not-writable"
-      elif ! [ -r /proc/sys/net/ipv4/ip_forward ] || [ "$(cat /proc/sys/net/ipv4/ip_forward)" != "1" ]; then
-        missing_capability="ip-forward-disabled"
-      elif ! command -v sudo >/dev/null 2>&1; then
-        missing_capability="sudo-missing"
-      elif ! command -v ip >/dev/null 2>&1; then
-        missing_capability="ip-tool-missing"
-      elif ! command -v iptables >/dev/null 2>&1; then
-        missing_capability="iptables-tool-missing"
-      elif ! sudo -n "$(command -v ip)" link show >/dev/null 2>&1; then
-        missing_capability="sudo-networking-denied"
-      elif ! sudo -n "$(command -v iptables)" -w -L >/dev/null 2>&1; then
-        missing_capability="sudo-firewall-denied"
-      fi
-      ;;
-    Darwin:arm64|Darwin:aarch64)
-      required_capability="apple-silicon-vfkit"
-      ;;
-    Darwin:*)
-      required_capability="apple-silicon-vfkit"
-      missing_capability="unsupported-intel-mac"
-      ;;
-    *)
-      missing_capability="unsupported-host-platform"
-      ;;
-  esac
+  if [ "$required_capability" = "local-hypervisor" ]; then
+    case "$host_os:$host_arch" in
+      Linux:*)
+        required_capability="cloud-hypervisor-local-host"
+        if ! [ -r /dev/kvm ]; then
+          missing_capability="kvm-unavailable"
+        elif ! [ -w /dev/kvm ]; then
+          missing_capability="kvm-not-writable"
+        elif ! [ -r /proc/sys/net/ipv4/ip_forward ] || [ "$(cat /proc/sys/net/ipv4/ip_forward)" != "1" ]; then
+          missing_capability="ip-forward-disabled"
+        elif ! command -v sudo >/dev/null 2>&1; then
+          missing_capability="sudo-missing"
+        elif ! command -v ip >/dev/null 2>&1; then
+          missing_capability="ip-tool-missing"
+        elif ! command -v iptables >/dev/null 2>&1; then
+          missing_capability="iptables-tool-missing"
+        elif ! sudo -n "$(command -v ip)" link show >/dev/null 2>&1; then
+          missing_capability="sudo-networking-denied"
+        elif ! sudo -n "$(command -v iptables)" -w -L >/dev/null 2>&1; then
+          missing_capability="sudo-firewall-denied"
+        fi
+        ;;
+      Darwin:arm64|Darwin:aarch64)
+        required_capability="apple-silicon-vfkit"
+        ;;
+      Darwin:*)
+        required_capability="apple-silicon-vfkit"
+        missing_capability="unsupported-intel-mac"
+        ;;
+      *)
+        missing_capability="unsupported-host-platform"
+        ;;
+    esac
+  fi
 fi
 
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)

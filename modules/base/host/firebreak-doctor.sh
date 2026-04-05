@@ -105,56 +105,83 @@ firebreak_doctor_primary_checkout_state() {
   esac
 }
 
-firebreak_doctor_workspace_config_path() {
-  config_dir_name=$1
-  candidate_path=$PWD/$config_dir_name
-
-  if [ -L "$candidate_path" ]; then
-    resolved_target=$(realpath -m "$candidate_path")
-    case "$resolved_target" in
-      "$PWD"|"$PWD"/*)
-        printf '%s\n' "$candidate_path"
-        ;;
-      *)
-        printf '%s\n' "$resolved_target"
-        ;;
-    esac
-  else
-    printf '%s\n' "$candidate_path"
+firebreak_doctor_state_sha256() {
+  value=$1
+  if command -v sha256sum >/dev/null 2>&1; then
+    printf '%s' "$value" | sha256sum | cut -d' ' -f1
+    return 0
   fi
+
+  if command -v shasum >/dev/null 2>&1; then
+    printf '%s' "$value" | shasum -a 256 | cut -d' ' -f1
+    return 0
+  fi
+
+  printf '%s\n' "missing sha256 tool" >&2
+  return 1
 }
 
-firebreak_doctor_resolve_agent_state() {
-  agent_label=$1
-  agent_prefix=$2
-  default_host_path=$3
-  config_dir_name=$4
+firebreak_doctor_workspace_state_path() {
+  host_root=$1
+  config_subdir=$2
 
-  agent_specific_config_var=${agent_prefix}_CONFIG
-  agent_specific_host_var=${agent_prefix}_CONFIG_HOST_PATH
-  agent_specific_config=${!agent_specific_config_var:-}
-  agent_specific_host=${!agent_specific_host_var:-}
+  project_root=$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$PWD")
+  if ! project_key=$(firebreak_doctor_state_sha256 "$project_root"); then
+    printf '%s\n' "failed to resolve workspace state hash for project root: $project_root" >&2
+    return 1
+  fi
+  project_key=$(printf '%.16s' "$project_key")
+  printf '%s\n' "$host_root/workspaces/$project_key/$config_subdir"
+}
 
-  agent_mode=${agent_specific_config:-${AGENT_CONFIG:-vm}}
-  agent_host_path=$(firebreak_doctor_resolve_host_dir "${agent_specific_host:-${AGENT_CONFIG_HOST_PATH:-$default_host_path}}")
+firebreak_doctor_resolve_tool_state() {
+  tool_label=$1
+  tool_prefix=$2
+  default_host_root=$3
+  state_subdir=$4
 
-  case "$agent_mode" in
+  tool_specific_state_var=${tool_prefix}_STATE_MODE
+  tool_specific_state=${!tool_specific_state_var:-}
+
+  tool_mode=${tool_specific_state:-${FIREBREAK_STATE_MODE:-host}}
+  tool_host_root=$(firebreak_doctor_resolve_host_dir "${FIREBREAK_STATE_ROOT:-$default_host_root}")
+  tool_host_path=$tool_host_root/$state_subdir
+
+  case "$tool_mode" in
     host)
-      printf '%s|%s|%s|%s\n' "$agent_label" "$agent_mode" "$agent_host_path" "$agent_specific_config_var"
+      printf '%s|%s|%s|%s\n' "$tool_label" "$tool_mode" "$tool_host_path" "$tool_specific_state_var"
       ;;
     workspace)
-      printf '%s|%s|%s|%s\n' "$agent_label" "$agent_mode" "$(firebreak_doctor_workspace_config_path "$config_dir_name")" "$agent_specific_config_var"
+      printf '%s|%s|%s|%s\n' "$tool_label" "$tool_mode" "$(firebreak_doctor_workspace_state_path "$tool_host_root" "$state_subdir")" "$tool_specific_state_var"
       ;;
     vm)
-      printf '%s|%s|%s|%s\n' "$agent_label" "$agent_mode" "/var/lib/dev/$config_dir_name" "$agent_specific_config_var"
+      printf '%s|%s|%s|%s\n' "$tool_label" "$tool_mode" "/var/lib/dev/.firebreak/$state_subdir" "$tool_specific_state_var"
       ;;
     fresh)
-      printf '%s|%s|%s|%s\n' "$agent_label" "$agent_mode" "/run/agent-config-fresh" "$agent_specific_config_var"
+      printf '%s|%s|%s|%s\n' "$tool_label" "$tool_mode" "/run/firebreak-state-fresh/$state_subdir" "$tool_specific_state_var"
       ;;
     *)
-      printf '%s|%s|%s|%s\n' "$agent_label" "invalid" "$agent_mode" "$agent_specific_config_var"
+      printf '%s|%s|%s|%s\n' "$tool_label" "invalid" "$tool_mode" "$tool_specific_state_var"
       ;;
   esac
+}
+
+firebreak_doctor_resolve_credential_slot() {
+  tool_label=$1
+  tool_prefix=$2
+  default_slot_root=$3
+  slot_subdir=$4
+
+  tool_specific_slot_var=${tool_prefix}_CREDENTIAL_SLOT
+  tool_specific_slot=${!tool_specific_slot_var:-}
+  selected_slot=${tool_specific_slot:-${FIREBREAK_CREDENTIAL_SLOT:-}}
+  slot_root=$(firebreak_doctor_resolve_host_dir "${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-$default_slot_root}")
+
+  if [ -n "$selected_slot" ]; then
+    printf '%s|%s|%s|%s\n' "$tool_label" "$selected_slot" "$slot_root/$selected_slot/$slot_subdir" "$tool_specific_slot_var"
+  else
+    printf '%s|%s|%s|%s\n' "$tool_label" "none" "$slot_root" "$tool_specific_slot_var"
+  fi
 }
 
 firebreak_doctor_command() {
@@ -198,12 +225,18 @@ firebreak_doctor_command() {
   fi
 
   IFS='|' read -r codex_label codex_mode codex_path codex_source_var <<EOF
-$(firebreak_doctor_resolve_agent_state "codex" "CODEX" "$HOME/.codex" ".codex")
+$(firebreak_doctor_resolve_tool_state "codex" "CODEX" "$HOME/.firebreak" "codex")
 EOF
   IFS='|' read -r claude_label claude_mode claude_path claude_source_var <<EOF
-$(firebreak_doctor_resolve_agent_state "claude-code" "CLAUDE" "$HOME/.claude" ".claude")
+$(firebreak_doctor_resolve_tool_state "claude-code" "CLAUDE" "$HOME/.firebreak" "claude")
 EOF
-  : "$codex_label" "$codex_source_var" "$claude_label" "$claude_source_var"
+  IFS='|' read -r _codex_slot_label codex_slot codex_slot_path codex_slot_source_var <<EOF
+$(firebreak_doctor_resolve_credential_slot "codex" "CODEX" "$HOME/.firebreak/credentials" "codex")
+EOF
+  IFS='|' read -r _claude_slot_label claude_slot claude_slot_path claude_slot_source_var <<EOF
+$(firebreak_doctor_resolve_credential_slot "claude-code" "CLAUDE" "$HOME/.firebreak/credentials" "claude")
+EOF
+  : "$codex_label" "$codex_source_var" "$claude_label" "$claude_source_var" "$codex_slot_source_var" "$claude_slot_source_var"
 
   if [ "$doctor_output" = "json" ]; then
     verbose_json_fields=""
@@ -235,14 +268,18 @@ EOF
   "primary_checkout": "$(firebreak_doctor_json_escape "$primary_checkout")",
   "kvm": "$(firebreak_doctor_json_escape "$kvm_state")",
   "ignored_config_keys": [$(firebreak_doctor_json_array "$FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS")],
-  "agents": {
+  "tools": {
     "codex": {
       "mode": "$(firebreak_doctor_json_escape "$codex_mode")",
-      "path": "$(firebreak_doctor_json_escape "$codex_path")"
+      "path": "$(firebreak_doctor_json_escape "$codex_path")",
+      "credential_slot": "$(firebreak_doctor_json_escape "$codex_slot")",
+      "credential_path": "$(firebreak_doctor_json_escape "$codex_slot_path")"
     },
     "claude-code": {
       "mode": "$(firebreak_doctor_json_escape "$claude_mode")",
-      "path": "$(firebreak_doctor_json_escape "$claude_path")"
+      "path": "$(firebreak_doctor_json_escape "$claude_path")",
+      "credential_slot": "$(firebreak_doctor_json_escape "$claude_slot")",
+      "credential_path": "$(firebreak_doctor_json_escape "$claude_slot_path")"
     }
   }$verbose_json_fields
 }
@@ -260,8 +297,10 @@ EOF
   firebreak_doctor_report_line "cwd_whitespace" "$cwd_whitespace"
   firebreak_doctor_report_line "primary_checkout" "$primary_checkout"
   firebreak_doctor_report_line "kvm" "$kvm_state"
-  firebreak_doctor_report_line "codex_config" "$codex_mode ($codex_path)"
-  firebreak_doctor_report_line "claude_config" "$claude_mode ($claude_path)"
+  firebreak_doctor_report_line "codex_state" "$codex_mode ($codex_path)"
+  firebreak_doctor_report_line "claude_state" "$claude_mode ($claude_path)"
+  firebreak_doctor_report_line "codex_credentials" "$codex_slot ($codex_slot_path)"
+  firebreak_doctor_report_line "claude_credentials" "$claude_slot ($claude_slot_path)"
 
   if [ "$doctor_verbose" = "1" ]; then
     printf '\nDetails\n'
@@ -269,6 +308,8 @@ EOF
     firebreak_doctor_report_line "cwd" "$PWD"
     firebreak_doctor_report_line "git_common_dir" "${git_common_dir:-unknown}"
     firebreak_doctor_report_line "ignored_keys" "${FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS:-none}"
+    firebreak_doctor_report_line "codex_selector" "$codex_source_var / $codex_slot_source_var"
+    firebreak_doctor_report_line "claude_selector" "$claude_source_var / $claude_slot_source_var"
   fi
 
   printf '\nSuggested next steps\n'

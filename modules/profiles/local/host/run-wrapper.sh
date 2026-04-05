@@ -10,13 +10,11 @@ resolved_firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPD
 firebreak_state_root=${FIREBREAK_STATE_DIR:-${XDG_STATE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.local/state}/firebreak}
 default_firebreak_state_root=${XDG_STATE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.local/state}/firebreak
 worker_state_dir=${FIREBREAK_WORKER_STATE_DIR:-$firebreak_state_root/worker-broker}
-agent_specific_config_var=@AGENT_ENV_PREFIX@_CONFIG
-agent_specific_host_path_var=@AGENT_ENV_PREFIX@_CONFIG_HOST_PATH
-agent_specific_config=${!agent_specific_config_var:-}
-agent_specific_host_path=${!agent_specific_host_path_var:-}
-agent_config_mode=${agent_specific_config:-${AGENT_CONFIG:-vm}}
+specific_state_mode_var=@AGENT_ENV_PREFIX@_STATE_MODE
+specific_state_mode=${!specific_state_mode_var:-}
+state_mode=${specific_state_mode:-${FIREBREAK_STATE_MODE:-host}}
 requested_launch_mode=${FIREBREAK_LAUNCH_MODE:-run}
-requested_worker_mode=${FIREBREAK_WORKER_MODE:-${FIREBREAK_WORKER_PROXY_MODE:-}}
+requested_worker_mode=${FIREBREAK_WORKER_MODE:-}
 requested_worker_modes=${FIREBREAK_WORKER_MODES:-}
 agent_session_mode_override=${FIREBREAK_AGENT_SESSION_MODE_OVERRIDE:-}
 agent_session_mode=agent
@@ -24,7 +22,11 @@ default_agent_command=@DEFAULT_AGENT_COMMAND@
 host_system=@HOST_SYSTEM@
 agent_command_override=""
 shell_command_override=${AGENT_VM_COMMAND:-}
-agent_config_host_dir=""
+shared_state_root_host_dir=""
+shared_credential_slots_host_dir=""
+workspace_bootstrap_config_host_dir=@WORKSPACE_BOOTSTRAP_CONFIG_HOST_DIR@
+host_config_adoption_enabled=@HOST_CONFIG_ADOPTION_ENABLED@
+shared_credential_slots_enabled=@SHARED_CREDENTIAL_SLOTS_ENABLED@
 default_control_socket=@CONTROL_SOCKET@
 instance_state_dir=${FIREBREAK_INSTANCE_DIR:-}
 instance_ephemeral=${FIREBREAK_INSTANCE_EPHEMERAL:-0}
@@ -89,12 +91,164 @@ resolve_host_dir() {
   fi
 }
 
-resolve_symlink_target() {
-  path=$1
-  realpath -m "$path"
+resolve_canonical_path() {
+  target_path=$1
+
+  if resolved_path=$(readlink -f "$target_path" 2>/dev/null); then
+    printf '%s\n' "$resolved_path"
+    return 0
+  fi
+
+  if resolved_path=$(realpath "$target_path" 2>/dev/null); then
+    printf '%s\n' "$resolved_path"
+    return 0
+  fi
+
+  @PYTHON3@ -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$target_path" 2>/dev/null || return 1
 }
 
-default_agent_config_host_dir=$(resolve_host_dir "${agent_specific_host_path:-${AGENT_CONFIG_HOST_PATH:-@DEFAULT_AGENT_CONFIG_HOST_DIR@}}")
+require_absolute_host_path() {
+  path=$1
+  description=$2
+
+  case "$path" in
+    /*) ;;
+    *)
+      echo "$description must resolve to an absolute host path: $path" >&2
+      exit 1
+      ;;
+  esac
+}
+
+ensure_host_state_subdir() {
+  host_root=$1
+  state_subdir=$2
+  bootstrap_target=$3
+  host_state_path=$host_root/$state_subdir
+
+  mkdir -p "$host_root"
+
+  materialize_host_state_target() {
+    source_path=$1
+    destination_path=$2
+
+    rm -rf "$destination_path"
+    mkdir -p "$destination_path"
+    if [ -d "$source_path" ]; then
+      cp -a "$source_path"/. "$destination_path"/
+    elif [ -e "$source_path" ] || [ -L "$source_path" ]; then
+      cp -a "$source_path" "$destination_path"/
+    fi
+  }
+
+  path_within_root() {
+    candidate_path=$1
+    root_path=$2
+
+    case "$candidate_path" in
+      "$root_path"|"$root_path"/*)
+        return 0
+        ;;
+      *)
+        return 1
+        ;;
+    esac
+  }
+
+  maybe_materialize_external_state() {
+    current_path=$1
+    root_path=$2
+
+    if ! [ -L "$current_path" ]; then
+      return 0
+    fi
+
+    resolved_link=$(resolve_canonical_path "$current_path" 2>/dev/null || true)
+    resolved_root=$(resolve_canonical_path "$root_path" 2>/dev/null || true)
+    if [ -z "$resolved_link" ] || [ -z "$resolved_root" ]; then
+      return 0
+    fi
+
+    if path_within_root "$resolved_link" "$resolved_root"; then
+      return 0
+    fi
+
+    rm -f "$current_path"
+    materialize_host_state_target "$resolved_link" "$current_path"
+    printf '%s\n' "firebreak: materialized external tool state into $current_path from $resolved_link" >&2
+  }
+
+  if [ -n "$bootstrap_target" ] && ! [ -e "$host_state_path" ] && ! [ -L "$host_state_path" ] && { [ -e "$bootstrap_target" ] || [ -L "$bootstrap_target" ]; }; then
+    reject_whitespace_path "$bootstrap_target" "host state bootstrap target"
+    resolved_target=$(resolve_canonical_path "$bootstrap_target" 2>/dev/null || true)
+    resolved_root=$(resolve_canonical_path "$host_root" 2>/dev/null || true)
+    if [ -n "$resolved_target" ] && [ -n "$resolved_root" ] && path_within_root "$resolved_target" "$resolved_root"; then
+      ln -s "$bootstrap_target" "$host_state_path"
+      printf '%s\n' "firebreak: adopted existing tool state as $host_state_path -> $bootstrap_target" >&2
+    else
+      materialize_host_state_target "$bootstrap_target" "$host_state_path"
+      printf '%s\n' "firebreak: materialized adopted tool state into $host_state_path from $bootstrap_target" >&2
+    fi
+    return 0
+  fi
+
+  maybe_materialize_external_state "$host_state_path" "$host_root"
+
+  if [ -e "$host_state_path" ] && ! [ -d "$host_state_path" ] && ! [ -L "$host_state_path" ]; then
+    printf '%s\n' "Firebreak host state path exists but is not a directory: $host_state_path" >&2
+    exit 1
+  fi
+
+  if ! [ -e "$host_state_path" ] && ! [ -L "$host_state_path" ]; then
+    mkdir -p "$host_state_path"
+  fi
+}
+
+append_optional_env_default() {
+  key=$1
+  value=$2
+  [ -n "$value" ] || return 0
+
+  printf -v quoted_value '%q' "$value"
+  printf ": \"\${%s:=%s}\"\n" "$key" "$quoted_value" >> "$shared_state_root_env_file"
+  printf 'export %s\n' "$key" >> "$shared_state_root_env_file"
+}
+
+append_matching_env_defaults() {
+  suffix_pattern=$1
+
+  # Suffix-only matching is intentional so new tool-specific selectors can flow
+  # through the shared state env file without changing Firebreak core.
+  while IFS= read -r env_entry; do
+    env_key=${env_entry%%=*}
+    env_value=${env_entry#*=}
+    case "$env_key" in
+      *"$suffix_pattern")
+        append_optional_env_default "$env_key" "$env_value"
+        ;;
+    esac
+  done <<EOF
+$(env)
+EOF
+}
+
+default_state_root=$(resolve_host_dir "${FIREBREAK_STATE_ROOT:-@DEFAULT_STATE_ROOT@}")
+default_credential_slots_host_dir=$(resolve_host_dir "${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-@DEFAULT_CREDENTIAL_SLOTS_HOST_DIR@}")
+workspace_bootstrap_target=""
+if [ -n "$workspace_bootstrap_config_host_dir" ]; then
+  workspace_bootstrap_target=$(resolve_host_dir "$workspace_bootstrap_config_host_dir")
+fi
+require_absolute_host_path "$default_state_root" "FIREBREAK_STATE_ROOT"
+if [ -n "$workspace_bootstrap_target" ]; then
+  require_absolute_host_path "$workspace_bootstrap_target" "workspace bootstrap target"
+fi
+shared_state_root_host_dir=$default_state_root
+shared_credential_slots_host_dir=$default_credential_slots_host_dir
+if [ "$shared_credential_slots_enabled" != "1" ]; then
+  shared_credential_slots_host_dir=""
+else
+  require_absolute_host_path "$default_credential_slots_host_dir" "FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH"
+fi
 
 reject_whitespace_path "$host_cwd" "current working directory"
 reject_whitespace_path "$resolved_firebreak_tmp_root" "Firebreak temporary runtime directory"
@@ -116,12 +270,14 @@ host_instance_dir=$host_runtime_dir/instance
 runner_stdout_log=$host_runtime_dir/runner.out
 runner_stderr_log=$host_runtime_dir/runner.err
 virtiofsd_hostcwd_log=$host_runtime_dir/v-cwd.log
-virtiofsd_agent_config_log=$host_runtime_dir/v-cfg.log
+virtiofsd_shared_state_root_log=$host_runtime_dir/v-shared-cfg.log
+virtiofsd_shared_credential_slots_log=$host_runtime_dir/v-credential-slots.log
 virtiofsd_agent_exec_log=$host_runtime_dir/v-out.log
 virtiofsd_agent_tools_log=$host_runtime_dir/v-tools.log
 virtiofsd_worker_bridge_log=$host_runtime_dir/v-worker.log
 hostcwd_socket=$host_runtime_dir/cwd.sock
-agent_config_socket=$host_runtime_dir/cfg.sock
+shared_state_root_socket=$host_runtime_dir/shared-cfg.sock
+shared_credential_slots_socket=$host_runtime_dir/credential-slots.sock
 agent_exec_output_socket=$host_runtime_dir/out.sock
 agent_tools_socket=$host_runtime_dir/tools.sock
 worker_bridge_dir=$host_runtime_dir/w
@@ -152,8 +308,48 @@ if { [ -z "$agent_columns" ] || [ -z "$agent_lines" ]; } && command -v stty >/de
 fi
 
 trace_wrapper() {
-  printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >>"$wrapper_trace_log"
+  if ! [ -d "$host_runtime_dir" ]; then
+    return 0
+  fi
+  printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >>"$wrapper_trace_log" 2>/dev/null || true
 }
+
+print_runner_json_parse_hint() {
+  stderr_log=$1
+
+  if ! [ -s "$stderr_log" ]; then
+    return 0
+  fi
+
+  if grep -F -q "[json.exception.parse_error.101]" "$stderr_log" 2>/dev/null \
+    || grep -F -q "attempting to parse an empty input" "$stderr_log" 2>/dev/null; then
+    cat >&2 <<'EOF'
+firebreak: the VM runner failed while parsing empty JSON from an internal helper.
+
+Likely causes:
+  - the outer Nix launch ignored this flake's config; rerun with:
+      nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run ...
+  - an internal Firebreak helper returned no JSON because an earlier step failed
+
+Inspect the preserved Firebreak runtime logs for the exact failing step.
+EOF
+  fi
+}
+
+require_absolute_host_path "$shared_state_root_host_dir" "FIREBREAK_STATE_ROOT"
+reject_whitespace_path "$shared_state_root_host_dir" "Firebreak host state root"
+if [ "$host_system" = "aarch64-darwin" ]; then
+  reject_comma_path "$shared_state_root_host_dir" "Firebreak host state root"
+fi
+mkdir -p "$shared_state_root_host_dir"
+if [ -n "$shared_credential_slots_host_dir" ]; then
+  require_absolute_host_path "$shared_credential_slots_host_dir" "FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH"
+  reject_whitespace_path "$shared_credential_slots_host_dir" "Firebreak credential slot root"
+  if [ "$host_system" = "aarch64-darwin" ]; then
+    reject_comma_path "$shared_credential_slots_host_dir" "Firebreak credential slot root"
+  fi
+  mkdir -p "$shared_credential_slots_host_dir"
+fi
 
 if [ -n "$instance_state_dir" ]; then
   case "$instance_state_dir" in
@@ -272,55 +468,18 @@ if [ -z "$agent_command_override" ]; then
   esac
 fi
 
-case "$agent_config_mode" in
-  host)
-    agent_config_host_dir=$default_agent_config_host_dir
-
-    case "$agent_config_host_dir" in
-      /*) ;;
-      *)
-        echo "AGENT_CONFIG_HOST_PATH must resolve to an absolute host path: $agent_config_host_dir" >&2
-        exit 1
-        ;;
-    esac
-
-    reject_whitespace_path "$agent_config_host_dir" "agent host config path"
-    if [ "$host_system" = "aarch64-darwin" ]; then
-      reject_comma_path "$agent_config_host_dir" "agent host config path"
-    fi
-
-    mkdir -p "$agent_config_host_dir"
-    ;;
-  workspace|vm|fresh)
+case "$state_mode" in
+  host|workspace|vm|fresh)
     ;;
   *)
-    echo "unsupported agent config mode: $agent_config_mode" >&2
-    echo "supported modes: host, workspace, vm, fresh" >&2
+    echo "unsupported state mode: $state_mode" >&2
+    echo "supported state modes: host, workspace, vm, fresh" >&2
     exit 1
     ;;
 esac
 
-workspace_agent_config_path=$host_cwd/@AGENT_CONFIG_DIR_NAME@
-if [ "$agent_config_mode" = "workspace" ] && [ -L "$workspace_agent_config_path" ]; then
-  resolved_symlink_target=$(resolve_symlink_target "$workspace_agent_config_path")
-    reject_whitespace_path "$resolved_symlink_target" "workspace agent config symlink target"
-    case "$resolved_symlink_target" in
-      "$host_cwd"|"$host_cwd"/*)
-        ;;
-      *)
-        agent_config_mode=host
-        agent_config_host_dir=$resolved_symlink_target
-        target_parent=$(dirname "$agent_config_host_dir")
-        if ! [ -d "$agent_config_host_dir" ] && ! [ -w "$target_parent" ]; then
-          echo "workspace agent config symlink target is not writable on the host; falling back to $default_agent_config_host_dir" >&2
-          agent_config_host_dir=$default_agent_config_host_dir
-        fi
-        if [ "$host_system" = "aarch64-darwin" ]; then
-          reject_comma_path "$agent_config_host_dir" "workspace agent config symlink target"
-        fi
-        mkdir -p "$agent_config_host_dir"
-        ;;
-  esac
+if [ "$host_config_adoption_enabled" = "1" ] && [ "$state_mode" = "host" ]; then
+  ensure_host_state_subdir "$shared_state_root_host_dir" "@STATE_SUBDIR@" "$workspace_bootstrap_target"
 fi
 
 # shellcheck disable=SC2329
@@ -329,9 +488,13 @@ cleanup() {
     kill "$hostcwd_virtiofsd_pid" 2>/dev/null || true
     wait "$hostcwd_virtiofsd_pid" 2>/dev/null || true
   fi
-  if [ -n "${agent_config_virtiofsd_pid:-}" ]; then
-    kill "$agent_config_virtiofsd_pid" 2>/dev/null || true
-    wait "$agent_config_virtiofsd_pid" 2>/dev/null || true
+  if [ -n "${shared_state_root_virtiofsd_pid:-}" ]; then
+    kill "$shared_state_root_virtiofsd_pid" 2>/dev/null || true
+    wait "$shared_state_root_virtiofsd_pid" 2>/dev/null || true
+  fi
+  if [ -n "${shared_credential_slots_virtiofsd_pid:-}" ]; then
+    kill "$shared_credential_slots_virtiofsd_pid" 2>/dev/null || true
+    wait "$shared_credential_slots_virtiofsd_pid" 2>/dev/null || true
   fi
   if [ -n "${agent_exec_output_virtiofsd_pid:-}" ]; then
     kill "$agent_exec_output_virtiofsd_pid" 2>/dev/null || true
@@ -370,6 +533,7 @@ if [ "$host_agent_tools_dir" != "$default_host_agent_tools_dir" ] \
 fi
 mkdir -p "$worker_bridge_dir/requests"
 rm -f "$control_socket"
+shared_state_root_env_file=$host_meta_dir/firebreak-shared-state.env
 : >"$wrapper_trace_log"
 : >"$attach_pty_log"
 
@@ -385,7 +549,8 @@ cat >"$runtime_debug_file" <<EOF
   "runner_stdout_log": "$(printf '%s' "$runner_stdout_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "runner_stderr_log": "$(printf '%s' "$runner_stderr_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_hostcwd_log": "$(printf '%s' "$virtiofsd_hostcwd_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
-  "virtiofs_agent_config_log": "$(printf '%s' "$virtiofsd_agent_config_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "virtiofs_shared_state_root_log": "$(printf '%s' "$virtiofsd_shared_state_root_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "virtiofs_shared_credential_slots_log": "$(printf '%s' "$virtiofsd_shared_credential_slots_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_agent_exec_log": "$(printf '%s' "$virtiofsd_agent_exec_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_agent_tools_log": "$(printf '%s' "$virtiofsd_agent_tools_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_worker_bridge_log": "$(printf '%s' "$virtiofsd_worker_bridge_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
@@ -444,22 +609,27 @@ start_worker_bridge_server() {
 printf '%s\n' "$host_cwd" > "$host_meta_dir/mount-path"
 printf '%s\n' "$host_uid" > "$host_meta_dir/host-uid"
 printf '%s\n' "$host_gid" > "$host_meta_dir/host-gid"
-printf '%s\n' "$agent_config_mode" > "$host_meta_dir/agent-config-mode"
-printf '%s\n' "$agent_session_mode" > "$host_meta_dir/agent-session-mode"
+printf '%s\n' "$agent_session_mode" > "$host_meta_dir/worker-session-mode"
+: > "$shared_state_root_env_file"
+append_optional_env_default "FIREBREAK_STATE_MODE" "${FIREBREAK_STATE_MODE:-}"
+append_optional_env_default "FIREBREAK_STATE_ROOT" "${FIREBREAK_STATE_ROOT:-}"
+append_matching_env_defaults "_STATE_MODE"
+append_optional_env_default "FIREBREAK_CREDENTIAL_SLOT" "${FIREBREAK_CREDENTIAL_SLOT:-}"
+append_optional_env_default "FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH" "${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-}"
+append_matching_env_defaults "_CREDENTIAL_SLOT"
 printf '%s\n' "$requested_worker_mode" > "$host_meta_dir/worker-mode"
-printf '%s\n' "$requested_worker_mode" > "$host_meta_dir/worker-proxy-mode"
 printf '%s\n' "$requested_worker_modes" > "$host_meta_dir/worker-modes"
 if [ -n "$agent_term" ]; then
-  printf '%s\n' "$agent_term" > "$host_meta_dir/agent-term"
+  printf '%s\n' "$agent_term" > "$host_meta_dir/worker-term"
 fi
 if [ -n "$agent_columns" ]; then
-  printf '%s\n' "$agent_columns" > "$host_meta_dir/agent-columns"
+  printf '%s\n' "$agent_columns" > "$host_meta_dir/worker-columns"
 fi
 if [ -n "$agent_lines" ]; then
-  printf '%s\n' "$agent_lines" > "$host_meta_dir/agent-lines"
+  printf '%s\n' "$agent_lines" > "$host_meta_dir/worker-lines"
 fi
 if [ -n "$agent_command_override" ]; then
-  printf '%s\n' "$agent_command_override" > "$host_meta_dir/agent-command"
+  printf '%s\n' "$agent_command_override" > "$host_meta_dir/worker-command"
 fi
 
 if [ "$host_system" != "aarch64-darwin" ]; then
@@ -467,17 +637,21 @@ if [ "$host_system" != "aarch64-darwin" ]; then
   hostcwd_virtiofsd_pid=$started_virtiofsd_pid
   trace_wrapper "virtiofs-hostcwd-ready"
 
-  if [ -n "$agent_config_host_dir" ]; then
-    start_virtiofsd "$agent_config_host_dir" "$agent_config_socket" "$virtiofsd_agent_config_log"
-    agent_config_virtiofsd_pid=$started_virtiofsd_pid
-    trace_wrapper "virtiofs-agent-config-ready"
+  if [ -n "$shared_state_root_host_dir" ]; then
+    start_virtiofsd "$shared_state_root_host_dir" "$shared_state_root_socket" "$virtiofsd_shared_state_root_log"
+    shared_state_root_virtiofsd_pid=$started_virtiofsd_pid
+    trace_wrapper "virtiofs-state-root-ready"
+  fi
+  if [ "$shared_credential_slots_enabled" = "1" ] && [ -n "$shared_credential_slots_host_dir" ]; then
+    start_virtiofsd "$shared_credential_slots_host_dir" "$shared_credential_slots_socket" "$virtiofsd_shared_credential_slots_log"
+    shared_credential_slots_virtiofsd_pid=$started_virtiofsd_pid
+    trace_wrapper "virtiofs-credential-slots-ready"
   fi
   if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
     start_virtiofsd "$host_exec_output_dir" "$agent_exec_output_socket" "$virtiofsd_agent_exec_log"
     agent_exec_output_virtiofsd_pid=$started_virtiofsd_pid
     trace_wrapper "virtiofs-agent-exec-ready"
   fi
-
   start_virtiofsd "$host_agent_tools_dir" "$agent_tools_socket" "$virtiofsd_agent_tools_log"
   agent_tools_virtiofsd_pid=$started_virtiofsd_pid
   trace_wrapper "virtiofs-agent-tools-ready"
@@ -499,7 +673,8 @@ run_runner() {
       env \
         MICROVM_VFKIT_HOST_META_DIR="$host_meta_dir" \
         MICROVM_VFKIT_HOST_CWD_DIR="$host_cwd" \
-        MICROVM_VFKIT_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
+        MICROVM_VFKIT_SHARED_STATE_ROOT_DIR="$shared_state_root_host_dir" \
+        MICROVM_VFKIT_SHARED_CREDENTIAL_SLOTS_DIR="$shared_credential_slots_host_dir" \
         MICROVM_VFKIT_AGENT_EXEC_OUTPUT_DIR="$host_exec_output_dir" \
         MICROVM_VFKIT_AGENT_TOOLS_DIR="$host_agent_tools_dir" \
         MICROVM_VFKIT_WORKER_BRIDGE_DIR="$worker_bridge_dir" \
@@ -508,7 +683,8 @@ run_runner() {
       env \
         MICROVM_VFKIT_HOST_META_DIR="$host_meta_dir" \
         MICROVM_VFKIT_HOST_CWD_DIR="$host_cwd" \
-        MICROVM_VFKIT_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
+        MICROVM_VFKIT_SHARED_STATE_ROOT_DIR="$shared_state_root_host_dir" \
+        MICROVM_VFKIT_SHARED_CREDENTIAL_SLOTS_DIR="$shared_credential_slots_host_dir" \
         MICROVM_VFKIT_AGENT_TOOLS_DIR="$host_agent_tools_dir" \
         MICROVM_VFKIT_WORKER_BRIDGE_DIR="$worker_bridge_dir" \
         @RUNNER@ "$@"
@@ -520,8 +696,10 @@ run_runner() {
     env \
       MICROVM_HOST_META_DIR="$host_meta_dir" \
       MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
-      MICROVM_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
-      MICROVM_AGENT_CONFIG_HOST_SOCKET="$agent_config_socket" \
+      MICROVM_SHARED_STATE_ROOT_DIR="$shared_state_root_host_dir" \
+      MICROVM_SHARED_STATE_ROOT_SOCKET="$shared_state_root_socket" \
+      MICROVM_SHARED_CREDENTIAL_SLOTS_DIR="$shared_credential_slots_host_dir" \
+      MICROVM_SHARED_CREDENTIAL_SLOTS_SOCKET="$shared_credential_slots_socket" \
       MICROVM_AGENT_EXEC_OUTPUT_SOCKET="$agent_exec_output_socket" \
       MICROVM_AGENT_TOOLS_SOCKET="$agent_tools_socket" \
       MICROVM_WORKER_BRIDGE_SOCKET="$worker_bridge_socket_env" \
@@ -530,8 +708,10 @@ run_runner() {
     env \
       MICROVM_HOST_META_DIR="$host_meta_dir" \
       MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
-      MICROVM_AGENT_CONFIG_HOST_DIR="$agent_config_host_dir" \
-      MICROVM_AGENT_CONFIG_HOST_SOCKET="$agent_config_socket" \
+      MICROVM_SHARED_STATE_ROOT_DIR="$shared_state_root_host_dir" \
+      MICROVM_SHARED_STATE_ROOT_SOCKET="$shared_state_root_socket" \
+      MICROVM_SHARED_CREDENTIAL_SLOTS_DIR="$shared_credential_slots_host_dir" \
+      MICROVM_SHARED_CREDENTIAL_SLOTS_SOCKET="$shared_credential_slots_socket" \
       MICROVM_AGENT_TOOLS_SOCKET="$agent_tools_socket" \
       MICROVM_WORKER_BRIDGE_SOCKET="$worker_bridge_socket_env" \
       @RUNNER@ "$@"
@@ -539,6 +719,7 @@ run_runner() {
 }
 
 runner_status=0
+rm -f "$runner_stderr_log"
 trace_wrapper "runner-start"
 if [ "$agent_session_mode" = "agent-exec" ]; then
   (
@@ -559,8 +740,10 @@ set -eu
 cd '$(printf '%s' "$runner_workdir" | sed "s/'/'\\''/g")'
 export MICROVM_HOST_META_DIR='$(printf '%s' "$host_meta_dir" | sed "s/'/'\\\\''/g")'
 export MICROVM_HOST_CWD_SOCKET='$(printf '%s' "$hostcwd_socket" | sed "s/'/'\\\\''/g")'
-export MICROVM_AGENT_CONFIG_HOST_DIR='$(printf '%s' "$agent_config_host_dir" | sed "s/'/'\\\\''/g")'
-export MICROVM_AGENT_CONFIG_HOST_SOCKET='$(printf '%s' "$agent_config_socket" | sed "s/'/'\\\\''/g")'
+export MICROVM_SHARED_STATE_ROOT_DIR='$(printf '%s' "$shared_state_root_host_dir" | sed "s/'/'\\\\''/g")'
+export MICROVM_SHARED_STATE_ROOT_SOCKET='$(printf '%s' "$shared_state_root_socket" | sed "s/'/'\\\\''/g")'
+export MICROVM_SHARED_CREDENTIAL_SLOTS_DIR='$(printf '%s' "$shared_credential_slots_host_dir" | sed "s/'/'\\\\''/g")'
+export MICROVM_SHARED_CREDENTIAL_SLOTS_SOCKET='$(printf '%s' "$shared_credential_slots_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_AGENT_EXEC_OUTPUT_SOCKET='$(printf '%s' "$agent_exec_output_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_AGENT_TOOLS_SOCKET='$(printf '%s' "$agent_tools_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_WORKER_BRIDGE_SOCKET='$(printf '%s' "$worker_bridge_socket_env" | sed "s/'/'\\\\''/g")'
@@ -1515,10 +1698,13 @@ EOF
 else
   (
     cd "$runner_workdir"
-    run_runner "$@"
+    run_runner "$@" 2> >(tee "$runner_stderr_log" >&2)
   ) || runner_status=$?
 fi
 trace_wrapper "runner-exit:$runner_status"
+if [ "$runner_status" -ne 0 ]; then
+  print_runner_json_parse_hint "$runner_stderr_log"
+fi
 
 if [ "$agent_session_mode" = "agent-exec" ]; then
   if [ -f "$host_exec_output_dir/stdout" ]; then
@@ -1540,8 +1726,11 @@ if [ "$agent_session_mode" = "agent-exec" ]; then
       if [ -s "$virtiofsd_hostcwd_log" ]; then
         cat "$virtiofsd_hostcwd_log" >&2
       fi
-      if [ -s "$virtiofsd_agent_config_log" ]; then
-        cat "$virtiofsd_agent_config_log" >&2
+      if [ -s "$virtiofsd_shared_state_root_log" ]; then
+        cat "$virtiofsd_shared_state_root_log" >&2
+      fi
+      if [ -s "$virtiofsd_shared_credential_slots_log" ]; then
+        cat "$virtiofsd_shared_credential_slots_log" >&2
       fi
       if [ -s "$virtiofsd_agent_exec_log" ]; then
         cat "$virtiofsd_agent_exec_log" >&2
@@ -1563,8 +1752,11 @@ if [ "$agent_session_mode" = "agent-exec" ]; then
   if [ -s "$virtiofsd_hostcwd_log" ]; then
     cat "$virtiofsd_hostcwd_log" >&2
   fi
-  if [ -s "$virtiofsd_agent_config_log" ]; then
-    cat "$virtiofsd_agent_config_log" >&2
+  if [ -s "$virtiofsd_shared_state_root_log" ]; then
+    cat "$virtiofsd_shared_state_root_log" >&2
+  fi
+  if [ -s "$virtiofsd_shared_credential_slots_log" ]; then
+    cat "$virtiofsd_shared_credential_slots_log" >&2
   fi
   if [ -s "$virtiofsd_agent_exec_log" ]; then
     cat "$virtiofsd_agent_exec_log" >&2

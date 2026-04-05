@@ -6,47 +6,51 @@ if [ -z "$repo_root" ] || [ ! -f "$repo_root/flake.nix" ]; then
   exit 1
 fi
 
+# shellcheck disable=SC1091
+. "$repo_root/modules/base/host/firebreak-project-config.sh"
+
 host_uid=$(id -u)
 host_gid=$(id -g)
 timeout_seconds=${FIREBREAK_SMOKE_TIMEOUT:-${CODEX_VM_SMOKE_TIMEOUT:-900}}
 firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
 mkdir -p "$firebreak_tmp_root"
 host_config_dir=$(mktemp -d "$firebreak_tmp_root/agent-smoke-config.XXXXXX")
-workspace_config_host_path=""
-expected_workspace_config_dir=""
+host_config_root=$(mktemp -d "$firebreak_tmp_root/agent-smoke-root.XXXXXX")
+
+state_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    printf '%s' "$1" | sha256sum | cut -d' ' -f1
+    return 0
+  fi
+
+  printf '%s' "$1" | shasum -a 256 | cut -d' ' -f1
+}
+
+workspace_state_key=$(state_sha256 "$repo_root")
+workspace_state_key=$(printf '%.16s' "$workspace_state_key")
+expected_workspace_config_dir="/run/firebreak-state-root/workspaces/$workspace_state_key/@STATE_SUBDIR@"
 
 cleanup() {
   rm -rf "$host_config_dir"
+  rm -rf "$host_config_root"
 }
 trap cleanup EXIT INT TERM
 
 printf '%s\n' "host-smoke-marker" > "$host_config_dir/marker.txt"
-
-workspace_config_host_path=$repo_root/@AGENT_CONFIG_DIR_NAME@
-expected_workspace_config_dir=$repo_root/@AGENT_CONFIG_DIR_NAME@
-if [ -L "$workspace_config_host_path" ]; then
-  workspace_config_target=$(realpath -m "$workspace_config_host_path")
-  case "$workspace_config_target" in
-    "$repo_root"|"$repo_root"/*)
-      ;;
-    *)
-      expected_workspace_config_dir="/run/agent-config-host"
-      ;;
-  esac
-fi
+ln -s "$host_config_dir" "$host_config_root/@STATE_SUBDIR@"
 
 smoke_probe_command=$(cat <<'EOF'
 printf '__SMOKE_PWD__%s\n' "$PWD"
 printf '__SMOKE_IDS__%s:%s\n' "$(id -u)" "$(id -g)"
 printf '__SMOKE_OWNER__%s\n' "$(stat -c %u:%g .)"
-printf '__SMOKE_CONFIG_DIR__%s\n' "${AGENT_CONFIG_DIR:-}"
+printf '__SMOKE_STATE_DIR__%s\n' "${FIREBREAK_TOOL_STATE_DIR:-}"
 test -f flake.nix
 printf '__SMOKE_FLAKE__ok\n'
-test -d "$AGENT_CONFIG_DIR"
-test -w "$AGENT_CONFIG_DIR"
+test -d "$FIREBREAK_TOOL_STATE_DIR"
+test -w "$FIREBREAK_TOOL_STATE_DIR"
 printf '__SMOKE_CONFIG_OK__ok\n'
-if [ "$AGENT_CONFIG_DIR" = "/run/agent-config-host" ]; then
-  test -f "$AGENT_CONFIG_DIR/marker.txt"
+if [ "$FIREBREAK_TOOL_STATE_DIR" = "/run/firebreak-state-root/@STATE_SUBDIR@" ]; then
+  test -f "$FIREBREAK_TOOL_STATE_DIR/marker.txt"
   printf '__SMOKE_HOST_CONFIG__ok\n'
 fi
 @AGENT_BIN@ --version | sed -n '1s/^/__SMOKE_AGENT__/p'
@@ -75,6 +79,30 @@ require_line() {
   printf '%s\n' "$value"
 }
 
+run_with_clean_firebreak_env() (
+  while IFS= read -r env_key; do
+    [ -n "$env_key" ] || continue
+    unset "$env_key"
+  done <<EOF
+$(firebreak_list_scrubbable_env_keys)
+EOF
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      *=*)
+        assignment=$1
+        export "${assignment%%=*}=${assignment#*=}"
+        shift
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+  exec "$@"
+)
+
 run_scenario() {
   package_name=$1
   mode=$2
@@ -86,10 +114,11 @@ run_scenario() {
 
   set +e
   output=$(
-    AGENT_CONFIG=$mode \
+    run_with_clean_firebreak_env \
+      FIREBREAK_STATE_MODE="$mode" \
       FIREBREAK_LAUNCH_MODE=shell \
       FIREBREAK_INSTANCE_EPHEMERAL=1 \
-      AGENT_CONFIG_HOST_PATH="${host_config_path:-}" \
+      FIREBREAK_STATE_ROOT="${host_config_path:-}" \
       AGENT_VM_COMMAND="$smoke_probe_command" \
       timeout --foreground "$timeout_seconds" \
       bash "$run_flake" run ".#$package_name" 2>&1
@@ -124,16 +153,16 @@ run_scenario() {
     exit 1
   fi
 
-  agent_config_dir=$(require_line "$output" '__SMOKE_CONFIG_DIR__' 'agent config directory')
-  if [ "$agent_config_dir" != "$expected_config_dir" ]; then
+  tool_state_dir=$(require_line "$output" '__SMOKE_STATE_DIR__' 'tool state directory')
+  if [ "$tool_state_dir" != "$expected_config_dir" ]; then
     printf '%s\n' "$output" >&2
-    echo "unexpected agent config directory: $agent_config_dir" >&2
+    echo "unexpected tool state directory: $tool_state_dir" >&2
     exit 1
   fi
 
   require_line "$output" '__SMOKE_FLAKE__' 'workspace contents' >/dev/null
-  require_line "$output" '__SMOKE_CONFIG_OK__' 'agent config usability' >/dev/null
-  if [ "$expected_config_dir" = "/run/agent-config-host" ]; then
+  require_line "$output" '__SMOKE_CONFIG_OK__' 'tool state usability' >/dev/null
+  if [ "$expected_config_dir" = "/run/firebreak-state-root/@STATE_SUBDIR@" ]; then
     require_line "$output" '__SMOKE_HOST_CONFIG__' 'host config marker' >/dev/null
   fi
   require_line "$output" '__SMOKE_AGENT__' '@AGENT_DISPLAY_NAME@ CLI' >/dev/null
@@ -149,7 +178,8 @@ run_agent_exec_scenario() {
   printf '%s\n' "running: $scenario_label"
   set +e
   output=$(
-    AGENT_CONFIG=$mode \
+    run_with_clean_firebreak_env \
+      FIREBREAK_STATE_MODE="$mode" \
       FIREBREAK_INSTANCE_EPHEMERAL=1 \
       timeout --foreground "$timeout_seconds" \
       bash "$run_flake" run .#@AGENT_PACKAGE@ -- "$agent_cli_arg" 2>&1
@@ -176,9 +206,18 @@ run_agent_exec_scenario() {
   printf '%s\n' "ok: $scenario_label"
 }
 
+state_dir_preexists=0
+if [ -e "$repo_root/@STATE_DIR_NAME@" ]; then
+  state_dir_preexists=1
+fi
+
 run_agent_exec_scenario workspace "default agent entry runs @AGENT_BIN@ --version as a one-shot command" "--version"
 run_scenario @AGENT_PACKAGE@ workspace "$expected_workspace_config_dir" "shell override uses workspace config"
-run_scenario @AGENT_PACKAGE@ vm "/var/lib/dev/@AGENT_CONFIG_DIR_NAME@" "shell override uses vm config"
-run_scenario @AGENT_PACKAGE@ host "/run/agent-config-host" "shell override uses host config" "$host_config_dir"
+if [ "$state_dir_preexists" = "0" ] && [ -e "$repo_root/@STATE_DIR_NAME@" ]; then
+  echo "workspace mode should not create a Firebreak-managed project config overlay: $repo_root/@STATE_DIR_NAME@" >&2
+  exit 1
+fi
+run_scenario @AGENT_PACKAGE@ vm "/var/lib/dev/@STATE_DIR_NAME@" "shell override uses vm config"
+run_scenario @AGENT_PACKAGE@ host "/run/firebreak-state-root/@STATE_SUBDIR@" "shell override uses host config" "$host_config_root"
 
 printf '%s\n' "Firebreak smoke test passed"

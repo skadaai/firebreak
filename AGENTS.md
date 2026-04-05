@@ -108,4 +108,6 @@ For non-trivial autonomous work in this repository, prefer the `dev-flow` workfl
 - Use [ROLE_SELECTION.md](./.agents/profiles/ROLE_SELECTION.md) to choose the smallest role that can complete the current phase.
 - Use `dev-flow workspace ...`, `dev-flow validate run ...`, and `dev-flow loop run ...` as the internal command surface for autonomous work.
 
+Keep Firebreak core generic. Do not hardcode external tool or package identities into core modules, host helpers, or the top-level CLI. If a new tool needs special behavior, define it in that tool's overlay module or through generic extensibility points rather than adding package-specific env vars, binary paths, or dispatch rules to Firebreak core.
+
 When a change requires manual setup outside the repository, such as configuring GitHub, registering self-hosted runners, adding secrets or variables, or any other human intervention, add or update a detailed step-by-step guide under [`guides/`](./guides) in the same change.

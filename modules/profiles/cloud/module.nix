@@ -1,6 +1,6 @@
 { config, lib, pkgs, renderTemplate, ... }:
 let
-  cfg = config.agentVm;
+  cfg = config.workloadVm;
   devHome = "/var/lib/${cfg.devUser}";
 
   qemu9pOptions = [
@@ -12,16 +12,10 @@ let
   ];
 
   scriptVars = {
-    "@AGENT_CONFIG_DIR_FILE@" = cfg.agentConfigDirFile;
-    "@AGENT_CONFIG_DIR_NAME@" = cfg.agentConfigDirName;
-    "@AGENT_CONFIG_ENABLED@" = if cfg.agentConfigEnabled then "1" else "0";
-    "@AGENT_CONFIG_FRESH_DIR@" = cfg.agentConfigFreshDir;
-    "@AGENT_CONFIG_HOST_MOUNT@" = cfg.agentConfigHostMount;
-    "@AGENT_CONFIG_VM_DIR@" = "${devHome}/${cfg.agentConfigDirName}";
-    "@AGENT_EXEC_OUTPUT_MOUNT@" = cfg.agentExecOutputMount;
-    "@AGENT_PROMPT_COMMAND@" = if cfg.agentPromptCommand == null then "" else cfg.agentPromptCommand;
-    "@AGENT_PROMPT_FILE@" = cfg.agentPromptFile;
-    "@AGENT_SESSION_MODE_FILE@" = cfg.agentSessionModeFile;
+    "@AGENT_EXEC_OUTPUT_MOUNT@" = cfg.workerExecOutputMount;
+    "@AGENT_PROMPT_COMMAND@" = if cfg.promptCommand == null then "" else cfg.promptCommand;
+    "@AGENT_PROMPT_FILE@" = cfg.promptFile;
+    "@AGENT_SESSION_MODE_FILE@" = cfg.workerSessionModeFile;
     "@BASH@" = "${pkgs.bashInteractive}/bin/bash";
     "@CAT@" = "${pkgs.coreutils}/bin/cat";
     "@CHOWN@" = "${pkgs.coreutils}/bin/chown";
@@ -30,6 +24,14 @@ let
     "@GROUPMOD@" = "${pkgs.shadow}/bin/groupmod";
     "@HOST_META_MOUNT@" = cfg.hostMetaMount;
     "@ID@" = "${pkgs.coreutils}/bin/id";
+    "@SHARED_STATE_ROOT_ENABLED@" = if cfg.sharedStateRoots.enable then "1" else "0";
+    "@SHARED_STATE_ROOT_FRESH_ROOT@" = cfg.sharedStateRoots.freshRoot;
+    "@SHARED_STATE_ROOT_HOST_MOUNT@" = cfg.sharedStateRoots.hostMount;
+    "@SHARED_STATE_ROOT_MOUNTED_FLAG@" = cfg.sharedStateRoots.mountedFlag;
+    "@SHARED_STATE_ROOT_VM_ROOT@" = cfg.sharedStateRoots.vmRoot;
+    "@SHARED_CREDENTIAL_SLOTS_ENABLED@" = if cfg.sharedCredentialSlots.enable then "1" else "0";
+    "@SHARED_CREDENTIAL_SLOTS_HOST_MOUNT@" = cfg.sharedCredentialSlots.hostMount;
+    "@SHARED_CREDENTIAL_SLOTS_MOUNTED_FLAG@" = cfg.sharedCredentialSlots.mountedFlag;
     "@RUNUSER@" = "${pkgs.util-linux}/bin/runuser";
     "@START_DIR_FILE@" = cfg.startDirFile;
     "@SUDO@" = "${pkgs.sudo}/bin/sudo";

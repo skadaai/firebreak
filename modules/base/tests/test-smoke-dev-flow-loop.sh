@@ -169,7 +169,6 @@ if ! [ -f "$shared_escape_plan_path" ] || ! [ -f "$shared_escape_audit_root/revi
   exit 1
 fi
 close_workspace spec-006-shared-escape blocked
-
 runtime_branch="agent/spec-006-runtime-$branch_suffix"
 dev_flow_cmd workspace create --workspace-id spec-006-runtime --branch "$runtime_branch" --owner smoke >/dev/null
 set +e

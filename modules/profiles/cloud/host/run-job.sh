@@ -278,7 +278,7 @@ set +e
 setsid env \
   MICROVM_WORKSPACE_SOCKET="$workspace_socket" \
   MICROVM_AGENT_JOB_INPUT_DIR="$input_dir" \
-  MICROVM_AGENT_CONFIG_HOST_SOCKET="$config_socket" \
+  MICROVM_SHARED_STATE_ROOT_SOCKET="$config_socket" \
   MICROVM_AGENT_EXEC_OUTPUT_SOCKET="$output_socket" \
   sh -c 'cd "$1" && exec "$2"' sh "$runner_workdir" @RUNNER@ >"$job_state_dir/runner.stdout" 2>"$runner_stderr_log" &
 runner_pid=$!

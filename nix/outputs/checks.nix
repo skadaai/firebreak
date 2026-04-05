@@ -29,6 +29,10 @@
   firebreak-internal-runner-claude-code = self.packages.${system}.firebreak-internal-runner-claude-code;
   firebreak-claude-code-system = localVmArtifacts.firebreak-claude-code.nixosConfiguration.config.system.build.toplevel;
   firebreak-test-smoke-claude-code = self.packages.${system}.firebreak-test-smoke-claude-code;
+  firebreak-credential-fixture-system = localVmArtifacts.firebreak-credential-fixture.nixosConfiguration.config.system.build.toplevel;
+  firebreak-test-smoke-credential-slots = self.packages.${system}.firebreak-test-smoke-credential-slots;
+  firebreak-test-smoke-codex-credential-slots = self.packages.${system}.firebreak-test-smoke-codex-credential-slots;
+  firebreak-test-smoke-claude-code-credential-slots = self.packages.${system}.firebreak-test-smoke-claude-code-credential-slots;
 } // lib.optionalAttrs hostIsLinux {
   firebreak-internal-runner-codex-cloud = self.packages.${system}.firebreak-internal-runner-codex-cloud;
   firebreak-codex-cloud-system = localVmArtifacts.firebreak-codex-cloud.nixosConfiguration.config.system.build.toplevel;

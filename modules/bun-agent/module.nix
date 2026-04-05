@@ -5,18 +5,30 @@ moduleArgs:
   binName,
   packageSpec,
   promptCommand,
-  configDirName,
+  configSelectorPrefix,
+  configSubdir,
   configExports,
+  credentialFileBindings ? [ ],
+  credentialEnvBindings ? [ ],
+  credentialHelperBindings ? [ ],
+  credentialLoginArgs ? [ ],
+  credentialLoginMaterialization ? "none",
   extraSystemPackages ? [ ],
   bootstrapPackages ? [ ],
 }:
 let
   inherit (moduleArgs) config lib pkgs renderTemplate;
-  cfg = config.agentVm;
+  cfg = config.workloadVm;
+  hasCredentialAdapters =
+    credentialFileBindings != [ ]
+    || credentialEnvBindings != [ ]
+    || credentialHelperBindings != [ ]
+    || credentialLoginArgs != [ ]
+    || credentialLoginMaterialization != "none";
   devHome = "/var/lib/${cfg.devUser}";
-  toolsMount = cfg.agentToolsMount;
+  toolsMount = cfg.toolRuntimesMount;
   bootstrapReadyMarker =
-    if cfg.agentToolsEnabled
+    if cfg.toolRuntimesEnabled
     then "${toolsMount}/bootstrap-ready"
     else "${devHome}/.cache/firebreak-tools/${vmName}/bootstrap-ready";
   bootstrapWaitScript = pkgs.writeShellApplication {
@@ -26,7 +38,7 @@ let
       set -eu
 
       ready_marker='${bootstrapReadyMarker}'
-      state_path='/run/firebreak-agent/bootstrap-state.json'
+      state_path='/run/firebreak-worker/bootstrap-state.json'
       timeout_seconds=''${FIREBREAK_BOOTSTRAP_WAIT_TIMEOUT_SECONDS:-300}
       elapsed_seconds=0
 
@@ -64,24 +76,41 @@ let
     "@DEV_HOME@" = devHome;
     "@DEV_USER@" = cfg.devUser;
     "@AGENT_BIN@" = binName;
-    "@AGENT_CONFIG_DIR_FILE@" = cfg.agentConfigDirFile;
-    "@AGENT_CONFIG_DIR_NAME@" = configDirName;
-    "@AGENT_CONFIG_EXPORTS@" = configExports;
-    "@AGENT_DISPLAY_NAME@" = displayName;
-    "@AGENT_EXEC_OUTPUT_MOUNT@" = cfg.agentExecOutputMount;
     "@AGENT_PACKAGE_SPEC@" = packageSpec;
+    "@STATE_ENV_EXPORTS@" = configExports;
+    "@STATE_MODE_SELECTOR_VAR@" = "${configSelectorPrefix}_STATE_MODE";
+    "@STATE_SUBDIR@" = configSubdir;
+    "@AGENT_DISPLAY_NAME@" = displayName;
+    "@AGENT_EXEC_OUTPUT_MOUNT@" = cfg.workerExecOutputMount;
     "@AGENT_TOOLS_MOUNT@" = toolsMount;
     "@BOOTSTRAP_READY_MARKER@" = bootstrapReadyMarker;
   };
 in {
   config = {
-    agentVm = {
+    workloadVm = {
       name = lib.mkDefault vmName;
-      agentConfigEnabled = true;
-      agentToolsEnabled = true;
-      agentConfigDirName = configDirName;
-      agentCommand = binName;
-      agentPromptCommand = promptCommand;
+      toolRuntimesEnabled = true;
+      sharedStateRoots = {
+        enable = true;
+        tools.${binName} = {
+          displayName = displayName;
+          selectorPrefix = configSelectorPrefix;
+          configSubdir = configSubdir;
+          configEnvExports = configExports;
+        } // lib.optionalAttrs hasCredentialAdapters {
+          credentials = {
+            slotSubdir = configSubdir;
+            fileBindings = credentialFileBindings;
+            envBindings = credentialEnvBindings;
+            helperBindings = credentialHelperBindings;
+            loginArgs = credentialLoginArgs;
+            loginMaterialization = credentialLoginMaterialization;
+          };
+        };
+      };
+      sharedCredentialSlots.enable = hasCredentialAdapters;
+      defaultCommand = binName;
+      promptCommand = promptCommand;
       extraSystemPackages = with pkgs; [
         bun
         bootstrapWaitScript

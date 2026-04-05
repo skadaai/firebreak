@@ -1,5 +1,12 @@
 if [ "$USER" = "@DEV_USER@" ]; then
   export PS1='[\u@\h:\w]\$ '
+  @SHARED_STATE_ROOT_ENV_EXPORTS@
+  @SHARED_CREDENTIAL_SLOT_ENV_EXPORTS@
+  @SHARED_TOOL_WRAPPER_ENV_EXPORTS@
+
+  if [ -n "${FIREBREAK_SHARED_TOOL_WRAPPER_BIN_DIR:-}" ]; then
+    export PATH="$FIREBREAK_SHARED_TOOL_WRAPPER_BIN_DIR:$PATH"
+  fi
 
   cdw() {
     target=@WORKSPACE_MOUNT@
@@ -8,10 +15,6 @@ if [ "$USER" = "@DEV_USER@" ]; then
     fi
     cd "$target"
   }
-
-  if [ -r @AGENT_CONFIG_DIR_FILE@ ]; then
-    export AGENT_CONFIG_DIR=$(cat @AGENT_CONFIG_DIR_FILE@)
-  fi
 
   export FIREBREAK_WORKER_KINDS_FILE=@WORKER_KINDS_FILE@
   export FIREBREAK_WORKER_LOCAL_STATE_DIR=@WORKER_LOCAL_STATE_DIR@

@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -eu
 
+firebreak_libexec_dir=${FIREBREAK_LIBEXEC_DIR:-}
+if [ -z "$firebreak_libexec_dir" ]; then
+  firebreak_libexec_dir=$(
+    CDPATH='' cd -- "$(dirname -- "$0")" && pwd
+  )
+fi
+
+# shellcheck disable=SC1091
+. "$firebreak_libexec_dir/firebreak-project-config.sh"
+
 state_dir=${FIREBREAK_WORKER_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/firebreak/worker-broker}
 worker_authority=${FIREBREAK_WORKER_AUTHORITY:-host}
 worker_allow_firebreak=${FIREBREAK_WORKER_ALLOW_FIREBREAK:-1}
@@ -622,6 +632,42 @@ quote_arg() {
   printf '%q' "$1"
 }
 
+firebreak_worker_maybe_print_flake_config_hint() {
+  stderr_log=$1
+
+  if grep -F -q "Pass '--accept-flake-config' to trust it" "$stderr_log" 2>/dev/null \
+    || grep -F -q "untrusted flake configuration setting" "$stderr_log" 2>/dev/null; then
+    cat >&2 <<'EOF'
+firebreak worker: Nix refused this flake's configuration while resolving the nested Firebreak package.
+Rerun with:
+  nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run ...
+
+If you are invoking the worker from a Firebreak-managed environment, export:
+  FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG=1
+EOF
+  fi
+}
+
+firebreak_worker_capture_nix_stdout() {
+  stderr_log=$(mktemp "${TMPDIR:-/tmp}/firebreak-worker-nix-stderr.XXXXXX")
+  if output=$("$@" 2>"$stderr_log"); then
+    status=0
+  else
+    status=$?
+  fi
+  if [ -s "$stderr_log" ]; then
+    cat "$stderr_log" >&2
+  fi
+  if [ "$status" -eq 0 ]; then
+    rm -f "$stderr_log"
+    printf '%s\n' "$output"
+    return 0
+  fi
+  firebreak_worker_maybe_print_flake_config_hint "$stderr_log"
+  rm -f "$stderr_log"
+  return "$status"
+}
+
 configure_attach_tty() {
   attach_tty_state=""
   if [ -t 0 ] && [ -t 1 ] && command -v stty >/dev/null 2>&1; then
@@ -643,23 +689,23 @@ resolve_firebreak_worker_exec() {
 
   if [ "${FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG:-}" = "1" ] \
     && [ -n "${FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES:-}" ]; then
-    build_output=$(
+    build_output=$(firebreak_worker_capture_nix_stdout \
       nix --accept-flake-config \
         --extra-experimental-features "$FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES" \
         build --no-link --print-out-paths "$installable"
     )
   elif [ "${FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG:-}" = "1" ]; then
-    build_output=$(
+    build_output=$(firebreak_worker_capture_nix_stdout \
       nix --accept-flake-config \
         build --no-link --print-out-paths "$installable"
     )
   elif [ -n "${FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES:-}" ]; then
-    build_output=$(
+    build_output=$(firebreak_worker_capture_nix_stdout \
       nix --extra-experimental-features "$FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES" \
         build --no-link --print-out-paths "$installable"
     )
   else
-    build_output=$(nix build --no-link --print-out-paths "$installable")
+    build_output=$(firebreak_worker_capture_nix_stdout nix build --no-link --print-out-paths "$installable")
   fi
 
   resolved_out=$(printf '%s\n' "$build_output" | tail -n 1)
@@ -789,6 +835,14 @@ write_firebreak_launch_script() {
   resolved_exec=$(resolve_firebreak_worker_exec "$FIREBREAK_FLAKE_REF#$package_name" "$package_name")
   quoted_resolved_exec=$(quote_arg "$resolved_exec")
 
+  quoted_unset_env_args=""
+  while IFS= read -r env_key; do
+    [ -n "$env_key" ] || continue
+    quoted_unset_env_args="$quoted_unset_env_args -u $(quote_arg "$env_key")"
+  done <<EOF
+$(firebreak_list_scrubbable_env_keys)
+EOF
+
   quoted_args=""
   for arg in "$@"; do
     quoted_args="$quoted_args $(quote_arg "$arg")"
@@ -863,58 +917,43 @@ if [ "\$attach_mode" = "1" ]; then
     fi
   fi
   if [ "$forwarded_arg_count" -eq 0 ]; then
-    bash -c '
-      child_pid_path=\$1
-      shift
-      printf "%s\n" "\$BASHPID" >"\$child_pid_path"
-      exec "\$@"
-    ' bash "\$child_pid_path" \
-      env \
-      -u AGENT_CONFIG \
-      -u AGENT_CONFIG_HOST_PATH \
-      -u CODEX_CONFIG \
-      -u CODEX_CONFIG_HOST_PATH \
-      -u CLAUDE_CONFIG \
-      -u CLAUDE_CONFIG_HOST_PATH \
+    env \
+      $quoted_unset_env_args \
       \${forwarded_term:+TERM="\$forwarded_term"} \
       \${forwarded_columns:+COLUMNS="\$forwarded_columns"} \
       \${forwarded_lines:+LINES="\$forwarded_lines"} \
       FIREBREAK_INSTANCE_DIR="\$instance_dir" \
       FIREBREAK_LAUNCH_MODE="\$launch_mode" \
       FIREBREAK_AGENT_SESSION_MODE_OVERRIDE="agent-attach-exec" \
+      bash -c '
+      child_pid_path=\$1
+      shift
+      printf "%s\n" "\$BASHPID" >"\$child_pid_path"
+      exec "\$@"
+    ' bash "\$child_pid_path" \
       $quoted_resolved_exec
   else
-    bash -c '
-      child_pid_path=\$1
-      shift
-      printf "%s\n" "\$BASHPID" >"\$child_pid_path"
-      exec "\$@"
-    ' bash "\$child_pid_path" \
-      env \
-      -u AGENT_CONFIG \
-      -u AGENT_CONFIG_HOST_PATH \
-      -u CODEX_CONFIG \
-      -u CODEX_CONFIG_HOST_PATH \
-      -u CLAUDE_CONFIG \
-      -u CLAUDE_CONFIG_HOST_PATH \
+    env \
+      $quoted_unset_env_args \
       \${forwarded_term:+TERM="\$forwarded_term"} \
       \${forwarded_columns:+COLUMNS="\$forwarded_columns"} \
       \${forwarded_lines:+LINES="\$forwarded_lines"} \
       FIREBREAK_INSTANCE_DIR="\$instance_dir" \
       FIREBREAK_LAUNCH_MODE="\$launch_mode" \
       FIREBREAK_AGENT_SESSION_MODE_OVERRIDE="agent-attach-exec" \
+      bash -c '
+      child_pid_path=\$1
+      shift
+      printf "%s\n" "\$BASHPID" >"\$child_pid_path"
+      exec "\$@"
+    ' bash "\$child_pid_path" \
       $quoted_resolved_exec$quoted_args
   fi
   command_status=\$?
 else
   printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "detached-background-start" >>"\$trace_path"
   env \
-    -u AGENT_CONFIG \
-    -u AGENT_CONFIG_HOST_PATH \
-    -u CODEX_CONFIG \
-    -u CODEX_CONFIG_HOST_PATH \
-    -u CLAUDE_CONFIG \
-    -u CLAUDE_CONFIG_HOST_PATH \
+    $quoted_unset_env_args \
     FIREBREAK_INSTANCE_DIR="\$instance_dir" \
     FIREBREAK_LAUNCH_MODE="\$launch_mode" \
     $quoted_resolved_exec$quoted_args &

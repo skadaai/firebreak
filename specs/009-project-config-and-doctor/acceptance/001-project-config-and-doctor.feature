@@ -21,7 +21,7 @@ Feature: Firebreak project config and diagnostics
     Then Firebreak ignores that key as part of the public config contract
     And "firebreak doctor" can report that the key is unsupported
 
-  Scenario: agent-specific selectors override generic selectors
+  Scenario: tool-specific selectors override generic defaults
     Given a project with ".firebreak.env" that sets both a generic agent selector and a Codex-specific selector
     When the operator resolves local Codex launch settings
     Then Firebreak uses the Codex-specific selector
@@ -33,7 +33,7 @@ Feature: Firebreak project config and diagnostics
     Then Firebreak reports the resolved project root
     And Firebreak reports the resolved project config source
     And Firebreak reports the local mode selector state
-    And Firebreak reports the resolved agent config state
+    And Firebreak reports the resolved tool state
     And Firebreak reports whether KVM is readable and writable
     And Firebreak reports whether current working directory is compatible
 

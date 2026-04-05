@@ -20,7 +20,7 @@ export PATH="$LOCAL_BIN:$BUN_INSTALL/bin:$PATH"
 export AGENT_SPEC_MARKER_DIR="$XDG_STATE_HOME/firebreak-bun-agent"
 export AGENT_SPEC_MARKER_PATH="$AGENT_SPEC_MARKER_DIR/@AGENT_BIN@.spec"
 export AGENT_GLOBAL_BIN="$BUN_INSTALL/bin/@AGENT_BIN@"
-export FIREBREAK_GUEST_STATE_DIR=/run/firebreak-agent
+export FIREBREAK_GUEST_STATE_DIR=/run/firebreak-worker
 export FIREBREAK_BOOTSTRAP_STATE_PATH="$FIREBREAK_GUEST_STATE_DIR/bootstrap-state.json"
 export FIREBREAK_SHARED_BOOTSTRAP_STATE_PATH="@AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json"
 export FIREBREAK_BOOTSTRAP_READY_MARKER="@BOOTSTRAP_READY_MARKER@"
@@ -159,6 +159,7 @@ log_phase "toolchain-ownership-ready @AGENT_DISPLAY_NAME@"
 current_bootstrap_phase=toolchain-ownership-ready
 write_bootstrap_state "$current_bootstrap_phase" "running" "@AGENT_DISPLAY_NAME@"
 
+rm -f "$agent_wrapper_path"
 cat > "$LOCAL_BIN/@AGENT_BIN@" <<'EOF'
 #!/bin/sh
 set -eu

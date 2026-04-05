@@ -1,6 +1,6 @@
 ---
 status: in_progress
-last_updated: 2026-03-23
+last_updated: 2026-03-25
 ---
 
 # 009 Project Config And Doctor
@@ -52,7 +52,8 @@ The intended landing shape is:
 - the project file uses the same `KEY=VALUE` spelling as the documented user-facing environment variables
 - real environment variables override project file values
 - only documented public keys are loaded from the project file
-- agent-specific keys such as `CODEX_*` and `CLAUDE_*` override generic `AGENT_*` keys for their respective workloads
+- tool-specific keys such as `CODEX_*` and `CLAUDE_*` override generic `FIREBREAK_*` defaults for their respective workloads
+- `host` mode resolves through one shared host root plus stable per-tool subdirectories instead of per-tool host-path variables
 - `firebreak init` writes a minimal Firebreak-native defaults file
 - `firebreak doctor` explains the resolved config and launch readiness before a workload is started
 - `FIREBREAK_LAUNCH_MODE` is the public mode selector for local launch packages
@@ -67,13 +68,17 @@ The intended landing shape is:
 - When the project defaults file contains an unsupported key, the system shall ignore that key rather than treating it as part of the public Firebreak config contract.
 - The system shall define an allowlist of documented user-facing keys that may be loaded from the project defaults file.
 - The system shall not treat internal plumbing variables for dev-flow workspace, validation, loop, or cloud-job execution as part of the project defaults contract.
-- When resolving local workload config for Codex, the system shall give precedence to `CODEX_*` selectors over generic `AGENT_*` selectors for Codex-specific behavior.
-- When resolving local workload config for Claude Code, the system shall give precedence to `CLAUDE_*` selectors over generic `AGENT_*` selectors for Claude-specific behavior.
-- The system shall use `host`, `workspace`, `vm`, and `fresh` as the public config-mode vocabulary for local workload config resolution.
+- When resolving local workload state for Codex, the system shall give precedence to `CODEX_*` selectors over generic `FIREBREAK_*` defaults for Codex-specific behavior.
+- When resolving local workload state for Claude Code, the system shall give precedence to `CLAUDE_*` selectors over generic `FIREBREAK_*` defaults for Claude-specific behavior.
+- The system shall use `host`, `workspace`, `vm`, and `fresh` as the public state-mode vocabulary for local workload state resolution.
+- When Firebreak resolves local workload state in `host` mode, the system shall treat `FIREBREAK_STATE_ROOT` as one shared host state root rather than a per-tool leaf directory.
+- When Firebreak resolves Codex state in `host` mode, the system shall map that resolution to a stable `codex` subdirectory within the shared host state root.
+- When Firebreak resolves Claude Code state in `host` mode, the system shall map that resolution to a stable `claude` subdirectory within the shared host state root.
+- The system shall not require or document `CODEX_CONFIG_HOST_PATH` or `CLAUDE_CONFIG_HOST_PATH` as part of the public local config contract.
 - The system shall provide `firebreak init` to write a Firebreak-native project defaults template.
 - When `firebreak init` writes the project defaults template, the system shall use `.firebreak.env` instead of a legacy sandbox file name.
 - When `firebreak init` writes the project defaults template, the system shall keep that template minimal and focused on the stable public Firebreak knobs.
-- The system shall provide `firebreak doctor` to report the resolved project root, project config source, local mode resolution, agent config resolution, and host readiness before launch.
+- The system shall provide `firebreak doctor` to report the resolved project root, project config source, local mode resolution, tool state resolution, and host readiness before launch.
 - When `firebreak doctor` reports host readiness, the system shall include whether KVM is readable and writable on the host.
 - When `firebreak doctor` reports local launch readiness, the system shall include whether the current working directory is compatible with Firebreak's mount and runtime path assumptions.
 - Where `firebreak doctor --json` is requested, the system shall emit machine-readable diagnostics.
@@ -86,7 +91,8 @@ The intended landing shape is:
 - `.firebreak.env` is the Firebreak project defaults file and uses `KEY=VALUE` entries.
 - Supported public settings can be expressed the same way in the process environment and in the project defaults file.
 - Unsupported internal plumbing variables are excluded from the project defaults contract.
-- Agent-specific selectors override generic selectors for their matching workloads.
+- Tool-specific selectors override generic defaults for their matching workloads.
+- `host` mode resolves through one shared host root with stable per-tool subdirectories.
 - `firebreak init` emits a Firebreak-native minimal template.
 - `firebreak doctor` can explain the resolved config and readiness state before launch.
 - `FIREBREAK_LAUNCH_MODE` is the public local mode selector, and legacy mode aliases are removed from the public contract.

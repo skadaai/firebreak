@@ -1,4 +1,8 @@
+#!/usr/bin/env bash
 set -eu
+
+# shellcheck disable=SC1091
+. "@REPO_ROOT@/modules/base/host/firebreak-project-config.sh"
 
 default_firebreak_tmpdir=${TMPDIR:-/tmp}
 if [ -d /cache ] && [ -w /cache ]; then
@@ -22,6 +26,30 @@ workspace_dir=$smoke_tmp_dir/workspace
 state_dir=$smoke_tmp_dir/state
 firebreak_state_dir=$smoke_tmp_dir/firebreak-state
 mkdir -p "$workspace_dir" "$state_dir" "$firebreak_state_dir"
+
+run_with_clean_firebreak_env() (
+  while IFS= read -r env_key; do
+    [ -n "$env_key" ] || continue
+    unset "$env_key"
+  done <<EOF
+$(firebreak_list_scrubbable_env_keys)
+EOF
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      *=*)
+        assignment=$1
+        export "${assignment%%=*}=${assignment#*=}"
+        shift
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+  exec "$@"
+)
 
 guest_script=$workspace_dir/guest-bridge-interactive-check.sh
 cat >"$guest_script" <<'EOF'
@@ -131,7 +159,7 @@ EOF
 
 if ! output=$(
   cd "$workspace_dir"
-  env -u AGENT_CONFIG -u AGENT_CONFIG_HOST_PATH -u CODEX_CONFIG -u CODEX_CONFIG_HOST_PATH -u CLAUDE_CONFIG -u CLAUDE_CONFIG_HOST_PATH \
+  run_with_clean_firebreak_env \
     FIREBREAK_WORKER_STATE_DIR="$state_dir" \
     FIREBREAK_STATE_DIR="$firebreak_state_dir" \
     FIREBREAK_DEBUG_KEEP_RUNTIME=1 \

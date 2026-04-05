@@ -2,18 +2,18 @@ set -eu
 
 metadata=@HOST_META_MOUNT@/mount-path
 session_mode=agent
-session_command_file=@HOST_META_MOUNT@/agent-command
-session_mode_file=@HOST_META_MOUNT@/agent-session-mode
-session_term_file=@HOST_META_MOUNT@/agent-term
-session_columns_file=@HOST_META_MOUNT@/agent-columns
-session_lines_file=@HOST_META_MOUNT@/agent-lines
+session_command_file=@HOST_META_MOUNT@/worker-command
+session_mode_file=@HOST_META_MOUNT@/worker-session-mode
+session_term_file=@HOST_META_MOUNT@/worker-term
+session_columns_file=@HOST_META_MOUNT@/worker-columns
+session_lines_file=@HOST_META_MOUNT@/worker-lines
 worker_mode_file=@HOST_META_MOUNT@/worker-mode
 worker_modes_file=@HOST_META_MOUNT@/worker-modes
 agent_tools_enabled=@AGENT_TOOLS_ENABLED@
 agent_tools_mount=@AGENT_TOOLS_MOUNT@
 start_dir=@WORKSPACE_MOUNT@
 worker_bridge_enabled=@WORKER_BRIDGE_ENABLED@
-guest_state_dir=/run/firebreak-agent
+guest_state_dir=/run/firebreak-worker
 bootstrap_state_local=$guest_state_dir/bootstrap-state.json
 command_state_local=$guest_state_dir/command-state.json
 session_term_state_file=$guest_state_dir/session-term
@@ -22,9 +22,9 @@ session_lines_state_file=$guest_state_dir/session-lines
 worker_mode_state_file=$guest_state_dir/worker-mode
 worker_modes_state_file=$guest_state_dir/worker-modes
 
-export FIREBREAK_SHARED_AGENT_CONFIG_HOST_MOUNT=@SHARED_AGENT_CONFIG_HOST_MOUNT@
-export FIREBREAK_SHARED_AGENT_CONFIG_VM_ROOT=@SHARED_AGENT_CONFIG_VM_ROOT@
-export FIREBREAK_SHARED_AGENT_CONFIG_HOST_MOUNTED_FLAG=@SHARED_AGENT_CONFIG_MOUNTED_FLAG@
+export FIREBREAK_SHARED_STATE_ROOT_HOST_MOUNT=@SHARED_STATE_ROOT_HOST_MOUNT@
+export FIREBREAK_SHARED_STATE_ROOT_VM_ROOT=@SHARED_STATE_ROOT_VM_ROOT@
+export FIREBREAK_SHARED_STATE_ROOT_HOST_MOUNTED_FLAG=@SHARED_STATE_ROOT_MOUNTED_FLAG@
 export FIREBREAK_SHARED_CREDENTIAL_SLOTS_HOST_MOUNT=@SHARED_CREDENTIAL_SLOTS_HOST_MOUNT@
 export FIREBREAK_SHARED_CREDENTIAL_SLOTS_MOUNTED_FLAG=@SHARED_CREDENTIAL_SLOTS_MOUNTED_FLAG@
 
@@ -189,17 +189,17 @@ if [ "$start_dir" != "@WORKSPACE_MOUNT@" ]; then
   log_phase prepare-agent-session-bind-workspace-done
 fi
 
-if [ "@SHARED_AGENT_CONFIG_ENABLED@" = "1" ]; then
-  mkdir -p @SHARED_AGENT_CONFIG_HOST_MOUNT@ @SHARED_AGENT_CONFIG_FRESH_ROOT@
-  chown @DEV_USER@:@DEV_USER@ @SHARED_AGENT_CONFIG_FRESH_ROOT@
-  rm -f @SHARED_AGENT_CONFIG_MOUNTED_FLAG@
+if [ "@SHARED_STATE_ROOT_ENABLED@" = "1" ]; then
+  mkdir -p @SHARED_STATE_ROOT_HOST_MOUNT@ @SHARED_STATE_ROOT_FRESH_ROOT@
+  chown @DEV_USER@:@DEV_USER@ @SHARED_STATE_ROOT_FRESH_ROOT@
+  rm -f @SHARED_STATE_ROOT_MOUNTED_FLAG@
 
-  if mountpoint -q @SHARED_AGENT_CONFIG_HOST_MOUNT@; then
-    touch @SHARED_AGENT_CONFIG_MOUNTED_FLAG@
-  elif mount_output=$(mount -t virtiofs hostagentconfigroot @SHARED_AGENT_CONFIG_HOST_MOUNT@ 2>&1); then
-    touch @SHARED_AGENT_CONFIG_MOUNTED_FLAG@
+  if mountpoint -q @SHARED_STATE_ROOT_HOST_MOUNT@; then
+    touch @SHARED_STATE_ROOT_MOUNTED_FLAG@
+  elif mount_output=$(mount -t virtiofs hoststateroot @SHARED_STATE_ROOT_HOST_MOUNT@ 2>&1); then
+    touch @SHARED_STATE_ROOT_MOUNTED_FLAG@
   else
-    printf '%s\n' "Firebreak shared agent config root is not available; continuing without host-backed config: $mount_output"
+    printf '%s\n' "Firebreak shared state root is not available; continuing without host-backed state: $mount_output"
   fi
 fi
 

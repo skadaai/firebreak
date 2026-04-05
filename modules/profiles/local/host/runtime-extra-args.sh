@@ -14,10 +14,10 @@ if [ -n "${MICROVM_HOST_META_DIR:-}" ]; then
     -device virtio-9p-pci,fsdev=fs-hostmeta,mount_tag=hostmeta
 fi
 
-if [ -n "${MICROVM_SHARED_AGENT_CONFIG_DIR:-}" ]; then
+if [ -n "${MICROVM_SHARED_STATE_ROOT_DIR:-}" ]; then
   printf '%s\n' \
-    -chardev socket,id=fs-hostagentconfigroot,path="$MICROVM_SHARED_AGENT_CONFIG_SOCKET" \
-    -device vhost-user-fs-pci,chardev=fs-hostagentconfigroot,tag=hostagentconfigroot
+    -chardev socket,id=fs-hoststateroot,path="$MICROVM_SHARED_STATE_ROOT_SOCKET" \
+    -device vhost-user-fs-pci,chardev=fs-hoststateroot,tag=hoststateroot
 fi
 
 if [ -n "${MICROVM_SHARED_CREDENTIAL_SLOTS_DIR:-}" ]; then

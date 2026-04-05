@@ -49,7 +49,7 @@ mkdir -p "$state_dir" "$firebreak_state_dir" "$workspace_dir"
 
 run_attach_version() {
   env \
-    AGENT_CONFIG=outer-leak \
+    FIREBREAK_STATE_MODE=outer-leak \
     FIREBREAK_CREDENTIAL_SLOT=outer-leak \
     FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH="$smoke_tmp_dir"/firebreak-worker-credential-slot-leak \
     FIREBREAK_WORKER_STATE_DIR="$state_dir" \

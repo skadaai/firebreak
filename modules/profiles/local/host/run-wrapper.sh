@@ -10,9 +10,9 @@ resolved_firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPD
 firebreak_state_root=${FIREBREAK_STATE_DIR:-${XDG_STATE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.local/state}/firebreak}
 default_firebreak_state_root=${XDG_STATE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.local/state}/firebreak
 worker_state_dir=${FIREBREAK_WORKER_STATE_DIR:-$firebreak_state_root/worker-broker}
-agent_specific_config_var=@AGENT_ENV_PREFIX@_CONFIG
-agent_specific_config=${!agent_specific_config_var:-}
-agent_config_mode=${agent_specific_config:-${AGENT_CONFIG:-host}}
+specific_state_mode_var=@AGENT_ENV_PREFIX@_STATE_MODE
+specific_state_mode=${!specific_state_mode_var:-}
+state_mode=${specific_state_mode:-${FIREBREAK_STATE_MODE:-host}}
 requested_launch_mode=${FIREBREAK_LAUNCH_MODE:-run}
 requested_worker_mode=${FIREBREAK_WORKER_MODE:-}
 requested_worker_modes=${FIREBREAK_WORKER_MODES:-}
@@ -22,7 +22,7 @@ default_agent_command=@DEFAULT_AGENT_COMMAND@
 host_system=@HOST_SYSTEM@
 agent_command_override=""
 shell_command_override=${AGENT_VM_COMMAND:-}
-shared_agent_config_host_dir=""
+shared_state_root_host_dir=""
 shared_credential_slots_host_dir=""
 workspace_bootstrap_config_host_dir=@WORKSPACE_BOOTSTRAP_CONFIG_HOST_DIR@
 host_config_adoption_enabled=@HOST_CONFIG_ADOPTION_ENABLED@
@@ -91,23 +91,23 @@ resolve_host_dir() {
   fi
 }
 
-ensure_host_agent_config_subdir() {
+ensure_host_state_subdir() {
   host_root=$1
-  config_subdir=$2
+  state_subdir=$2
   bootstrap_target=$3
-  host_config_path=$host_root/$config_subdir
+  host_state_path=$host_root/$state_subdir
 
   mkdir -p "$host_root"
 
-  if [ -n "$bootstrap_target" ] && ! [ -e "$host_config_path" ] && ! [ -L "$host_config_path" ] && { [ -e "$bootstrap_target" ] || [ -L "$bootstrap_target" ]; }; then
-    reject_whitespace_path "$bootstrap_target" "host config bootstrap target"
-    ln -s "$bootstrap_target" "$host_config_path"
-    printf '%s\n' "firebreak: adopted existing agent config as $host_config_path -> $bootstrap_target" >&2
+  if [ -n "$bootstrap_target" ] && ! [ -e "$host_state_path" ] && ! [ -L "$host_state_path" ] && { [ -e "$bootstrap_target" ] || [ -L "$bootstrap_target" ]; }; then
+    reject_whitespace_path "$bootstrap_target" "host state bootstrap target"
+    ln -s "$bootstrap_target" "$host_state_path"
+    printf '%s\n' "firebreak: adopted existing tool state as $host_state_path -> $bootstrap_target" >&2
     return 0
   fi
 
-  if ! [ -e "$host_config_path" ] && ! [ -L "$host_config_path" ]; then
-    mkdir -p "$host_config_path"
+  if ! [ -e "$host_state_path" ] && ! [ -L "$host_state_path" ]; then
+    mkdir -p "$host_state_path"
   fi
 }
 
@@ -117,8 +117,8 @@ append_optional_env_default() {
   [ -n "$value" ] || return 0
 
   printf -v quoted_value '%q' "$value"
-  printf ": \"\${%s:=%s}\"\n" "$key" "$quoted_value" >> "$shared_agent_config_env_file"
-  printf 'export %s\n' "$key" >> "$shared_agent_config_env_file"
+  printf ": \"\${%s:=%s}\"\n" "$key" "$quoted_value" >> "$shared_state_root_env_file"
+  printf 'export %s\n' "$key" >> "$shared_state_root_env_file"
 }
 
 append_matching_env_defaults() {
@@ -137,13 +137,13 @@ $(env)
 EOF
 }
 
-default_agent_config_host_dir=$(resolve_host_dir "${AGENT_CONFIG_HOST_PATH:-@DEFAULT_AGENT_CONFIG_HOST_DIR@}")
+default_state_root=$(resolve_host_dir "${FIREBREAK_STATE_ROOT:-@DEFAULT_STATE_ROOT@}")
 default_credential_slots_host_dir=$(resolve_host_dir "${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-@DEFAULT_CREDENTIAL_SLOTS_HOST_DIR@}")
 workspace_bootstrap_target=""
 if [ -n "$workspace_bootstrap_config_host_dir" ]; then
   workspace_bootstrap_target=$(resolve_host_dir "$workspace_bootstrap_config_host_dir")
 fi
-shared_agent_config_host_dir=$default_agent_config_host_dir
+shared_state_root_host_dir=$default_state_root
 shared_credential_slots_host_dir=$default_credential_slots_host_dir
 if [ "$shared_credential_slots_enabled" != "1" ]; then
   shared_credential_slots_host_dir=""
@@ -169,13 +169,13 @@ host_instance_dir=$host_runtime_dir/instance
 runner_stdout_log=$host_runtime_dir/runner.out
 runner_stderr_log=$host_runtime_dir/runner.err
 virtiofsd_hostcwd_log=$host_runtime_dir/v-cwd.log
-virtiofsd_shared_agent_config_log=$host_runtime_dir/v-shared-cfg.log
+virtiofsd_shared_state_root_log=$host_runtime_dir/v-shared-cfg.log
 virtiofsd_shared_credential_slots_log=$host_runtime_dir/v-credential-slots.log
 virtiofsd_agent_exec_log=$host_runtime_dir/v-out.log
 virtiofsd_agent_tools_log=$host_runtime_dir/v-tools.log
 virtiofsd_worker_bridge_log=$host_runtime_dir/v-worker.log
 hostcwd_socket=$host_runtime_dir/cwd.sock
-shared_agent_config_socket=$host_runtime_dir/shared-cfg.sock
+shared_state_root_socket=$host_runtime_dir/shared-cfg.sock
 shared_credential_slots_socket=$host_runtime_dir/credential-slots.sock
 agent_exec_output_socket=$host_runtime_dir/out.sock
 agent_tools_socket=$host_runtime_dir/tools.sock
@@ -210,15 +210,15 @@ trace_wrapper() {
   printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >>"$wrapper_trace_log"
 }
 
-case "$shared_agent_config_host_dir" in
+case "$shared_state_root_host_dir" in
   /*) ;;
   *)
-    echo "AGENT_CONFIG_HOST_PATH must resolve to an absolute host path for Firebreak host config root: $shared_agent_config_host_dir" >&2
+    echo "FIREBREAK_STATE_ROOT must resolve to an absolute host path for the Firebreak host state root: $shared_state_root_host_dir" >&2
     exit 1
     ;;
 esac
-reject_whitespace_path "$shared_agent_config_host_dir" "Firebreak host config root"
-mkdir -p "$shared_agent_config_host_dir"
+reject_whitespace_path "$shared_state_root_host_dir" "Firebreak host state root"
+mkdir -p "$shared_state_root_host_dir"
 if [ -n "$shared_credential_slots_host_dir" ]; then
   reject_whitespace_path "$shared_credential_slots_host_dir" "Firebreak credential slot root"
   mkdir -p "$shared_credential_slots_host_dir"
@@ -341,18 +341,18 @@ if [ -z "$agent_command_override" ]; then
   esac
 fi
 
-case "$agent_config_mode" in
+case "$state_mode" in
   host|workspace|vm|fresh)
     ;;
   *)
-    echo "unsupported agent config mode: $agent_config_mode" >&2
-    echo "supported modes: host, workspace, vm, fresh" >&2
+    echo "unsupported state mode: $state_mode" >&2
+    echo "supported state modes: host, workspace, vm, fresh" >&2
     exit 1
     ;;
 esac
 
-if [ "$host_config_adoption_enabled" = "1" ] && [ "$agent_config_mode" = "host" ]; then
-  ensure_host_agent_config_subdir "$shared_agent_config_host_dir" "@AGENT_CONFIG_SUBDIR@" "$workspace_bootstrap_target"
+if [ "$host_config_adoption_enabled" = "1" ] && [ "$state_mode" = "host" ]; then
+  ensure_host_state_subdir "$shared_state_root_host_dir" "@STATE_SUBDIR@" "$workspace_bootstrap_target"
 fi
 
 # shellcheck disable=SC2329
@@ -361,9 +361,9 @@ cleanup() {
     kill "$hostcwd_virtiofsd_pid" 2>/dev/null || true
     wait "$hostcwd_virtiofsd_pid" 2>/dev/null || true
   fi
-  if [ -n "${shared_agent_config_virtiofsd_pid:-}" ]; then
-    kill "$shared_agent_config_virtiofsd_pid" 2>/dev/null || true
-    wait "$shared_agent_config_virtiofsd_pid" 2>/dev/null || true
+  if [ -n "${shared_state_root_virtiofsd_pid:-}" ]; then
+    kill "$shared_state_root_virtiofsd_pid" 2>/dev/null || true
+    wait "$shared_state_root_virtiofsd_pid" 2>/dev/null || true
   fi
   if [ -n "${shared_credential_slots_virtiofsd_pid:-}" ]; then
     kill "$shared_credential_slots_virtiofsd_pid" 2>/dev/null || true
@@ -406,7 +406,7 @@ if [ "$host_agent_tools_dir" != "$default_host_agent_tools_dir" ] \
 fi
 mkdir -p "$worker_bridge_dir/requests"
 rm -f "$control_socket"
-shared_agent_config_env_file=$host_meta_dir/firebreak-shared-agent.env
+shared_state_root_env_file=$host_meta_dir/firebreak-shared-state.env
 : >"$wrapper_trace_log"
 : >"$attach_pty_log"
 
@@ -422,7 +422,7 @@ cat >"$runtime_debug_file" <<EOF
   "runner_stdout_log": "$(printf '%s' "$runner_stdout_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "runner_stderr_log": "$(printf '%s' "$runner_stderr_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_hostcwd_log": "$(printf '%s' "$virtiofsd_hostcwd_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
-  "virtiofs_shared_agent_config_log": "$(printf '%s' "$virtiofsd_shared_agent_config_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "virtiofs_shared_state_root_log": "$(printf '%s' "$virtiofsd_shared_state_root_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_shared_credential_slots_log": "$(printf '%s' "$virtiofsd_shared_credential_slots_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_agent_exec_log": "$(printf '%s' "$virtiofsd_agent_exec_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_agent_tools_log": "$(printf '%s' "$virtiofsd_agent_tools_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
@@ -482,27 +482,27 @@ start_worker_bridge_server() {
 printf '%s\n' "$host_cwd" > "$host_meta_dir/mount-path"
 printf '%s\n' "$host_uid" > "$host_meta_dir/host-uid"
 printf '%s\n' "$host_gid" > "$host_meta_dir/host-gid"
-printf '%s\n' "$agent_session_mode" > "$host_meta_dir/agent-session-mode"
-: > "$shared_agent_config_env_file"
-append_optional_env_default "AGENT_CONFIG" "${AGENT_CONFIG:-}"
-append_optional_env_default "AGENT_CONFIG_HOST_PATH" "${AGENT_CONFIG_HOST_PATH:-}"
-append_matching_env_defaults "_CONFIG"
+printf '%s\n' "$agent_session_mode" > "$host_meta_dir/worker-session-mode"
+: > "$shared_state_root_env_file"
+append_optional_env_default "FIREBREAK_STATE_MODE" "${FIREBREAK_STATE_MODE:-}"
+append_optional_env_default "FIREBREAK_STATE_ROOT" "${FIREBREAK_STATE_ROOT:-}"
+append_matching_env_defaults "_STATE_MODE"
 append_optional_env_default "FIREBREAK_CREDENTIAL_SLOT" "${FIREBREAK_CREDENTIAL_SLOT:-}"
 append_optional_env_default "FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH" "${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-}"
 append_matching_env_defaults "_CREDENTIAL_SLOT"
 printf '%s\n' "$requested_worker_mode" > "$host_meta_dir/worker-mode"
 printf '%s\n' "$requested_worker_modes" > "$host_meta_dir/worker-modes"
 if [ -n "$agent_term" ]; then
-  printf '%s\n' "$agent_term" > "$host_meta_dir/agent-term"
+  printf '%s\n' "$agent_term" > "$host_meta_dir/worker-term"
 fi
 if [ -n "$agent_columns" ]; then
-  printf '%s\n' "$agent_columns" > "$host_meta_dir/agent-columns"
+  printf '%s\n' "$agent_columns" > "$host_meta_dir/worker-columns"
 fi
 if [ -n "$agent_lines" ]; then
-  printf '%s\n' "$agent_lines" > "$host_meta_dir/agent-lines"
+  printf '%s\n' "$agent_lines" > "$host_meta_dir/worker-lines"
 fi
 if [ -n "$agent_command_override" ]; then
-  printf '%s\n' "$agent_command_override" > "$host_meta_dir/agent-command"
+  printf '%s\n' "$agent_command_override" > "$host_meta_dir/worker-command"
 fi
 
 if [ "$host_system" != "aarch64-darwin" ]; then
@@ -510,10 +510,10 @@ if [ "$host_system" != "aarch64-darwin" ]; then
   hostcwd_virtiofsd_pid=$started_virtiofsd_pid
   trace_wrapper "virtiofs-hostcwd-ready"
 
-if [ -n "$shared_agent_config_host_dir" ]; then
-  start_virtiofsd "$shared_agent_config_host_dir" "$shared_agent_config_socket" "$virtiofsd_shared_agent_config_log"
-  shared_agent_config_virtiofsd_pid=$started_virtiofsd_pid
-  trace_wrapper "virtiofs-agent-config-ready"
+if [ -n "$shared_state_root_host_dir" ]; then
+  start_virtiofsd "$shared_state_root_host_dir" "$shared_state_root_socket" "$virtiofsd_shared_state_root_log"
+  shared_state_root_virtiofsd_pid=$started_virtiofsd_pid
+  trace_wrapper "virtiofs-state-root-ready"
 fi
 if [ "$shared_credential_slots_enabled" = "1" ] && [ -n "$shared_credential_slots_host_dir" ]; then
   start_virtiofsd "$shared_credential_slots_host_dir" "$shared_credential_slots_socket" "$virtiofsd_shared_credential_slots_log"
@@ -546,7 +546,7 @@ run_runner() {
       env \
         MICROVM_VFKIT_HOST_META_DIR="$host_meta_dir" \
         MICROVM_VFKIT_HOST_CWD_DIR="$host_cwd" \
-        MICROVM_VFKIT_SHARED_AGENT_CONFIG_DIR="$shared_agent_config_host_dir" \
+        MICROVM_VFKIT_SHARED_STATE_ROOT_DIR="$shared_state_root_host_dir" \
         MICROVM_VFKIT_SHARED_CREDENTIAL_SLOTS_DIR="$shared_credential_slots_host_dir" \
         MICROVM_VFKIT_AGENT_EXEC_OUTPUT_DIR="$host_exec_output_dir" \
         MICROVM_VFKIT_AGENT_TOOLS_DIR="$host_agent_tools_dir" \
@@ -556,7 +556,7 @@ run_runner() {
       env \
         MICROVM_VFKIT_HOST_META_DIR="$host_meta_dir" \
         MICROVM_VFKIT_HOST_CWD_DIR="$host_cwd" \
-        MICROVM_VFKIT_SHARED_AGENT_CONFIG_DIR="$shared_agent_config_host_dir" \
+        MICROVM_VFKIT_SHARED_STATE_ROOT_DIR="$shared_state_root_host_dir" \
         MICROVM_VFKIT_SHARED_CREDENTIAL_SLOTS_DIR="$shared_credential_slots_host_dir" \
         MICROVM_VFKIT_AGENT_TOOLS_DIR="$host_agent_tools_dir" \
         MICROVM_VFKIT_WORKER_BRIDGE_DIR="$worker_bridge_dir" \
@@ -569,8 +569,8 @@ run_runner() {
     env \
       MICROVM_HOST_META_DIR="$host_meta_dir" \
       MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
-      MICROVM_SHARED_AGENT_CONFIG_DIR="$shared_agent_config_host_dir" \
-      MICROVM_SHARED_AGENT_CONFIG_SOCKET="$shared_agent_config_socket" \
+      MICROVM_SHARED_STATE_ROOT_DIR="$shared_state_root_host_dir" \
+      MICROVM_SHARED_STATE_ROOT_SOCKET="$shared_state_root_socket" \
       MICROVM_SHARED_CREDENTIAL_SLOTS_DIR="$shared_credential_slots_host_dir" \
       MICROVM_SHARED_CREDENTIAL_SLOTS_SOCKET="$shared_credential_slots_socket" \
       MICROVM_AGENT_EXEC_OUTPUT_SOCKET="$agent_exec_output_socket" \
@@ -581,8 +581,8 @@ run_runner() {
     env \
       MICROVM_HOST_META_DIR="$host_meta_dir" \
       MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
-      MICROVM_SHARED_AGENT_CONFIG_DIR="$shared_agent_config_host_dir" \
-      MICROVM_SHARED_AGENT_CONFIG_SOCKET="$shared_agent_config_socket" \
+      MICROVM_SHARED_STATE_ROOT_DIR="$shared_state_root_host_dir" \
+      MICROVM_SHARED_STATE_ROOT_SOCKET="$shared_state_root_socket" \
       MICROVM_SHARED_CREDENTIAL_SLOTS_DIR="$shared_credential_slots_host_dir" \
       MICROVM_SHARED_CREDENTIAL_SLOTS_SOCKET="$shared_credential_slots_socket" \
       MICROVM_AGENT_TOOLS_SOCKET="$agent_tools_socket" \
@@ -612,8 +612,8 @@ set -eu
 cd '$(printf '%s' "$runner_workdir" | sed "s/'/'\\''/g")'
 export MICROVM_HOST_META_DIR='$(printf '%s' "$host_meta_dir" | sed "s/'/'\\\\''/g")'
 export MICROVM_HOST_CWD_SOCKET='$(printf '%s' "$hostcwd_socket" | sed "s/'/'\\\\''/g")'
-export MICROVM_SHARED_AGENT_CONFIG_DIR='$(printf '%s' "$shared_agent_config_host_dir" | sed "s/'/'\\\\''/g")'
-export MICROVM_SHARED_AGENT_CONFIG_SOCKET='$(printf '%s' "$shared_agent_config_socket" | sed "s/'/'\\\\''/g")'
+export MICROVM_SHARED_STATE_ROOT_DIR='$(printf '%s' "$shared_state_root_host_dir" | sed "s/'/'\\\\''/g")'
+export MICROVM_SHARED_STATE_ROOT_SOCKET='$(printf '%s' "$shared_state_root_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_SHARED_CREDENTIAL_SLOTS_DIR='$(printf '%s' "$shared_credential_slots_host_dir" | sed "s/'/'\\\\''/g")'
 export MICROVM_SHARED_CREDENTIAL_SLOTS_SOCKET='$(printf '%s' "$shared_credential_slots_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_AGENT_EXEC_OUTPUT_SOCKET='$(printf '%s' "$agent_exec_output_socket" | sed "s/'/'\\\\''/g")'
@@ -1595,8 +1595,8 @@ if [ "$agent_session_mode" = "agent-exec" ]; then
       if [ -s "$virtiofsd_hostcwd_log" ]; then
         cat "$virtiofsd_hostcwd_log" >&2
       fi
-      if [ -s "$virtiofsd_shared_agent_config_log" ]; then
-        cat "$virtiofsd_shared_agent_config_log" >&2
+      if [ -s "$virtiofsd_shared_state_root_log" ]; then
+        cat "$virtiofsd_shared_state_root_log" >&2
       fi
       if [ -s "$virtiofsd_shared_credential_slots_log" ]; then
         cat "$virtiofsd_shared_credential_slots_log" >&2
@@ -1621,8 +1621,8 @@ if [ "$agent_session_mode" = "agent-exec" ]; then
   if [ -s "$virtiofsd_hostcwd_log" ]; then
     cat "$virtiofsd_hostcwd_log" >&2
   fi
-  if [ -s "$virtiofsd_shared_agent_config_log" ]; then
-    cat "$virtiofsd_shared_agent_config_log" >&2
+  if [ -s "$virtiofsd_shared_state_root_log" ]; then
+    cat "$virtiofsd_shared_state_root_log" >&2
   fi
   if [ -s "$virtiofsd_shared_credential_slots_log" ]; then
     cat "$virtiofsd_shared_credential_slots_log" >&2

@@ -10,21 +10,21 @@ export XDG_STATE_HOME="$tool_home/.local/state"
 export TMPDIR="$XDG_CACHE_HOME/tmp"
 export npm_config_cache="$XDG_CACHE_HOME/npm"
 export npm_config_prefix="$tool_home/.local"
-if [ -n "${FIREBREAK_SHARED_AGENT_WRAPPER_BIN_DIR:-}" ]; then
-  export PATH="$FIREBREAK_SHARED_AGENT_WRAPPER_BIN_DIR:$LOCAL_BIN:$PATH"
+if [ -n "${FIREBREAK_SHARED_TOOL_WRAPPER_BIN_DIR:-}" ]; then
+  export PATH="$FIREBREAK_SHARED_TOOL_WRAPPER_BIN_DIR:$LOCAL_BIN:$PATH"
 else
   export PATH="$LOCAL_BIN:$PATH"
 fi
 @LAUNCH_ENV_EXPORTS@
 
-if [ -r /run/firebreak-agent/worker-mode ]; then
-  if worker_mode_value=$(cat /run/firebreak-agent/worker-mode); then
+if [ -r /run/firebreak-worker/worker-mode ]; then
+  if worker_mode_value=$(cat /run/firebreak-worker/worker-mode); then
     export FIREBREAK_WORKER_MODE="$worker_mode_value"
   fi
 fi
 
-if [ -r /run/firebreak-agent/worker-modes ]; then
-  if worker_modes_value=$(cat /run/firebreak-agent/worker-modes); then
+if [ -r /run/firebreak-worker/worker-modes ]; then
+  if worker_modes_value=$(cat /run/firebreak-worker/worker-modes); then
     export FIREBREAK_WORKER_MODES="$worker_modes_value"
   fi
 fi

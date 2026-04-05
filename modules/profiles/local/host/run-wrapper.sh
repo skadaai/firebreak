@@ -525,7 +525,7 @@ __FIREBREAK_WORKER_BRIDGE_HOST_SCRIPT__
   chmod 0555 "$worker_helper_script" "$worker_bridge_server_script"
 fi
 
-start_virtiofsd() {
+spawn_virtiofsd() {
   shared_dir=$1
   socket_path=$2
   log_path=$3
@@ -536,7 +536,12 @@ start_virtiofsd() {
     --posix-acl \
     --xattr >"$log_path" 2>&1 &
   started_virtiofsd_pid=$!
+}
 
+wait_for_virtiofsd_socket() {
+  socket_path=$1
+  log_path=$2
+  virtiofsd_pid=$3
   for _ in $(seq 1 50); do
     if [ -S "$socket_path" ]; then
       return 0
@@ -544,9 +549,12 @@ start_virtiofsd() {
     sleep 0.1
   done
 
-  kill "$started_virtiofsd_pid" 2>/dev/null || true
-  wait "$started_virtiofsd_pid" 2>/dev/null || true
+  kill "$virtiofsd_pid" 2>/dev/null || true
+  wait "$virtiofsd_pid" 2>/dev/null || true
   echo "virtiofsd did not create socket: $socket_path" >&2
+  if [ -s "$log_path" ]; then
+    cat "$log_path" >&2
+  fi
   exit 1
 }
 
@@ -592,30 +600,46 @@ cloud_hypervisor_setup_local_network
 
 case "$runtime_backend" in
   cloud-hypervisor)
-    start_virtiofsd "/nix/store" "$ro_store_socket" "$virtiofsd_ro_store_log"
+    spawn_virtiofsd "/nix/store" "$ro_store_socket" "$virtiofsd_ro_store_log"
     ro_store_virtiofsd_pid=$started_virtiofsd_pid
-    trace_wrapper "virtiofs-ro-store-ready"
 
-    start_virtiofsd "$host_cwd" "$hostcwd_socket" "$virtiofsd_hostcwd_log"
+    spawn_virtiofsd "$host_cwd" "$hostcwd_socket" "$virtiofsd_hostcwd_log"
     hostcwd_virtiofsd_pid=$started_virtiofsd_pid
-    trace_wrapper "virtiofs-hostcwd-ready"
 
-    start_virtiofsd "$host_runtime_share_dir" "$hostruntime_socket" "$virtiofsd_hostruntime_log"
+    spawn_virtiofsd "$host_runtime_share_dir" "$hostruntime_socket" "$virtiofsd_hostruntime_log"
     hostruntime_virtiofsd_pid=$started_virtiofsd_pid
-    trace_wrapper "virtiofs-hostruntime-ready"
 
     if [ -n "$shared_state_root_host_dir" ]; then
-      start_virtiofsd "$shared_state_root_host_dir" "$shared_state_root_socket" "$virtiofsd_shared_state_root_log"
+      spawn_virtiofsd "$shared_state_root_host_dir" "$shared_state_root_socket" "$virtiofsd_shared_state_root_log"
       shared_state_root_virtiofsd_pid=$started_virtiofsd_pid
-      trace_wrapper "virtiofs-state-root-ready"
     fi
     if [ "$shared_credential_slots_enabled" = "1" ] && [ -n "$shared_credential_slots_host_dir" ]; then
-      start_virtiofsd "$shared_credential_slots_host_dir" "$shared_credential_slots_socket" "$virtiofsd_shared_credential_slots_log"
+      spawn_virtiofsd "$shared_credential_slots_host_dir" "$shared_credential_slots_socket" "$virtiofsd_shared_credential_slots_log"
       shared_credential_slots_virtiofsd_pid=$started_virtiofsd_pid
+    fi
+    spawn_virtiofsd "$host_agent_tools_dir" "$agent_tools_socket" "$virtiofsd_agent_tools_log"
+    agent_tools_virtiofsd_pid=$started_virtiofsd_pid
+
+    wait_for_virtiofsd_socket "$ro_store_socket" "$virtiofsd_ro_store_log" "$ro_store_virtiofsd_pid"
+    trace_wrapper "virtiofs-ro-store-ready"
+
+    wait_for_virtiofsd_socket "$hostcwd_socket" "$virtiofsd_hostcwd_log" "$hostcwd_virtiofsd_pid"
+    trace_wrapper "virtiofs-hostcwd-ready"
+
+    wait_for_virtiofsd_socket "$hostruntime_socket" "$virtiofsd_hostruntime_log" "$hostruntime_virtiofsd_pid"
+    trace_wrapper "virtiofs-hostruntime-ready"
+
+    if [ -n "${shared_state_root_virtiofsd_pid:-}" ]; then
+      wait_for_virtiofsd_socket "$shared_state_root_socket" "$virtiofsd_shared_state_root_log" "$shared_state_root_virtiofsd_pid"
+      trace_wrapper "virtiofs-state-root-ready"
+    fi
+
+    if [ -n "${shared_credential_slots_virtiofsd_pid:-}" ]; then
+      wait_for_virtiofsd_socket "$shared_credential_slots_socket" "$virtiofsd_shared_credential_slots_log" "$shared_credential_slots_virtiofsd_pid"
       trace_wrapper "virtiofs-credential-slots-ready"
     fi
-    start_virtiofsd "$host_agent_tools_dir" "$agent_tools_socket" "$virtiofsd_agent_tools_log"
-    agent_tools_virtiofsd_pid=$started_virtiofsd_pid
+
+    wait_for_virtiofsd_socket "$agent_tools_socket" "$virtiofsd_agent_tools_log" "$agent_tools_virtiofsd_pid"
     trace_wrapper "virtiofs-agent-tools-ready"
     ;;
   vfkit)

@@ -2,6 +2,7 @@ set -eu
 
 @FIREBREAK_PROJECT_CONFIG_LIB@
 @FIREBREAK_CLOUD_HYPERVISOR_NETWORK_LIB@
+@FIREBREAK_LOCAL_INSTANCE_CONTROLLER_LIB@
 
 host_cwd=$PWD
 host_uid=$(id -u)
@@ -435,6 +436,11 @@ if [ "$host_config_adoption_enabled" = "1" ] && [ "$state_mode" = "host" ]; then
   ensure_host_state_subdir "$shared_state_root_host_dir" "@STATE_SUBDIR@" "$workspace_bootstrap_target"
 fi
 
+if local_controller_should_dispatch; then
+  rm -rf "$host_runtime_dir"
+  local_controller_dispatch_request
+fi
+
 # shellcheck disable=SC2329
 cleanup() {
   cloud_hypervisor_cleanup_local_network
@@ -466,6 +472,9 @@ cleanup() {
     kill "$worker_bridge_server_pid" 2>/dev/null || true
     wait "$worker_bridge_server_pid" 2>/dev/null || true
   fi
+  if [ "$local_controller_mode" = "daemon" ]; then
+    local_controller_clear_state
+  fi
   rm -f "$control_socket"
   if [ "$debug_keep_runtime" = "1" ]; then
     echo "keeping Firebreak runtime directory: $host_runtime_dir" >&2
@@ -491,6 +500,10 @@ rm -f "$control_socket"
 shared_state_root_env_file=$host_meta_dir/firebreak-shared-state.env
 : >"$wrapper_trace_log"
 : >"$attach_pty_log"
+
+if [ "$local_controller_mode" = "daemon" ]; then
+  local_controller_record_runtime_dir
+fi
 
 cat >"$runtime_debug_file" <<EOF
 {

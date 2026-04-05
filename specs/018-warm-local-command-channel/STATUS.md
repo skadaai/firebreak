@@ -16,6 +16,10 @@ Executing the warm local command-channel slices.
 - guest command state now records the request id so host-side dispatch can match responses to requests
 - local Linux guests now support an internal `agent-service` mode with a long-lived command agent ready for repeated `agent-exec` requests
 - local Linux `agent-exec` requests now route through a backend-private warm instance controller rooted in the stable instance directory
+- warm controller dispatch is now serialized per stable instance so concurrent requests do not clobber shared request/response files
+- warm controller reuse is now build-aware; stale daemons from older Firebreak builds are stopped instead of being silently reused
+- warm controller lifecycle now emits explicit wrapper trace events for spawn, readiness, dispatch, locking, and stale-build replacement
+- a cheap host-side `test-smoke-local-controller` suite now exercises the controller lock and stale-build invalidation without requiring a VM boot
 
 ## What remains open
 

@@ -65,17 +65,22 @@ EOF
 
 validate_stale_build_invalidation() {
   runner_workdir=$smoke_tmp_dir/build-instance
-  runtime_generation=current-build
+  export runtime_generation=current-build
   mkdir -p "$runner_workdir"
   # shellcheck disable=SC1090
   . "$controller_lib"
   local_controller_prepare_state
-  mkdir -p "$local_controller_state_dir"
+  state_dir=${local_controller_state_dir:-}
+  pid_file=${local_controller_pid_file:-}
+  build_id_file=${local_controller_build_id_file:-}
+  runtime_dir_file=${local_controller_runtime_dir_file:-}
+
+  mkdir -p "$state_dir"
 
   sleep 30 &
   stale_pid=$!
-  printf '%s\n' "$stale_pid" >"$local_controller_pid_file"
-  printf '%s\n' old-build >"$local_controller_build_id_file"
+  printf '%s\n' "$stale_pid" >"$pid_file"
+  printf '%s\n' old-build >"$build_id_file"
 
   if local_controller_matches_build_id; then
     echo "local controller matched a stale build id" >&2
@@ -92,9 +97,9 @@ validate_stale_build_invalidation() {
   fi
 
   for stale_path in \
-    "$local_controller_pid_file" \
-    "$local_controller_runtime_dir_file" \
-    "$local_controller_build_id_file"; do
+    "$pid_file" \
+    "$runtime_dir_file" \
+    "$build_id_file"; do
     if [ -e "$stale_path" ]; then
       echo "local controller left stale state behind: $stale_path" >&2
       exit 1

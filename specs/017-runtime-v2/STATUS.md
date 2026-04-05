@@ -23,6 +23,8 @@ Executing the Linux local runtime replacement and cold-boot reduction slices.
 - shared state-root and credential-slot mounts now fail fast instead of silently downgrading
 - local non-interactive command requests now have an explicit request/response contract instead of boot-time metadata smearing
 - Linux local now has a private warm instance controller and guest command-agent mode for repeated `agent-exec` reuse
+- warm local controller requests are now serialized per instance, stale warm daemons are invalidated on build changes, and controller lifecycle tracing exists in the wrapper logs
+- the runtime now has a cheap host-side warm-controller smoke suite that can be run through flake checks and internal validation without booting a VM
 
 ## What remains open
 
@@ -41,4 +43,4 @@ Executing the Linux local runtime replacement and cold-boot reduction slices.
 ## History
 
 - 2026-04-05: created Runtime v2 as a new design-definition changeset centered on aggressive replacement rather than compatibility-preserving migration
-- 2026-04-05: landed backend capability checks, Linux local Cloud Hypervisor cutover, local networking/port publishing, hot-path bootstrap reduction, runtime-share consolidation, fail-fast share semantics, explicit command requests, a guest warm command-agent mode, and a private local warm instance controller
+- 2026-04-05: landed backend capability checks, Linux local Cloud Hypervisor cutover, local networking/port publishing, hot-path bootstrap reduction, runtime-share consolidation, fail-fast share semantics, explicit command requests, a guest warm command-agent mode, a private local warm instance controller, controller serialization and stale-build invalidation, and a cheap host-side warm-controller smoke suite

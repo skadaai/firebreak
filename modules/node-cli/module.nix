@@ -256,6 +256,44 @@ PY
       exit 1
     '';
   };
+  bootstrapConditionScript = pkgs.writeShellScript "firebreak-bootstrap-condition" ''
+    set -eu
+
+    tool_home='${toolsMount}'
+    if ! [ -d "$tool_home" ]; then
+      tool_home='${devHome}'
+    fi
+
+    local_bin="$tool_home/.local/bin"
+    xdg_state_home="$tool_home/.local/state"
+    state_file="$xdg_state_home/firebreak-node-cli/${vmName}/install-state"
+    ready_marker='${bootstrapReadyMarker}'
+    install_state_id='${installStateId}'
+
+    wrappers_ready() {
+      for wrapper_name in ${installBinNamesArgs}; do
+        if ! [ -x "$local_bin/$wrapper_name" ]; then
+          return 1
+        fi
+      done
+      for wrapper_name in ${proxyLocalUpstreamNamesArgs}; do
+        if ! [ -x "$local_bin/.firebreak-upstream-$wrapper_name" ]; then
+          return 1
+        fi
+      done
+      return 0
+    }
+
+    if [ -x "$local_bin/${binName}" ] \
+      && [ -r "$state_file" ] \
+      && [ "$(cat "$state_file")" = "$install_state_id" ] \
+      && [ -r "$ready_marker" ] \
+      && wrappers_ready; then
+      exit 1
+    fi
+
+    exit 0
+  '';
   scriptVars = {
     "@AGENT_EXEC_OUTPUT_MOUNT@" = cfg.workerExecOutputMount;
     "@BIN_NAME@" = binName;
@@ -318,6 +356,7 @@ in {
         python3
         util-linux
       ] ++ extraBootstrapPackages;
+      bootstrapConditionScript = "${bootstrapConditionScript}";
       bootstrapScript = renderTemplate scriptVars ./guest/bootstrap.sh;
       shellInit = renderTemplate scriptVars ./guest/shell-init.sh;
     };

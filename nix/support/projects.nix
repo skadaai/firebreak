@@ -224,6 +224,46 @@ __FIREBREAK_WRAPPER_INFO__
               cd "$WORKSPACE"
               ${bootstrapCommands}
             '';
+            bootstrapConditionScript = pkgs.writeShellScript "${name}-workspace-bootstrap-condition" ''
+              set -eu
+
+              workspace="${cfg.workspaceMount}"
+              state_file="${stateRoot}/inputs.sha256"
+              missing_marker=""
+
+              for marker in ${repoMarkerArgs}; do
+                if ! [ -e "$workspace/$marker" ]; then
+                  missing_marker=$marker
+                  break
+                fi
+              done
+
+              if [ -n "$missing_marker" ]; then
+                exit 1
+              fi
+
+              hash_input=$(mktemp)
+              {
+                for lockfile in ${lockfileArgs}; do
+                  if [ -e "$workspace/$lockfile" ]; then
+                    sha256sum "$workspace/$lockfile"
+                  fi
+                done
+              } > "$hash_input"
+
+              if [ -s "$hash_input" ]; then
+                current_hash=$(sha256sum "$hash_input" | cut -d' ' -f1)
+              else
+                current_hash=no-lockfiles
+              fi
+              rm -f "$hash_input"
+
+              if [ -r "$state_file" ] && [ "$(cat "$state_file")" = "$current_hash" ]; then
+                exit 1
+              fi
+
+              exit 0
+            '';
             readyScript = pkgs.writeShellApplication {
               name = readyCommandName;
               runtimeInputs = with pkgs; [ coreutils ];
@@ -295,6 +335,7 @@ __FIREBREAK_WRAPPER_INFO__
               brandingTagline = tagline;
               extraSystemPackages = tools ++ [ launchScript readyScript ];
               bootstrapPackages = sharedBootstrapPackages ++ bootstrapTools;
+              bootstrapConditionScript = "${bootstrapConditionScript}";
               bootstrapScript = ''
                 set -eu
 

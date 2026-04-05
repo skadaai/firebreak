@@ -102,6 +102,7 @@ EOF
   mkWorkloadPackage = {
     name,
     runner,
+    runtimeBackend,
     controlSocketName,
     defaultAgentCommand ? "",
     agentConfigSubdir ? "agent",
@@ -136,6 +137,7 @@ EOF
         ] ++ lib.optional pkgs.stdenv.hostPlatform.isLinux virtiofsd;
       text = renderTemplate {
         "@HOST_SYSTEM@" = system;
+        "@RUNTIME_BACKEND@" = runtimeBackend;
         "@CONTROL_SOCKET@" = "${controlSocketName}.socket";
         "@DEFAULT_AGENT_COMMAND@" = defaultAgentCommand;
         "@RUNNER@" = "${runnerWrapper}";
@@ -158,6 +160,7 @@ EOF
   mkLocalVmPackage = {
     name,
     runnerPackage,
+    runtimeBackend,
     controlSocketName ? name,
     defaultAgentCommand ? "",
     agentConfigSubdir ? "agent",
@@ -173,6 +176,7 @@ EOF
     mkWorkloadPackage {
       inherit
         name
+        runtimeBackend
         controlSocketName
         defaultAgentCommand
         agentConfigSubdir
@@ -233,6 +237,7 @@ EOF
           sharedStateRoots
           sharedCredentialSlots
           workerBridgeEnabled;
+        runtimeBackend = nixosConfiguration.config.workloadVm.runtimeBackend;
       };
     in {
       inherit nixosConfiguration package runnerPackage;

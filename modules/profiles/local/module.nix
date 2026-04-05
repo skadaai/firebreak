@@ -96,6 +96,7 @@ in {
   config = {
     workloadVm.requiredCapabilities = [
       "interactive-console"
+      "local-networking"
       "workspace-share"
       "host-meta-share"
     ];
@@ -197,6 +198,6 @@ in {
       };
     };
 
-    microvm.extraArgsScript = lib.optionalString (!lib.hasSuffix "-darwin" cfg.hostSystem) "${runtimeExtraArgsScript}";
+    microvm.extraArgsScript = lib.optionalString (cfg.runtimeBackend != "vfkit") "${runtimeExtraArgsScript}";
   };
 }

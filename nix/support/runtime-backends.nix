@@ -7,6 +7,7 @@ let
       roStoreShareProto = "9p";
       capabilities = [
         "interactive-console"
+        "local-networking"
         "workspace-share"
         "host-meta-share"
         "shared-state-root"
@@ -23,6 +24,7 @@ let
       roStoreShareProto = "virtiofs";
       capabilities = [
         "interactive-console"
+        "local-networking"
         "workspace-share"
         "host-meta-share"
         "shared-state-root"

@@ -20,6 +20,7 @@ agent_session_mode_override=${FIREBREAK_AGENT_SESSION_MODE_OVERRIDE:-}
 agent_session_mode=agent
 default_agent_command=@DEFAULT_AGENT_COMMAND@
 host_system=@HOST_SYSTEM@
+runtime_backend=@RUNTIME_BACKEND@
 agent_command_override=""
 shell_command_override=${AGENT_VM_COMMAND:-}
 shared_state_root_host_dir=""
@@ -232,7 +233,7 @@ reject_whitespace_path "$resolved_firebreak_tmp_root" "Firebreak temporary runti
 reject_whitespace_path "$firebreak_state_root" "Firebreak state root"
 reject_whitespace_path "$default_firebreak_state_root" "default Firebreak state root"
 reject_whitespace_path "$worker_state_dir" "Firebreak worker state directory"
-if [ "$host_system" = "aarch64-darwin" ]; then
+if [ "$runtime_backend" = "vfkit" ]; then
   reject_comma_path "$host_cwd" "current working directory"
   reject_comma_path "$resolved_firebreak_tmp_root" "Firebreak temporary runtime directory"
 fi
@@ -247,12 +248,14 @@ host_instance_dir=$host_runtime_dir/instance
 runner_stdout_log=$host_runtime_dir/runner.out
 runner_stderr_log=$host_runtime_dir/runner.err
 virtiofsd_hostcwd_log=$host_runtime_dir/v-cwd.log
+virtiofsd_hostmeta_log=$host_runtime_dir/v-meta.log
 virtiofsd_shared_state_root_log=$host_runtime_dir/v-shared-cfg.log
 virtiofsd_shared_credential_slots_log=$host_runtime_dir/v-credential-slots.log
 virtiofsd_agent_exec_log=$host_runtime_dir/v-out.log
 virtiofsd_agent_tools_log=$host_runtime_dir/v-tools.log
 virtiofsd_worker_bridge_log=$host_runtime_dir/v-worker.log
 hostcwd_socket=$host_runtime_dir/cwd.sock
+hostmeta_socket=$host_runtime_dir/meta.sock
 shared_state_root_socket=$host_runtime_dir/shared-cfg.sock
 shared_credential_slots_socket=$host_runtime_dir/credential-slots.sock
 agent_exec_output_socket=$host_runtime_dir/out.sock
@@ -434,6 +437,10 @@ cleanup() {
     kill "$hostcwd_virtiofsd_pid" 2>/dev/null || true
     wait "$hostcwd_virtiofsd_pid" 2>/dev/null || true
   fi
+  if [ -n "${hostmeta_virtiofsd_pid:-}" ]; then
+    kill "$hostmeta_virtiofsd_pid" 2>/dev/null || true
+    wait "$hostmeta_virtiofsd_pid" 2>/dev/null || true
+  fi
   if [ -n "${shared_state_root_virtiofsd_pid:-}" ]; then
     kill "$shared_state_root_virtiofsd_pid" 2>/dev/null || true
     wait "$shared_state_root_virtiofsd_pid" 2>/dev/null || true
@@ -495,6 +502,7 @@ cat >"$runtime_debug_file" <<EOF
   "runner_stdout_log": "$(printf '%s' "$runner_stdout_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "runner_stderr_log": "$(printf '%s' "$runner_stderr_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_hostcwd_log": "$(printf '%s' "$virtiofsd_hostcwd_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "virtiofs_hostmeta_log": "$(printf '%s' "$virtiofsd_hostmeta_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_shared_state_root_log": "$(printf '%s' "$virtiofsd_shared_state_root_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_shared_credential_slots_log": "$(printf '%s' "$virtiofsd_shared_credential_slots_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_agent_exec_log": "$(printf '%s' "$virtiofsd_agent_exec_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
@@ -578,43 +586,57 @@ if [ -n "$agent_command_override" ]; then
   printf '%s\n' "$agent_command_override" > "$host_meta_dir/worker-command"
 fi
 
-if [ "$host_system" != "aarch64-darwin" ]; then
-  start_virtiofsd "$host_cwd" "$hostcwd_socket" "$virtiofsd_hostcwd_log"
-  hostcwd_virtiofsd_pid=$started_virtiofsd_pid
-  trace_wrapper "virtiofs-hostcwd-ready"
+case "$runtime_backend" in
+  qemu|cloud-hypervisor)
+    start_virtiofsd "$host_cwd" "$hostcwd_socket" "$virtiofsd_hostcwd_log"
+    hostcwd_virtiofsd_pid=$started_virtiofsd_pid
+    trace_wrapper "virtiofs-hostcwd-ready"
 
-if [ -n "$shared_state_root_host_dir" ]; then
-  start_virtiofsd "$shared_state_root_host_dir" "$shared_state_root_socket" "$virtiofsd_shared_state_root_log"
-  shared_state_root_virtiofsd_pid=$started_virtiofsd_pid
-  trace_wrapper "virtiofs-state-root-ready"
-fi
-if [ "$shared_credential_slots_enabled" = "1" ] && [ -n "$shared_credential_slots_host_dir" ]; then
-  start_virtiofsd "$shared_credential_slots_host_dir" "$shared_credential_slots_socket" "$virtiofsd_shared_credential_slots_log"
-  shared_credential_slots_virtiofsd_pid=$started_virtiofsd_pid
-  trace_wrapper "virtiofs-credential-slots-ready"
-fi
-if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
-  start_virtiofsd "$host_exec_output_dir" "$agent_exec_output_socket" "$virtiofsd_agent_exec_log"
-  agent_exec_output_virtiofsd_pid=$started_virtiofsd_pid
-  trace_wrapper "virtiofs-agent-exec-ready"
-fi
-  start_virtiofsd "$host_agent_tools_dir" "$agent_tools_socket" "$virtiofsd_agent_tools_log"
-  agent_tools_virtiofsd_pid=$started_virtiofsd_pid
-  trace_wrapper "virtiofs-agent-tools-ready"
+    if [ "$runtime_backend" = "cloud-hypervisor" ]; then
+      start_virtiofsd "$host_meta_dir" "$hostmeta_socket" "$virtiofsd_hostmeta_log"
+      hostmeta_virtiofsd_pid=$started_virtiofsd_pid
+      trace_wrapper "virtiofs-hostmeta-ready"
+    fi
 
-  if [ "$worker_bridge_enabled" = "1" ]; then
-    start_virtiofsd "$worker_bridge_dir" "$worker_bridge_socket" "$virtiofsd_worker_bridge_log"
-    worker_bridge_virtiofsd_pid=$started_virtiofsd_pid
-    worker_bridge_socket_env=$worker_bridge_socket
-  fi
-fi
+    if [ -n "$shared_state_root_host_dir" ]; then
+      start_virtiofsd "$shared_state_root_host_dir" "$shared_state_root_socket" "$virtiofsd_shared_state_root_log"
+      shared_state_root_virtiofsd_pid=$started_virtiofsd_pid
+      trace_wrapper "virtiofs-state-root-ready"
+    fi
+    if [ "$shared_credential_slots_enabled" = "1" ] && [ -n "$shared_credential_slots_host_dir" ]; then
+      start_virtiofsd "$shared_credential_slots_host_dir" "$shared_credential_slots_socket" "$virtiofsd_shared_credential_slots_log"
+      shared_credential_slots_virtiofsd_pid=$started_virtiofsd_pid
+      trace_wrapper "virtiofs-credential-slots-ready"
+    fi
+    if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
+      start_virtiofsd "$host_exec_output_dir" "$agent_exec_output_socket" "$virtiofsd_agent_exec_log"
+      agent_exec_output_virtiofsd_pid=$started_virtiofsd_pid
+      trace_wrapper "virtiofs-agent-exec-ready"
+    fi
+    start_virtiofsd "$host_agent_tools_dir" "$agent_tools_socket" "$virtiofsd_agent_tools_log"
+    agent_tools_virtiofsd_pid=$started_virtiofsd_pid
+    trace_wrapper "virtiofs-agent-tools-ready"
+
+    if [ "$worker_bridge_enabled" = "1" ]; then
+      start_virtiofsd "$worker_bridge_dir" "$worker_bridge_socket" "$virtiofsd_worker_bridge_log"
+      worker_bridge_virtiofsd_pid=$started_virtiofsd_pid
+      worker_bridge_socket_env=$worker_bridge_socket
+    fi
+    ;;
+  vfkit)
+    ;;
+  *)
+    echo "unsupported local runtime backend: $runtime_backend" >&2
+    exit 1
+    ;;
+esac
 
 if [ "$worker_bridge_enabled" = "1" ]; then
   start_worker_bridge_server
 fi
 
 run_runner() {
-  if [ "$host_system" = "aarch64-darwin" ]; then
+  if [ "$runtime_backend" = "vfkit" ]; then
     if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
       env \
         MICROVM_VFKIT_HOST_META_DIR="$host_meta_dir" \
@@ -638,9 +660,15 @@ run_runner() {
     return
   fi
 
+  if [ "$runtime_backend" != "qemu" ] && [ "$runtime_backend" != "cloud-hypervisor" ]; then
+    echo "unsupported local runtime backend: $runtime_backend" >&2
+    exit 1
+  fi
+
   if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
     env \
       MICROVM_HOST_META_DIR="$host_meta_dir" \
+      MICROVM_HOST_META_SOCKET="$hostmeta_socket" \
       MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
       MICROVM_SHARED_STATE_ROOT_DIR="$shared_state_root_host_dir" \
       MICROVM_SHARED_STATE_ROOT_SOCKET="$shared_state_root_socket" \
@@ -653,6 +681,7 @@ run_runner() {
   else
     env \
       MICROVM_HOST_META_DIR="$host_meta_dir" \
+      MICROVM_HOST_META_SOCKET="$hostmeta_socket" \
       MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
       MICROVM_SHARED_STATE_ROOT_DIR="$shared_state_root_host_dir" \
       MICROVM_SHARED_STATE_ROOT_SOCKET="$shared_state_root_socket" \
@@ -684,6 +713,7 @@ elif [ "$agent_session_mode" = "agent-attach-exec" ]; then
 set -eu
 cd '$(printf '%s' "$runner_workdir" | sed "s/'/'\\''/g")'
 export MICROVM_HOST_META_DIR='$(printf '%s' "$host_meta_dir" | sed "s/'/'\\\\''/g")'
+export MICROVM_HOST_META_SOCKET='$(printf '%s' "$hostmeta_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_HOST_CWD_SOCKET='$(printf '%s' "$hostcwd_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_SHARED_STATE_ROOT_DIR='$(printf '%s' "$shared_state_root_host_dir" | sed "s/'/'\\\\''/g")'
 export MICROVM_SHARED_STATE_ROOT_SOCKET='$(printf '%s' "$shared_state_root_socket" | sed "s/'/'\\\\''/g")'

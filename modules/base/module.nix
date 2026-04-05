@@ -497,6 +497,12 @@ in {
       description = "Optional oneshot bootstrap script that runs before the console starts.";
     };
 
+    bootstrapConditionScript = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = "Optional ExecCondition script used to skip dev-bootstrap entirely when cached tool state is already valid.";
+    };
+
     workerBridgeEnabled = mkOption {
       type = types.bool;
       default = false;
@@ -581,14 +587,15 @@ in {
       description = "Install persistent developer tools before login";
       wantedBy = [ "multi-user.target" ];
       before = [ "getty.target" "serial-getty@ttyS0.service" ];
-      after = [ "local-fs.target" "network-online.target" ];
-      wants = [ "network-online.target" ];
+      after = [ "local-fs.target" ];
 
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
         StandardOutput = "journal+console";
         StandardError = "journal+console";
+      } // lib.optionalAttrs (cfg.bootstrapConditionScript != null) {
+        ExecCondition = cfg.bootstrapConditionScript;
       };
 
       path = cfg.bootstrapPackages;

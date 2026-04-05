@@ -66,6 +66,8 @@ let
       exit 1
     '';
   };
+  bootstrapConditionScript = pkgs.writeShellScript "firebreak-bootstrap-condition"
+    (renderTemplate scriptVars ./guest/bootstrap-condition.sh);
   scriptVars = {
     "@DEV_HOME@" = devHome;
     "@DEV_USER@" = cfg.devUser;
@@ -116,6 +118,7 @@ in {
         nodejs
         util-linux
       ] ++ bootstrapPackages;
+      bootstrapConditionScript = "${bootstrapConditionScript}";
       bootstrapScript = renderTemplate scriptVars ./guest/bootstrap.sh;
       shellInit = renderTemplate scriptVars ./guest/shell-init.sh;
     };

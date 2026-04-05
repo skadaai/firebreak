@@ -77,7 +77,7 @@ sync_primary_checkout_to_worktree() {
     git ls-files --cached --modified --others --exclude-standard -z |
       while IFS= read -r -d '' path; do
         case "$path" in
-          .codex|.codex/*|.claude|.claude/*|.direnv|.direnv/*|.agent-sandbox.env|result|result/*|*.img|*.socket)
+          .direnv|.direnv/*|.agent-sandbox.env|result|result/*|*.img|*.socket)
             continue
             ;;
         esac

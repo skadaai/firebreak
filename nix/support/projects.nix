@@ -82,19 +82,16 @@ rec {
       }
 
       worker_mode_overrides=''${FIREBREAK_WORKER_MODES:-}
-      if [ -z "$worker_mode_overrides" ] && [ -r /run/firebreak-agent/worker-modes ]; then
-        worker_mode_overrides=$(cat /run/firebreak-agent/worker-modes)
+      if [ -z "$worker_mode_overrides" ] && [ -r /run/firebreak-worker/worker-modes ]; then
+        worker_mode_overrides=$(cat /run/firebreak-worker/worker-modes)
       fi
 
       worker_mode=$(resolve_command_worker_mode "$worker_mode_overrides" || true)
       if [ -z "$worker_mode" ]; then
-        worker_mode=''${FIREBREAK_WORKER_MODE:-''${FIREBREAK_WORKER_PROXY_MODE:-}}
+        worker_mode=''${FIREBREAK_WORKER_MODE:-}
       fi
-      if [ -z "$worker_mode" ] && [ -r /run/firebreak-agent/worker-mode ]; then
-        worker_mode=$(cat /run/firebreak-agent/worker-mode)
-      fi
-      if [ -z "$worker_mode" ] && [ -r /run/firebreak-agent/worker-proxy-mode ]; then
-        worker_mode=$(cat /run/firebreak-agent/worker-proxy-mode)
+      if [ -z "$worker_mode" ] && [ -r /run/firebreak-worker/worker-mode ]; then
+        worker_mode=$(cat /run/firebreak-worker/worker-mode)
       fi
       worker_mode=$(normalize_worker_mode "$worker_mode")
       if [ -z "$worker_mode" ] && [ -n "$proxy_default_mode" ]; then
@@ -187,7 +184,7 @@ __FIREBREAK_WRAPPER_INFO__
       extraModules = [
         ({ config, pkgs, ... }:
           let
-            cfg = config.agentVm;
+            cfg = config.workloadVm;
             devHome = "/var/lib/${cfg.devUser}";
             stateRoot = "${devHome}/.cache/firebreak-workspaces/${name}";
             workspaceOwnedPaths = [
@@ -294,9 +291,8 @@ __FIREBREAK_WRAPPER_INFO__
               '';
             };
           in {
-            agentVm = {
+            workloadVm = {
               brandingTagline = tagline;
-              agentConfigEnabled = false;
               extraSystemPackages = tools ++ [ launchScript readyScript ];
               bootstrapPackages = sharedBootstrapPackages ++ bootstrapTools;
               bootstrapScript = ''
@@ -397,6 +393,8 @@ __FIREBREAK_WRAPPER_INFO__
     memoryMiB ? 3072,
     runtimePackages ? [ ],
     bootstrapPackages ? null,
+    sharedStateRoots ? { },
+    sharedCredentialSlots ? { },
     extraShellInit ? "",
     extraModules ? [ ],
     workerBridgeEnabled ? false,
@@ -465,6 +463,7 @@ __FIREBREAK_WRAPPER_INFO__
     mkLocalVmArtifacts {
       inherit name;
       defaultAgentCommand = launchCommandName;
+      inherit sharedStateRoots sharedCredentialSlots;
       workerBridgeEnabled = effectiveWorkerBridgeEnabled;
       workerKinds = effectiveWorkerKinds;
       extraModules = [
@@ -481,6 +480,8 @@ __FIREBREAK_WRAPPER_INFO__
             postInstallScript
             readyCommandName
             memoryMiB
+            sharedStateRoots
+            sharedCredentialSlots
             extraShellInit
             ;
           installBinScripts = effectiveInstallBinScripts;

@@ -1,8 +1,69 @@
 { config, lib, pkgs, renderTemplate, ... }:
 let
-  cfg = config.agentVm;
+  cfg = config.workloadVm;
   devHome = "/var/lib/${cfg.devUser}";
-  agentConfigVmDir = "${devHome}/${cfg.agentConfigDirName}";
+  localBin =
+    if cfg.toolRuntimesEnabled then
+      "${cfg.toolRuntimesMount}/.local/bin"
+    else
+      "${devHome}/.local/bin";
+  sharedStateRootsEnvFile = "${cfg.hostMetaMount}/firebreak-shared-state.env";
+  renderCredentialFileBindings = bindings:
+    lib.concatStringsSep "\n" (map
+      (binding: "${binding.slotPath}\t${binding.runtimePath}\t${if binding.required then "1" else "0"}\t${binding.format}")
+      bindings);
+  renderCredentialEnvBindings = bindings:
+    lib.concatStringsSep "\n" (map
+      (binding: "${binding.slotPath}\t${binding.envVar}\t${if binding.required then "1" else "0"}")
+      bindings);
+  renderCredentialHelperBindings = bindings:
+    lib.concatStringsSep "\n" (map
+      (binding: "${binding.slotPath}\t${binding.helperName}\t${binding.envVar}\t${if binding.required then "1" else "0"}")
+      bindings);
+  renderShellArray = values:
+    lib.concatMapStringsSep "\n" (value: "  ${lib.escapeShellArg value}") values;
+  resolveStateRootScript = pkgs.writeShellScript "firebreak-resolve-state-root"
+    (renderTemplate {
+      "@FIREBREAK_SHARED_STATE_ROOT_LIB@" = builtins.readFile ./guest/shared-state-roots.sh;
+    } ./guest/resolve-state-root.sh);
+  sharedToolWrapperPackages = lib.mapAttrsToList
+    (wrapperName: wrapper:
+      pkgs.writeShellScriptBin wrapperName
+        (renderTemplate {
+          "@FIREBREAK_SHARED_STATE_ROOT_LIB@" = builtins.readFile ./guest/shared-state-roots.sh;
+          "@FIREBREAK_SHARED_CREDENTIAL_SLOT_LIB@" = builtins.readFile ./guest/shared-credential-slots.sh;
+          "@WRAPPER_NAME@" = wrapperName;
+          "@WRAPPER_DISPLAY_NAME@" = wrapper.displayName;
+          "@REAL_BIN_NAME@" = wrapper.realBinName;
+          "@REAL_BIN_PATH@" = wrapper.realBinPath;
+          "@REAL_BIN_TOOLS_FALLBACK@" = "${cfg.toolRuntimesMount}/.local/bin/${wrapper.realBinName}";
+          "@REAL_BIN_HOME_FALLBACK@" = "${devHome}/.local/bin/${wrapper.realBinName}";
+          "@SPECIFIC_STATE_MODE_VAR@" = "${wrapper.selectorPrefix}_STATE_MODE";
+          "@STATE_SUBDIR@" = wrapper.configSubdir;
+          "@CONFIG_ENV_EXPORTS@" = wrapper.configEnvExports;
+          "@CREDENTIAL_SLOT_SPECIFIC_VAR@" = "${wrapper.selectorPrefix}_CREDENTIAL_SLOT";
+          "@CREDENTIAL_SLOT_SUBDIR@" = wrapper.credentials.slotSubdir;
+          "@CREDENTIAL_FILE_BINDINGS@" = renderCredentialFileBindings wrapper.credentials.fileBindings;
+          "@CREDENTIAL_ENV_BINDINGS@" = renderCredentialEnvBindings wrapper.credentials.envBindings;
+          "@CREDENTIAL_HELPER_BINDINGS@" = renderCredentialHelperBindings wrapper.credentials.helperBindings;
+          "@CREDENTIAL_LOGIN_ARGS@" = renderShellArray wrapper.credentials.loginArgs;
+          "@CREDENTIAL_LOGIN_MATERIALIZATION@" = wrapper.credentials.loginMaterialization;
+          "@RESOLVE_STATE_ROOT_BIN@" = "${resolveStateRootScript}";
+        } ./guest/shared-tool-wrapper.sh))
+    cfg.sharedStateRoots.tools;
+  sharedToolWrapperPackage =
+    if sharedToolWrapperPackages == [ ] then
+      null
+    else
+      pkgs.symlinkJoin {
+        name = "${cfg.name}-shared-tool-wrappers";
+        paths = sharedToolWrapperPackages;
+      };
+  sharedToolWrapperBinDir =
+    if sharedToolWrapperPackage == null then
+      ""
+    else
+      "${sharedToolWrapperPackage}/bin";
   hostIsDarwin = lib.hasSuffix "-darwin" cfg.hostSystem;
   roStoreShareProto = if hostIsDarwin then "virtiofs" else "9p";
   localHypervisor = if hostIsDarwin then "vfkit" else "qemu";
@@ -10,21 +71,41 @@ let
   scriptVars = {
     "@DEV_HOME@" = devHome;
     "@DEV_USER@" = cfg.devUser;
-    "@AGENT_CONFIG_DIR_FILE@" = cfg.agentConfigDirFile;
-    "@AGENT_CONFIG_DIR_NAME@" = cfg.agentConfigDirName;
     "@START_DIR_FILE@" = cfg.startDirFile;
     "@WORKER_KINDS_FILE@" = cfg.workerKindsFile;
     "@WORKER_LOCAL_STATE_DIR@" = cfg.workerLocalStateDir;
     "@WORKSPACE_MOUNT@" = cfg.workspaceMount;
+    "@SHARED_STATE_ROOT_ENV_EXPORTS@" = lib.optionalString cfg.sharedStateRoots.enable ''
+      export FIREBREAK_SHARED_STATE_ROOT_ENABLED=1
+      export FIREBREAK_SHARED_STATE_ROOT_HOST_MOUNT=${lib.escapeShellArg cfg.sharedStateRoots.hostMount}
+      export FIREBREAK_SHARED_STATE_ROOT_VM_ROOT=${lib.escapeShellArg cfg.sharedStateRoots.vmRoot}
+      export FIREBREAK_SHARED_STATE_ROOT_FRESH_ROOT=${lib.escapeShellArg cfg.sharedStateRoots.freshRoot}
+      export FIREBREAK_SHARED_STATE_ROOT_ENV_FILE=${lib.escapeShellArg sharedStateRootsEnvFile}
+      export FIREBREAK_SHARED_STATE_ROOT_HOST_MOUNTED_FLAG=${lib.escapeShellArg cfg.sharedStateRoots.mountedFlag}
+      export FIREBREAK_RESOLVE_STATE_ROOT_BIN=${lib.escapeShellArg "${resolveStateRootScript}"}
+    '';
+    "@SHARED_CREDENTIAL_SLOT_ENV_EXPORTS@" = lib.optionalString cfg.sharedCredentialSlots.enable ''
+      export FIREBREAK_SHARED_CREDENTIAL_SLOTS_ENABLED=1
+      export FIREBREAK_SHARED_CREDENTIAL_SLOTS_HOST_MOUNT=${lib.escapeShellArg cfg.sharedCredentialSlots.hostMount}
+      export FIREBREAK_SHARED_CREDENTIAL_SLOTS_ENV_FILE=${lib.escapeShellArg sharedStateRootsEnvFile}
+      export FIREBREAK_SHARED_CREDENTIAL_SLOTS_MOUNTED_FLAG=${lib.escapeShellArg cfg.sharedCredentialSlots.mountedFlag}
+    '';
+    "@SHARED_TOOL_WRAPPER_ENV_EXPORTS@" = lib.optionalString (sharedToolWrapperBinDir != "") ''
+      export FIREBREAK_SHARED_TOOL_WRAPPER_BIN_DIR=${lib.escapeShellArg sharedToolWrapperBinDir}
+    '';
   };
 
   baseShellInit = renderTemplate scriptVars ./guest/shell-init.sh;
+  commandShellInit = ''
+    ${baseShellInit}
+    ${cfg.shellInit}
+  '';
   bootstrapEnabled = cfg.bootstrapScript != null;
 in {
-  options.agentVm = with lib; {
+  options.workloadVm = with lib; {
     name = mkOption {
       type = types.str;
-      default = "agent-vm";
+      default = "workload-vm";
       description = "MicroVM hostname and primary identity.";
     };
 
@@ -76,82 +157,274 @@ in {
       description = "World-readable file containing the resolved guest start directory.";
     };
 
-    agentConfigEnabled = mkOption {
-      type = types.bool;
-      default = false;
-      description = "Whether the VM resolves a shared per-agent config directory for the current session.";
-    };
-
-    agentConfigDirName = mkOption {
+    workerSessionModeFile = mkOption {
       type = types.str;
-      default = ".agent";
-      description = "Directory name used for workspace/vm agent config resolution.";
-    };
-
-    agentConfigHostMount = mkOption {
-      type = types.str;
-      default = "/run/agent-config-host";
-      description = "Guest path used for an optional host-provided agent config share.";
-    };
-
-    agentConfigDirFile = mkOption {
-      type = types.str;
-      default = "/run/agent-config-dir";
-      description = "World-readable file containing the resolved agent config directory for the current session.";
-    };
-
-    agentConfigFreshDir = mkOption {
-      type = types.str;
-      default = "/run/agent-config-fresh";
-      description = "Guest path used for fresh ephemeral agent config sessions.";
-    };
-
-    agentSessionModeFile = mkOption {
-      type = types.str;
-      default = "/run/agent-session-mode";
+      default = "/run/worker-session-mode";
       description = "World-readable file containing the requested interactive session mode.";
     };
 
-    agentCommandFile = mkOption {
+    workerCommandFile = mkOption {
       type = types.str;
-      default = "/run/agent-command";
-      description = "World-readable file containing the agent command selected for the current session.";
+      default = "/run/worker-command";
+      description = "World-readable file containing the command selected for the current session.";
     };
 
-    agentExecOutputMount = mkOption {
+    workerExecOutputMount = mkOption {
       type = types.str;
-      default = "/run/agent-exec-output";
+      default = "/run/worker-exec-output";
       description = "Guest path for a host-shared directory used to persist one-shot command stdout, stderr, and exit code.";
     };
 
-    agentToolsEnabled = mkOption {
+    commandShellInitFile = mkOption {
+      type = types.str;
+      default = "/etc/firebreak-command-init.sh";
+      description = "Guest path to the shell-init script sourced by non-interactive worker command execution.";
+    };
+
+    toolRuntimesEnabled = mkOption {
       type = types.bool;
       default = false;
-      description = "Whether the VM mounts a host-shared persistent tools directory for bootstrap-managed agent runtimes.";
+      description = "Whether the VM mounts a host-shared persistent tools directory for bootstrap-managed tool runtimes.";
     };
 
-    agentToolsMount = mkOption {
+    toolRuntimesMount = mkOption {
       type = types.str;
-      default = "/run/agent-tools-host";
-      description = "Guest path for an optional host-shared directory used to persist bootstrap-managed agent tools across VM launches.";
+      default = "/run/tool-runtimes-host";
+      description = "Guest path for an optional host-shared directory used to persist bootstrap-managed tool runtimes across VM launches.";
     };
 
-    agentCommand = mkOption {
+    defaultCommand = mkOption {
       type = types.nullOr types.str;
       default = null;
-      description = "Default agent command to launch in the interactive session.";
+      description = "Default command to launch in the interactive session.";
     };
 
-    agentPromptCommand = mkOption {
+    promptCommand = mkOption {
       type = types.nullOr types.str;
       default = null;
-      description = "Shell command used to start a non-interactive agent session from FIREBREAK_AGENT_PROMPT.";
+      description = "Shell command used to start a non-interactive worker session from FIREBREAK_AGENT_PROMPT.";
     };
 
-    agentPromptFile = mkOption {
+    promptFile = mkOption {
       type = types.str;
-      default = "/run/agent-prompt";
-      description = "World-readable file containing the initial prompt for non-interactive agent execution.";
+      default = "/run/worker-prompt";
+      description = "World-readable file containing the initial prompt for non-interactive worker execution.";
+    };
+
+    sharedStateRoots = mkOption {
+      default = { };
+      description = "Shared state-root contract for sandboxes and dedicated workloads.";
+      type = types.submodule ({ ... }: {
+        options = {
+          enable = mkOption {
+            type = types.bool;
+            default = false;
+            description = "Whether the VM exposes the shared state-root contract.";
+          };
+
+          hostMount = mkOption {
+            type = types.str;
+            default = "/run/firebreak-state-root";
+            description = "Guest path used for the shared host-backed state root.";
+          };
+
+          vmRoot = mkOption {
+            type = types.str;
+            default = "${devHome}/.firebreak";
+            description = "Guest root used for persistent VM-local state directories.";
+          };
+
+          freshRoot = mkOption {
+            type = types.str;
+            default = "/run/firebreak-state-fresh";
+            description = "Guest root used for fresh ephemeral state directories.";
+          };
+
+          mountedFlag = mkOption {
+            type = types.str;
+            default = "/run/firebreak-shared-state-root-mounted";
+            description = "Guest file used to indicate that the shared host state root is mounted.";
+          };
+
+          tools = mkOption {
+            type = types.attrsOf (types.submodule ({ name, ... }: {
+              options = {
+                displayName = mkOption {
+                  type = types.str;
+                  default = name;
+                  description = "Human-facing wrapper name used in diagnostics.";
+                };
+
+                realBinName = mkOption {
+                  type = types.strMatching "[A-Za-z0-9][A-Za-z0-9._+-]*";
+                  default = name;
+                  description = "Real binary name in the per-user local bin directory.";
+                };
+
+                realBinPath = mkOption {
+                  type = types.str;
+                  default = "";
+                  description = "Optional absolute path to the real binary when it does not live in the standard local-bin locations.";
+                };
+
+                selectorPrefix = mkOption {
+                  type = types.strMatching "[A-Z][A-Z0-9_]*";
+                  description = "Prefix for Firebreak selector vars such as CODEX or CLAUDE.";
+                };
+
+                configSubdir = mkOption {
+                  type = types.strMatching "[A-Za-z0-9][A-Za-z0-9._-]*";
+                  description = "Stable subdirectory name inside the resolved shared state root.";
+                };
+
+                configEnvExports = mkOption {
+                  type = types.lines;
+                  description = "Shell exports that map the resolved state directory into tool-native env vars.";
+                };
+
+                credentials = mkOption {
+                  default = { };
+                  description = "Optional credential-slot adapters for this wrapper.";
+                  type = types.submodule ({ ... }: {
+                    options = {
+                      slotSubdir = mkOption {
+                        type = types.str;
+                        default = name;
+                        description = "Stable subdirectory name used inside the selected credential slot.";
+                      };
+
+                      fileBindings = mkOption {
+                        type = types.listOf (types.submodule ({ config, ... }: {
+                          options = {
+                            slotPath = mkOption {
+                              type = types.strMatching "[^\t\n]+";
+                              default = config.runtimePath;
+                              description = "Relative file path inside the selected slot. Defaults to runtimePath.";
+                            };
+
+                            runtimePath = mkOption {
+                              type = types.strMatching "[^\t\n]+";
+                              description = "Relative file path inside the resolved runtime state root.";
+                            };
+
+                            required = mkOption {
+                              type = types.bool;
+                              default = false;
+                              description = "Whether the binding must exist when a slot is selected.";
+                            };
+
+                            format = mkOption {
+                              type = types.enum [ "opaque" "json" ];
+                              default = "opaque";
+                              description = "Optional format hint used for runtime validation.";
+                            };
+                          };
+                        }));
+                        default = [ ];
+                        description = "Files copied from the selected slot into the runtime state root before launch and synced back on exit.";
+                      };
+
+                      envBindings = mkOption {
+                        type = types.listOf (types.submodule ({ config, ... }: {
+                          options = {
+                            slotPath = mkOption {
+                              type = types.strMatching "[^\t\n]+";
+                              default = config.envVar;
+                              description = "Relative file path inside the selected slot. Defaults to envVar.";
+                            };
+
+                            envVar = mkOption {
+                              type = types.strMatching "[A-Z][A-Z0-9_]*";
+                              description = "Env var populated from the slot file content.";
+                            };
+
+                            required = mkOption {
+                              type = types.bool;
+                              default = false;
+                              description = "Whether the binding must exist when a slot is selected.";
+                            };
+                          };
+                        }));
+                        default = [ ];
+                        description = "Env vars populated from files in the selected slot.";
+                      };
+
+                      helperBindings = mkOption {
+                        type = types.listOf (types.submodule ({ ... }: {
+                          options = {
+                            slotPath = mkOption {
+                              type = types.strMatching "[^\t\n]+";
+                              description = "Relative file path inside the selected slot.";
+                            };
+
+                            helperName = mkOption {
+                              type = types.strMatching "[A-Za-z0-9][A-Za-z0-9._+-]*";
+                              description = "Generated helper script name.";
+                            };
+
+                            envVar = mkOption {
+                              type = types.strMatching "[A-Z][A-Z0-9_]*";
+                              description = "Env var pointing at the generated helper script.";
+                            };
+
+                            required = mkOption {
+                              type = types.bool;
+                              default = false;
+                              description = "Whether the binding must exist when a slot is selected.";
+                            };
+                          };
+                        }));
+                        default = [ ];
+                        description = "Helper scripts that read their value from the selected slot.";
+                      };
+
+                      loginArgs = mkOption {
+                        type = types.listOf types.str;
+                        default = [ ];
+                        description = "Native login argv prefix that should run against the selected slot.";
+                      };
+
+                      loginMaterialization = mkOption {
+                        type = types.enum [ "none" "slot-root" ];
+                        default = "none";
+                        description = "How the native login command should target the selected slot.";
+                      };
+                    };
+                  });
+                };
+              };
+            }));
+            default = { };
+            description = "Wrapper commands generated for workloads that expose tool CLIs through the shared state-root contract.";
+          };
+        };
+      });
+    };
+
+    sharedCredentialSlots = mkOption {
+      default = { };
+      description = "Optional shared host-backed credential slot root exposed to wrappers.";
+      type = types.submodule ({ ... }: {
+        options = {
+          enable = mkOption {
+            type = types.bool;
+            default = false;
+            description = "Whether the VM exposes the shared credential-slot host mount.";
+          };
+
+          hostMount = mkOption {
+            type = types.str;
+            default = "/run/credential-slots-host-root";
+            description = "Guest path used for the shared host-backed credential-slot root.";
+          };
+
+          mountedFlag = mkOption {
+            type = types.str;
+            default = "/run/firebreak-shared-credential-slots-mounted";
+            description = "Guest file used to indicate that the shared credential-slot root is mounted.";
+          };
+        };
+      });
     };
 
     varVolumeSizeMiB = mkOption {
@@ -247,6 +520,12 @@ in {
       default = "${devHome}/.local/state/firebreak/worker-local";
       description = "Guest-owned state directory for guest-local process workers.";
     };
+
+    sharedToolWrapperBinDir = mkOption {
+      type = types.str;
+      default = "";
+      description = "Internal wrapper-bin path used to prefer generated Firebreak wrappers over raw tool binaries.";
+    };
   };
 
   config = {
@@ -269,17 +548,21 @@ in {
     assertions = [
       {
         assertion = lib.hasPrefix "/etc/" cfg.workerKindsFile;
-        message = "agentVm.workerKindsFile must stay under /etc so Firebreak can materialize it declaratively.";
+        message = "workloadVm.workerKindsFile must stay under /etc so Firebreak can materialize it declaratively.";
       }
     ];
 
-    environment.systemPackages = cfg.extraSystemPackages;
+    environment.systemPackages =
+      cfg.extraSystemPackages
+      ++ lib.optional (sharedToolWrapperPackage != null) sharedToolWrapperPackage;
+
+    workloadVm.sharedToolWrapperBinDir = sharedToolWrapperBinDir;
 
     environment.etc.${lib.removePrefix "/etc/" cfg.workerKindsFile}.text = cfg.workerKindsJson;
+    environment.etc.${lib.removePrefix "/etc/" cfg.commandShellInitFile}.text = commandShellInit;
 
     programs.bash.interactiveShellInit = ''
-      ${baseShellInit}
-      ${cfg.shellInit}
+      ${commandShellInit}
     '';
 
     systemd.services.dev-bootstrap = lib.mkIf bootstrapEnabled {

@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 set -eu
 
+if [ -n "${PATH:-}" ]; then
+  export PATH="/run/current-system/sw/bin:$PATH"
+else
+  export PATH="/run/current-system/sw/bin"
+fi
+
 target=@WORKSPACE_MOUNT@
 session_mode=shell
 agent_command=@AGENT_COMMAND@
 agent_tools_mount=@AGENT_TOOLS_MOUNT@
-guest_state_dir=/run/firebreak-agent
+guest_state_dir=/run/firebreak-worker
 command_state_local=$guest_state_dir/command-state.json
 command_state_shared=@AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
 command_process_local=$guest_state_dir/command-processes.txt
@@ -18,7 +24,9 @@ command_signal_stream_shared=@AGENT_EXEC_OUTPUT_MOUNT@/command-signals.stream
 session_term_state_file=$guest_state_dir/session-term
 session_columns_state_file=$guest_state_dir/session-columns
 session_lines_state_file=$guest_state_dir/session-lines
+command_shell_init_file=@COMMAND_SHELL_INIT_FILE@
 attach_shell_flag=-ic
+attach_shell_flag=-lc
 
 json_escape() {
   printf '%s' "$1" | @PYTHON3@ -c 'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'
@@ -59,12 +67,19 @@ if [ -r @AGENT_COMMAND_FILE@ ]; then
   agent_command=$(cat @AGENT_COMMAND_FILE@)
 fi
 
+shared_tool_wrapper_bin_dir="@SHARED_AGENT_WRAPPER_BIN_DIR@"
+if [ -n "$shared_tool_wrapper_bin_dir" ] && [ -d "$shared_tool_wrapper_bin_dir" ]; then
+  export PATH="$shared_tool_wrapper_bin_dir:$PATH"
+fi
+if ! [ -r "$command_shell_init_file" ]; then
+  command_shell_init_file=""
+fi
+
 case "$session_mode:$agent_command" in
   agent-attach-exec:codex|agent:codex)
     if [ -x "$agent_tools_mount/.bun/bin/codex" ]; then
       agent_command="$agent_tools_mount/.bun/bin/codex"
     fi
-    attach_shell_flag=-lc
     ;;
 esac
 
@@ -105,6 +120,7 @@ cli_auth_credentials_store = "ephemeral"
 alternate_screen = "never"
 EOF
   cat >"$codex_wrapper_path" <<EOF
+#!/usr/bin/env bash
 set -eu
 export HOME='$(printf '%s' "$codex_home_dir" | sed "s/'/'\\\\''/g")'
 export CODEX_HOME='$(printf '%s' "$codex_config_dir" | sed "s/'/'\\\\''/g")'
@@ -114,8 +130,8 @@ mkdir -p "\$CODEX_HOME" "\$CODEX_SQLITE_HOME"
 cd '$(printf '%s' "$target" | sed "s/'/'\\\\''/g")'
 exec '$(printf '%s' "$agent_tools_mount/.bun/bin/codex" | sed "s/'/'\\\\''/g")' --no-alt-screen
 EOF
-  chmod 0555 "$codex_wrapper_path"
-  agent_command=$codex_wrapper_path
+  chmod 0444 "$codex_wrapper_path"
+  agent_command="@BASH@ $(printf '%s' "$codex_wrapper_path" | sed "s/'/'\\\\''/g")"
 }
 
 case "$session_mode:$agent_command" in
@@ -143,59 +159,50 @@ case "$session_mode" in
     ;;
   agent)
     if [ -n "$agent_command" ]; then
-      exec @BASH@ -ic "$agent_command; exec @BASH@ -i"
+      exec env FIREBREAK_AGENT_COMMAND="$agent_command" @BASH@ -lc '
+        command_shell_init_file="'"$command_shell_init_file"'"
+        if [ -n "$command_shell_init_file" ]; then
+          # shellcheck disable=SC1090
+          . "$command_shell_init_file"
+        fi
+        eval "$FIREBREAK_AGENT_COMMAND"
+        exec @BASH@ -i
+      '
     fi
     exec @BASH@ -i
     ;;
   agent-exec)
     if [ -n "$agent_command" ]; then
-      exec env FIREBREAK_AGENT_COMMAND="$agent_command" @BASH@ -ic '
-        status=0
-        stdout_path=@AGENT_EXEC_OUTPUT_MOUNT@/stdout
-        stderr_path=@AGENT_EXEC_OUTPUT_MOUNT@/stderr
-        exit_code_path=@AGENT_EXEC_OUTPUT_MOUNT@/exit_code
-        rm -f "$stdout_path" "$stderr_path" "$exit_code_path"
-        write_command_state() {
-          command_phase=$1
-          command_status=$2
-          command_detail=$3
-          command_exit_code=$4
-          updated_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          mkdir -p "'"$guest_state_dir"'"
-          cat >"'"$command_state_local"'" <<EOF
-{
-  "source": "guest-command",
-  "phase": "$(printf "%s" "$command_phase" | @PYTHON3@ -c '"'"'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'"'"')",
-  "status": "$(printf "%s" "$command_status" | @PYTHON3@ -c '"'"'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'"'"')",
-  "detail": "$(printf "%s" "$command_detail" | @PYTHON3@ -c '"'"'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'"'"')",
-  "command": "$(printf "%s" "$FIREBREAK_AGENT_COMMAND" | @PYTHON3@ -c '"'"'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'"'"')",
-  "exit_code": $command_exit_code,
-  "updated_at": "$updated_at"
-}
-EOF
-          if [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
-            cp "'"$command_state_local"'" "'"$command_state_shared"'" 2>/dev/null || true
-          fi
-        }
-        if command -v firebreak-bootstrap-wait >/dev/null 2>&1; then
-          write_command_state bootstrap-wait running agent-exec 0
-          if firebreak-bootstrap-wait; then
-            :
-          else
-            status=$?
-            write_command_state bootstrap-wait error agent-exec "$status"
-            printf "%s\n" "$status" >"$exit_code_path"
-            sudo poweroff >/dev/null 2>&1 || true
-            exit "$status"
-          fi
+      export FIREBREAK_AGENT_COMMAND="$agent_command"
+      status=0
+      stdout_path=@AGENT_EXEC_OUTPUT_MOUNT@/stdout
+      stderr_path=@AGENT_EXEC_OUTPUT_MOUNT@/stderr
+      exit_code_path=@AGENT_EXEC_OUTPUT_MOUNT@/exit_code
+      rm -f "$stdout_path" "$stderr_path" "$exit_code_path"
+      if command -v firebreak-bootstrap-wait >/dev/null 2>&1; then
+        write_command_state bootstrap-wait running agent-exec 0
+        if firebreak-bootstrap-wait; then
+          :
+        else
+          status=$?
+          write_command_state bootstrap-wait error agent-exec "$status"
+          printf "%s\n" "$status" >"$exit_code_path"
+          sudo poweroff >/dev/null 2>&1 || true
+          exit "$status"
         fi
-        write_command_state command-start running agent-exec 0
-        eval "$FIREBREAK_AGENT_COMMAND" >"$stdout_path" 2>"$stderr_path" || status=$?
-        write_command_state command-exit completed agent-exec "$status"
-        printf "%s\n" "$status" >"$exit_code_path"
-        sudo poweroff >/dev/null 2>&1 || true
-        exit "$status"
-      '
+      fi
+      write_command_state command-start running agent-exec 0
+      {
+        if [ -n "$command_shell_init_file" ]; then
+          # shellcheck disable=SC1090
+          . "$command_shell_init_file"
+        fi
+        eval "$FIREBREAK_AGENT_COMMAND"
+      } >"$stdout_path" 2>"$stderr_path" || status=$?
+      write_command_state command-exit completed agent-exec "$status"
+      printf "%s\n" "$status" >"$exit_code_path"
+      sudo poweroff >/dev/null 2>&1 || true
+      exit "$status"
     fi
     exec @BASH@ -i
     ;;
@@ -214,6 +221,7 @@ EOF
         command_tty_shared="'"$command_tty_shared"'"
         command_job_info_local="'"$command_job_info_local"'"
         command_signal_stream_shared="'"$command_signal_stream_shared"'"
+        command_shell_init_file="'"$command_shell_init_file"'"
         command_process_monitor_pid=""
         command_signal_monitor_pid=""
         command_job_pid=""
@@ -511,6 +519,10 @@ PY
           fi
         }
         trap restore_command_tty EXIT INT TERM
+        if [ -n "$command_shell_init_file" ]; then
+          # shellcheck disable=SC1090
+          . "$command_shell_init_file"
+        fi
         if command -v firebreak-bootstrap-wait >/dev/null 2>&1; then
           write_command_state bootstrap-wait running agent-attach-exec 0
           if firebreak-bootstrap-wait; then

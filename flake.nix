@@ -1,11 +1,6 @@
 {
   description = "Skada Firebreak: reliable isolation for high-trust automation";
 
-  nixConfig = {
-    extra-substituters = [ "https://microvm.cachix.org" ];
-    extra-trusted-public-keys = [ "microvm.cachix.org-1:oXnBc6hRE3eX5rSYdRyMYXnfzcCxC7yKPTbZXALsqys=" ];
-  };
-
   inputs.nixpkgs.url = "nixpkgs";
   inputs.microvm = {
     url = "github:microvm-nix/microvm.nix";
@@ -46,7 +41,7 @@
 
       lib = lib.genAttrs supportedHostSystems (system: {
         inherit (supports.${system})
-          mkAgentVm
+          mkWorkloadVm
           mkLocalVmArtifacts
           mkLocalVmPackage
           mkPackagedNodeCliArtifacts
@@ -70,10 +65,12 @@
           inherit (supports.${system})
             hostIsLinux
             lib
-            mkAgentPackage
-            mkAgentVersionSmokePackage
+            mkWorkloadPackage
+            mkWorkloadVersionSmokePackage
             mkCloudJobPackage
             mkCloudSmokePackage
+            mkCredentialSlotSmokePackage
+            mkToolCredentialSlotSmokePackage
             mkFirebreakCliSurfaceSmokePackage
             mkWorkerFirebreakBridgeProbePackage
             mkFirebreakCliPackage

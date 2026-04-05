@@ -8,7 +8,7 @@
 
 # Firebreak
 
-Firebreak is a VM-first control plane for running coding agents with a small public interface.
+Firebreak is a VM-first control plane for running tools and workloads with a small public interface.
 
 ## Firebreak CLI
 
@@ -73,11 +73,31 @@ nix run .#firebreak -- doctor
 Example `.firebreak.env`:
 
 ```dotenv
-AGENT_CONFIG=workspace
+FIREBREAK_STATE_MODE=host
 # FIREBREAK_LAUNCH_MODE=run
-# CODEX_CONFIG=workspace
-# CLAUDE_CONFIG=workspace
+# CODEX_STATE_MODE=workspace
+# CLAUDE_STATE_MODE=workspace
+# FIREBREAK_CREDENTIAL_SLOT=default
+# FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH=~/.firebreak/credentials
+# CODEX_CREDENTIAL_SLOT=backup
 ```
+
+## State Roots And Credential Slots
+
+Use `FIREBREAK_STATE_MODE` and per-tool overrides such as `CODEX_STATE_MODE` and `CLAUDE_STATE_MODE` to choose the runtime state root:
+
+- `host`: shared host-backed runtime state
+- `workspace`: per-project runtime state
+- `vm`: persistent VM-local runtime state
+- `fresh`: empty runtime state for each launch
+
+Credential slots are separate:
+
+- `FIREBREAK_CREDENTIAL_SLOT`: default slot name
+- `CODEX_CREDENTIAL_SLOT`, `CLAUDE_CREDENTIAL_SLOT`: per-tool overrides
+- `FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH`: shared host root that stores the named slots
+
+See [guides/state-roots-and-credential-slots.md](./guides/state-roots-and-credential-slots.md) for the full model and examples.
 
 ## Diagnostics
 
@@ -86,7 +106,8 @@ AGENT_CONFIG=workspace
 - project root and config-file resolution
 - host platform and selected local runtime path
 - public launch mode resolution
-- Codex and Claude Code config resolution
+- Codex and Claude Code runtime-state resolution
+- Codex and Claude Code credential-slot resolution
 - current working directory compatibility
 - KVM availability when relevant, plus primary-checkout state
 
@@ -97,7 +118,7 @@ Use `nix run .#firebreak -- doctor --json` for machine-readable output.
 Firebreak exposes a public `worker` surface for orchestrator-style sandboxes:
 
 ```sh
-firebreak worker run --kind codex --workspace "$PWD" -- --version
+firebreak worker run --backend firebreak --package firebreak-codex --kind codex --workspace "$PWD" -- codex --version
 firebreak worker ps
 firebreak worker inspect codex-1234abcd
 firebreak worker debug --json

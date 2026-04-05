@@ -5,8 +5,13 @@ rec {
     agentPackage,
     agentBin,
     agentDisplayName,
-    agentConfigDirName,
+    agentConfigSubdir,
+    defaultAgentConfigHostDir,
+    workspaceBootstrapConfigHostDir,
   }:
+    let
+      agentConfigDirName = ".firebreak/${agentConfigSubdir}";
+    in
     pkgs.writeShellApplication {
       inherit name;
       runtimeInputs = with pkgs; [
@@ -18,9 +23,12 @@ rec {
       ];
       text = renderTemplate {
         "@AGENT_BIN@" = agentBin;
-        "@AGENT_CONFIG_DIR_NAME@" = agentConfigDirName;
+        "@STATE_DIR_NAME@" = agentConfigDirName;
+        "@STATE_SUBDIR@" = agentConfigSubdir;
         "@AGENT_DISPLAY_NAME@" = agentDisplayName;
         "@AGENT_PACKAGE@" = agentPackage;
+        "@DEFAULT_STATE_ROOT@" = defaultAgentConfigHostDir;
+        "@WORKSPACE_BOOTSTRAP_CONFIG_HOST_DIR@" = workspaceBootstrapConfigHostDir;
       } ../../modules/base/tests/agent-smoke.sh;
     };
 
@@ -37,6 +45,63 @@ rec {
       text = renderTemplate {
         "@REPO_ROOT@" = builtins.toString ../../.;
       } ../../modules/base/tests/test-smoke-project-config-and-doctor.sh;
+    };
+
+  mkCredentialSlotSmokePackage = {
+    name,
+    fixturePackage,
+  }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        coreutils
+        git
+        gnugrep
+      ];
+      text = renderTemplate {
+        "@FIXTURE_PACKAGE_BIN@" = "${self.packages.${system}.${fixturePackage}}/bin/${fixturePackage}";
+      } ../../modules/base/tests/test-smoke-credential-slots.sh;
+    };
+
+  mkToolCredentialSlotSmokePackage = {
+    name,
+    agentPackage,
+    agentBin,
+    agentDisplayName,
+    agentConfigSubdir,
+    authFile,
+    apiKeyFile,
+    apiKeyEnv,
+    configRootEnv,
+    credentialSlotSpecificVar,
+    loginCommand,
+    loginCommandArgs,
+  }:
+    let
+      renderShellArray = values:
+        builtins.concatStringsSep "\n" (map (value: "  ${pkgs.lib.escapeShellArg value}") values);
+    in
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        bash
+        coreutils
+        git
+        gnugrep
+      ];
+      text = renderTemplate {
+        "@AGENT_PACKAGE@" = agentPackage;
+        "@AGENT_BIN@" = agentBin;
+        "@AGENT_DISPLAY_NAME@" = agentDisplayName;
+        "@STATE_SUBDIR@" = agentConfigSubdir;
+        "@AUTH_FILE@" = authFile;
+        "@API_KEY_FILE@" = apiKeyFile;
+        "@API_KEY_ENV@" = apiKeyEnv;
+        "@CONFIG_ROOT_ENV@" = configRootEnv;
+        "@CREDENTIAL_SLOT_SPECIFIC_VAR@" = credentialSlotSpecificVar;
+        "@LOGIN_COMMAND@" = loginCommand;
+        "@LOGIN_COMMAND_ARGS@" = renderShellArray loginCommandArgs;
+      } ../../modules/base/tests/test-smoke-tool-credential-slots.sh;
     };
 
   mkNpxLauncherSmokePackage = { name }:
@@ -110,6 +175,34 @@ rec {
           printf '%s\n' "__ARG__$arg"
         done
       '';
+      fakeWorkloadRegistry = pkgs.runCommand "firebreak-cli-smoke-workloads" {} ''
+        mkdir -p "$out/bin"
+        cat >"$out/bin/firebreak-codex" <<'EOF'
+#!${pkgs.bash}/bin/bash
+printf '%s\n' "__VM__codex"
+printf '%s\n' "__MODE__''${FIREBREAK_LAUNCH_MODE:-unset}"
+printf '%s\n' "__WORKER_MODE__''${FIREBREAK_WORKER_MODE:-unset}"
+printf '%s\n' "__WORKER_MODES__''${FIREBREAK_WORKER_MODES:-unset}"
+for arg in "$@"; do
+  printf '%s\n' "__ARG__$arg"
+done
+EOF
+        cat >"$out/bin/firebreak-claude-code" <<'EOF'
+#!${pkgs.bash}/bin/bash
+printf '%s\n' "__VM__claude-code"
+printf '%s\n' "__MODE__''${FIREBREAK_LAUNCH_MODE:-unset}"
+printf '%s\n' "__WORKER_MODE__''${FIREBREAK_WORKER_MODE:-unset}"
+printf '%s\n' "__WORKER_MODES__''${FIREBREAK_WORKER_MODES:-unset}"
+for arg in "$@"; do
+  printf '%s\n' "__ARG__$arg"
+done
+EOF
+        chmod 0555 "$out/bin/firebreak-codex" "$out/bin/firebreak-claude-code"
+        cat >"$out/workloads.tsv" <<EOF
+codex	Codex local Firebreak VM	$out/bin/firebreak-codex
+claude-code	Claude Code local Firebreak VM	$out/bin/firebreak-claude-code
+EOF
+      '';
       fakeCli = pkgs.writeShellApplication {
         name = "firebreak-cli-smoke-firebreak";
         runtimeInputs = with pkgs; [
@@ -124,6 +217,7 @@ rec {
         text = ''
           export FIREBREAK_LIBEXEC_DIR='${builtins.toString ../../modules/base/host}'
           export FIREBREAK_FLAKE_REF='path:/firebreak-cli-smoke'
+          export FIREBREAK_WORKLOAD_REGISTRY='${fakeWorkloadRegistry}/workloads.tsv'
           exec bash "$FIREBREAK_LIBEXEC_DIR/firebreak.sh" "$@"
         '';
       };
@@ -244,7 +338,7 @@ rec {
       } ../../modules/base/host/firebreak-validate.sh;
     };
 
-  mkAgentVersionSmokePackage = {
+  mkWorkloadVersionSmokePackage = {
     name,
     agentPackage,
     agentDisplayName,
@@ -432,7 +526,7 @@ rec {
         };
         extraModules = [
           ({ pkgs, ... }: {
-            agentVm.extraSystemPackages = with pkgs; [
+            workloadVm.extraSystemPackages = with pkgs; [
               gnugrep
               gnused
               python3
@@ -507,7 +601,10 @@ rec {
       text = builtins.readFile ../../modules/base/tests/test-smoke-internal-loop.sh;
     };
 
-  mkFirebreakCliPackage = { name }:
+  mkFirebreakCliPackage = {
+    name,
+    publicWorkloads,
+  }:
     let
       firebreakLibexec = pkgs.runCommand "firebreak-libexec" {} ''
         mkdir -p "$out/libexec"
@@ -516,6 +613,11 @@ rec {
         install -m 0555 ${../../modules/base/host/firebreak-doctor.sh} "$out/libexec/firebreak-doctor.sh"
         install -m 0555 ${../../modules/base/host/firebreak-project-config.sh} "$out/libexec/firebreak-project-config.sh"
         install -m 0555 ${../../modules/base/host/firebreak-worker.sh} "$out/libexec/firebreak-worker.sh"
+        cat >"$out/libexec/workloads.tsv" <<'EOF'
+${builtins.concatStringsSep "\n" (map (workload:
+          "${workload.name}\t${workload.description}\t${workload.launcher}"
+        ) publicWorkloads)}
+EOF
       '';
       firebreakFlakeRef = "path:${builtins.toString ../../.}";
     in
@@ -534,6 +636,7 @@ rec {
       text = ''
         export FIREBREAK_LIBEXEC_DIR='${firebreakLibexec}/libexec'
         export FIREBREAK_FLAKE_REF='${firebreakFlakeRef}'
+        export FIREBREAK_WORKLOAD_REGISTRY='${firebreakLibexec}/libexec/workloads.tsv'
         export FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG='1'
         export FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes'
         exec bash "$FIREBREAK_LIBEXEC_DIR/firebreak.sh" "$@"

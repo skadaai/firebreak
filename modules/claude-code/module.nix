@@ -5,9 +5,23 @@ moduleArgs@{ pkgs, ... }:
   binName = "claude";
   packageSpec = "@anthropic-ai/claude-code@latest";
   promptCommand = ''claude -p "$FIREBREAK_AGENT_PROMPT"'';
-  configDirName = ".claude";
+  configSelectorPrefix = "CLAUDE";
+  configSubdir = "claude";
   configExports = ''
-    export CLAUDE_CONFIG_DIR="$agent_config_dir"
+    export CLAUDE_CONFIG_DIR="$tool_state_dir"
   '';
+  credentialFileBindings = [
+    {
+      format = "json";
+      runtimePath = ".credentials.json";
+    }
+  ];
+  credentialEnvBindings = [
+    {
+      envVar = "ANTHROPIC_API_KEY";
+    }
+  ];
+  credentialLoginArgs = [ "auth" "login" ];
+  credentialLoginMaterialization = "slot-root";
   extraSystemPackages = with pkgs; [ ripgrep ];
 }

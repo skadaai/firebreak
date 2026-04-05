@@ -7,7 +7,7 @@ let
     ];
     text = ''
       set -eu
-      state_path=/run/firebreak-agent/interactive-echo.log
+      state_path=/run/firebreak-worker/interactive-echo.log
       if [ -d /run/agent-exec-output ]; then
         state_path=/run/agent-exec-output/interactive-echo.log
       fi
@@ -32,10 +32,9 @@ let
   };
 in {
   config = {
-    agentVm = {
+    workloadVm = {
       name = lib.mkDefault "firebreak-interactive-echo";
-      agentConfigEnabled = false;
-      agentCommand = "interactive-echo";
+      defaultCommand = "interactive-echo";
       extraSystemPackages = [ interactiveEcho ];
       bootstrapScript = null;
     };

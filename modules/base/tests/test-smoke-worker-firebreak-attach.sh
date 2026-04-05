@@ -49,10 +49,9 @@ mkdir -p "$state_dir" "$firebreak_state_dir" "$workspace_dir"
 
 run_attach_version() {
   env \
-    AGENT_CONFIG=outer-leak \
-    AGENT_CONFIG_HOST_PATH="$smoke_tmp_dir"/firebreak-worker-attach-leak \
-    CODEX_CONFIG=outer-leak \
-    CODEX_CONFIG_HOST_PATH="$smoke_tmp_dir"/firebreak-worker-codex-attach-leak \
+    FIREBREAK_STATE_MODE=outer-leak \
+    FIREBREAK_CREDENTIAL_SLOT=outer-leak \
+    FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH="$smoke_tmp_dir"/firebreak-worker-credential-slot-leak \
     FIREBREAK_WORKER_STATE_DIR="$state_dir" \
     FIREBREAK_STATE_DIR="$firebreak_state_dir" \
     FIREBREAK_DEBUG_KEEP_RUNTIME=1 \
@@ -147,6 +146,12 @@ latest_runtime_json=$latest_worker_root/instance/.firebreak-runtime.json
 if ! [ -f "$first_runtime_json" ] || ! [ -f "$latest_runtime_json" ]; then
   printf 'first_runtime_json=%s\nlatest_runtime_json=%s\n' "$first_runtime_json" "$latest_runtime_json" >&2
   echo "attached firebreak worker smoke expected retained runtime metadata for both workers" >&2
+  exit 1
+fi
+
+if grep -R -F -e 'outer-leak' -e "$smoke_tmp_dir/firebreak-worker-credential-slot-leak" "$state_dir/workers" >/dev/null 2>&1; then
+  grep -R -F -n -e 'outer-leak' -e "$smoke_tmp_dir/firebreak-worker-credential-slot-leak" "$state_dir/workers" >&2 || true
+  echo "attached firebreak worker smoke leaked outer Firebreak selectors into the nested worker runtime" >&2
   exit 1
 fi
 

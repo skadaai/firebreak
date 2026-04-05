@@ -2,19 +2,18 @@ set -eu
 
 metadata=@HOST_META_MOUNT@/mount-path
 session_mode=agent
-session_command_file=@HOST_META_MOUNT@/agent-command
-session_mode_file=@HOST_META_MOUNT@/agent-session-mode
-session_term_file=@HOST_META_MOUNT@/agent-term
-session_columns_file=@HOST_META_MOUNT@/agent-columns
-session_lines_file=@HOST_META_MOUNT@/agent-lines
+session_command_file=@HOST_META_MOUNT@/worker-command
+session_mode_file=@HOST_META_MOUNT@/worker-session-mode
+session_term_file=@HOST_META_MOUNT@/worker-term
+session_columns_file=@HOST_META_MOUNT@/worker-columns
+session_lines_file=@HOST_META_MOUNT@/worker-lines
 worker_mode_file=@HOST_META_MOUNT@/worker-mode
 worker_modes_file=@HOST_META_MOUNT@/worker-modes
-worker_proxy_mode_file=@HOST_META_MOUNT@/worker-proxy-mode
 agent_tools_enabled=@AGENT_TOOLS_ENABLED@
 agent_tools_mount=@AGENT_TOOLS_MOUNT@
 start_dir=@WORKSPACE_MOUNT@
 worker_bridge_enabled=@WORKER_BRIDGE_ENABLED@
-guest_state_dir=/run/firebreak-agent
+guest_state_dir=/run/firebreak-worker
 bootstrap_state_local=$guest_state_dir/bootstrap-state.json
 command_state_local=$guest_state_dir/command-state.json
 session_term_state_file=$guest_state_dir/session-term
@@ -22,7 +21,12 @@ session_columns_state_file=$guest_state_dir/session-columns
 session_lines_state_file=$guest_state_dir/session-lines
 worker_mode_state_file=$guest_state_dir/worker-mode
 worker_modes_state_file=$guest_state_dir/worker-modes
-worker_proxy_mode_state_file=$guest_state_dir/worker-proxy-mode
+
+export FIREBREAK_SHARED_STATE_ROOT_HOST_MOUNT=@SHARED_STATE_ROOT_HOST_MOUNT@
+export FIREBREAK_SHARED_STATE_ROOT_VM_ROOT=@SHARED_STATE_ROOT_VM_ROOT@
+export FIREBREAK_SHARED_STATE_ROOT_HOST_MOUNTED_FLAG=@SHARED_STATE_ROOT_MOUNTED_FLAG@
+export FIREBREAK_SHARED_CREDENTIAL_SLOTS_HOST_MOUNT=@SHARED_CREDENTIAL_SLOTS_HOST_MOUNT@
+export FIREBREAK_SHARED_CREDENTIAL_SLOTS_MOUNTED_FLAG=@SHARED_CREDENTIAL_SLOTS_MOUNTED_FLAG@
 
 log_phase() {
   phase=$1
@@ -108,8 +112,7 @@ rm -f \
   "$session_columns_state_file" \
   "$session_lines_state_file" \
   "$worker_mode_state_file" \
-  "$worker_modes_state_file" \
-  "$worker_proxy_mode_state_file"
+  "$worker_modes_state_file"
 log_phase prepare-agent-session-state-dir-done
 if [ -r "$session_term_file" ]; then
   cat "$session_term_file" > "$session_term_state_file"
@@ -130,10 +133,6 @@ fi
 if [ -r "$worker_modes_file" ]; then
   cat "$worker_modes_file" > "$worker_modes_state_file"
   chmod 0644 "$worker_modes_state_file"
-fi
-if [ -r "$worker_proxy_mode_file" ]; then
-  cat "$worker_proxy_mode_file" > "$worker_proxy_mode_state_file"
-  chmod 0644 "$worker_proxy_mode_state_file"
 fi
 
 if [ "$agent_tools_enabled" = "1" ]; then
@@ -190,82 +189,30 @@ if [ "$start_dir" != "@WORKSPACE_MOUNT@" ]; then
   log_phase prepare-agent-session-bind-workspace-done
 fi
 
-if [ "@AGENT_CONFIG_ENABLED@" != "1" ]; then
-  log_phase prepare-agent-session-done
-  exit 0
+if [ "@SHARED_STATE_ROOT_ENABLED@" = "1" ]; then
+  mkdir -p @SHARED_STATE_ROOT_HOST_MOUNT@ @SHARED_STATE_ROOT_FRESH_ROOT@
+  chown @DEV_USER@:@DEV_USER@ @SHARED_STATE_ROOT_FRESH_ROOT@
+  rm -f @SHARED_STATE_ROOT_MOUNTED_FLAG@
+
+  if mountpoint -q @SHARED_STATE_ROOT_HOST_MOUNT@; then
+    touch @SHARED_STATE_ROOT_MOUNTED_FLAG@
+  elif mount_output=$(mount -t virtiofs hoststateroot @SHARED_STATE_ROOT_HOST_MOUNT@ 2>&1); then
+    touch @SHARED_STATE_ROOT_MOUNTED_FLAG@
+  else
+    printf '%s\n' "Firebreak shared state root is not available; continuing without host-backed state: $mount_output"
+  fi
 fi
 
-mode=vm
-mode_file=@HOST_META_MOUNT@/agent-config-mode
-resolved_dir=@AGENT_CONFIG_VM_DIR@
+if [ "@SHARED_CREDENTIAL_SLOTS_ENABLED@" = "1" ]; then
+  mkdir -p @SHARED_CREDENTIAL_SLOTS_HOST_MOUNT@
+  rm -f @SHARED_CREDENTIAL_SLOTS_MOUNTED_FLAG@
 
-if [ -r "$mode_file" ]; then
-  mode=$(cat "$mode_file")
+  if mountpoint -q @SHARED_CREDENTIAL_SLOTS_HOST_MOUNT@; then
+    touch @SHARED_CREDENTIAL_SLOTS_MOUNTED_FLAG@
+  elif mount_output=$(mount -t virtiofs hostcredentialslots @SHARED_CREDENTIAL_SLOTS_HOST_MOUNT@ 2>&1); then
+    touch @SHARED_CREDENTIAL_SLOTS_MOUNTED_FLAG@
+  else
+    printf '%s\n' "Firebreak shared credential slots are not available; continuing without slot-backed credentials: $mount_output"
+  fi
 fi
-
-case "$mode" in
-  host)
-    log_phase prepare-agent-session-agent-config-host-start
-    mkdir -p @AGENT_CONFIG_HOST_MOUNT@
-    if ! mountpoint -q @AGENT_CONFIG_HOST_MOUNT@; then
-      if ! mount -t virtiofs hostagentconfig @AGENT_CONFIG_HOST_MOUNT@; then
-        echo "failed to mount host agent config share; falling back to vm config" >&2
-        mode=vm
-      fi
-    fi
-
-    if [ "$mode" = "host" ]; then
-      resolved_dir=@AGENT_CONFIG_HOST_MOUNT@
-    fi
-    log_phase prepare-agent-session-agent-config-host-done
-    ;;
-  workspace)
-    log_phase prepare-agent-session-agent-config-workspace-start
-    resolved_dir=$start_dir/@AGENT_CONFIG_DIR_NAME@
-    if ! [ -d "$resolved_dir" ]; then
-      if [ -L "$resolved_dir" ]; then
-        link_target=$(readlink "$resolved_dir")
-        case "$link_target" in
-          /*)
-            resolved_target=$link_target
-            ;;
-          *)
-            resolved_target=$(dirname "$resolved_dir")/$link_target
-            ;;
-        esac
-        @RUNUSER@ -u @DEV_USER@ -- @MKDIR@ -p "$resolved_target"
-      elif [ -e "$resolved_dir" ]; then
-        echo "workspace agent config path exists but is not a directory: $resolved_dir" >&2
-        exit 1
-      else
-        @RUNUSER@ -u @DEV_USER@ -- @MKDIR@ -p "$resolved_dir"
-      fi
-    fi
-    log_phase prepare-agent-session-agent-config-workspace-done
-    ;;
-  vm)
-    log_phase prepare-agent-session-agent-config-vm-start
-    mkdir -p "$resolved_dir"
-    chown @DEV_USER@:@DEV_USER@ "$resolved_dir"
-    log_phase prepare-agent-session-agent-config-vm-done
-    ;;
-  fresh)
-    log_phase prepare-agent-session-agent-config-fresh-start
-    resolved_dir=@AGENT_CONFIG_FRESH_DIR@
-    rm -rf "$resolved_dir"
-    mkdir -p "$resolved_dir"
-    chown @DEV_USER@:@DEV_USER@ "$resolved_dir"
-    log_phase prepare-agent-session-agent-config-fresh-done
-    ;;
-  *)
-    log_phase prepare-agent-session-agent-config-fallback-start
-    echo "unsupported agent config mode '$mode'; falling back to vm" >&2
-    mkdir -p "$resolved_dir"
-    chown @DEV_USER@:@DEV_USER@ "$resolved_dir"
-    log_phase prepare-agent-session-agent-config-fallback-done
-    ;;
-esac
-
-printf '%s\n' "$resolved_dir" > @AGENT_CONFIG_DIR_FILE@
-chmod 0644 @AGENT_CONFIG_DIR_FILE@
 log_phase prepare-agent-session-done

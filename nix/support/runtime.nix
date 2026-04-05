@@ -47,8 +47,12 @@ if [ -n "''${MICROVM_VFKIT_HOST_META_DIR:-}" ]; then
   firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_HOST_META_DIR},mountTag=hostmeta")
 fi
 
-if [ -n "''${MICROVM_VFKIT_AGENT_CONFIG_HOST_DIR:-}" ]; then
-  firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_AGENT_CONFIG_HOST_DIR},mountTag=hostagentconfig")
+if [ -n "''${MICROVM_VFKIT_SHARED_STATE_ROOT_DIR:-}" ]; then
+  firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_SHARED_STATE_ROOT_DIR},mountTag=hoststateroot")
+fi
+
+if [ -n "''${MICROVM_VFKIT_SHARED_CREDENTIAL_SLOTS_DIR:-}" ]; then
+  firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_SHARED_CREDENTIAL_SLOTS_DIR},mountTag=hostcredentialslots")
 fi
 
 if [ -n "''${MICROVM_VFKIT_AGENT_EXEC_OUTPUT_DIR:-}" ]; then
@@ -66,7 +70,7 @@ EOF
       chmod 0555 "$out/bin/firebreak-runner-extra-args"
     '';
 
-  mkAgentVm = {
+  mkWorkloadVm = {
     name,
     extraModules ? [ ],
     profileModules ? [ self.nixosModules.firebreak-local-profile ],
@@ -80,22 +84,27 @@ EOF
         microvm.nixosModules.microvm
         self.nixosModules.firebreak-vm-base
         {
-          agentVm.name = name;
-          agentVm.hostSystem = system;
-          agentVm.guestSystem = guestSystem;
+          workloadVm.name = name;
+          workloadVm.hostSystem = system;
+          workloadVm.guestSystem = guestSystem;
           microvm.vmHostPackages = pkgs;
         }
       ] ++ profileModules ++ extraModules;
     };
 
-  mkAgentPackage = {
+  mkWorkloadPackage = {
     name,
     runner,
     controlSocketName,
     defaultAgentCommand ? "",
-    agentConfigDirName,
+    agentConfigSubdir ? "agent",
     defaultAgentConfigHostDir,
+    defaultCredentialSlotsHostDir ? "$HOME/.firebreak/credentials",
+    workspaceBootstrapConfigHostDir ? "",
+    hostConfigAdoptionEnabled ? false,
     agentEnvPrefix ? "AGENT",
+    sharedStateRoots ? { },
+    sharedCredentialSlots ? { },
     workerBridgeEnabled ? false,
   }:
     let
@@ -123,9 +132,14 @@ EOF
         "@CONTROL_SOCKET@" = "${controlSocketName}.socket";
         "@DEFAULT_AGENT_COMMAND@" = defaultAgentCommand;
         "@RUNNER@" = "${runnerWrapper}";
-        "@AGENT_CONFIG_DIR_NAME@" = agentConfigDirName;
-        "@DEFAULT_AGENT_CONFIG_HOST_DIR@" = defaultAgentConfigHostDir;
+        "@STATE_SUBDIR@" = agentConfigSubdir;
+        "@DEFAULT_STATE_ROOT@" = defaultAgentConfigHostDir;
+        "@DEFAULT_CREDENTIAL_SLOTS_HOST_DIR@" = defaultCredentialSlotsHostDir;
+        "@WORKSPACE_BOOTSTRAP_CONFIG_HOST_DIR@" = workspaceBootstrapConfigHostDir;
+        "@HOST_CONFIG_ADOPTION_ENABLED@" = if hostConfigAdoptionEnabled then "1" else "0";
         "@AGENT_ENV_PREFIX@" = agentEnvPrefix;
+        "@SHARED_STATE_ROOT_ENABLED@" = if (sharedStateRoots.enable or false) then "1" else "0";
+        "@SHARED_CREDENTIAL_SLOTS_ENABLED@" = if (sharedCredentialSlots.enable or false) then "1" else "0";
         "@FIREBREAK_PROJECT_CONFIG_LIB@" = builtins.readFile ../../modules/base/host/firebreak-project-config.sh;
         "@FIREBREAK_FLAKE_REF@" = "path:${builtins.toString ../../.}";
         "@FIREBREAK_WORKER_LIB@" = builtins.readFile ../../modules/base/host/firebreak-worker.sh;
@@ -139,19 +153,29 @@ EOF
     runnerPackage,
     controlSocketName ? name,
     defaultAgentCommand ? "",
-    agentConfigDirName ? ".firebreak",
-    defaultAgentConfigHostDir ? "$HOME/.firebreak/${name}",
+    agentConfigSubdir ? "agent",
+    defaultAgentConfigHostDir ? "$HOME/.firebreak",
+    defaultCredentialSlotsHostDir ? "$HOME/.firebreak/credentials",
+    workspaceBootstrapConfigHostDir ? "",
+    hostConfigAdoptionEnabled ? false,
     agentEnvPrefix ? "AGENT",
+    sharedStateRoots ? { },
+    sharedCredentialSlots ? { },
     workerBridgeEnabled ? false,
   }:
-    mkAgentPackage {
+    mkWorkloadPackage {
       inherit
         name
         controlSocketName
         defaultAgentCommand
-        agentConfigDirName
+        agentConfigSubdir
         defaultAgentConfigHostDir
+        defaultCredentialSlotsHostDir
+        workspaceBootstrapConfigHostDir
+        hostConfigAdoptionEnabled
         agentEnvPrefix
+        sharedStateRoots
+        sharedCredentialSlots
         workerBridgeEnabled;
       runner = runnerPackage;
     };
@@ -162,22 +186,27 @@ EOF
     profileModules ? [ self.nixosModules.firebreak-local-profile ],
     controlSocketName ? name,
     defaultAgentCommand ? "",
-    agentConfigDirName ? ".firebreak",
-    defaultAgentConfigHostDir ? "$HOME/.firebreak/${name}",
+    agentConfigSubdir ? "agent",
+    defaultAgentConfigHostDir ? "$HOME/.firebreak",
+    defaultCredentialSlotsHostDir ? "$HOME/.firebreak/credentials",
+    workspaceBootstrapConfigHostDir ? "",
+    hostConfigAdoptionEnabled ? false,
     agentEnvPrefix ? "AGENT",
+    sharedStateRoots ? { },
+    sharedCredentialSlots ? { },
     workerBridgeEnabled ? false,
     workerKinds ? { },
   }:
     let
-      nixosConfiguration = mkAgentVm {
+      nixosConfiguration = mkWorkloadVm {
         inherit name profileModules;
         extraModules =
           extraModules
           ++ nixpkgs.lib.optional (workerKinds != { }) {
-            agentVm.workerKindsJson = builtins.toJSON workerKinds;
+            workloadVm.workerKindsJson = builtins.toJSON workerKinds;
           }
           ++ nixpkgs.lib.optional workerBridgeEnabled {
-            agentVm.workerBridgeEnabled = true;
+            workloadVm.workerBridgeEnabled = true;
           };
       };
       runnerPackage = mkRunnerPackage nixosConfiguration.config.microvm.declaredRunner;
@@ -187,18 +216,23 @@ EOF
           runnerPackage
           controlSocketName
           defaultAgentCommand
-          agentConfigDirName
+          agentConfigSubdir
           defaultAgentConfigHostDir
+          defaultCredentialSlotsHostDir
+          workspaceBootstrapConfigHostDir
+          hostConfigAdoptionEnabled
           agentEnvPrefix
+          sharedStateRoots
+          sharedCredentialSlots
           workerBridgeEnabled;
       };
     in {
       inherit nixosConfiguration package runnerPackage;
-    };
+  };
 in {
   inherit
-    mkAgentPackage
-    mkAgentVm
+    mkWorkloadPackage
+    mkWorkloadVm
     mkLocalVmArtifacts
     mkLocalVmPackage
     mkRunnerPackage

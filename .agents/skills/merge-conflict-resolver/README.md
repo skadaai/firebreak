@@ -233,13 +233,13 @@ Tip: Use 'git mergetool' for interactive conflict resolution
 
 ```python
 # Before (with conflict markers):
-<<<<<<< HEAD
+<CONFLICT-START HEAD>
 DATABASE_URL = "postgresql://localhost/myapp_dev"
 CACHE_ENABLED = True
-=======
+<CONFLICT-MID>
 DATABASE_URL = "postgresql://localhost/myapp"
 DEBUG_MODE = False
->>>>>>> origin/main
+<CONFLICT-END origin/main>
 
 # After (resolved - kept both changes):
 DATABASE_URL = "postgresql://localhost/myapp_dev"

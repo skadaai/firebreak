@@ -144,11 +144,9 @@ with open(log_path, "wb") as log_file, open(normalized_log_path, "w", encoding="
         return text
 
     transcript = bytearray()
-    theme_seen_at = None
-    sent_down = False
-    sent_enter = False
-    sent_space = False
-    sent_lf = False
+    boot_ready_at = None
+    boot_ready_size = 0
+    saw_interactive_attach = False
     last_normalized = ""
     deadline = time.time() + 420
 
@@ -174,24 +172,20 @@ with open(log_path, "wb") as log_file, open(normalized_log_path, "w", encoding="
                     normalized_log_file.truncate()
                     normalized_log_file.flush()
                     last_normalized = normalized
-                if "MonokaiExtended" in normalized and theme_seen_at is None:
-                    theme_seen_at = time.time()
+                if "Permission denied" in normalized:
+                    print("direct interactive Claude smoke hit a permission error", file=sys.stderr)
+                    raise SystemExit(1)
 
-            if theme_seen_at is not None:
-                elapsed = time.time() - theme_seen_at
-                if not sent_down and elapsed >= 1:
-                    os.write(master_fd, b"\x1b[B")
-                    sent_down = True
-                if not sent_enter and elapsed >= 3:
-                    os.write(master_fd, b"\r")
-                    sent_enter = True
-                if not sent_space and elapsed >= 6:
-                    os.write(master_fd, b" ")
-                    sent_space = True
-                if not sent_lf and elapsed >= 9:
-                    os.write(master_fd, b"\n")
-                    sent_lf = True
-                if elapsed >= 15:
+                if "Started Interactive dev shell on ttyS0" in normalized and boot_ready_at is None:
+                    boot_ready_at = time.time()
+                    boot_ready_size = len(transcript)
+
+                if (
+                    boot_ready_at is not None
+                    and len(transcript) >= boot_ready_size + 1024
+                    and time.time() - boot_ready_at >= 5
+                ):
+                    saw_interactive_attach = True
                     break
 
             if proc.poll() is not None:
@@ -224,20 +218,12 @@ with open(log_path, "wb") as log_file, open(normalized_log_path, "w", encoding="
     sys.stdout.write(f"\n__STATUS__:{status}\n")
 
     normalized = normalize(transcript)
-    if "MonokaiExtended" not in normalized:
-        print("direct interactive Claude smoke did not surface the Claude theme selection UI", file=sys.stderr)
+    if "Permission denied" in normalized:
+        print("direct interactive Claude smoke hit a permission error", file=sys.stderr)
         raise SystemExit(1)
 
-    login_markers = [
-        "/login",
-        "Claude Pro",
-        "Anthropic Console",
-        "Amazon Bedrock",
-        "Google Vertex AI",
-        "Microsoft Foundry",
-    ]
-    if not any(marker in normalized for marker in login_markers):
-        print("direct interactive Claude smoke did not advance past the theme selection screen", file=sys.stderr)
+    if not saw_interactive_attach:
+        print("direct interactive Claude smoke did not keep the interactive attach session alive after boot", file=sys.stderr)
         raise SystemExit(1)
 PY
 

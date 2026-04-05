@@ -101,12 +101,98 @@ is_login_command() {
   return 0
 }
 
+validate_json_file() {
+  target_path=$1
+  description=$2
+
+  if ! [ -e "$target_path" ]; then
+    return 0
+  fi
+
+  if ! [ -s "$target_path" ]; then
+    printf '%s\n' "Firebreak found an empty JSON credential file for @WRAPPER_DISPLAY_NAME@: $target_path" >&2
+    printf '%s\n' "Remove the file, restore valid credentials, or rerun the native login flow to recreate it." >&2
+    exit 1
+  fi
+
+  if ! python3 - "$target_path" "$description" <<'EOF'
+import json
+import sys
+
+path = sys.argv[1]
+description = sys.argv[2]
+
+try:
+    with open(path, "r", encoding="utf-8") as handle:
+        json.load(handle)
+except Exception as exc:  # noqa: BLE001
+    print(
+        f"Firebreak found invalid JSON credential material for {description}: {path}: {exc}",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+EOF
+  then
+    exit 1
+  fi
+}
+
+prepare_json_file_for_login() {
+  target_path=$1
+
+  if [ -e "$target_path" ] && ! [ -s "$target_path" ]; then
+    rm -f "$target_path"
+    printf '%s\n' "firebreak: removed empty JSON credential file before native login: $target_path" >&2
+  fi
+}
+
+validate_json_bindings() {
+  [ -n "$credential_file_bindings" ] || return 0
+
+  login_mode=0
+  if is_login_command "$@"; then
+    login_mode=1
+  fi
+
+  tab=$(printf '\t')
+  while IFS="$tab" read -r slot_rel_path runtime_rel_path _binding_required binding_format || [ -n "$slot_rel_path" ]; do
+    [ -n "$slot_rel_path" ] || continue
+    [ "$binding_format" = "json" ] || continue
+
+    runtime_path=$tool_state_dir/$runtime_rel_path
+    if [ "$login_mode" = "1" ]; then
+      prepare_json_file_for_login "$runtime_path"
+    fi
+
+    if [ -e "$runtime_path" ]; then
+      validate_json_file "$runtime_path" "@WRAPPER_DISPLAY_NAME@ runtime state"
+      continue
+    fi
+
+    if [ -n "$selected_slot_root" ]; then
+      slot_path=$selected_slot_root/$slot_rel_path
+      if [ -e "$slot_path" ]; then
+        if [ "$login_mode" = "1" ] && [ "$runtime_path" = "$slot_path" ]; then
+          prepare_json_file_for_login "$slot_path"
+          if [ -e "$slot_path" ]; then
+            validate_json_file "$slot_path" "@WRAPPER_DISPLAY_NAME@ credential slot"
+          fi
+        else
+          validate_json_file "$slot_path" "@WRAPPER_DISPLAY_NAME@ credential slot"
+        fi
+      fi
+    fi
+  done <<EOF
+$credential_file_bindings
+EOF
+}
+
 apply_file_bindings() {
   [ -n "$selected_slot_root" ] || return 0
   [ -n "$credential_file_bindings" ] || return 0
 
   tab=$(printf '\t')
-  while IFS="$tab" read -r slot_rel_path runtime_rel_path binding_required || [ -n "$slot_rel_path" ]; do
+  while IFS="$tab" read -r slot_rel_path runtime_rel_path binding_required _binding_format || [ -n "$slot_rel_path" ]; do
     [ -n "$slot_rel_path" ] || continue
     slot_path=$selected_slot_root/$slot_rel_path
     runtime_path=$tool_state_dir/$runtime_rel_path
@@ -132,7 +218,7 @@ sync_file_bindings_back() {
   [ -n "$credential_file_bindings" ] || return 0
 
   tab=$(printf '\t')
-  while IFS="$tab" read -r slot_rel_path runtime_rel_path _binding_required || [ -n "$slot_rel_path" ]; do
+  while IFS="$tab" read -r slot_rel_path runtime_rel_path _binding_required _binding_format || [ -n "$slot_rel_path" ]; do
     [ -n "$slot_rel_path" ] || continue
     slot_path=$selected_slot_root/$slot_rel_path
     runtime_path=$tool_state_dir/$runtime_rel_path
@@ -222,6 +308,7 @@ if is_login_command "$@" && [ -n "$selected_slot_root" ] && [ '@CREDENTIAL_LOGIN
 fi
 
 export FIREBREAK_TOOL_STATE_DIR="$tool_state_dir"
+validate_json_bindings "$@"
 apply_file_bindings
 apply_env_bindings
 apply_helper_bindings

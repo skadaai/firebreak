@@ -10,7 +10,7 @@ let
   sharedStateRootsEnvFile = "${cfg.hostMetaMount}/firebreak-shared-state.env";
   renderCredentialFileBindings = bindings:
     lib.concatStringsSep "\n" (map
-      (binding: "${binding.slotPath}\t${binding.runtimePath}\t${if binding.required then "1" else "0"}")
+      (binding: "${binding.slotPath}\t${binding.runtimePath}\t${if binding.required then "1" else "0"}\t${binding.format}")
       bindings);
   renderCredentialEnvBindings = bindings:
     lib.concatStringsSep "\n" (map
@@ -311,6 +311,12 @@ in {
                               type = types.bool;
                               default = false;
                               description = "Whether the binding must exist when a slot is selected.";
+                            };
+
+                            format = mkOption {
+                              type = types.enum [ "opaque" "json" ];
+                              default = "opaque";
+                              description = "Optional format hint used for runtime validation.";
                             };
                           };
                         }));

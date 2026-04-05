@@ -12,6 +12,7 @@ moduleArgs@{ pkgs, ... }:
   '';
   credentialFileBindings = [
     {
+      format = "json";
       runtimePath = ".credentials.json";
     }
   ];

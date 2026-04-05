@@ -194,6 +194,11 @@ ensure_host_state_subdir() {
 
   maybe_materialize_external_state "$host_state_path" "$host_root"
 
+  if [ -e "$host_state_path" ] && ! [ -d "$host_state_path" ] && ! [ -L "$host_state_path" ]; then
+    printf '%s\n' "Firebreak host state path exists but is not a directory: $host_state_path" >&2
+    exit 1
+  fi
+
   if ! [ -e "$host_state_path" ] && ! [ -L "$host_state_path" ]; then
     mkdir -p "$host_state_path"
   fi
@@ -301,7 +306,32 @@ if { [ -z "$agent_columns" ] || [ -z "$agent_lines" ]; } && command -v stty >/de
 fi
 
 trace_wrapper() {
-  printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >>"$wrapper_trace_log"
+  if ! [ -d "$host_runtime_dir" ]; then
+    return 0
+  fi
+  printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >>"$wrapper_trace_log" 2>/dev/null || true
+}
+
+print_runner_json_parse_hint() {
+  stderr_log=$1
+
+  if ! [ -s "$stderr_log" ]; then
+    return 0
+  fi
+
+  if grep -F -q "[json.exception.parse_error.101]" "$stderr_log" 2>/dev/null \
+    || grep -F -q "attempting to parse an empty input" "$stderr_log" 2>/dev/null; then
+    cat >&2 <<'EOF'
+firebreak: the VM runner failed while parsing empty JSON from an internal helper.
+
+Likely causes:
+  - the outer Nix launch ignored this flake's config; rerun with:
+      nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run ...
+  - an internal Firebreak helper returned no JSON because an earlier step failed
+
+Inspect the preserved Firebreak runtime logs for the exact failing step.
+EOF
+  fi
 }
 
 require_absolute_host_path "$shared_state_root_host_dir" "FIREBREAK_STATE_ROOT"
@@ -687,6 +717,7 @@ run_runner() {
 }
 
 runner_status=0
+rm -f "$runner_stderr_log"
 trace_wrapper "runner-start"
 if [ "$agent_session_mode" = "agent-exec" ]; then
   (
@@ -1665,10 +1696,13 @@ EOF
 else
   (
     cd "$runner_workdir"
-    run_runner "$@"
+    run_runner "$@" 2> >(tee "$runner_stderr_log" >&2)
   ) || runner_status=$?
 fi
 trace_wrapper "runner-exit:$runner_status"
+if [ "$runner_status" -ne 0 ]; then
+  print_runner_json_parse_hint "$runner_stderr_log"
+fi
 
 if [ "$agent_session_mode" = "agent-exec" ]; then
   if [ -f "$host_exec_output_dir/stdout" ]; then

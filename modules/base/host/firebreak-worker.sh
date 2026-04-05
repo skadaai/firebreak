@@ -632,6 +632,35 @@ quote_arg() {
   printf '%q' "$1"
 }
 
+firebreak_worker_maybe_print_flake_config_hint() {
+  stderr_log=$1
+
+  if grep -F -q "Pass '--accept-flake-config' to trust it" "$stderr_log" 2>/dev/null \
+    || grep -F -q "untrusted flake configuration setting" "$stderr_log" 2>/dev/null; then
+    cat >&2 <<'EOF'
+firebreak worker: Nix refused this flake's configuration while resolving the nested Firebreak package.
+Rerun with:
+  nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run ...
+
+If you are invoking the worker from a Firebreak-managed environment, export:
+  FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG=1
+EOF
+  fi
+}
+
+firebreak_worker_capture_nix_stdout() {
+  stderr_log=$(mktemp "${TMPDIR:-/tmp}/firebreak-worker-nix-stderr.XXXXXX")
+  if output=$("$@" 2> >(tee "$stderr_log" >&2)); then
+    rm -f "$stderr_log"
+    printf '%s\n' "$output"
+    return 0
+  fi
+  status=$?
+  firebreak_worker_maybe_print_flake_config_hint "$stderr_log"
+  rm -f "$stderr_log"
+  return "$status"
+}
+
 configure_attach_tty() {
   attach_tty_state=""
   if [ -t 0 ] && [ -t 1 ] && command -v stty >/dev/null 2>&1; then
@@ -653,23 +682,23 @@ resolve_firebreak_worker_exec() {
 
   if [ "${FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG:-}" = "1" ] \
     && [ -n "${FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES:-}" ]; then
-    build_output=$(
+    build_output=$(firebreak_worker_capture_nix_stdout \
       nix --accept-flake-config \
         --extra-experimental-features "$FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES" \
         build --no-link --print-out-paths "$installable"
     )
   elif [ "${FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG:-}" = "1" ]; then
-    build_output=$(
+    build_output=$(firebreak_worker_capture_nix_stdout \
       nix --accept-flake-config \
         build --no-link --print-out-paths "$installable"
     )
   elif [ -n "${FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES:-}" ]; then
-    build_output=$(
+    build_output=$(firebreak_worker_capture_nix_stdout \
       nix --extra-experimental-features "$FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES" \
         build --no-link --print-out-paths "$installable"
     )
   else
-    build_output=$(nix build --no-link --print-out-paths "$installable")
+    build_output=$(firebreak_worker_capture_nix_stdout nix build --no-link --print-out-paths "$installable")
   fi
 
   resolved_out=$(printf '%s\n' "$build_output" | tail -n 1)

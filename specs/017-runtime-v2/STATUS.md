@@ -7,19 +7,27 @@ last_updated: 2026-04-05
 
 ## Current phase
 
-Drafting the runtime replacement contract.
+Executing the Linux local runtime replacement and cold-boot reduction slices.
 
 ## What is landed
 
 - the repository now records an explicit anti-degradation and anti-compatibility-layer rule in [AGENTS.md](../../AGENTS.md)
 - Runtime v2 is defined as a profile-stable, backend-private replacement effort rather than a conservative migration
+- runtime backends now have an explicit capability contract consumed by product profiles
+- Linux local Firebreak now defaults to Cloud Hypervisor and rejects the superseded local QEMU path
+- Linux local networking and host port publishing now exist as Cloud Hypervisor-specific host plumbing rather than QEMU `hostfwd`
+- local tool bootstrapping has been moved further off the hot path through baked CLIs and bootstrap skip conditions
+- Linux local `/nix/store` and host metadata now use `virtiofs` rather than Linux `9p`
+- local share startup has been simplified by collapsing host metadata, exec-output, and worker-bridge into one writable runtime share
+- local `virtiofsd` startup is now parallelized rather than serialized
+- shared state-root and credential-slot mounts now fail fast instead of silently downgrading
 
 ## What remains open
 
-- backend capability contract implementation
-- Linux local Cloud Hypervisor runtime implementation
-- Linux local port publishing replacement for the current QEMU-specific forwarding path
-- deletion of Linux local QEMU support after replacement lands
+- warm local instance lifetime separated from per-command session execution
+- a host command channel for reusing a running local VM instead of booting a fresh one for each request
+- snapshot preparation and restore on the local Cloud Hypervisor backend
+- deletion of remaining stale runtime assumptions and warnings that no longer fit the accepted backend contract
 - future cloud backend selection and implementation
 
 ## Current sources of truth
@@ -31,3 +39,4 @@ Drafting the runtime replacement contract.
 ## History
 
 - 2026-04-05: created Runtime v2 as a new design-definition changeset centered on aggressive replacement rather than compatibility-preserving migration
+- 2026-04-05: landed backend capability checks, Linux local Cloud Hypervisor cutover, local networking/port publishing, hot-path bootstrap reduction, runtime-share consolidation, and fail-fast share semantics

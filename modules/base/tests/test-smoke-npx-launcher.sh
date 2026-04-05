@@ -164,6 +164,30 @@ assert_no_nix_invocation "the Intel Mac rejection path"
 
 rm -f "$nix_args_path" "$nix_cwd_path"
 
+ip_forward_warning_output=$(
+  cd "$repo_root"
+  PATH="$fake_bin_dir:$PATH" \
+    FIREBREAK_LAUNCHER_KVM_PATH="$fake_kvm_path" \
+    FIREBREAK_LAUNCHER_IP_FORWARD_STATE=disabled \
+    node "$repo_root/bin/firebreak.js" vms 2>&1
+)
+
+if ! printf '%s\n' "$ip_forward_warning_output" | grep -F -q "net.ipv4.ip_forward is disabled"; then
+  printf '%s\n' "$ip_forward_warning_output" >&2
+  echo "launcher smoke did not warn clearly when ip_forward was disabled for local-only commands" >&2
+  exit 1
+fi
+
+if ! printf '%s\n' "$ip_forward_warning_output" | grep -F -q "codex"; then
+  printf '%s\n' "$ip_forward_warning_output" >&2
+  echo "launcher smoke did not continue through the local-only command when ip_forward was disabled" >&2
+  exit 1
+fi
+
+assert_no_nix_invocation "the ip_forward warning path"
+
+rm -f "$nix_args_path" "$nix_cwd_path"
+
 darwin_validate_output=$(
   PATH="$fake_bin_dir:$PATH" \
     FIREBREAK_LAUNCHER_TEST_PLATFORM=darwin \
@@ -203,6 +227,29 @@ fi
 if [ -f "$nix_args_path" ]; then
   cat "$nix_args_path" >&2
   echo "launcher smoke should not invoke nix when KVM preflight fails" >&2
+  exit 1
+fi
+
+rm -f "$nix_args_path" "$nix_cwd_path"
+set +e
+missing_ip_forward_output=$(
+  PATH="$fake_bin_dir:$PATH" \
+    FIREBREAK_LAUNCHER_KVM_PATH="$fake_kvm_path" \
+    FIREBREAK_LAUNCHER_IP_FORWARD_STATE=disabled \
+    node "$repo_root/bin/firebreak.js" internal validate run test-smoke-codex 2>&1
+)
+missing_ip_forward_status=$?
+set -e
+
+if [ "$missing_ip_forward_status" -eq 0 ] || ! printf '%s\n' "$missing_ip_forward_output" | grep -F -q "net.ipv4.ip_forward=1"; then
+  printf '%s\n' "$missing_ip_forward_output" >&2
+  echo "launcher smoke did not block non-diagnostic commands when ip_forward was disabled" >&2
+  exit 1
+fi
+
+if [ -f "$nix_args_path" ]; then
+  cat "$nix_args_path" >&2
+  echo "launcher smoke should not invoke nix when ip_forward preflight fails" >&2
   exit 1
 fi
 

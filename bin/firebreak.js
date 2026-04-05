@@ -23,6 +23,7 @@ const args = process.argv.slice(2)
 const topLevelCommand = args[0] || "";
 const forcedLocalRoot = process.env.FIREBREAK_LAUNCHER_PACKAGE_ROOT || "";
 const kvmPath = process.env.FIREBREAK_LAUNCHER_KVM_PATH || "/dev/kvm";
+const forcedIpForwardState = process.env.FIREBREAK_LAUNCHER_IP_FORWARD_STATE || "";
 const nixHelpersDisabled = process.env.FIREBREAK_LAUNCHER_DISABLE_NIX_HELPERS === "1"
 const launcherPlatform = process.env.FIREBREAK_LAUNCHER_TEST_PLATFORM || process.platform
 const launcherArch = process.env.FIREBREAK_LAUNCHER_TEST_ARCH || process.arch
@@ -158,6 +159,22 @@ const kvmFailureReason = () => {
   }
 }
 
+const ipForwardFailureReason = () => {
+  if (forcedIpForwardState) {
+    if (forcedIpForwardState === "enabled") {
+      return null;
+    }
+    return "net.ipv4.ip_forward is disabled";
+  }
+
+  try {
+    const raw = fs.readFileSync("/proc/sys/net/ipv4/ip_forward", "utf8").trim()
+    return raw === "1" ? null : "net.ipv4.ip_forward is disabled";
+  } catch (error) {
+    return `unable to read net.ipv4.ip_forward: ${error.message}`;
+  }
+}
+
 const runCommandRequiresNix = () => {
   if (topLevelCommand !== "run") {
     return false;
@@ -206,12 +223,12 @@ const commandRequiresNix = () => {
 const needsNix = commandRequiresNix()
 const commandUsesOra = () => runCommandRequiresNix()
 
-const checkKvm = () => {
+const checkLinuxLocalHost = () => {
   if (launcherPlatform !== "linux") {
     return;
   }
 
-  const failure = kvmFailureReason()
+  const failure = kvmFailureReason() || ipForwardFailureReason()
   if (!failure) {
     return;
   }
@@ -221,7 +238,7 @@ const checkKvm = () => {
     return;
   }
 
-  fail(`${failure}. Firebreak needs KVM access to run local MicroVM workloads.`)
+  fail(`${failure}. Firebreak local Linux workloads require KVM access and net.ipv4.ip_forward=1.`)
 }
 
 const checkWorkspacePath = () => {
@@ -494,7 +511,7 @@ checkPlatform()
 if (needsNix) {
   checkNix()
 }
-checkKvm()
+checkLinuxLocalHost()
 checkWorkspacePath()
 runFirebreak().catch((error) => {
   fail(`unexpected launcher error: ${error.message}`)

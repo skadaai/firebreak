@@ -91,6 +91,19 @@ resolve_host_dir() {
   fi
 }
 
+require_absolute_host_path() {
+  path=$1
+  description=$2
+
+  case "$path" in
+    /*) ;;
+    *)
+      echo "$description must resolve to an absolute host path: $path" >&2
+      exit 1
+      ;;
+  esac
+}
+
 ensure_host_state_subdir() {
   host_root=$1
   state_subdir=$2
@@ -99,12 +112,71 @@ ensure_host_state_subdir() {
 
   mkdir -p "$host_root"
 
+  materialize_host_state_target() {
+    source_path=$1
+    destination_path=$2
+
+    rm -rf "$destination_path"
+    mkdir -p "$destination_path"
+    if [ -d "$source_path" ]; then
+      cp -a "$source_path"/. "$destination_path"/
+    elif [ -e "$source_path" ] || [ -L "$source_path" ]; then
+      cp -a "$source_path" "$destination_path"/
+    fi
+  }
+
+  path_within_root() {
+    candidate_path=$1
+    root_path=$2
+
+    case "$candidate_path" in
+      "$root_path"|"$root_path"/*)
+        return 0
+        ;;
+      *)
+        return 1
+        ;;
+    esac
+  }
+
+  maybe_materialize_external_state() {
+    current_path=$1
+    root_path=$2
+
+    if ! [ -L "$current_path" ]; then
+      return 0
+    fi
+
+    resolved_link=$(readlink -f "$current_path" 2>/dev/null || true)
+    resolved_root=$(readlink -f "$root_path" 2>/dev/null || true)
+    if [ -z "$resolved_link" ] || [ -z "$resolved_root" ]; then
+      return 0
+    fi
+
+    if path_within_root "$resolved_link" "$resolved_root"; then
+      return 0
+    fi
+
+    rm -f "$current_path"
+    materialize_host_state_target "$resolved_link" "$current_path"
+    printf '%s\n' "firebreak: materialized external tool state into $current_path from $resolved_link" >&2
+  }
+
   if [ -n "$bootstrap_target" ] && ! [ -e "$host_state_path" ] && ! [ -L "$host_state_path" ] && { [ -e "$bootstrap_target" ] || [ -L "$bootstrap_target" ]; }; then
     reject_whitespace_path "$bootstrap_target" "host state bootstrap target"
-    ln -s "$bootstrap_target" "$host_state_path"
-    printf '%s\n' "firebreak: adopted existing tool state as $host_state_path -> $bootstrap_target" >&2
+    resolved_target=$(readlink -f "$bootstrap_target" 2>/dev/null || true)
+    resolved_root=$(readlink -f "$host_root" 2>/dev/null || true)
+    if [ -n "$resolved_target" ] && [ -n "$resolved_root" ] && path_within_root "$resolved_target" "$resolved_root"; then
+      ln -s "$bootstrap_target" "$host_state_path"
+      printf '%s\n' "firebreak: adopted existing tool state as $host_state_path -> $bootstrap_target" >&2
+    else
+      materialize_host_state_target "$bootstrap_target" "$host_state_path"
+      printf '%s\n' "firebreak: materialized adopted tool state into $host_state_path from $bootstrap_target" >&2
+    fi
     return 0
   fi
+
+  maybe_materialize_external_state "$host_state_path" "$host_root"
 
   if ! [ -e "$host_state_path" ] && ! [ -L "$host_state_path" ]; then
     mkdir -p "$host_state_path"
@@ -143,10 +215,16 @@ workspace_bootstrap_target=""
 if [ -n "$workspace_bootstrap_config_host_dir" ]; then
   workspace_bootstrap_target=$(resolve_host_dir "$workspace_bootstrap_config_host_dir")
 fi
+require_absolute_host_path "$default_state_root" "FIREBREAK_STATE_ROOT"
+if [ -n "$workspace_bootstrap_target" ]; then
+  require_absolute_host_path "$workspace_bootstrap_target" "workspace bootstrap target"
+fi
 shared_state_root_host_dir=$default_state_root
 shared_credential_slots_host_dir=$default_credential_slots_host_dir
 if [ "$shared_credential_slots_enabled" != "1" ]; then
   shared_credential_slots_host_dir=""
+else
+  require_absolute_host_path "$default_credential_slots_host_dir" "FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH"
 fi
 
 reject_whitespace_path "$host_cwd" "current working directory"
@@ -210,16 +288,11 @@ trace_wrapper() {
   printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >>"$wrapper_trace_log"
 }
 
-case "$shared_state_root_host_dir" in
-  /*) ;;
-  *)
-    echo "FIREBREAK_STATE_ROOT must resolve to an absolute host path for the Firebreak host state root: $shared_state_root_host_dir" >&2
-    exit 1
-    ;;
-esac
+require_absolute_host_path "$shared_state_root_host_dir" "FIREBREAK_STATE_ROOT"
 reject_whitespace_path "$shared_state_root_host_dir" "Firebreak host state root"
 mkdir -p "$shared_state_root_host_dir"
 if [ -n "$shared_credential_slots_host_dir" ]; then
+  require_absolute_host_path "$shared_credential_slots_host_dir" "FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH"
   reject_whitespace_path "$shared_credential_slots_host_dir" "Firebreak credential slot root"
   mkdir -p "$shared_credential_slots_host_dir"
 fi

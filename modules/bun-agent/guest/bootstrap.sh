@@ -159,6 +159,7 @@ log_phase "toolchain-ownership-ready @AGENT_DISPLAY_NAME@"
 current_bootstrap_phase=toolchain-ownership-ready
 write_bootstrap_state "$current_bootstrap_phase" "running" "@AGENT_DISPLAY_NAME@"
 
+rm -f "$agent_wrapper_path"
 cat > "$LOCAL_BIN/@AGENT_BIN@" <<'EOF'
 #!/bin/sh
 set -eu

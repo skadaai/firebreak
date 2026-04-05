@@ -19,6 +19,7 @@ let
     "@BRANDING_TAGLINE@" = cfg.brandingTagline;
     "@CAT@" = "${pkgs.coreutils}/bin/cat";
     "@CHOWN@" = "${pkgs.coreutils}/bin/chown";
+    "@COMMAND_SHELL_INIT_FILE@" = cfg.commandShellInitFile;
     "@DEV_HOME@" = devHome;
     "@DEV_USER@" = cfg.devUser;
     "@AGENT_COMMAND@" = if cfg.defaultCommand == null then "" else cfg.defaultCommand;
@@ -169,7 +170,7 @@ in {
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
       requires = [ "adopt-host-identity.service" "prepare-agent-session.service" ]
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
-      wants = lib.optional bootstrapEnabled "dev-bootstrap.service";
+      wants = [ ];
       conflicts = [ "serial-getty@ttyS0.service" ];
 
       serviceConfig = {

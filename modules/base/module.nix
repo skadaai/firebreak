@@ -96,6 +96,10 @@ let
   };
 
   baseShellInit = renderTemplate scriptVars ./guest/shell-init.sh;
+  commandShellInit = ''
+    ${baseShellInit}
+    ${cfg.shellInit}
+  '';
   bootstrapEnabled = cfg.bootstrapScript != null;
 in {
   options.workloadVm = with lib; {
@@ -169,6 +173,12 @@ in {
       type = types.str;
       default = "/run/worker-exec-output";
       description = "Guest path for a host-shared directory used to persist one-shot command stdout, stderr, and exit code.";
+    };
+
+    commandShellInitFile = mkOption {
+      type = types.str;
+      default = "/etc/firebreak-command-init.sh";
+      description = "Guest path to the shell-init script sourced by non-interactive worker command execution.";
     };
 
     toolRuntimesEnabled = mkOption {
@@ -541,10 +551,10 @@ in {
     workloadVm.sharedToolWrapperBinDir = sharedToolWrapperBinDir;
 
     environment.etc.${lib.removePrefix "/etc/" cfg.workerKindsFile}.text = cfg.workerKindsJson;
+    environment.etc.${lib.removePrefix "/etc/" cfg.commandShellInitFile}.text = commandShellInit;
 
     programs.bash.interactiveShellInit = ''
-      ${baseShellInit}
-      ${cfg.shellInit}
+      ${commandShellInit}
     '';
 
     systemd.services.dev-bootstrap = lib.mkIf bootstrapEnabled {

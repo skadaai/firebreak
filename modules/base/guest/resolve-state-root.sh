@@ -48,5 +48,14 @@ case "$mode" in
     ;;
 esac
 
-mkdir -p "$state_dir"
+if [ -L "$state_dir" ]; then
+  if ! [ -d "$state_dir" ]; then
+    printf '%s\n' "Firebreak resolved $display_name state path is a broken symlink: $state_dir" >&2
+    exit 1
+  fi
+elif ! mkdir -p "$state_dir"; then
+  printf '%s\n' "failed to create Firebreak state directory: $state_dir" >&2
+  exit 1
+fi
+
 printf '%s\n' "$state_dir"

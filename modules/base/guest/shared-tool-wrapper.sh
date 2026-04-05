@@ -30,13 +30,13 @@ credential_login_args=(
 resolve_real_bin() {
   real_bin_name='@REAL_BIN_NAME@'
 
-  if [ -n "${LOCAL_BIN:-}" ] && [ -x "$LOCAL_BIN/$real_bin_name" ]; then
-    printf '%s\n' "$LOCAL_BIN/$real_bin_name"
+  if [ -n "${BUN_INSTALL:-}" ] && [ -x "$BUN_INSTALL/bin/$real_bin_name" ]; then
+    printf '%s\n' "$BUN_INSTALL/bin/$real_bin_name"
     return 0
   fi
 
-  if [ -n "${BUN_INSTALL:-}" ] && [ -x "$BUN_INSTALL/bin/$real_bin_name" ]; then
-    printf '%s\n' "$BUN_INSTALL/bin/$real_bin_name"
+  if [ -n "${LOCAL_BIN:-}" ] && [ -x "$LOCAL_BIN/$real_bin_name" ]; then
+    printf '%s\n' "$LOCAL_BIN/$real_bin_name"
     return 0
   fi
 
@@ -90,7 +90,8 @@ is_login_command() {
 
   index=0
   while [ "$index" -lt "${#credential_login_args[@]}" ]; do
-    eval "current_arg=\${$((index + 1))}"
+    position=$((index + 1))
+    current_arg=${!position}
     if [ "$current_arg" != "${credential_login_args[$index]}" ]; then
       return 1
     fi
@@ -229,8 +230,8 @@ apply_helper_bindings
 real_bin=$(resolve_real_bin)
 if "$real_bin" "$@"; then
   command_status=0
+  sync_file_bindings_back
 else
   command_status=$?
 fi
-sync_file_bindings_back
 exit "$command_status"

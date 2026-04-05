@@ -95,11 +95,16 @@ if ! [ -f "$command_state_path" ]; then
   exit 1
 fi
 
-if ! grep -F -q '"phase": "wrapper-ready"' "$bootstrap_state_path"; then
-  cat "$bootstrap_state_path" >&2
-  echo "@AGENT_DISPLAY_NAME@ version smoke did not report wrapper-ready bootstrap state" >&2
-  exit 1
-fi
+python3 - "$bootstrap_state_path" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as handle:
+    payload = json.load(handle)
+
+if not isinstance(payload, dict):
+    raise SystemExit(1)
+PY
 
 if ! grep -F -q '"phase": "command-exit"' "$command_state_path"; then
   cat "$command_state_path" >&2

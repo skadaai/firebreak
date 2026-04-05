@@ -10,7 +10,7 @@ This repository is centered on a Nix flake plus reusable VM modules:
 - [`modules/base/`](./modules/base): shared Firebreak VM runtime, with `module.nix`, shared guest-side helpers, and the generic smoke template.
 - [`modules/profiles/local/`](./modules/profiles/local): local-launch profile, including local host-side helpers and local guest task-preparation helpers.
 - [`modules/profiles/cloud/`](./modules/profiles/cloud): cloud execution profile, including cloud host-side helpers and cloud guest job/task helpers.
-- [`modules/bun-agent/`](./modules/bun-agent): shared helper layer for Bun-managed agent CLIs.
+- [`modules/packaged-agent/`](./modules/packaged-agent): shared helper layer for image-baked agent CLIs.
 - [`modules/codex/`](./modules/codex): Codex-specific overlay module.
 - [`modules/claude-code/`](./modules/claude-code): Claude Code-specific overlay module.
 - [`ARCHITECTURE.md`](./ARCHITECTURE.md): module-oriented structure and guidance for adding new agents.

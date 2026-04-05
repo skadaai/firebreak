@@ -1,9 +1,9 @@
 moduleArgs@{ pkgs, ... }:
-(import ../bun-agent/module.nix moduleArgs) {
+(import ../packaged-agent/module.nix moduleArgs) {
   vmName = "firebreak-claude-code";
   displayName = "Claude Code";
   binName = "claude";
-  packageSpec = "@anthropic-ai/claude-code@latest";
+  package = pkgs.claude-code;
   promptCommand = ''claude -p "$FIREBREAK_AGENT_PROMPT"'';
   configSelectorPrefix = "CLAUDE";
   configSubdir = "claude";

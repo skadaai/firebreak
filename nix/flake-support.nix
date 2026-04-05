@@ -1,7 +1,13 @@
 { self, nixpkgs, microvm, system, guestSystem ? system }:
 let
   lib = nixpkgs.lib;
-  pkgs = nixpkgs.legacyPackages.${system};
+  nixpkgsConfig = import ./support/nixpkgs-config.nix {
+    inherit lib;
+  };
+  pkgs = import nixpkgs {
+    inherit system;
+    config = nixpkgsConfig;
+  };
 
   renderTemplate = vars: path:
     lib.replaceStrings
@@ -14,7 +20,7 @@ let
   };
 
   runtime = import ./support/runtime.nix {
-    inherit self nixpkgs microvm system guestSystem renderTemplate runtimeBackends;
+    inherit self nixpkgs microvm system guestSystem renderTemplate runtimeBackends nixpkgsConfig;
   };
 
   projects = import ./support/projects.nix {

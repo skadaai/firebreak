@@ -29,9 +29,9 @@ Do not use bare `session` to mean the host-side work unit.
   - [`module.nix`](./modules/profiles/cloud/module.nix): cloud guest behavior layered over the shared runtime.
   - [`host/`](./modules/profiles/cloud/host): cloud host-side runtime argument helpers.
   - [`guest/`](./modules/profiles/cloud/guest): cloud guest-side task preparation and job execution helpers.
-- [`modules/bun-agent/`](./modules/bun-agent): shared implementation for Bun-managed agent CLIs.
-  - [`module.nix`](./modules/bun-agent/module.nix): common Bun-agent overlay logic.
-  - [`guest/`](./modules/bun-agent/guest): guest bootstrap and shell-init templates for Bun-backed agents.
+- [`modules/packaged-agent/`](./modules/packaged-agent): shared implementation for image-baked agent CLIs.
+  - [`module.nix`](./modules/packaged-agent/module.nix): common packaged-agent overlay logic.
+  - [`guest/`](./modules/packaged-agent/guest): guest shell-init templates for packaged agents.
 - [`modules/node-cli/`](./modules/node-cli): shared implementation for npm-installed Node CLI sandboxes.
   - [`module.nix`](./modules/node-cli/module.nix): common Node CLI overlay logic.
   - [`guest/`](./modules/node-cli/guest): guest bootstrap and shell-init templates for packaged Node CLIs.
@@ -43,7 +43,7 @@ Do not use bare `session` to mean the host-side work unit.
 - `modules/base` owns the shared guest runtime, common VM settings, reusable shell behavior, and generic smoke validation.
 - `modules/profiles/local` owns local-only launch behavior such as dynamic host cwd sharing, host identity adoption, task preparation, and the interactive console.
 - `modules/profiles/cloud` owns cloud-only guest behavior such as fixed workspace semantics, prompt-driven agent execution, and non-interactive job completion.
-- `modules/bun-agent` owns the shared contract for agents launched through Bun, including bootstrap and agent-specific environment exports.
+- `modules/packaged-agent` owns the shared contract for agents baked into the VM image, including state-root resolution and agent-specific environment exports.
 - `modules/node-cli` owns the shared contract for npm-installed packaged CLIs, including bootstrap, persistent install state, and project launch helpers.
 - `modules/node-cli` also owns the generic packaged-node bootstrap readiness contract (`firebreak-bootstrap-wait`) and declarative extra wrapper installation for recipe-owned CLI aliases such as worker proxies.
 - Agent modules such as `codex` and `claude-code` should stay thin. They should mostly declare package name, binary name, config directory, and any agent-specific packages or environment exports.
@@ -60,7 +60,7 @@ External recipes should stay declarative and thin.
 
 ## Adding A New Agent
 
-1. Decide whether the agent fits an existing shared family such as [`modules/bun-agent/`](./modules/bun-agent).
+1. Decide whether the agent fits an existing shared family such as [`modules/packaged-agent/`](./modules/packaged-agent).
 2. Add a new module directory, for example `modules/my-agent/`.
 3. Create `modules/my-agent/module.nix` as a thin overlay over the shared family module.
 4. Add flake wiring for:

@@ -1,7 +1,10 @@
-{ self, nixpkgs, microvm, system, guestSystem, renderTemplate, runtimeBackends }:
+{ self, nixpkgs, microvm, system, guestSystem, renderTemplate, runtimeBackends, nixpkgsConfig }:
 let
   lib = nixpkgs.lib;
-  pkgs = nixpkgs.legacyPackages.${system};
+  pkgs = import nixpkgs {
+    inherit system;
+    config = nixpkgsConfig;
+  };
 
   mkRunnerPackage = runner:
     pkgs.runCommand "${runner.name}-compat" {
@@ -84,6 +87,9 @@ EOF
       modules = [
         microvm.nixosModules.microvm
         self.nixosModules.firebreak-vm-base
+        {
+          nixpkgs.config = nixpkgsConfig;
+        }
         {
           workloadVm.name = name;
           workloadVm.hostSystem = system;

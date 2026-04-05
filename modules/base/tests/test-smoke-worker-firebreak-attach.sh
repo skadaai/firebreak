@@ -185,16 +185,15 @@ if ! [ -n "$latest_runner_stdout_log" ] || ! [ -f "$latest_runner_stdout_log" ];
   exit 1
 fi
 
-if ! grep -F -q 'toolchain-install-start @openai/codex@latest' "$first_runner_stdout_log" \
-  && ! grep -F -q 'toolchain-cache-hit @openai/codex@latest' "$first_runner_stdout_log"; then
+if grep -F -q 'toolchain-install-start' "$first_runner_stdout_log"; then
   cat "$first_runner_stdout_log" >&2
-  echo "attached firebreak worker smoke expected the first worker to either install or reuse the shared Codex tool cache" >&2
+  echo "attached firebreak worker smoke should not trigger boot-time tool installation for the packaged Codex VM" >&2
   exit 1
 fi
 
-if ! grep -F -q 'toolchain-cache-hit @openai/codex@latest' "$latest_runner_stdout_log"; then
+if grep -F -q 'toolchain-install-start' "$latest_runner_stdout_log"; then
   cat "$latest_runner_stdout_log" >&2
-  echo "attached firebreak worker smoke expected the second worker to reuse the shared Codex tool cache" >&2
+  echo "attached firebreak worker smoke should not trigger boot-time tool installation for the packaged Codex VM" >&2
   exit 1
 fi
 

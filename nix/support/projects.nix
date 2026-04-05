@@ -556,7 +556,12 @@ __FIREBREAK_WRAPPER_INFO__
       testProjectFor = system: mkProject system [ ];
       testsFor = system:
         import testsModule {
-          pkgs = nixpkgs.legacyPackages.${system};
+          pkgs = import nixpkgs {
+            inherit system;
+            config = import ./nixpkgs-config.nix {
+              inherit lib;
+            };
+          };
           project = projectFor system;
           testProject = testProjectFor system;
           firebreakBin = "${firebreak.packages.${system}.default}/bin/firebreak";

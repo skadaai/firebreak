@@ -1,5 +1,13 @@
 command_request_dir=@AGENT_EXEC_OUTPUT_MOUNT@
 command_request_file=$command_request_dir/request.json
+export command_request_loaded=0
+export command_request_id=""
+export command_request_session_mode=""
+export command_request_command=""
+export command_request_start_dir=""
+export command_request_term=""
+export command_request_columns=""
+export command_request_lines=""
 
 load_command_request() {
   if ! [ -r "$command_request_file" ]; then
@@ -67,5 +75,14 @@ ensure_command_request_loaded() {
   fi
 
   eval "$(load_command_request)"
+  export \
+    command_request_loaded \
+    command_request_id \
+    command_request_session_mode \
+    command_request_command \
+    command_request_start_dir \
+    command_request_term \
+    command_request_columns \
+    command_request_lines
   export FIREBREAK_AGENT_REQUEST_ID=${command_request_id:-}
 }

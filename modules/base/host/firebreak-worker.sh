@@ -3,7 +3,9 @@ set -eu
 
 firebreak_libexec_dir=${FIREBREAK_LIBEXEC_DIR:-}
 if [ -z "$firebreak_libexec_dir" ]; then
-  firebreak_libexec_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+  firebreak_libexec_dir=$(
+    CDPATH='' cd -- "$(dirname -- "$0")" && pwd
+  )
 fi
 
 # shellcheck disable=SC1091

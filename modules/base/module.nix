@@ -618,6 +618,7 @@ in {
     };
 
     microvm = {
+      optimize.enable = true;
       mem = cfg.memoryMiB;
       interfaces = [ {
         type = "user";

@@ -82,6 +82,9 @@ expected_workspace_root="/run/firebreak-state-root/workspaces/$project_key"
 run_fixture() {
   env \
     -u FIREBREAK_STATE_ROOT \
+    -u FIXTURE_STATE_MODE \
+    -u FIXTURE_CREDENTIAL_SLOT \
+    -u PEER_CREDENTIAL_SLOT \
     -u CODEX_STATE_MODE \
     -u CLAUDE_STATE_MODE \
     FIREBREAK_INSTANCE_EPHEMERAL=1 \
@@ -117,11 +120,7 @@ fi
 
 login_output=$(
   cd "$workspace_dir"
-  env \
-    -u FIREBREAK_STATE_ROOT \
-    FIREBREAK_INSTANCE_EPHEMERAL=1 \
-    FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH="$credential_root" \
-    FIREBREAK_STATE_MODE=workspace \
+  run_fixture \
     FIXTURE_CREDENTIAL_SLOT=login-slot \
     @FIXTURE_PACKAGE_BIN@ login direct-login-auth
 )
@@ -133,12 +132,7 @@ fi
 
 multi_tool_output=$(
   cd "$workspace_dir"
-  env \
-    -u FIREBREAK_STATE_ROOT \
-    FIREBREAK_INSTANCE_EPHEMERAL=1 \
-    FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH="$credential_root" \
-    FIREBREAK_STATE_MODE=workspace \
-    FIREBREAK_CREDENTIAL_SLOT=default \
+  run_fixture \
     PEER_CREDENTIAL_SLOT=alternate \
     AGENT_VM_COMMAND='credential-fixture status && credential-fixture-peer status' \
     FIREBREAK_LAUNCH_MODE=shell \

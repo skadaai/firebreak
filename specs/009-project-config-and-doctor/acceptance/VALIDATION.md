@@ -4,13 +4,13 @@ This guide lists the checks needed to validate [SPEC.md](../SPEC.md).
 
 ## Automated Checks
 
-Run these from the repository parent or with `path:` installables so they do not depend on the current shell being inside the flake root.
+Run these from the flake root. If you are elsewhere, replace `.` with the repository root explicitly.
 
 1. Validate the project-config and doctor smoke end-to-end.
 
    ```sh
    nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
-     "path:$PWD#firebreak-test-smoke-project-config-and-doctor"
+     ".#firebreak-test-smoke-project-config-and-doctor"
    ```
 
    Expected result:
@@ -21,7 +21,7 @@ Run these from the repository parent or with `path:` installables so they do not
 
    ```sh
    nix --accept-flake-config --extra-experimental-features 'nix-command flakes' eval --raw \
-     "path:$PWD#packages.x86_64-linux.firebreak.name"
+     ".#packages.x86_64-linux.firebreak.name"
    ```
 
    Expected result:
@@ -31,7 +31,7 @@ Run these from the repository parent or with `path:` installables so they do not
 
    ```sh
    nix --accept-flake-config --extra-experimental-features 'nix-command flakes' eval --raw \
-     "path:$PWD#packages.x86_64-linux.firebreak-codex.name"
+     ".#packages.x86_64-linux.firebreak-codex.name"
    ```
 
    Expected result:
@@ -41,7 +41,7 @@ Run these from the repository parent or with `path:` installables so they do not
 
    ```sh
    nix --accept-flake-config --extra-experimental-features 'nix-command flakes' eval --raw \
-     "path:$PWD#packages.x86_64-linux.firebreak-claude-code.name"
+     ".#packages.x86_64-linux.firebreak-claude-code.name"
    ```
 
    Expected result:
@@ -53,7 +53,7 @@ Run these from the repository parent or with `path:` installables so they do not
 
    ```sh
    nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
-     "path:$PWD#firebreak" -- init --stdout
+     ".#firebreak" -- init --stdout
    ```
 
    Confirm:
@@ -66,7 +66,7 @@ Run these from the repository parent or with `path:` installables so they do not
    ```sh
    FIREBREAK_STATE_MODE=host FIREBREAK_STATE_ROOT=~/.firebreak \
    nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
-     "path:$PWD#firebreak" -- doctor --verbose
+     ".#firebreak" -- doctor --verbose
    ```
 
    Confirm:

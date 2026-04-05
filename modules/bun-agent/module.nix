@@ -19,6 +19,12 @@ moduleArgs:
 let
   inherit (moduleArgs) config lib pkgs renderTemplate;
   cfg = config.workloadVm;
+  hasCredentialAdapters =
+    credentialFileBindings != [ ]
+    || credentialEnvBindings != [ ]
+    || credentialHelperBindings != [ ]
+    || credentialLoginArgs != [ ]
+    || credentialLoginMaterialization != "none";
   devHome = "/var/lib/${cfg.devUser}";
   toolsMount = cfg.toolRuntimesMount;
   bootstrapReadyMarker =
@@ -91,6 +97,7 @@ in {
           selectorPrefix = configSelectorPrefix;
           configSubdir = configSubdir;
           configEnvExports = configExports;
+        } // lib.optionalAttrs hasCredentialAdapters {
           credentials = {
             slotSubdir = configSubdir;
             fileBindings = credentialFileBindings;
@@ -101,7 +108,7 @@ in {
           };
         };
       };
-      sharedCredentialSlots.enable = true;
+      sharedCredentialSlots.enable = hasCredentialAdapters;
       defaultCommand = binName;
       promptCommand = promptCommand;
       extraSystemPackages = with pkgs; [

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -eu
 
-repo_root=$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null || true)
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
 if [ -z "$repo_root" ] || [ ! -f "$repo_root/flake.nix" ]; then
   echo "run this smoke test from inside the Firebreak repository" >&2
   exit 1

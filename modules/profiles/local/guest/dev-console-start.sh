@@ -173,10 +173,6 @@ case "$session_mode" in
     ;;
   agent-exec)
     if [ -n "$agent_command" ]; then
-      if [ -n "$command_shell_init_file" ]; then
-        # shellcheck disable=SC1090
-        . "$command_shell_init_file"
-      fi
       export FIREBREAK_AGENT_COMMAND="$agent_command"
       status=0
       stdout_path=@AGENT_EXEC_OUTPUT_MOUNT@/stdout
@@ -196,7 +192,13 @@ case "$session_mode" in
         fi
       fi
       write_command_state command-start running agent-exec 0
-      eval "$FIREBREAK_AGENT_COMMAND" >"$stdout_path" 2>"$stderr_path" || status=$?
+      {
+        if [ -n "$command_shell_init_file" ]; then
+          # shellcheck disable=SC1090
+          . "$command_shell_init_file"
+        fi
+        eval "$FIREBREAK_AGENT_COMMAND"
+      } >"$stdout_path" 2>"$stderr_path" || status=$?
       write_command_state command-exit completed agent-exec "$status"
       printf "%s\n" "$status" >"$exit_code_path"
       sudo poweroff >/dev/null 2>&1 || true

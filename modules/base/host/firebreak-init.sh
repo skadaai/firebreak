@@ -220,7 +220,12 @@ firebreak_init_collect_interactive_answers() {
   FIREBREAK_INIT_CODEX_STATE_MODE=""
   FIREBREAK_INIT_CLAUDE_STATE_MODE=""
 
-  if [ "$FIREBREAK_INIT_STATE_MODE" = "host" ]; then
+  firebreak_init_collect_tool_override "Codex" "CODEX"
+  firebreak_init_collect_tool_override "Claude Code" "CLAUDE"
+
+  if [ "$FIREBREAK_INIT_STATE_MODE" = "host" ] \
+    || [ "${FIREBREAK_INIT_CODEX_STATE_MODE:-}" = "host" ] \
+    || [ "${FIREBREAK_INIT_CLAUDE_STATE_MODE:-}" = "host" ]; then
     # shellcheck disable=SC2088
     FIREBREAK_INIT_STATE_ROOT=$(
       firebreak_init_prompt_path \
@@ -228,9 +233,6 @@ firebreak_init_collect_interactive_answers() {
         "~/.firebreak"
     )
   fi
-
-  firebreak_init_collect_tool_override "Codex" "CODEX"
-  firebreak_init_collect_tool_override "Claude Code" "CLAUDE"
 }
 
 firebreak_init_command() {

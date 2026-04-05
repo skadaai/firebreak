@@ -64,10 +64,10 @@ The intended landing shape is:
 - Where a sandbox enables the shared state-root contract, the system shall mount one host-backed state root into that guest instead of requiring one independent host share per tool.
 - Where a sandbox enables the shared state-root contract, the system shall resolve stable per-tool subdirectories inside that mounted host root.
 - The system shall use the same host-root-plus-subdirectory contract for dedicated Firebreak workloads that expose one shipped tool CLI.
-- When a shared sandbox resolves Codex state in `host` mode, the system shall map that resolution to the Codex subdirectory within the mounted host state root.
-- When a shared sandbox resolves Claude Code state in `host` mode, the system shall map that resolution to the Claude subdirectory within the mounted host state root.
-- When a dedicated Codex workload resolves state in `host` mode, the system shall map that resolution to the Codex subdirectory within the shared host state root.
-- When a dedicated Claude Code workload resolves state in `host` mode, the system shall map that resolution to the Claude subdirectory within the shared host state root.
+- When a shared sandbox resolves Codex state in `host` mode, the system shall map that resolution to the stable `codex` subdirectory within the mounted host state root.
+- When a shared sandbox resolves Claude Code state in `host` mode, the system shall map that resolution to the stable `claude` subdirectory within the mounted host state root.
+- When a dedicated Codex workload resolves state in `host` mode, the system shall map that resolution to the stable `codex` subdirectory within the shared host state root.
+- When a dedicated Claude Code workload resolves state in `host` mode, the system shall map that resolution to the stable `claude` subdirectory within the shared host state root.
 - When both a generic selector and a tool-specific selector are present, the system shall give precedence to the tool-specific selector for that matching tool.
 - When a shared sandbox launches Codex through the Firebreak wrapper, the system shall export the resolved directory through Codex-native env vars rather than expecting Codex to understand Firebreak selector vars directly.
 - When a shared sandbox launches Claude Code through the Firebreak wrapper, the system shall export the resolved directory through Claude-native env vars rather than expecting Claude Code to understand Firebreak selector vars directly.
@@ -75,6 +75,7 @@ The intended landing shape is:
 - Where `host` mode is enabled for a shared sandbox, the system shall expose enough mounted host state for multiple tool wrappers to resolve distinct host-backed directories in the same guest.
 - The system shall not require one tool's host state directory to be reused as another tool's host state directory as part of the public contract.
 - The system shall document the stable subdirectory naming rules for each shipped tool made available through the shared state root.
+- The stable shipped-tool subdirectory names `codex` and `claude` are part of the public contract and shall remain fixed unless a future spec explicitly revises them.
 
 ## Acceptance criteria
 

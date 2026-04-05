@@ -34,7 +34,7 @@ last_updated: 2026-04-04
 
 ## Current status
 
-Specified only. Implementation has not started.
+Implementation has started. Runtime wiring, state-root semantics, and focused smoke coverage have landed in this branch; direct login-to-slot coverage and broader integration validation still remain open.
 
 ## Open questions
 

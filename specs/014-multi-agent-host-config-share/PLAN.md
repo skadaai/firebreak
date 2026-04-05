@@ -13,13 +13,17 @@ last_updated: 2026-03-25
 4. Add guest-visible wrapper commands for shipped tools such as Codex and Claude Code that resolve Firebreak selectors and export tool-native config env vars.
 5. Consume the shared contract from a packaged external recipe without recipe-local mount hacks.
 6. Add acceptance coverage for generic-vs-tool-specific precedence, per-tool host subdirectory resolution, wrapper env export behavior, and project-local workspace isolation.
-7. Update docs and external recipe examples to describe the shared host-root model.
+7. Add credential-slot validation coverage for Codex and Claude Code wrapper flows in `workspace`, `vm`, `fresh`, and `host` modes, including selected-slot auth artifact materialization.
+8. Add a smoke check for the external shared-sandbox recipe that installs both tool CLIs and verifies selected-slot auth artifacts in the shared guest.
+9. Update docs and external recipe examples to describe the shared host-root model.
 
 ## Validation approach
 
 - run acceptance coverage for Codex wrapper resolution in `workspace`, `vm`, `fresh`, and `host` modes
 - run acceptance coverage for Claude Code wrapper resolution in `workspace`, `vm`, `fresh`, and `host` modes
+- run credential-slot coverage for Codex and Claude Code wrappers, including `auth.json` and `OPENAI_API_KEY` materialization where applicable
 - run smoke coverage for one external shared-sandbox recipe that installs both tool CLIs
+- run smoke coverage for one external shared-sandbox recipe that installs both tool CLIs with selected credential slots active
 - run `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' flake check`
 
 ## Dependencies

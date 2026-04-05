@@ -43,8 +43,12 @@ unset FIREBREAK_PROJECT_CONFIG_FILE
 unset FIREBREAK_LAUNCH_MODE
 unset FIREBREAK_WORKER_MODE
 unset FIREBREAK_WORKER_MODES
+unset FIREBREAK_CREDENTIAL_SLOT
+unset FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH
 unset CODEX_STATE_MODE
 unset CLAUDE_STATE_MODE
+unset CODEX_CREDENTIAL_SLOT
+unset CLAUDE_CREDENTIAL_SLOT
 
 firebreak_cmd() {
   (
@@ -97,7 +101,7 @@ require_pattern "$init_template_stdout" "# FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH=
 
 set +e
 interactive_init_output=$(
-  printf '3\n1\n~/.firebreak\nn\nn\ny\n' | firebreak_cmd init 2>&1
+  printf '3\n1\nn\nn\n~/.firebreak\ny\n' | firebreak_cmd init 2>&1
 )
 interactive_init_status=$?
 set -e

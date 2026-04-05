@@ -50,7 +50,7 @@ resolve_real_bin() {
     return 0
   fi
 
-  if [ -n '@REAL_BIN_PATH@' ] && [ -x '@REAL_BIN_PATH@' ]; then
+  if [ -x '@REAL_BIN_PATH@' ]; then
     printf '%s\n' '@REAL_BIN_PATH@'
     return 0
   fi

@@ -91,6 +91,22 @@ resolve_host_dir() {
   fi
 }
 
+resolve_canonical_path() {
+  target_path=$1
+
+  if resolved_path=$(readlink -f "$target_path" 2>/dev/null); then
+    printf '%s\n' "$resolved_path"
+    return 0
+  fi
+
+  if resolved_path=$(realpath "$target_path" 2>/dev/null); then
+    printf '%s\n' "$resolved_path"
+    return 0
+  fi
+
+  @PYTHON3@ -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$target_path" 2>/dev/null || return 1
+}
+
 require_absolute_host_path() {
   path=$1
   description=$2
@@ -147,8 +163,8 @@ ensure_host_state_subdir() {
       return 0
     fi
 
-    resolved_link=$(readlink -f "$current_path" 2>/dev/null || true)
-    resolved_root=$(readlink -f "$root_path" 2>/dev/null || true)
+    resolved_link=$(resolve_canonical_path "$current_path" 2>/dev/null || true)
+    resolved_root=$(resolve_canonical_path "$root_path" 2>/dev/null || true)
     if [ -z "$resolved_link" ] || [ -z "$resolved_root" ]; then
       return 0
     fi
@@ -164,8 +180,8 @@ ensure_host_state_subdir() {
 
   if [ -n "$bootstrap_target" ] && ! [ -e "$host_state_path" ] && ! [ -L "$host_state_path" ] && { [ -e "$bootstrap_target" ] || [ -L "$bootstrap_target" ]; }; then
     reject_whitespace_path "$bootstrap_target" "host state bootstrap target"
-    resolved_target=$(readlink -f "$bootstrap_target" 2>/dev/null || true)
-    resolved_root=$(readlink -f "$host_root" 2>/dev/null || true)
+    resolved_target=$(resolve_canonical_path "$bootstrap_target" 2>/dev/null || true)
+    resolved_root=$(resolve_canonical_path "$host_root" 2>/dev/null || true)
     if [ -n "$resolved_target" ] && [ -n "$resolved_root" ] && path_within_root "$resolved_target" "$resolved_root"; then
       ln -s "$bootstrap_target" "$host_state_path"
       printf '%s\n' "firebreak: adopted existing tool state as $host_state_path -> $bootstrap_target" >&2
@@ -290,10 +306,16 @@ trace_wrapper() {
 
 require_absolute_host_path "$shared_state_root_host_dir" "FIREBREAK_STATE_ROOT"
 reject_whitespace_path "$shared_state_root_host_dir" "Firebreak host state root"
+if [ "$host_system" = "aarch64-darwin" ]; then
+  reject_comma_path "$shared_state_root_host_dir" "Firebreak host state root"
+fi
 mkdir -p "$shared_state_root_host_dir"
 if [ -n "$shared_credential_slots_host_dir" ]; then
   require_absolute_host_path "$shared_credential_slots_host_dir" "FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH"
   reject_whitespace_path "$shared_credential_slots_host_dir" "Firebreak credential slot root"
+  if [ "$host_system" = "aarch64-darwin" ]; then
+    reject_comma_path "$shared_credential_slots_host_dir" "Firebreak credential slot root"
+  fi
   mkdir -p "$shared_credential_slots_host_dir"
 fi
 

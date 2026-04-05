@@ -79,7 +79,7 @@ rec {
   }:
     let
       renderShellArray = values:
-        builtins.concatStringsSep "\n" (map (value: "  ${builtins.toJSON value}") values);
+        builtins.concatStringsSep "\n" (map (value: "  ${pkgs.lib.escapeShellArg value}") values);
     in
     pkgs.writeShellApplication {
       inherit name;

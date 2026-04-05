@@ -19,6 +19,13 @@ resolve_selected_credential_slot_root() {
 
   [ -n "$selected_slot" ] || return 0
 
+  case "$selected_slot" in
+    *[\\/]*|*..*|*[!A-Za-z0-9._-]*)
+      printf '%s\n' "invalid Firebreak credential slot name: $selected_slot" >&2
+      exit 1
+      ;;
+  esac
+
   mounted_flag=${FIREBREAK_SHARED_CREDENTIAL_SLOTS_MOUNTED_FLAG:-/run/firebreak-shared-credential-slots-mounted}
   if ! [ -e "$mounted_flag" ]; then
     printf '%s\n' "Firebreak credential slots are not mounted; select a different state mode or inspect prepare-agent-session logs for the credential-slot mount failure." >&2

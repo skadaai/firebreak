@@ -201,6 +201,12 @@ in {
       description = "Whether the VM mounts a host-shared persistent tools directory for bootstrap-managed tool runtimes.";
     };
 
+    runtimeManagedRoStore = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Whether the runtime wrapper injects the read-only /nix/store share instead of relying on declared microvm shares.";
+    };
+
     toolRuntimesMount = mkOption {
       type = types.str;
       default = "/run/tool-runtimes-host";
@@ -623,7 +629,7 @@ in {
         image = cfg.varVolumeImage;
         size = cfg.varVolumeSizeMiB;
       } ];
-      shares = [ {
+      shares = lib.optional (!cfg.runtimeManagedRoStore) {
         # use proto = "virtiofs" for MicroVMs that are started by systemd
         proto = backendSpec.roStoreShareProto;
         tag = "ro-store";
@@ -631,7 +637,7 @@ in {
         # squashfs/erofs will be built for it.
         source = "/nix/store";
         mountPoint = "/nix/.ro-store";
-      } ];
+      };
 
       hypervisor = backendSpec.microvmHypervisor;
       socket = cfg.controlSocket;

@@ -248,6 +248,7 @@ host_instance_dir=$host_runtime_dir/instance
 runner_stdout_log=$host_runtime_dir/runner.out
 runner_stderr_log=$host_runtime_dir/runner.err
 virtiofsd_hostcwd_log=$host_runtime_dir/v-cwd.log
+virtiofsd_ro_store_log=$host_runtime_dir/v-ro-store.log
 virtiofsd_hostmeta_log=$host_runtime_dir/v-meta.log
 virtiofsd_shared_state_root_log=$host_runtime_dir/v-shared-cfg.log
 virtiofsd_shared_credential_slots_log=$host_runtime_dir/v-credential-slots.log
@@ -255,6 +256,7 @@ virtiofsd_agent_exec_log=$host_runtime_dir/v-out.log
 virtiofsd_agent_tools_log=$host_runtime_dir/v-tools.log
 virtiofsd_worker_bridge_log=$host_runtime_dir/v-worker.log
 hostcwd_socket=$host_runtime_dir/cwd.sock
+ro_store_socket=$host_runtime_dir/ro-store.sock
 hostmeta_socket=$host_runtime_dir/meta.sock
 shared_state_root_socket=$host_runtime_dir/shared-cfg.sock
 shared_credential_slots_socket=$host_runtime_dir/credential-slots.sock
@@ -433,6 +435,10 @@ fi
 
 # shellcheck disable=SC2329
 cleanup() {
+  if [ -n "${ro_store_virtiofsd_pid:-}" ]; then
+    kill "$ro_store_virtiofsd_pid" 2>/dev/null || true
+    wait "$ro_store_virtiofsd_pid" 2>/dev/null || true
+  fi
   if [ -n "${hostcwd_virtiofsd_pid:-}" ]; then
     kill "$hostcwd_virtiofsd_pid" 2>/dev/null || true
     wait "$hostcwd_virtiofsd_pid" 2>/dev/null || true
@@ -588,6 +594,10 @@ fi
 
 case "$runtime_backend" in
   qemu|cloud-hypervisor)
+    start_virtiofsd "/nix/store" "$ro_store_socket" "$virtiofsd_ro_store_log"
+    ro_store_virtiofsd_pid=$started_virtiofsd_pid
+    trace_wrapper "virtiofs-ro-store-ready"
+
     start_virtiofsd "$host_cwd" "$hostcwd_socket" "$virtiofsd_hostcwd_log"
     hostcwd_virtiofsd_pid=$started_virtiofsd_pid
     trace_wrapper "virtiofs-hostcwd-ready"
@@ -667,6 +677,7 @@ run_runner() {
 
   if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
     env \
+      MICROVM_RO_STORE_SOCKET="$ro_store_socket" \
       MICROVM_HOST_META_DIR="$host_meta_dir" \
       MICROVM_HOST_META_SOCKET="$hostmeta_socket" \
       MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
@@ -680,6 +691,7 @@ run_runner() {
       @RUNNER@ "$@"
   else
     env \
+      MICROVM_RO_STORE_SOCKET="$ro_store_socket" \
       MICROVM_HOST_META_DIR="$host_meta_dir" \
       MICROVM_HOST_META_SOCKET="$hostmeta_socket" \
       MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
@@ -713,6 +725,7 @@ elif [ "$agent_session_mode" = "agent-attach-exec" ]; then
 set -eu
 cd '$(printf '%s' "$runner_workdir" | sed "s/'/'\\''/g")'
 export MICROVM_HOST_META_DIR='$(printf '%s' "$host_meta_dir" | sed "s/'/'\\\\''/g")'
+export MICROVM_RO_STORE_SOCKET='$(printf '%s' "$ro_store_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_HOST_META_SOCKET='$(printf '%s' "$hostmeta_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_HOST_CWD_SOCKET='$(printf '%s' "$hostcwd_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_SHARED_STATE_ROOT_DIR='$(printf '%s' "$shared_state_root_host_dir" | sed "s/'/'\\\\''/g")'

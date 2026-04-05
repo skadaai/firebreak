@@ -21,6 +21,7 @@ emit_qemu_virtiofs_share() {
 
 case "$runtime_backend" in
   qemu)
+    emit_qemu_virtiofs_share "fs-ro-store" "${MICROVM_RO_STORE_SOCKET:-}" "ro-store"
     [ -n "${MICROVM_HOST_CWD_SOCKET:-}" ] || exit 0
     emit_qemu_virtiofs_share "fs-hostcwd" "${MICROVM_HOST_CWD_SOCKET:-}" "hostcwd"
 
@@ -37,6 +38,7 @@ case "$runtime_backend" in
     emit_qemu_virtiofs_share "fs-workerbridge" "${MICROVM_WORKER_BRIDGE_SOCKET:-}" "hostworkerbridge"
     ;;
   cloud-hypervisor)
+    emit_cloud_hypervisor_fs "ro-store" "${MICROVM_RO_STORE_SOCKET:-}"
     emit_cloud_hypervisor_fs "hostcwd" "${MICROVM_HOST_CWD_SOCKET:-}"
     emit_cloud_hypervisor_fs "hostmeta" "${MICROVM_HOST_META_SOCKET:-}"
     emit_cloud_hypervisor_fs "hoststateroot" "${MICROVM_SHARED_STATE_ROOT_SOCKET:-}"

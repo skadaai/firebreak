@@ -117,6 +117,15 @@ in {
         else
           qemu9pOptions ++ [ "ro" ];
     };
+    fileSystems."/nix/.ro-store" = lib.mkIf (cfg.runtimeBackend != "vfkit") {
+      device = "ro-store";
+      fsType = "virtiofs";
+      options = [
+        "defaults"
+        "ro"
+        "x-systemd.after=systemd-modules-load.service"
+      ];
+    };
 
     systemd.services.adopt-host-identity = {
       description = "Align guest development user with the host user identity";
@@ -199,5 +208,7 @@ in {
     };
 
     microvm.extraArgsScript = lib.optionalString (cfg.runtimeBackend != "vfkit") "${runtimeExtraArgsScript}";
+
+    workloadVm.runtimeManagedRoStore = cfg.runtimeBackend != "vfkit";
   };
 }

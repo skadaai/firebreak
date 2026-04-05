@@ -4,6 +4,7 @@ local_controller_prepare_state() {
   local_controller_state_dir=$runner_workdir/.firebreak-local
   local_controller_pid_file=$local_controller_state_dir/daemon.pid
   local_controller_runtime_dir_file=$local_controller_state_dir/runtime-dir
+  local_controller_build_id_file=$local_controller_state_dir/build-id
   local_controller_spawn_log=$local_controller_state_dir/spawn.log
   local_controller_dispatch_lock_dir=$local_controller_state_dir/dispatch.lock
   local_controller_dispatch_lock_pid_file=$local_controller_dispatch_lock_dir/pid
@@ -27,6 +28,17 @@ local_controller_pid_is_alive() {
       ;;
   esac
   kill -0 "$local_controller_pid" 2>/dev/null
+}
+
+local_controller_matches_build_id() {
+  local_controller_prepare_state
+  if ! [ -r "$local_controller_build_id_file" ]; then
+    return 1
+  fi
+
+  local_controller_recorded_build_id=$(cat "$local_controller_build_id_file" 2>/dev/null || true)
+  [ -n "$local_controller_recorded_build_id" ] || return 1
+  [ "$local_controller_recorded_build_id" = "${runtime_generation:-}" ]
 }
 
 local_controller_should_dispatch() {
@@ -59,16 +71,43 @@ local_controller_wait_for_ready() {
   exit 1
 }
 
+local_controller_stop_running() {
+  local_controller_prepare_state
+
+  if ! local_controller_pid_is_alive; then
+    rm -f "$local_controller_pid_file" "$local_controller_runtime_dir_file" "$local_controller_build_id_file"
+    return 0
+  fi
+
+  kill "$local_controller_pid" 2>/dev/null || true
+  for _ in $(seq 1 50); do
+    if ! local_controller_pid_is_alive; then
+      rm -f "$local_controller_pid_file" "$local_controller_runtime_dir_file" "$local_controller_build_id_file"
+      return 0
+    fi
+    sleep 0.2
+  done
+
+  kill -9 "$local_controller_pid" 2>/dev/null || true
+  rm -f "$local_controller_pid_file" "$local_controller_runtime_dir_file" "$local_controller_build_id_file"
+}
+
 local_controller_ensure_running() {
   local_controller_prepare_state
   mkdir -p "$local_controller_state_dir"
+
+  if local_controller_pid_is_alive; then
+    if ! local_controller_matches_build_id; then
+      local_controller_stop_running
+    fi
+  fi
 
   if local_controller_pid_is_alive; then
     local_controller_wait_for_ready
     return 0
   fi
 
-  rm -f "$local_controller_pid_file" "$local_controller_runtime_dir_file"
+  rm -f "$local_controller_pid_file" "$local_controller_runtime_dir_file" "$local_controller_build_id_file"
   setsid env \
     FIREBREAK_INSTANCE_DIR="$runner_workdir" \
     FIREBREAK_AGENT_SESSION_MODE_OVERRIDE=agent-service \
@@ -84,12 +123,13 @@ local_controller_record_runtime_dir() {
   local_controller_prepare_state
   mkdir -p "$local_controller_state_dir"
   printf '%s\n' "$host_runtime_dir" > "$local_controller_runtime_dir_file"
+  printf '%s\n' "${runtime_generation:-}" > "$local_controller_build_id_file"
   printf '%s\n' "${BASHPID:-$$}" > "$local_controller_pid_file"
 }
 
 local_controller_clear_state() {
   local_controller_prepare_state
-  rm -f "$local_controller_pid_file" "$local_controller_runtime_dir_file"
+  rm -f "$local_controller_pid_file" "$local_controller_runtime_dir_file" "$local_controller_build_id_file"
 }
 
 local_controller_dispatch_lock_pid_is_alive() {

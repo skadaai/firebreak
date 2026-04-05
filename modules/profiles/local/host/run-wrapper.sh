@@ -22,6 +22,7 @@ agent_session_mode_override=${FIREBREAK_AGENT_SESSION_MODE_OVERRIDE:-}
 agent_session_mode=agent
 default_agent_command=@DEFAULT_AGENT_COMMAND@
 runtime_backend=@RUNTIME_BACKEND@
+runtime_generation=@RUNNER@
 agent_command_override=""
 shell_command_override=${AGENT_VM_COMMAND:-}
 shared_state_root_host_dir=""

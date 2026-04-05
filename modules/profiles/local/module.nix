@@ -98,10 +98,30 @@ let
     ];
     text = renderTemplate scriptVars ./guest/run-agent-exec.sh;
   };
+  localCommandAgentScript = pkgs.writeShellScript "firebreak-local-command-agent"
+    (renderTemplate (scriptVars // {
+      "@RUN_AGENT_EXEC_SCRIPT@" = "${runAgentExecScript}/bin/firebreak-run-agent-exec";
+    }) ./guest/local-command-agent.sh);
   devConsoleStartScript = pkgs.writeShellScript "dev-console-start"
     (renderTemplate (scriptVars // {
       "@RUN_AGENT_EXEC_SCRIPT@" = "${runAgentExecScript}/bin/firebreak-run-agent-exec";
     }) ./guest/dev-console-start.sh);
+  devConsoleConditionScript = pkgs.writeShellScript "firebreak-dev-console-condition" ''
+    set -eu
+    session_mode=""
+    if [ -r ${lib.escapeShellArg cfg.workerSessionModeFile} ]; then
+      session_mode=$(cat ${lib.escapeShellArg cfg.workerSessionModeFile})
+    fi
+    [ "$session_mode" != "agent-service" ]
+  '';
+  localCommandAgentConditionScript = pkgs.writeShellScript "firebreak-local-command-agent-condition" ''
+    set -eu
+    session_mode=""
+    if [ -r ${lib.escapeShellArg cfg.workerSessionModeFile} ]; then
+      session_mode=$(cat ${lib.escapeShellArg cfg.workerSessionModeFile})
+    fi
+    [ "$session_mode" = "agent-service" ]
+  '';
   bootstrapEnabled = cfg.bootstrapScript != null;
 in {
   config = {
@@ -245,6 +265,7 @@ in {
       conflicts = [ "serial-getty@ttyS0.service" ];
 
       serviceConfig = {
+        ExecCondition = devConsoleConditionScript;
         User = cfg.devUser;
         WorkingDirectory = devHome;
         StandardInput = "tty-force";
@@ -258,6 +279,29 @@ in {
         RestartSec = 0;
         Type = "idle";
         ExecStart = devConsoleStartScript;
+      };
+    };
+
+    systemd.services.local-command-agent = {
+      description = "Warm local command agent";
+      wantedBy = [ "multi-user.target" ];
+      after = [ "prepare-agent-session.service" ]
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
+        ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
+      requires = [ "prepare-agent-session.service" ]
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
+        ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
+
+      serviceConfig = {
+        ExecCondition = localCommandAgentConditionScript;
+        ExecStart = localCommandAgentScript;
+        Restart = "always";
+        RestartSec = 1;
+        Type = "simple";
+        User = cfg.devUser;
+        WorkingDirectory = devHome;
+        StandardOutput = "journal+console";
+        StandardError = "journal+console";
       };
     };
 

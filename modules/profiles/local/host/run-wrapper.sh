@@ -401,7 +401,7 @@ fi
 
 if [ -n "$agent_session_mode_override" ]; then
   case "$agent_session_mode_override" in
-    shell|agent|agent-exec|agent-attach-exec)
+    shell|agent|agent-exec|agent-attach-exec|agent-service)
       agent_session_mode=$agent_session_mode_override
       ;;
     *)
@@ -479,6 +479,7 @@ mkdir -p "$host_meta_dir"
 mkdir -p "$host_exec_output_dir"
 mkdir -p "$host_agent_tools_dir"
 mkdir -p "$worker_bridge_dir/requests"
+ln -snf "$host_exec_output_dir" "$host_runtime_dir/o"
 if [ "$host_agent_tools_dir" != "$default_host_agent_tools_dir" ] \
   && ! [ -e "$host_agent_tools_dir/bootstrap-ready" ] \
   && [ -e "$default_host_agent_tools_dir/bootstrap-ready" ]; then

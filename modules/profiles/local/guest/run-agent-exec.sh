@@ -5,6 +5,7 @@ set -eu
 @FIREBREAK_AGENT_COMMAND_STATE_LIB@
 
 command_shell_init_file=@COMMAND_SHELL_INIT_FILE@
+power_action=${FIREBREAK_AGENT_POWER_ACTION:-poweroff}
 
 if ! [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
   echo "agent exec output share is unavailable at @AGENT_EXEC_OUTPUT_MOUNT@" >&2
@@ -19,6 +20,17 @@ if [ -z "$FIREBREAK_AGENT_COMMAND" ]; then
   echo "command request did not provide a command for firebreak-run-agent-exec" >&2
   exit 1
 fi
+
+if [ "$command_request_session_mode" != "agent-exec" ]; then
+  echo "firebreak-run-agent-exec requires an agent-exec request, got: $command_request_session_mode" >&2
+  exit 1
+fi
+
+target_dir=${command_request_start_dir:-@WORKSPACE_MOUNT@}
+if ! [ -d "$target_dir" ]; then
+  target_dir=@WORKSPACE_MOUNT@
+fi
+cd "$target_dir"
 
 if ! [ -r "$command_shell_init_file" ]; then
   command_shell_init_file=""
@@ -38,7 +50,9 @@ if command -v firebreak-bootstrap-wait >/dev/null 2>&1; then
     status=$?
     write_command_state bootstrap-wait error agent-exec "$status"
     printf "%s\n" "$status" >"$exit_code_path"
-    sudo poweroff >/dev/null 2>&1 || true
+    if [ "$power_action" = "poweroff" ]; then
+      sudo poweroff >/dev/null 2>&1 || true
+    fi
     exit "$status"
   fi
 fi
@@ -52,5 +66,7 @@ write_command_state command-start running agent-exec 0
 eval "$FIREBREAK_AGENT_COMMAND" >"$stdout_path" 2>"$stderr_path" || status=$?
 write_command_state command-exit completed agent-exec "$status"
 printf "%s\n" "$status" >"$exit_code_path"
-sudo poweroff >/dev/null 2>&1 || true
+if [ "$power_action" = "poweroff" ]; then
+  sudo poweroff >/dev/null 2>&1 || true
+fi
 exit "$status"

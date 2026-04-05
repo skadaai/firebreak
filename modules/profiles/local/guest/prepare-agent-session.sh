@@ -94,14 +94,16 @@ chmod 0644 @START_DIR_FILE@
 printf '%s\n' "$session_mode" > @AGENT_SESSION_MODE_FILE@
 chmod 0644 @AGENT_SESSION_MODE_FILE@
 
-if [ "$session_mode" = "agent-exec" ] || [ "$session_mode" = "agent-attach-exec" ]; then
+if [ "$session_mode" = "agent-exec" ] || [ "$session_mode" = "agent-attach-exec" ] || [ "$session_mode" = "agent-service" ]; then
   log_phase prepare-agent-session-exec-output-ready-check
   if ! [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
     echo "agent exec output share is unavailable at @AGENT_EXEC_OUTPUT_MOUNT@" >&2
     exit 1
   fi
   sync_guest_state_files
-  printf '%s\n' "prepare-agent-session-mounted-exec-output" > @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
+  if [ "$session_mode" != "agent-service" ]; then
+    printf '%s\n' "prepare-agent-session-mounted-exec-output" > @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
+  fi
 fi
 
 log_phase prepare-agent-session-state-dir-start

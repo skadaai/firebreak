@@ -626,6 +626,7 @@ in {
     microvm = {
       optimize.enable = true;
       mem = cfg.memoryMiB;
+      storeOnDisk = !cfg.runtimeManagedRoStore;
       interfaces = lib.optional (cfg.runtimeBackend != "cloud-hypervisor") {
         type = "user";
         id = "vm-user";

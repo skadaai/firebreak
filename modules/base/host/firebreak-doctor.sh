@@ -117,7 +117,7 @@ firebreak_doctor_state_sha256() {
     return 0
   fi
 
-  printf '%s\n' "missing sha256 tool"
+  printf '%s\n' "missing sha256 tool" >&2
   return 1
 }
 
@@ -126,7 +126,10 @@ firebreak_doctor_workspace_state_path() {
   config_subdir=$2
 
   project_root=$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$PWD")
-  project_key=$(firebreak_doctor_state_sha256 "$project_root")
+  if ! project_key=$(firebreak_doctor_state_sha256 "$project_root"); then
+    printf '%s\n' "failed to resolve workspace state hash for project root: $project_root" >&2
+    return 1
+  fi
   project_key=$(printf '%.16s' "$project_key")
   printf '%s\n' "$host_root/workspaces/$project_key/$config_subdir"
 }

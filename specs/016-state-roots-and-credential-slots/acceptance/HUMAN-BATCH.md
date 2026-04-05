@@ -70,7 +70,7 @@ git -C "$repo_b" init -q
      cd "$repo_a"
      FIREBREAK_STATE_MODE=workspace FIREBREAK_LAUNCH_MODE=shell \
      nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
-       'path:/home/zvictor/development/firebreak/ao#firebreak-codex'
+       '.#firebreak-codex'
    )
    ```
 
@@ -89,7 +89,7 @@ git -C "$repo_b" init -q
      cd "$repo_a"
      FIREBREAK_STATE_MODE=workspace FIREBREAK_LAUNCH_MODE=shell \
      nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
-       'path:/home/zvictor/development/firebreak/ao#firebreak-claude-code'
+       '.#firebreak-claude-code'
    )
    ```
 
@@ -109,7 +109,7 @@ git -C "$repo_b" init -q
      cd "$repo_a"
      FIREBREAK_STATE_MODE=workspace FIREBREAK_LAUNCH_MODE=shell \
      nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
-       'path:/home/zvictor/development/firebreak/ao#firebreak-codex'
+       '.#firebreak-codex'
    )
    ```
 
@@ -118,7 +118,7 @@ git -C "$repo_b" init -q
      cd "$repo_b"
      FIREBREAK_STATE_MODE=workspace FIREBREAK_LAUNCH_MODE=shell \
      nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
-       'path:/home/zvictor/development/firebreak/ao#firebreak-codex'
+       '.#firebreak-codex'
    )
    ```
 
@@ -142,7 +142,7 @@ git -C "$repo_b" init -q
    ```sh
    FIREBREAK_STATE_MODE=host FIREBREAK_LAUNCH_MODE=shell \
    nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
-     'path:/home/zvictor/development/firebreak/ao#firebreak-codex'
+     '.#firebreak-codex'
    ```
 
    Confirm:
@@ -160,7 +160,7 @@ git -C "$repo_b" init -q
    ```sh
    FIREBREAK_STATE_MODE=host FIREBREAK_LAUNCH_MODE=shell \
    nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
-     'path:/home/zvictor/development/firebreak/ao#firebreak-claude-code'
+     '.#firebreak-claude-code'
    ```
 
    Confirm:
@@ -188,7 +188,7 @@ git -C "$repo_b" init -q
      FIREBREAK_CREDENTIAL_SLOT=default \
      FIREBREAK_LAUNCH_MODE=shell \
      nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
-       'path:/home/zvictor/development/firebreak/ao#firebreak-codex'
+       '.#firebreak-codex'
    )
    ```
 
@@ -200,21 +200,25 @@ git -C "$repo_b" init -q
      CODEX_CREDENTIAL_SLOT=backup \
      FIREBREAK_LAUNCH_MODE=shell \
      nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
-       'path:/home/zvictor/development/firebreak/ao#firebreak-codex'
+       '.#firebreak-codex'
    )
    ```
 
    In both VMs, record `CODEX_HOME`.
+   In the first VM, also record `CODEX_CREDENTIAL_SLOT` and `cat "$CODEX_HOME/auth.json"`.
+   In the second VM, also record `CODEX_CREDENTIAL_SLOT` and `cat "$CODEX_HOME/auth.json"`.
 
    Confirm:
    - the `CODEX_HOME` value stays the same between the two runs
+   - the first VM shows `CODEX_CREDENTIAL_SLOT=default` and `slot-default-auth`
+   - the second VM shows `CODEX_CREDENTIAL_SLOT=backup` and `slot-backup-auth`
    - only the selected credential slot changes
 
 ## Batch 5: Documentation Clarity
 
 Review:
-- [README.md](/home/zvictor/development/firebreak/ao/README.md)
-- [state-roots-and-credential-slots.md](/home/zvictor/development/firebreak/ao/guides/state-roots-and-credential-slots.md)
+- [README.md](../../../README.md)
+- [state-roots-and-credential-slots.md](../../../guides/state-roots-and-credential-slots.md)
 
 Confirm:
 - the docs clearly separate native project config, Firebreak runtime state, and credential slots

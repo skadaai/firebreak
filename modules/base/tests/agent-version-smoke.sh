@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -eu
 
+repo_root=$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null || true)
+if [ -z "$repo_root" ] || [ ! -f "$repo_root/flake.nix" ]; then
+  echo "run this smoke test from inside the Firebreak repository" >&2
+  exit 1
+fi
+
+# shellcheck disable=SC1091
+. "$repo_root/modules/base/host/firebreak-project-config.sh"
+
 firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
 mkdir -p "$firebreak_tmp_root"
 smoke_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-agent-version.XXXXXX")
@@ -24,23 +33,11 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 run_with_clean_firebreak_env() (
-  while IFS='=' read -r env_key _; do
-    case "$env_key" in
-      FIREBREAK_STATE_MODE|FIREBREAK_STATE_ROOT|FIREBREAK_CREDENTIAL_SLOT|FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH|*_CREDENTIAL_SLOT)
-        unset "$env_key"
-        ;;
-      *_STATE_MODE)
-        case "$env_key" in
-          NIX_CONFIG|FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG)
-            ;;
-          *)
-            unset "$env_key"
-            ;;
-        esac
-        ;;
-    esac
+  while IFS= read -r env_key; do
+    [ -n "$env_key" ] || continue
+    unset "$env_key"
   done <<EOF
-$(env)
+$(firebreak_list_scrubbable_env_keys)
 EOF
 
   while [ "$#" -gt 0 ]; do

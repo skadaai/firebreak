@@ -1,5 +1,8 @@
 set -eu
 
+# shellcheck disable=SC1091
+. "@REPO_ROOT@/modules/base/host/firebreak-project-config.sh"
+
 default_firebreak_tmpdir=${TMPDIR:-/tmp}
 if [ -d /cache ] && [ -w /cache ]; then
   default_firebreak_tmpdir=/cache/firebreak
@@ -24,23 +27,11 @@ firebreak_state_dir=$smoke_tmp_dir/firebreak-state
 mkdir -p "$workspace_dir" "$state_dir" "$firebreak_state_dir"
 
 run_with_clean_firebreak_env() (
-  while IFS='=' read -r env_key _; do
-    case "$env_key" in
-      FIREBREAK_STATE_MODE|FIREBREAK_STATE_ROOT|FIREBREAK_CREDENTIAL_SLOT|FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH|*_CREDENTIAL_SLOT)
-        unset "$env_key"
-        ;;
-      *_STATE_MODE)
-        case "$env_key" in
-          NIX_CONFIG|FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG)
-            ;;
-          *)
-            unset "$env_key"
-            ;;
-        esac
-        ;;
-    esac
+  while IFS= read -r env_key; do
+    [ -n "$env_key" ] || continue
+    unset "$env_key"
   done <<EOF
-$(env)
+$(firebreak_list_scrubbable_env_keys)
 EOF
 
   while [ "$#" -gt 0 ]; do

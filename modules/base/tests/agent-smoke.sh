@@ -6,6 +6,9 @@ if [ -z "$repo_root" ] || [ ! -f "$repo_root/flake.nix" ]; then
   exit 1
 fi
 
+# shellcheck disable=SC1091
+. "$repo_root/modules/base/host/firebreak-project-config.sh"
+
 host_uid=$(id -u)
 host_gid=$(id -g)
 timeout_seconds=${FIREBREAK_SMOKE_TIMEOUT:-${CODEX_VM_SMOKE_TIMEOUT:-900}}
@@ -34,8 +37,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 printf '%s\n' "host-smoke-marker" > "$host_config_dir/marker.txt"
-mkdir -p "$host_config_root/@STATE_SUBDIR@"
-cp "$host_config_dir/marker.txt" "$host_config_root/@STATE_SUBDIR@/marker.txt"
+ln -s "$host_config_dir" "$host_config_root/@STATE_SUBDIR@"
 
 smoke_probe_command=$(cat <<'EOF'
 printf '__SMOKE_PWD__%s\n' "$PWD"
@@ -78,23 +80,11 @@ require_line() {
 }
 
 run_with_clean_firebreak_env() (
-  while IFS='=' read -r env_key _; do
-    case "$env_key" in
-      FIREBREAK_STATE_MODE|FIREBREAK_STATE_ROOT|FIREBREAK_CREDENTIAL_SLOT|FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH|*_CREDENTIAL_SLOT)
-        unset "$env_key"
-        ;;
-      *_STATE_MODE)
-        case "$env_key" in
-          NIX_CONFIG|FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG)
-            ;;
-          *)
-            unset "$env_key"
-            ;;
-        esac
-        ;;
-    esac
+  while IFS= read -r env_key; do
+    [ -n "$env_key" ] || continue
+    unset "$env_key"
   done <<EOF
-$(env)
+$(firebreak_list_scrubbable_env_keys)
 EOF
 
   while [ "$#" -gt 0 ]; do
@@ -216,9 +206,14 @@ run_agent_exec_scenario() {
   printf '%s\n' "ok: $scenario_label"
 }
 
+state_dir_preexists=0
+if [ -e "$repo_root/@STATE_DIR_NAME@" ]; then
+  state_dir_preexists=1
+fi
+
 run_agent_exec_scenario workspace "default agent entry runs @AGENT_BIN@ --version as a one-shot command" "--version"
 run_scenario @AGENT_PACKAGE@ workspace "$expected_workspace_config_dir" "shell override uses workspace config"
-if [ -e "$repo_root/@STATE_DIR_NAME@" ]; then
+if [ "$state_dir_preexists" = "0" ] && [ -e "$repo_root/@STATE_DIR_NAME@" ]; then
   echo "workspace mode should not create a Firebreak-managed project config overlay: $repo_root/@STATE_DIR_NAME@" >&2
   exit 1
 fi

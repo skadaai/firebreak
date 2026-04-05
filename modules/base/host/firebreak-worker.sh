@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -eu
 
+firebreak_libexec_dir=${FIREBREAK_LIBEXEC_DIR:-}
+if [ -z "$firebreak_libexec_dir" ]; then
+  firebreak_libexec_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+fi
+
+# shellcheck disable=SC1091
+. "$firebreak_libexec_dir/firebreak-project-config.sh"
+
 state_dir=${FIREBREAK_WORKER_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/firebreak/worker-broker}
 worker_authority=${FIREBREAK_WORKER_AUTHORITY:-host}
 worker_allow_firebreak=${FIREBREAK_WORKER_ALLOW_FIREBREAK:-1}
@@ -790,23 +798,11 @@ write_firebreak_launch_script() {
   quoted_resolved_exec=$(quote_arg "$resolved_exec")
 
   quoted_unset_env_args=""
-  while IFS='=' read -r env_key _; do
-    case "$env_key" in
-      FIREBREAK_STATE_MODE|FIREBREAK_STATE_ROOT|FIREBREAK_CREDENTIAL_SLOT|FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH|*_CREDENTIAL_SLOT)
-        quoted_unset_env_args="$quoted_unset_env_args -u $(quote_arg "$env_key")"
-        ;;
-      *_STATE_MODE)
-        case "$env_key" in
-          NIX_CONFIG|FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG)
-            ;;
-          *)
-            quoted_unset_env_args="$quoted_unset_env_args -u $(quote_arg "$env_key")"
-            ;;
-        esac
-        ;;
-    esac
+  while IFS= read -r env_key; do
+    [ -n "$env_key" ] || continue
+    quoted_unset_env_args="$quoted_unset_env_args -u $(quote_arg "$env_key")"
   done <<EOF
-$(env)
+$(firebreak_list_scrubbable_env_keys)
 EOF
 
   quoted_args=""

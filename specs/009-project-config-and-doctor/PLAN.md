@@ -13,7 +13,7 @@ last_updated: 2026-03-25
 4. Tighten local wrapper state resolution so tool-specific selectors override generic selectors for their matching workloads.
 5. Implement `firebreak init` with a minimal Firebreak-native template.
 6. Implement `firebreak doctor` with summary, verbose, and JSON output modes.
-7. Add acceptance coverage for config loading, precedence, agent-specific overrides, and diagnostics output.
+7. Add acceptance coverage for config loading, precedence, tool-specific selectors, and diagnostics output.
 8. Update docs and examples to describe the new config and diagnostics contract.
 
 ## Validation approach

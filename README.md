@@ -118,7 +118,7 @@ Use `nix run .#firebreak -- doctor --json` for machine-readable output.
 Firebreak exposes a public `worker` surface for orchestrator-style sandboxes:
 
 ```sh
-firebreak worker run --kind codex --workspace "$PWD" -- --version
+firebreak worker run --backend firebreak --package firebreak-codex --kind codex --workspace "$PWD" -- codex --version
 firebreak worker ps
 firebreak worker inspect codex-1234abcd
 firebreak worker debug --json

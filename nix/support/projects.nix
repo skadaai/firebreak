@@ -463,8 +463,7 @@ __FIREBREAK_WRAPPER_INFO__
     mkLocalVmArtifacts {
       inherit name;
       defaultAgentCommand = launchCommandName;
-      sharedStateRoots = sharedStateRoots;
-      sharedCredentialSlots = sharedCredentialSlots;
+      inherit sharedStateRoots sharedCredentialSlots;
       workerBridgeEnabled = effectiveWorkerBridgeEnabled;
       workerKinds = effectiveWorkerKinds;
       extraModules = [

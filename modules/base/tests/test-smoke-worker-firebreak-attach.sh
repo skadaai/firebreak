@@ -149,6 +149,12 @@ if ! [ -f "$first_runtime_json" ] || ! [ -f "$latest_runtime_json" ]; then
   exit 1
 fi
 
+if grep -R -F -e 'outer-leak' -e "$smoke_tmp_dir/firebreak-worker-credential-slot-leak" "$state_dir/workers" >/dev/null 2>&1; then
+  grep -R -F -n -e 'outer-leak' -e "$smoke_tmp_dir/firebreak-worker-credential-slot-leak" "$state_dir/workers" >&2 || true
+  echo "attached firebreak worker smoke leaked outer Firebreak selectors into the nested worker runtime" >&2
+  exit 1
+fi
+
 get_json_field() {
   json_path=$1
   field_name=$2

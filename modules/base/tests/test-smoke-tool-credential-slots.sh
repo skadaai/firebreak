@@ -7,6 +7,9 @@ if [ -z "$repo_root" ] || [ ! -f "$repo_root/flake.nix" ]; then
   exit 1
 fi
 
+# shellcheck disable=SC1091
+. "$repo_root/modules/base/host/firebreak-project-config.sh"
+
 firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
 mkdir -p "$firebreak_tmp_root"
 smoke_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-@AGENT_BIN@-credential-slots.XXXXXX")
@@ -32,24 +35,14 @@ require_pattern() {
 }
 
 run_with_clean_firebreak_env() (
-  while IFS='=' read -r env_key _; do
-    case "$env_key" in
-      FIREBREAK_STATE_MODE|FIREBREAK_STATE_ROOT|FIREBREAK_CREDENTIAL_SLOT|FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH|*_CREDENTIAL_SLOT)
-        unset "$env_key"
-        ;;
-      *_STATE_MODE)
-        case "$env_key" in
-          NIX_CONFIG|FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG)
-            ;;
-          *)
-            unset "$env_key"
-            ;;
-        esac
-        ;;
-    esac
+  while IFS= read -r env_key; do
+    [ -n "$env_key" ] || continue
+    unset "$env_key"
   done <<EOF
-$(env)
+$(firebreak_list_scrubbable_env_keys)
 EOF
+
+  unset FIREBREAK_INSTANCE_DIR FIREBREAK_STATE_DIR
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -105,9 +98,12 @@ project_key=$(printf '%.16s' "$project_key")
 expected_workspace_root="/run/firebreak-state-root/workspaces/$project_key/@STATE_SUBDIR@"
 
 make_fake_real_bin_command=$(cat <<'EOF'
+fake_local_bin=$(mktemp -d "${TMPDIR:-/tmp}/firebreak-fake-bin.XXXXXX")
+LOCAL_BIN="$fake_local_bin"
+export LOCAL_BIN
 mkdir -p "$LOCAL_BIN"
 cleanup_fake_real_bin() {
-  rm -f "$LOCAL_BIN/@AGENT_BIN@"
+  rm -rf "$fake_local_bin"
 }
 trap cleanup_fake_real_bin EXIT
 cat >"$LOCAL_BIN/@AGENT_BIN@" <<'EOS'
@@ -124,7 +120,8 @@ is_login_command() {
 
   index=0
   while [ "$index" -lt "${#login_args[@]}" ]; do
-    eval "current_arg=\${$((index + 1))}"
+    position=$((index + 1))
+    current_arg=${!position}
     if [ "$current_arg" != "${login_args[$index]}" ]; then
       return 1
     fi
@@ -137,7 +134,8 @@ is_login_command() {
 config_root="${@CONFIG_ROOT_ENV@:-${FIREBREAK_TOOL_STATE_DIR:-}}"
 
 if is_login_command "$@"; then
-  eval "token=\${$(( ${#login_args[@]} + 1 )):-smoke-login-token}"
+  token_position=$(( ${#login_args[@]} + 1 ))
+  token=${!token_position:-smoke-login-token}
   mkdir -p "$config_root"
   printf '%s\n' "$token" >"$config_root/@AUTH_FILE@"
   printf 'LOGIN_ROOT=%s\n' "$config_root"

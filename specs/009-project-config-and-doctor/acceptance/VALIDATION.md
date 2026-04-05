@@ -6,7 +6,7 @@ This guide lists the checks needed to validate [SPEC.md](../SPEC.md).
 
 Run these from the repository parent or with `path:` installables so they do not depend on the current shell being inside the flake root.
 
-1. Validate the project-config and doctor smoke end to end.
+1. Validate the project-config and doctor smoke end-to-end.
 
    ```sh
    nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \

@@ -32,6 +32,7 @@ Feature: Shared state root
 
   Scenario: wrappers translate Firebreak resolution into tool-native env vars
     Given a Firebreak sandbox that exposes both Codex and Claude Code
+    And the operator sets "FIREBREAK_STATE_MODE=workspace"
     When the operator launches the Firebreak Codex wrapper
     Then Firebreak exports the resolved directory through Codex-native config env vars
     When the operator launches the Firebreak Claude Code wrapper

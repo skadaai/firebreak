@@ -41,7 +41,7 @@ Run these from the `ao` checkout root.
    - the default entrypoint still works
    - `workspace`, `vm`, and `host` all resolve correctly as runtime-state roots
 
-4. Validate the shared credential-slot contract end to end.
+4. Validate the shared credential-slot contract end-to-end.
 
    ```sh
    nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
@@ -112,7 +112,7 @@ Run these from the `ao` checkout root.
    ```sh
    nix --accept-flake-config --extra-experimental-features 'nix-command flakes' eval --raw \
      '.#packages.x86_64-linux.firebreak-agent-orchestrator.name' \
-     --override-input firebreak 'path:/home/zvictor/development/firebreak/ao'
+     --override-input firebreak ../..
    ```
 
    Run that command from `external/agent-orchestrator`.

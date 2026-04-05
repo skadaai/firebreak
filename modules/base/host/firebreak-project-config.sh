@@ -1,3 +1,5 @@
+# shellcheck disable=SC2329
+
 trim_whitespace() {
   value=$1
   value="${value#"${value%%[![:space:]]*}"}"
@@ -17,18 +19,11 @@ firebreak_reset_project_config_state() {
 
 firebreak_project_config_key_allowed() {
   case "$1" in
-    FIREBREAK_STATE_MODE|FIREBREAK_STATE_ROOT|FIREBREAK_LAUNCH_MODE|FIREBREAK_WORKER_MODE|FIREBREAK_WORKER_MODES|FIREBREAK_CREDENTIAL_SLOT|FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH)
+    FIREBREAK_STATE_MODE|FIREBREAK_STATE_ROOT|FIREBREAK_STATE_DIR|FIREBREAK_INSTANCE_DIR|FIREBREAK_INSTANCE_EPHEMERAL|FIREBREAK_LAUNCH_MODE|FIREBREAK_WORKER_MODE|FIREBREAK_WORKER_MODES|FIREBREAK_CREDENTIAL_SLOT|FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH)
       return 0
       ;;
     *_STATE_MODE)
-      case "$1" in
-        NIX_CONFIG|FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG)
-          return 1
-          ;;
-        *)
-          return 0
-          ;;
-      esac
+      return 0
       ;;
     *_CREDENTIAL_SLOT)
       return 0
@@ -37,6 +32,29 @@ firebreak_project_config_key_allowed() {
       return 1
       ;;
   esac
+}
+
+# shellcheck disable=SC2329
+firebreak_should_scrub_env_key() {
+  case "$1" in
+    FIREBREAK_STATE_MODE|FIREBREAK_STATE_ROOT|FIREBREAK_STATE_DIR|FIREBREAK_INSTANCE_DIR|FIREBREAK_INSTANCE_EPHEMERAL|FIREBREAK_CREDENTIAL_SLOT|FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH|*_CREDENTIAL_SLOT|*_STATE_MODE)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+# shellcheck disable=SC2329
+firebreak_list_scrubbable_env_keys() {
+  while IFS='=' read -r env_key _; do
+    if firebreak_should_scrub_env_key "$env_key"; then
+      printf '%s\n' "$env_key"
+    fi
+  done <<EOF
+$(env)
+EOF
 }
 
 firebreak_record_ignored_key() {

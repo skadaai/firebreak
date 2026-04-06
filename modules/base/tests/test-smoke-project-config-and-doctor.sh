@@ -127,7 +127,7 @@ FIREBREAK_STATE_ROOT=~/shared-state-root
 CODEX_STATE_MODE=workspace
 FIREBREAK_CREDENTIAL_SLOT=default
 CODEX_CREDENTIAL_SLOT=backup
-FIREBREAK_TASK_STATE_DIR=/tmp/internal-only
+DEV_FLOW_STATE_DIR=/tmp/internal-only
 EOF
 
 doctor_output=$(FIREBREAK_STATE_MODE=vm firebreak_cmd doctor)
@@ -158,7 +158,7 @@ project_dir = os.environ["PROJECT_DIR"]
 workspace_state_key = os.environ["WORKSPACE_STATE_KEY"]
 
 assert obj["project_config_source"] == "project-default"
-assert "FIREBREAK_TASK_STATE_DIR" in obj["ignored_config_keys"]
+assert "DEV_FLOW_STATE_DIR" in obj["ignored_config_keys"]
 assert obj["tools"]["codex"]["mode"] == "workspace"
 assert obj["tools"]["codex"]["path"] == os.path.expanduser(f"~/shared-state-root/workspaces/{workspace_state_key}/codex")
 assert obj["tools"]["codex"]["credential_slot"] == "backup"
@@ -185,7 +185,7 @@ assert obj["cwd_whitespace"] is False
 assert details["cwd"] == project_dir
 assert details["project_root_source"] == "cwd"
 assert details["git_common_dir"] == "unknown"
-assert "FIREBREAK_TASK_STATE_DIR" in details["ignored_keys"]
+assert "DEV_FLOW_STATE_DIR" in details["ignored_keys"]
 PY
 
 prepare_git_repo

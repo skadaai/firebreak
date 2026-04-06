@@ -69,6 +69,8 @@
             mkWorkloadVersionSmokePackage
             mkCloudJobPackage
             mkCloudSmokePackage
+            mkDevFlowCliPackage
+            mkDevFlowCliSurfaceSmokePackage
             mkCredentialSlotSmokePackage
             mkToolCredentialSlotSmokePackage
             mkFirebreakCliSurfaceSmokePackage
@@ -80,8 +82,8 @@
             mkProjectConfigSmokePackage
             mkRunnerPackage
             mkSmokePackage
-            mkTaskPackage
-            mkTaskSmokePackage
+            mkWorkspacePackage
+            mkWorkspaceSmokePackage
             mkValidationPackage
             mkValidationSmokePackage
             mkWorkerFirebreakAttachSmokePackage

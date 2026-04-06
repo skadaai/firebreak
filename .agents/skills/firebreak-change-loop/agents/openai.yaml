@@ -1,6 +1,0 @@
-interface:
-  display_name: "Firebreak Change Loop"
-  short_description: "Run the bounded Firebreak attempt loop"
-  default_prompt: "Use $firebreak-change-loop to execute a bounded change attempt with plan, validation, review, and stop conditions."
-policy:
-  allow_implicit_invocation: false

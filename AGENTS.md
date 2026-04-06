@@ -39,14 +39,16 @@ There is no separate application `src/` tree yet. Keep shared behavior in the ba
   Builds the underlying declared runner without launching the VM.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-test-smoke-codex`
   Runs the lightweight host-side smoke test against the interactive Codex VM.
-- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-test-smoke-internal-loop`
-  Runs the bounded autonomous change-loop smoke against isolated Firebreak tasks.
+- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#dev-flow-test-smoke-loop`
+  Runs the bounded autonomous change-loop smoke against isolated dev-flow workspaces.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak`
-  Runs the top-level Firebreak CLI with the human-facing surface plus the `internal` subtree.
+  Runs the top-level Firebreak CLI with the human-facing VM surface.
+- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#dev-flow`
+  Runs the agent-oriented dev-flow CLI for workspace, validation, and bounded-attempt commands.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' flake check`
   Runs flake evaluation checks. Use this before submitting changes.
-- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak -- internal loop run ...`
-  Runs the bounded internal loop against an existing isolated task, recording plan, policy, validation, review, and commit evidence.
+- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#dev-flow -- loop run ...`
+  Runs the bounded loop against an existing isolated workspace, recording plan, policy, validation, review, and commit evidence.
 - GitHub Actions
   - `.github/workflows/ci.yml` runs hosted `flake check` on pushes and pull requests.
   - `.github/workflows/vm-smoke.yml` runs `firebreak-test-smoke-codex` on a self-hosted runner labeled `self-hosted`, `linux`, `x64`, and `kvm`.
@@ -90,11 +92,21 @@ Pull requests should include:
 - exact commands used for validation
 - boot logs or console output when changing services, mounts, or login behavior
 
+Every PR that changes behaviour must include a documentation update. No code merge without a corresponding docs change if the public interface or user behaviour changes.
+
 ## Agent-Specific Instructions
 
 Prefer `mcp__deepwiki__ask_question` early when behavior is unclear, especially for `microvm.nix` option semantics, runner behavior, or systemd interactions. Use it as a default aid before guessing from memory.
 
 Check [`UPSTREAM_REPOS.md`](./UPSTREAM_REPOS.md) first when choosing which upstream repository to query with `ask_question`.
+
+For non-trivial autonomous work in this repository, prefer the `dev-flow` workflow surface over ad hoc task language:
+
+- Start from [`dev-flow-autonomous-flow`](./.agents/skills/dev-flow-autonomous-flow/SKILL.md) when the work spans spec selection, workspace choice, validation, and review.
+- Use one workspace per spec line. Reuse it for sequential work on the same spec, and start another workspace when the work moves to a different spec or unrelated maintenance line.
+- Prefer the aligned role profiles in [`.agents/profiles/`](./.agents/profiles): `planner`, `worker`, `reviewer`, `validator`, `local-operator`, and `cloud-operator`.
+- Use [ROLE_SELECTION.md](./.agents/profiles/ROLE_SELECTION.md) to choose the smallest role that can complete the current phase.
+- Use `dev-flow workspace ...`, `dev-flow validate run ...`, and `dev-flow loop run ...` as the internal command surface for autonomous work.
 
 Keep Firebreak core generic. Do not hardcode external tool or package identities into core modules, host helpers, or the top-level CLI. If a new tool needs special behavior, define it in that tool's overlay module or through generic extensibility points rather than adding package-specific env vars, binary paths, or dispatch rules to Firebreak core.
 

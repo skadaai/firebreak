@@ -33,10 +33,10 @@ last_updated: 2026-03-24
 
 ## Current status
 
-Implemented in the bounded Firebreak task worktree, with flake evaluation and launcher smoke validation completed. Real `aarch64-linux` runtime validation on KVM hardware remains open.
+Implemented in the bounded workspace checkout, with flake evaluation and launcher smoke validation completed. Real `aarch64-linux` runtime validation on KVM hardware remains open.
 
 ## Open questions
 
 - whether runner compatibility logic should remain patch-based or move to explicit Firebreak-controlled QEMU argument generation
 - what minimum ARM Linux CI coverage is required before `aarch64-linux` is documented as fully supported
-- whether cloud-profile and internal loop surfaces should be validated on `aarch64-linux` in the first landing or in a follow-up
+- whether cloud-profile and dev-flow loop surfaces should be validated on `aarch64-linux` in the first landing or in a follow-up

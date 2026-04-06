@@ -46,85 +46,6 @@ firebreak_exec_package() {
   exec nix run "$FIREBREAK_FLAKE_REF#$package_name" -- "$@"
 }
 
-firebreak_local_preflight_kvm_state() {
-  if [ -n "${FIREBREAK_LOCAL_PREFLIGHT_KVM_STATE:-}" ]; then
-    printf '%s\n' "$FIREBREAK_LOCAL_PREFLIGHT_KVM_STATE"
-    return 0
-  fi
-  firebreak_doctor_detect_kvm
-}
-
-firebreak_local_preflight_ip_forward_state() {
-  if [ -n "${FIREBREAK_LOCAL_PREFLIGHT_IP_FORWARD_STATE:-}" ]; then
-    printf '%s\n' "$FIREBREAK_LOCAL_PREFLIGHT_IP_FORWARD_STATE"
-    return 0
-  fi
-  firebreak_doctor_detect_ip_forward
-}
-
-firebreak_local_preflight_sudo_networking_state() {
-  if [ -n "${FIREBREAK_LOCAL_PREFLIGHT_SUDO_NETWORKING_STATE:-}" ]; then
-    printf '%s\n' "$FIREBREAK_LOCAL_PREFLIGHT_SUDO_NETWORKING_STATE"
-    return 0
-  fi
-  firebreak_doctor_detect_passwordless_sudo
-}
-
-firebreak_require_local_linux_host_networking() {
-  host_runtime=$(firebreak_doctor_local_runtime)
-  case "$host_runtime" in
-    cloud-hypervisor)
-      kvm_state=$(firebreak_local_preflight_kvm_state)
-      ip_forward_state=$(firebreak_local_preflight_ip_forward_state)
-      sudo_networking_state=$(firebreak_local_preflight_sudo_networking_state)
-
-      case "$kvm_state" in
-        ok) ;;
-        *)
-          echo "Firebreak local Linux workloads require usable /dev/kvm access. Run 'firebreak doctor' for details." >&2
-          exit 1
-          ;;
-      esac
-
-      case "$ip_forward_state" in
-        ok) ;;
-        *)
-          echo "Firebreak local Linux workloads require net.ipv4.ip_forward=1. See guides/cloud-hypervisor-local-linux.md." >&2
-          exit 1
-          ;;
-      esac
-
-      case "$sudo_networking_state" in
-        ok) ;;
-        missing-tools)
-          echo "Firebreak local Linux workloads require ip, iptables, and passwordless sudo for host networking commands. See guides/cloud-hypervisor-local-linux.md." >&2
-          exit 1
-          ;;
-        missing-sudo|networking-denied)
-          echo "Firebreak local Linux workloads require passwordless sudo for host networking commands. See guides/cloud-hypervisor-local-linux.md." >&2
-          exit 1
-          ;;
-        firewall-denied)
-          echo "Firebreak local Linux workloads require passwordless sudo for host firewall commands. See guides/cloud-hypervisor-local-linux.md." >&2
-          exit 1
-          ;;
-        *)
-          echo "Firebreak local Linux workloads require a prepared host networking setup. Run 'firebreak doctor' for details." >&2
-          exit 1
-          ;;
-      esac
-      ;;
-    unsupported-intel-mac)
-      echo "Firebreak local support on macOS requires Apple Silicon." >&2
-      exit 1
-      ;;
-    unsupported-host)
-      echo "Firebreak local workloads currently require Linux or Apple Silicon macOS." >&2
-      exit 1
-      ;;
-  esac
-}
-
 vms_usage() {
   cat <<'EOF' >&2
 usage:
@@ -357,8 +278,6 @@ EOF
   dispatch_run_package() {
     package_name=$1
     shift
-
-    firebreak_require_local_linux_host_networking
 
     if [ -n "$requested_launch_mode" ] && { [ -n "$requested_worker_mode" ] || [ -n "$requested_worker_modes" ]; }; then
       FIREBREAK_LAUNCH_MODE="$requested_launch_mode" \

@@ -139,7 +139,6 @@ in {
 
     workloadVm.requiredCapabilities = [
       "interactive-console"
-      "local-networking"
       "workspace-share"
       "host-meta-share"
     ];

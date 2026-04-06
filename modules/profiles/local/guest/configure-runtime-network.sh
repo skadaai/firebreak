@@ -5,13 +5,11 @@ gateway_ipv4_file=@HOST_META_MOUNT@/network-gateway-ipv4
 dns_servers_file=@HOST_META_MOUNT@/network-dns-servers
 
 if ! [ -r "$guest_ipv4_cidr_file" ]; then
-  echo "runtime guest IPv4 metadata is unavailable at $guest_ipv4_cidr_file" >&2
-  exit 1
+  exit 0
 fi
 
 if ! [ -r "$gateway_ipv4_file" ]; then
-  echo "runtime gateway IPv4 metadata is unavailable at $gateway_ipv4_file" >&2
-  exit 1
+  exit 0
 fi
 
 network_interface=$(ip -o link show | awk -F': ' '$2 != "lo" { print $2; exit }')

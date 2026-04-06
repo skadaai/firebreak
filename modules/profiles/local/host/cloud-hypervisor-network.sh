@@ -1,5 +1,30 @@
+cloud_hypervisor_local_network_requested() {
+  if [ "${FIREBREAK_FULL_GUEST_NETWORK:-0}" = "1" ]; then
+    return 0
+  fi
+
+  LOCAL_PUBLISHED_HOST_PORTS_JSON='@LOCAL_PUBLISHED_HOST_PORTS_JSON@' \
+    python3 - <<'PY'
+import json
+import os
+import sys
+
+raw = os.environ["LOCAL_PUBLISHED_HOST_PORTS_JSON"].strip()
+if not raw:
+    raise SystemExit(1)
+
+try:
+    entries = json.loads(raw)
+except ValueError:
+    raise SystemExit(1)
+
+raise SystemExit(0 if entries else 1)
+PY
+}
+
 cloud_hypervisor_setup_local_network() {
   [ "$runtime_backend" = "cloud-hypervisor" ] || return 0
+  cloud_hypervisor_local_network_requested || return 0
   host_kernel=$(uname -s 2>/dev/null || printf '%s' unknown)
   case "$host_kernel" in
     Linux) ;;

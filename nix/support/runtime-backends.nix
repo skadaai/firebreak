@@ -7,14 +7,14 @@ let
       roStoreShareProto = "9p";
       capabilities = [
         "interactive-console"
-        "local-networking"
+        "guest-egress"
         "workspace-share"
         "host-meta-share"
         "shared-state-root"
         "shared-credential-slots"
         "tool-runtimes"
         "worker-bridge"
-        "local-port-publish"
+        "host-port-publish-tcp"
       ];
     };
 
@@ -24,13 +24,14 @@ let
       roStoreShareProto = "virtiofs";
       capabilities = [
         "interactive-console"
-        "local-networking"
+        "guest-egress"
         "workspace-share"
         "host-meta-share"
         "shared-state-root"
         "shared-credential-slots"
         "tool-runtimes"
         "worker-bridge"
+        "host-port-publish-tcp"
       ];
     };
 
@@ -40,14 +41,14 @@ let
       roStoreShareProto = "virtiofs";
       capabilities = [
         "interactive-console"
-        "local-networking"
         "workspace-share"
         "host-meta-share"
         "shared-state-root"
         "shared-credential-slots"
         "tool-runtimes"
         "worker-bridge"
-        "local-port-publish"
+        "host-port-publish-tcp"
+        "full-guest-network"
         "snapshot"
         "vsock"
       ];

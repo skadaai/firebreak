@@ -345,7 +345,7 @@ in {
       {
         assertion =
           forwardPorts == [ ]
-          || builtins.elem "local-port-publish" backendSpec.capabilities;
+          || builtins.elem "host-port-publish-tcp" backendSpec.capabilities;
         message =
           "workloadVm.runtimeBackend `${cfg.runtimeBackend}` does not support host port publishing required by modules/node-cli forwardPorts.";
       }

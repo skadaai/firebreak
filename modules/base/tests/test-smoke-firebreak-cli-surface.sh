@@ -37,51 +37,26 @@ require_pattern "$run_help_output" "usage:" "run help usage text"
 worker_help_output=$(@FIREBREAK_CLI_BIN@ worker --help 2>&1)
 require_pattern "$worker_help_output" "firebreak worker run" "worker help usage text"
 
-run_codex_output=$(
-  FIREBREAK_LOCAL_PREFLIGHT_KVM_STATE=ok \
-    FIREBREAK_LOCAL_PREFLIGHT_IP_FORWARD_STATE=ok \
-    FIREBREAK_LOCAL_PREFLIGHT_SUDO_NETWORKING_STATE=ok \
-    @FIREBREAK_CLI_BIN@ run codex -- --version
-)
+run_codex_output=$(@FIREBREAK_CLI_BIN@ run codex -- --version)
 require_pattern "$run_codex_output" '__VM__codex' "codex run delegation"
 require_pattern "$run_codex_output" '__MODE__unset' "default run mode passthrough"
 require_pattern "$run_codex_output" '__WORKER_MODE__unset' "default worker mode passthrough"
 require_pattern "$run_codex_output" '__ARG__--version' "codex forwarded argument"
 
-run_claude_shell_output=$(
-  FIREBREAK_LOCAL_PREFLIGHT_KVM_STATE=ok \
-    FIREBREAK_LOCAL_PREFLIGHT_IP_FORWARD_STATE=ok \
-    FIREBREAK_LOCAL_PREFLIGHT_SUDO_NETWORKING_STATE=ok \
-    @FIREBREAK_CLI_BIN@ run claude-code --shell -- prompt.txt
-)
+run_claude_shell_output=$(@FIREBREAK_CLI_BIN@ run claude-code --shell -- prompt.txt)
 require_pattern "$run_claude_shell_output" '__VM__claude-code' "claude-code run delegation"
 require_pattern "$run_claude_shell_output" '__MODE__shell' "shell mode override"
 require_pattern "$run_claude_shell_output" '__ARG__prompt.txt' "claude-code forwarded argument"
 
-run_codex_launch_mode_output=$(
-  FIREBREAK_LOCAL_PREFLIGHT_KVM_STATE=ok \
-    FIREBREAK_LOCAL_PREFLIGHT_IP_FORWARD_STATE=ok \
-    FIREBREAK_LOCAL_PREFLIGHT_SUDO_NETWORKING_STATE=ok \
-    @FIREBREAK_CLI_BIN@ run codex --launch-mode shell -- --version
-)
+run_codex_launch_mode_output=$(@FIREBREAK_CLI_BIN@ run codex --launch-mode shell -- --version)
 require_pattern "$run_codex_launch_mode_output" '__MODE__shell' "explicit launch mode override"
 
-run_codex_local_output=$(
-  FIREBREAK_LOCAL_PREFLIGHT_KVM_STATE=ok \
-    FIREBREAK_LOCAL_PREFLIGHT_IP_FORWARD_STATE=ok \
-    FIREBREAK_LOCAL_PREFLIGHT_SUDO_NETWORKING_STATE=ok \
-    @FIREBREAK_CLI_BIN@ run codex --worker-mode local -- --help
-)
+run_codex_local_output=$(@FIREBREAK_CLI_BIN@ run codex --worker-mode local -- --help)
 require_pattern "$run_codex_local_output" '__VM__codex' "codex local-mode delegation"
 require_pattern "$run_codex_local_output" '__WORKER_MODE__local' "worker mode override"
 require_pattern "$run_codex_local_output" '__ARG__--help' "local-mode forwarded argument"
 
-run_codex_per_worker_output=$(
-  FIREBREAK_LOCAL_PREFLIGHT_KVM_STATE=ok \
-    FIREBREAK_LOCAL_PREFLIGHT_IP_FORWARD_STATE=ok \
-    FIREBREAK_LOCAL_PREFLIGHT_SUDO_NETWORKING_STATE=ok \
-    @FIREBREAK_CLI_BIN@ run codex --worker-mode local --worker-mode codex=vm --worker-mode claude=local -- --version
-)
+run_codex_per_worker_output=$(@FIREBREAK_CLI_BIN@ run codex --worker-mode local --worker-mode codex=vm --worker-mode claude=local -- --version)
 require_pattern "$run_codex_per_worker_output" '__WORKER_MODE__local' "global worker mode with per-worker overrides"
 require_pattern "$run_codex_per_worker_output" '__WORKER_MODES__codex=vm' "codex per-worker override"
 require_pattern "$run_codex_per_worker_output" 'claude=local' "claude per-worker override"
@@ -127,22 +102,6 @@ set -e
 if [ "$unknown_vm_status" -eq 0 ] || ! printf '%s\n' "$unknown_vm_output" | grep -F -q "run 'firebreak vms'"; then
   printf '%s\n' "$unknown_vm_output" >&2
   echo "CLI surface smoke did not reject an unknown VM cleanly" >&2
-  exit 1
-fi
-
-set +e
-sudo_preflight_output=$(
-  FIREBREAK_LOCAL_PREFLIGHT_KVM_STATE=ok \
-    FIREBREAK_LOCAL_PREFLIGHT_IP_FORWARD_STATE=ok \
-    FIREBREAK_LOCAL_PREFLIGHT_SUDO_NETWORKING_STATE=networking-denied \
-    @FIREBREAK_CLI_BIN@ run codex 2>&1
-)
-sudo_preflight_status=$?
-set -e
-
-if [ "$sudo_preflight_status" -eq 0 ] || ! printf '%s\n' "$sudo_preflight_output" | grep -F -q "passwordless sudo"; then
-  printf '%s\n' "$sudo_preflight_output" >&2
-  echo "CLI surface smoke did not fail fast on missing sudo networking access" >&2
   exit 1
 fi
 

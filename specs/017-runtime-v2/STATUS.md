@@ -16,6 +16,7 @@ Executing the Linux local runtime replacement and cold-boot reduction slices.
 - runtime backends now have an explicit capability contract consumed by product profiles
 - Linux local Firebreak now defaults to Cloud Hypervisor and rejects the superseded local QEMU path
 - Linux local networking and host port publishing now exist as Cloud Hypervisor-specific host plumbing rather than QEMU `hostfwd`
+- local networking capabilities are now split more honestly; launcher-level Linux host-network preflight is gone, and Cloud Hypervisor host networking setup no longer runs unless a workload actually requests it
 - local tool bootstrapping has been moved further off the hot path through baked CLIs and bootstrap skip conditions
 - Linux local `/nix/store` and host metadata now use `virtiofs` rather than Linux `9p`
 - local share startup has been simplified by collapsing host metadata, exec-output, and worker-bridge into one writable runtime share

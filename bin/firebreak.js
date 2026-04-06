@@ -22,9 +22,6 @@ const ORA_SPINNER_NAME = "dots"
 const args = process.argv.slice(2)
 const topLevelCommand = args[0] || "";
 const forcedLocalRoot = process.env.FIREBREAK_LAUNCHER_PACKAGE_ROOT || "";
-const kvmPath = process.env.FIREBREAK_LAUNCHER_KVM_PATH || "/dev/kvm";
-const forcedIpForwardState = process.env.FIREBREAK_LAUNCHER_IP_FORWARD_STATE || "";
-const forcedSudoNetworkingState = process.env.FIREBREAK_LAUNCHER_SUDO_NETWORKING_STATE || "";
 const nixHelpersDisabled = process.env.FIREBREAK_LAUNCHER_DISABLE_NIX_HELPERS === "1"
 const launcherPlatform = process.env.FIREBREAK_LAUNCHER_TEST_PLATFORM || process.platform
 const launcherArch = process.env.FIREBREAK_LAUNCHER_TEST_ARCH || process.arch
@@ -36,10 +33,6 @@ const supportedLinuxArchitectures = new Map([
 const fail = (message) => {
   console.error(`firebreak launcher: ${message}`)
   process.exit(1)
-}
-
-const warn = (message) => {
-  console.error(`firebreak launcher: ${message}`)
 }
 
 const pathExists = (targetPath) => {
@@ -143,90 +136,6 @@ const checkNix = () => {
   }
 }
 
-const kvmFailureReason = () => {
-  try {
-    fs.accessSync(kvmPath, fs.constants.R_OK | fs.constants.W_OK)
-    return null;
-  } catch (error) {
-    if (!fs.existsSync(kvmPath)) {
-      return `${kvmPath} is missing`;
-    }
-
-    if (error && error.code === "EACCES") {
-      return `${kvmPath} is not readable and writable by the current user`;
-    }
-
-    return `${kvmPath} is not usable: ${error.message}`;
-  }
-}
-
-const ipForwardFailureReason = () => {
-  if (forcedIpForwardState) {
-    if (forcedIpForwardState === "enabled") {
-      return null;
-    }
-    return "net.ipv4.ip_forward is disabled";
-  }
-
-  try {
-    const raw = fs.readFileSync("/proc/sys/net/ipv4/ip_forward", "utf8").trim()
-    return raw === "1" ? null : "net.ipv4.ip_forward is disabled";
-  } catch (error) {
-    return `unable to read net.ipv4.ip_forward: ${error.message}`;
-  }
-}
-
-const commandExists = (command, argsForCheck) => {
-  const result = spawnSync(command, argsForCheck, {
-    stdio: "ignore"
-  })
-
-  return !result.error || result.error.code !== "ENOENT"
-}
-
-const sudoNetworkingFailureReason = () => {
-  if (forcedSudoNetworkingState) {
-    switch (forcedSudoNetworkingState) {
-      case "enabled":
-        return null
-      case "missing-tools":
-        return "host networking tools ip and iptables are required"
-      case "missing-sudo":
-        return "passwordless sudo is required for Firebreak host networking commands"
-      case "networking-denied":
-        return "passwordless sudo is required for Firebreak host networking commands"
-      case "firewall-denied":
-        return "passwordless sudo is required for Firebreak host firewall commands"
-      default:
-        return `invalid FIREBREAK_LAUNCHER_SUDO_NETWORKING_STATE: ${forcedSudoNetworkingState}`
-    }
-  }
-
-  if (!commandExists("ip", ["link", "show"]) || !commandExists("iptables", ["--version"])) {
-    return "host networking tools ip and iptables are required"
-  }
-
-  if (!commandExists("sudo", ["-n", "true"])) {
-    return "passwordless sudo is required for Firebreak host networking commands"
-  }
-
-  const sudoIp = spawnSync("sudo", ["-n", "ip", "link", "show"], {
-    stdio: "ignore"
-  })
-  if (sudoIp.status !== 0) {
-    return "passwordless sudo is required for Firebreak host networking commands"
-  }
-
-  const sudoIptables = spawnSync("sudo", ["-n", "iptables", "-w", "-L"], {
-    stdio: "ignore"
-  })
-  if (sudoIptables.status !== 0) {
-    return "passwordless sudo is required for Firebreak host firewall commands"
-  }
-
-  return null
-}
-
 const runCommandRequiresNix = () => {
   if (topLevelCommand !== "run") {
     return false;
@@ -274,24 +183,6 @@ const commandRequiresNix = () => {
 
 const needsNix = commandRequiresNix()
 const commandUsesOra = () => runCommandRequiresNix()
-
-const checkLinuxLocalHost = () => {
-  if (launcherPlatform !== "linux") {
-    return;
-  }
-
-  const failure = kvmFailureReason() || ipForwardFailureReason() || sudoNetworkingFailureReason()
-  if (!failure) {
-    return;
-  }
-
-  if (!commandRequiresNix()) {
-    warn(`${failure}. Continuing because this command can still provide setup or diagnostics help.`)
-    return;
-  }
-
-  fail(`${failure}. Firebreak local Linux workloads require KVM access, net.ipv4.ip_forward=1, and passwordless sudo for host networking commands.`)
-}
 
 const checkWorkspacePath = () => {
   if (/\s/.test(process.cwd())) {
@@ -563,7 +454,6 @@ checkPlatform()
 if (needsNix) {
   checkNix()
 }
-checkLinuxLocalHost()
 checkWorkspacePath()
 runFirebreak().catch((error) => {
   fail(`unexpected launcher error: ${error.message}`)

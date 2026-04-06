@@ -9,22 +9,25 @@ run_deepwiki_cli() {
   if command -v bunx >/dev/null 2>&1; then
     if bunx --silent -p "$DEEPWIKI_PACKAGE" deepwiki "$@"; then
       return 0
+    else
+      status=$?
     fi
-    status=$?
   fi
 
   if command -v npx >/dev/null 2>&1; then
     if npx --yes -p "$DEEPWIKI_PACKAGE" deepwiki "$@"; then
       return 0
+    else
+      status=$?
     fi
-    status=$?
   fi
 
   if command -v pnpx >/dev/null 2>&1; then
     if pnpx "$DEEPWIKI_PACKAGE" deepwiki "$@"; then
       return 0
+    else
+      status=$?
     fi
-    status=$?
   fi
 
   if [ "$status" -eq 0 ]; then

@@ -21,6 +21,10 @@
 
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=./dw-common.sh
+. "$script_dir/dw-common.sh"
+
 usage() {
   cat >&2 <<'EOF'
 Usage: dw-query.sh "question" owner/repo [owner/repo2 ...]
@@ -106,7 +110,7 @@ TMP_JSON="$(mktemp)"
 cleanup() { rm -f "$TMP_JSON"; }
 trap cleanup EXIT
 
-bunx @qwadratic/deepwiki-cli "${ARGS[@]}" > "$TMP_JSON"
+run_deepwiki_json_with_retry "$TMP_JSON" "${ARGS[@]}"
 
 if [[ "$RAW_JSON" == true ]]; then
   cat "$TMP_JSON"

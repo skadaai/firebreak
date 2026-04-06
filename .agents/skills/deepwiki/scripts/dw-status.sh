@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=./dw-common.sh
+. "$script_dir/dw-common.sh"
+
 usage() {
   echo 'Usage: dw-status.sh owner/repo [--warm]' >&2
 }
@@ -43,12 +47,16 @@ fi
 
 if [[ "$DO_WARM" == true ]]; then
   echo "Warming $REPO..." >&2
-  bunx @qwadratic/deepwiki-cli warm "$REPO" >&2
+  run_deepwiki_cli warm "$REPO" >&2
 fi
 
-RESULT="$(bunx @qwadratic/deepwiki-cli status "$REPO")"
-echo "$RESULT"
+tmp_json="$(mktemp)"
+cleanup() { rm -f "$tmp_json"; }
+trap cleanup EXIT
 
-if echo "$RESULT" | jq -e '.indexed == false or .status == "not_indexed"' > /dev/null 2>&1; then
+run_deepwiki_json_with_retry "$tmp_json" status "$REPO"
+cat "$tmp_json"
+
+if jq -e '.indexed == false or .status == "not_indexed"' "$tmp_json" > /dev/null 2>&1; then
   exit 1
 fi

@@ -68,11 +68,17 @@ One request. One response. Output:
 
 **Always use the default mode (`deep`).** Only use `--mode fast` for quick orientation when the answer is not going into code. Use `--mode codemap` for architecture, control flow, and code trace questions.
 
+`deep` mode can take a very long time. That is expected. Do not build short timeouts into the wrapper or assume a long wait means the query is stuck. If you intentionally want to cap waiting time for one call, wrap the script with the host `timeout` command yourself.
+Otherwise, wait patiently for it to return.
+
 #### Examples
 
 ```bash
 # Standard implementation research — use this for all implementation work
 ./scripts/dw-query.sh "How does the plugin lifecycle work?" vitejs/vite
+
+# If you intentionally want to cap how long you are willing to wait, do it outside the wrapper
+timeout 5m ./scripts/dw-query.sh "How does the plugin lifecycle work?" vitejs/vite
 
 # Quick orientation only
 ./scripts/dw-query.sh "What is this repo for?" withastro/starlight --mode fast
@@ -180,6 +186,16 @@ mcp__deepwiki__read_wiki_contents({ repoName: "owner/repo", topic: "authenticati
 | Repo index status | ✅ `dw-status.sh` | ❌ |
 | Context injection | ✅ `--context` | ❌ |
 | Source file listing | ✅ `--sources-only` | ❌ |
+
+---
+
+## Error Handling
+
+- Repository not found: verify the `owner/repo`, check `UPSTREAM_REPOS.md`, read the upstream `README.md` on GitHub, follow README links, or do a targeted web search.
+- Service unavailable: if the CLI returns upstream 502/504-style failures, retry once or twice, then fall back to `mcp__deepwiki__ask_question`, `mcp__deepwiki__read_wiki_structure`, or `mcp__deepwiki__read_wiki_contents`. If both CLI and MCP fail, use upstream docs and note the limitation.
+- Long-running deep mode: expect `deep` mode to take time. Only use the host `timeout` command when you intentionally want to bound the wait for one call, for example `timeout 10m ./scripts/dw-query.sh "..." owner/repo`.
+- Server-side query timeout: if DeepWiki returns a JSON error such as `{"error":"Query timed out after 240s"}`, treat it as a completed but inconclusive upstream result. Do not auto-retry the same deep query blindly; narrow the question, switch to `fast` or `codemap` if appropriate, or fall back to MCP and upstream docs.
+- Courteous usage: batch related questions, reuse printed `Thread-ID` values for follow-ups, and avoid spamming warm or repeated deep queries when one threaded conversation will do.
 
 ---
 

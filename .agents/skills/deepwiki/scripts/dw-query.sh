@@ -1,44 +1,83 @@
 #!/usr/bin/env bash
-# dw-query — query DeepWiki and print the answer to stdout.
+# dw-query.sh — query DeepWiki and print the answer + sources from one request.
 #
 # Usage:
-#   dw-query.sh "question" owner/repo [owner/repo2 ...] [--mode deep|fast|codemap]
-#               [--context "extra context"] [--id <prev-query-id>] [--mermaid]
+#   dw-query.sh "question" owner/repo [owner/repo2 ...]
+#               [--mode deep|fast|codemap] [--context "text"]
+#               [--id query-id] [--mermaid] [--sources-only] [--json]
 #
-# Defaults: mode=deep.
+# Default output (one request, one response):
+#   1. Answer prose
+#   2. Sources: list of file paths DeepWiki used from that same response
+#   3. Thread-ID: message_id to use with --id for follow-up queries
 #
-# Examples:
-#   ./scripts/dw-query.sh "How does routing work?" vitejs/vite
-#   ./scripts/dw-query.sh "Compare routing" expressjs/express koajs/koa --mode fast
-#   ./scripts/dw-query.sh "How does HMR work?" vitejs/vite --context "I am using React 19"
-#   ./scripts/dw-query.sh "Tell me more" vitejs/vite --id abc123
-#   ./scripts/dw-query.sh "Show the build pipeline" vitejs/vite --mode codemap --mermaid
+# Options:
+#   --mode       deep (default) | fast | codemap
+#   --context    Extra context injected into the query
+#   --id         Reuse a previous query's Thread-ID for follow-up threading
+#   --mermaid    Output Mermaid diagram (codemap mode only)
+#   --sources-only  Print only the source file paths, one per line
+#   --json       Print the raw JSON response (skips all extraction)
 
 set -euo pipefail
 
-QUESTION=""
-REPOS=()
-MODE="deep"
-CONTEXT=""
-ID=""
-MERMAID=false
+usage() {
+  cat >&2 <<'EOF'
+Usage: dw-query.sh "question" owner/repo [owner/repo2 ...]
+                   [--mode deep|fast|codemap] [--context "text"]
+                   [--id query-id] [--mermaid] [--sources-only] [--json]
+EOF
+}
 
 if [[ $# -eq 0 ]]; then
-  echo "Usage: dw-query.sh \"question\" owner/repo [owner/repo2 ...] [--mode MODE] [--context TEXT] [--id ID] [--mermaid]" >&2
+  usage
   exit 1
 fi
 
 QUESTION="$1"
 shift
 
+REPOS=()
+MODE="deep"
+CONTEXT=""
+ID=""
+MERMAID=false
+SOURCES_ONLY=false
+RAW_JSON=false
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --mode|-m)    MODE="$2";    shift 2 ;;
-    --context|-c) CONTEXT="$2"; shift 2 ;;
-    --id)         ID="$2";      shift 2 ;;
-    --mermaid)    MERMAID=true; shift ;;
+    --mode|-m)
+      MODE="${2:?'--mode requires a value'}"
+      shift 2
+      ;;
+    --context|-c)
+      CONTEXT="${2:?'--context requires a value'}"
+      shift 2
+      ;;
+    --id)
+      ID="${2:?'--id requires a value'}"
+      shift 2
+      ;;
+    --mermaid)
+      MERMAID=true
+      shift
+      ;;
+    --sources-only)
+      SOURCES_ONLY=true
+      shift
+      ;;
+    --json)
+      RAW_JSON=true
+      shift
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
     --*)
       echo "Unknown flag: $1" >&2
+      usage
       exit 1
       ;;
     *)
@@ -50,17 +89,52 @@ done
 
 if [[ ${#REPOS[@]} -eq 0 ]]; then
   echo "Error: at least one owner/repo is required." >&2
+  usage
   exit 1
 fi
 
-ARGS=("query" "$QUESTION")
+ARGS=(query "$QUESTION")
 for repo in "${REPOS[@]}"; do
-  ARGS+=("-r" "$repo")
+  ARGS+=(-r "$repo")
 done
-ARGS+=("-m" "$MODE")
-[[ -n "$CONTEXT" ]] && ARGS+=("-c" "$CONTEXT")
-[[ -n "$ID" ]]      && ARGS+=("--id" "$ID")
-[[ "$MERMAID" == true ]] && ARGS+=("--mermaid")
+ARGS+=(-m "$MODE")
+[[ -n "$CONTEXT" ]] && ARGS+=(-c "$CONTEXT")
+[[ -n "$ID" ]]      && ARGS+=(--id "$ID")
+[[ "$MERMAID" == true ]] && ARGS+=(--mermaid)
 
-bunx @qwadratic/deepwiki-cli "${ARGS[@]}" \
-  | jq -rj '.. | objects | select(.type? == "chunk" or .type? == "summary_chunk") | .data? // empty'
+TMP_JSON="$(mktemp)"
+cleanup() { rm -f "$TMP_JSON"; }
+trap cleanup EXIT
+
+bunx @qwadratic/deepwiki-cli "${ARGS[@]}" > "$TMP_JSON"
+
+if [[ "$RAW_JSON" == true ]]; then
+  cat "$TMP_JSON"
+  exit 0
+fi
+
+if [[ "$SOURCES_ONLY" == true ]]; then
+  jq -r '.. | objects | select(.type? == "file_contents") | .data[1]? // empty' "$TMP_JSON" \
+    | awk '!seen[$0]++'
+  exit 0
+fi
+
+# Answer prose
+jq -rj '.. | objects | select(.type? == "chunk" or .type? == "summary_chunk") | .data? // empty' "$TMP_JSON"
+
+echo
+
+# Source files from the same response
+SOURCES="$(jq -r '.. | objects | select(.type? == "file_contents") | .data[1]? // empty' "$TMP_JSON" \
+  | awk '!seen[$0]++')"
+if [[ -n "$SOURCES" ]]; then
+  echo "Sources:"
+  echo "$SOURCES" | sed 's/^/- /'
+  echo
+fi
+
+# Thread ID for follow-up queries
+THREAD_ID="$(jq -r '.queries[0].message_id? // empty' "$TMP_JSON")"
+if [[ -n "$THREAD_ID" ]]; then
+  echo "Thread-ID: $THREAD_ID"
+fi

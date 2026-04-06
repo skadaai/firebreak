@@ -29,8 +29,10 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 progress_phase=""
 progress_source_count=0
 progress_reference_count=0
-progress_heartbeat_pid=""
 progress_started_at="$(date +%s)"
+progress_last_heartbeat_secs=""
+stream_cli_pid=""
+stream_fifo_path=""
 
 usage() {
   cat >&2 <<'EOF'
@@ -57,25 +59,37 @@ set_progress_phase() {
 }
 
 start_progress_heartbeat() {
+  progress_last_heartbeat_secs=""
+}
+
+stop_progress_heartbeat() {
+  progress_last_heartbeat_secs=""
+}
+
+cleanup_stream_state() {
+  if [ -n "$stream_cli_pid" ]; then
+    kill "$stream_cli_pid" 2>/dev/null || true
+    wait "$stream_cli_pid" 2>/dev/null || true
+    stream_cli_pid=""
+  fi
+
+  if [ -n "$stream_fifo_path" ] && [ -p "$stream_fifo_path" ]; then
+    rm -f "$stream_fifo_path"
+    stream_fifo_path=""
+  fi
+}
+
+emit_progress_heartbeat() {
+  local elapsed
+
   if ! deepwiki_progress_enabled; then
     return
   fi
 
-  (
-    while :; do
-      sleep 15 || exit 0
-      elapsed="$(( $(date +%s) - progress_started_at ))"
-      printf '> Still working... %ss elapsed\n' "$elapsed" >&2
-    done
-  ) &
-  progress_heartbeat_pid=$!
-}
-
-stop_progress_heartbeat() {
-  if [ -n "$progress_heartbeat_pid" ]; then
-    kill "$progress_heartbeat_pid" 2>/dev/null || true
-    wait "$progress_heartbeat_pid" 2>/dev/null || true
-    progress_heartbeat_pid=""
+  elapsed="$(( $(date +%s) - progress_started_at ))"
+  if [ "$elapsed" != "$progress_last_heartbeat_secs" ]; then
+    progress_last_heartbeat_secs="$elapsed"
+    progress_log "Still working... ${elapsed}s elapsed"
   fi
 }
 
@@ -191,6 +205,8 @@ run_stream_query_with_retry() {
   local status
   local stream_args=("$@" --stream)
   local line
+  local read_status
+  local stream_fd=3
 
   while :; do
     : >"$output_path"
@@ -199,15 +215,38 @@ run_stream_query_with_retry() {
     progress_reference_count=0
     progress_started_at="$(date +%s)"
     start_progress_heartbeat
+    stream_fifo_path="$(mktemp -u)"
+    mkfifo "$stream_fifo_path"
 
-    if while IFS= read -r line; do
-      printf '%s\n' "$line" >>"$output_path"
-      handle_stream_event "$line"
-    done < <(run_deepwiki_cli "${stream_args[@]}"); then
+    run_deepwiki_cli "${stream_args[@]}" >"$stream_fifo_path" &
+    stream_cli_pid=$!
+    exec 3<"$stream_fifo_path"
+
+    while :; do
+      if IFS= read -r -t 15 -u "$stream_fd" line; then
+        printf '%s\n' "$line" >>"$output_path"
+        handle_stream_event "$line"
+        continue
+      fi
+
+      read_status=$?
+      if [ "$read_status" -gt 128 ]; then
+        emit_progress_heartbeat
+        continue
+      fi
+
+      break
+    done
+
+    if wait "$stream_cli_pid"; then
       status=0
     else
       status=$?
     fi
+    exec 3<&-
+    stream_cli_pid=""
+    rm -f "$stream_fifo_path"
+    stream_fifo_path=""
 
     stop_progress_heartbeat
 
@@ -316,6 +355,7 @@ TMP_JSON="$(mktemp)"
 TMP_STREAM="$(mktemp)"
 cleanup() {
   stop_progress_heartbeat
+  cleanup_stream_state
   rm -f "$TMP_JSON" "$TMP_STREAM"
 }
 trap cleanup EXIT

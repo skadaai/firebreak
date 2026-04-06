@@ -21,6 +21,7 @@ firebreak_write_command_request() {
   command_request_term=$5
   command_request_columns=$6
   command_request_lines=$7
+  command_request_capture_systemd_profile=$8
   command_request_id=$(date -u +%Y%m%dT%H%M%SZ)-${BASHPID:-$$}
   command_request_path=$command_response_dir/request.json
 
@@ -34,6 +35,7 @@ firebreak_write_command_request() {
   REQUEST_TERM=$command_request_term \
   REQUEST_COLUMNS=$command_request_columns \
   REQUEST_LINES=$command_request_lines \
+  REQUEST_CAPTURE_SYSTEMD_PROFILE=$command_request_capture_systemd_profile \
   python3 - <<'PY'
 import json
 import os
@@ -46,6 +48,7 @@ payload = {
     "term": os.environ["REQUEST_TERM"],
     "columns": os.environ["REQUEST_COLUMNS"],
     "lines": os.environ["REQUEST_LINES"],
+    "capture_systemd_profile": os.environ["REQUEST_CAPTURE_SYSTEMD_PROFILE"],
 }
 
 with open(os.environ["REQUEST_PATH"], "w", encoding="utf-8") as handle:

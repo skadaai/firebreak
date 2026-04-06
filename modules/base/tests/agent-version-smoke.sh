@@ -149,6 +149,23 @@ if [ "${FIREBREAK_PRINT_PROFILE:-0}" = "1" ]; then
   else
     @PYTHON3@ @PROFILE_SUMMARY_SCRIPT@ "$runtime_dir"
   fi
+
+  for profile_file in \
+    "$runtime_dir/o/systemd-time.txt" \
+    "$runtime_dir/o/systemd-basic-target-chain.txt" \
+    "$runtime_dir/o/systemd-cold-command-chain.txt"
+  do
+    if [ -f "$profile_file" ]; then
+      printf '\n%s\n' "$(basename "$profile_file"):"
+      cat "$profile_file"
+    fi
+  done
+
+  systemd_blame_path=$runtime_dir/o/systemd-blame.txt
+  if [ -f "$systemd_blame_path" ]; then
+    printf '\n%s\n' "systemd-blame.txt (top 20):"
+    sed -n '1,20p' "$systemd_blame_path"
+  fi
 fi
 
 printf '%s\n' "$output"

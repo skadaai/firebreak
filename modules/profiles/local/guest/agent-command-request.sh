@@ -8,6 +8,7 @@ export command_request_start_dir=""
 export command_request_term=""
 export command_request_columns=""
 export command_request_lines=""
+export command_request_capture_systemd_profile="0"
 
 load_command_request() {
   if ! [ -r "$command_request_file" ]; then
@@ -62,6 +63,7 @@ assignments = {
     "command_request_term": as_text("term"),
     "command_request_columns": columns,
     "command_request_lines": lines,
+    "command_request_capture_systemd_profile": "1" if as_text("capture_systemd_profile") == "1" else "0",
 }
 
 for key, value in assignments.items():
@@ -84,6 +86,7 @@ ensure_command_request_loaded() {
     command_request_start_dir \
     command_request_term \
     command_request_columns \
-    command_request_lines
+    command_request_lines \
+    command_request_capture_systemd_profile
   export FIREBREAK_AGENT_REQUEST_ID=${command_request_id:-}
 }

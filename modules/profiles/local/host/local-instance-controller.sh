@@ -189,6 +189,7 @@ local_controller_acquire_dispatch_lock() {
 
 local_controller_write_request() {
   controller_exec_output_dir=$1
+  capture_systemd_profile=${FIREBREAK_CAPTURE_SYSTEMD_PROFILE:-${FIREBREAK_PRINT_PROFILE:-0}}
   firebreak_write_command_request \
     "$controller_exec_output_dir" \
     "agent-exec" \
@@ -196,7 +197,8 @@ local_controller_write_request() {
     "$host_cwd" \
     "$agent_term" \
     "$agent_columns" \
-    "$agent_lines"
+    "$agent_lines" \
+    "$capture_systemd_profile"
   controller_request_id=$command_request_id
 }
 

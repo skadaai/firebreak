@@ -637,6 +637,7 @@ start_worker_bridge_server() {
 }
 
 write_command_request() {
+  capture_systemd_profile=${FIREBREAK_CAPTURE_SYSTEMD_PROFILE:-${FIREBREAK_PRINT_PROFILE:-0}}
   firebreak_write_command_request \
     "$host_exec_output_dir" \
     "$agent_session_mode" \
@@ -644,7 +645,8 @@ write_command_request() {
     "$host_cwd" \
     "$agent_term" \
     "$agent_columns" \
-    "$agent_lines"
+    "$agent_lines" \
+    "$capture_systemd_profile"
   trace_wrapper "command-request-ready:$command_request_id"
 }
 

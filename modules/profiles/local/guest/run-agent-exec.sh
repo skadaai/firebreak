@@ -41,7 +41,28 @@ status=0
 stdout_path=@AGENT_EXEC_OUTPUT_MOUNT@/stdout
 stderr_path=@AGENT_EXEC_OUTPUT_MOUNT@/stderr
 exit_code_path=@AGENT_EXEC_OUTPUT_MOUNT@/exit_code
+systemd_time_path=@AGENT_EXEC_OUTPUT_MOUNT@/systemd-time.txt
+systemd_blame_path=@AGENT_EXEC_OUTPUT_MOUNT@/systemd-blame.txt
+systemd_basic_chain_path=@AGENT_EXEC_OUTPUT_MOUNT@/systemd-basic-target-chain.txt
+systemd_command_chain_path=@AGENT_EXEC_OUTPUT_MOUNT@/systemd-cold-command-chain.txt
 rm -f "$stdout_path" "$stderr_path" "$exit_code_path"
+
+capture_systemd_boot_profile() {
+  if [ "${command_request_capture_systemd_profile:-0}" != "1" ]; then
+    return 0
+  fi
+
+  if ! command -v systemd-analyze >/dev/null 2>&1; then
+    return 0
+  fi
+
+  firebreak_profile_guest_mark run-agent-exec systemd-profile-start
+  systemd-analyze time --no-pager >"$systemd_time_path" 2>/dev/null || true
+  systemd-analyze blame --no-pager >"$systemd_blame_path" 2>/dev/null || true
+  systemd-analyze critical-chain basic.target --no-pager >"$systemd_basic_chain_path" 2>/dev/null || true
+  systemd-analyze critical-chain cold-command-exec.service --no-pager >"$systemd_command_chain_path" 2>/dev/null || true
+  firebreak_profile_guest_mark run-agent-exec systemd-profile-done
+}
 
 if command -v firebreak-bootstrap-wait >/dev/null 2>&1; then
   firebreak_profile_guest_mark run-agent-exec bootstrap-wait-start
@@ -66,6 +87,7 @@ if [ -n "$command_shell_init_file" ]; then
   . "$command_shell_init_file"
 fi
 
+capture_systemd_boot_profile
 firebreak_profile_guest_mark run-agent-exec command-start "$FIREBREAK_AGENT_COMMAND"
 write_command_state command-start running agent-exec 0
 eval "$FIREBREAK_AGENT_COMMAND" >"$stdout_path" 2>"$stderr_path" || status=$?

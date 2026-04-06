@@ -171,7 +171,15 @@ let
     if [ -r ${lib.escapeShellArg cfg.workerSessionModeFile} ]; then
       session_mode=$(cat ${lib.escapeShellArg cfg.workerSessionModeFile})
     fi
-    [ "$session_mode" != "agent-service" ]
+    [ "$session_mode" != "agent-service" ] && [ "$session_mode" != "agent-exec" ]
+  '';
+  coldCommandExecConditionScript = pkgs.writeShellScript "firebreak-cold-command-exec-condition" ''
+    set -eu
+    session_mode=""
+    if [ -r ${lib.escapeShellArg cfg.workerSessionModeFile} ]; then
+      session_mode=$(cat ${lib.escapeShellArg cfg.workerSessionModeFile})
+    fi
+    [ "$session_mode" = "agent-exec" ]
   '';
   localCommandAgentConditionScript = pkgs.writeShellScript "firebreak-local-command-agent-condition" ''
     set -eu
@@ -206,6 +214,9 @@ in {
     users.users.${cfg.devUser}.password = "";
 
     networking.useDHCP = lib.mkForce (cfg.runtimeBackend != "cloud-hypervisor");
+    networking.firewall.enable = lib.mkForce false;
+
+    services.timesyncd.enable = lib.mkForce false;
 
     workloadVm.hostMetaMount = lib.mkDefault hostMetaMount;
     workloadVm.workerExecOutputMount = lib.mkDefault workerExecOutputMount;
@@ -240,7 +251,7 @@ in {
     };
     systemd.services.adopt-host-identity = {
       description = "Align guest development user with the host user identity";
-      wantedBy = [ "multi-user.target" ];
+      wantedBy = [ "basic.target" ];
       before = [ "prepare-agent-session.service" "serial-getty@ttyS0.service" ]
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
       after = [ "local-fs.target" ];
@@ -261,7 +272,7 @@ in {
 
     systemd.services.prepare-agent-session = {
       description = "Prepare the workspace and agent session paths";
-      wantedBy = [ "multi-user.target" ];
+      wantedBy = [ "basic.target" ];
       before = [ "dev-console.service" ];
       after = [ "local-fs.target" "adopt-host-identity.service" ];
 
@@ -281,7 +292,7 @@ in {
 
     systemd.services.configure-runtime-network = lib.mkIf (cfg.runtimeBackend == "cloud-hypervisor") {
       description = "Configure runtime networking for the local Cloud Hypervisor backend";
-      wantedBy = [ "multi-user.target" ];
+      wantedBy = [ "basic.target" ];
       before = [ "dev-console.service" ] ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
       after = [ "prepare-agent-session.service" ];
       requires = [ "prepare-agent-session.service" ];
@@ -303,7 +314,7 @@ in {
 
     systemd.services.guest-egress-proxy = lib.mkIf (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) {
       description = "Expose rootless guest egress through Cloud Hypervisor vsock";
-      wantedBy = [ "multi-user.target" ];
+      wantedBy = [ "basic.target" ];
       before = [ "dev-console.service" ]
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
       after = [ "prepare-agent-session.service" ];
@@ -321,7 +332,7 @@ in {
 
     systemd.services.guest-port-publish-relay = lib.mkIf (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) {
       description = "Expose localhost TCP services through the Cloud Hypervisor vsock mux";
-      wantedBy = [ "multi-user.target" ];
+      wantedBy = [ "basic.target" ];
       before = [ "dev-console.service" ]
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
       after = [ "prepare-agent-session.service" ];
@@ -332,6 +343,29 @@ in {
         Restart = "always";
         RestartSec = 1;
         Type = "simple";
+        StandardOutput = "journal+console";
+        StandardError = "journal+console";
+      };
+    };
+
+    systemd.services.cold-command-exec = {
+      description = "Cold non-interactive command execution";
+      wantedBy = [ "basic.target" ];
+      after = [ "adopt-host-identity.service" "prepare-agent-session.service" ]
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service";
+      requires = [ "adopt-host-identity.service" "prepare-agent-session.service" ]
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service";
+
+      serviceConfig = {
+        ExecCondition = coldCommandExecConditionScript;
+        ExecStart = "${runAgentExecScript}/bin/firebreak-run-agent-exec";
+        Type = "simple";
+        User = cfg.devUser;
+        WorkingDirectory = devHome;
         StandardOutput = "journal+console";
         StandardError = "journal+console";
       };
@@ -360,7 +394,7 @@ in {
     systemd.services.dev-console = {
       description = "Interactive dev shell on ttyS0";
       wantedBy = [ "multi-user.target" ];
-      after = [ "adopt-host-identity.service" "prepare-agent-session.service" ]
+      after = [ "cold-command-exec.service" "adopt-host-identity.service" "prepare-agent-session.service" ]
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service"

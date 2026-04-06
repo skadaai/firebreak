@@ -383,6 +383,8 @@ rec {
       text = renderTemplate {
         "@AGENT_PACKAGE_BIN@" = "${self.packages.${system}.${agentPackage}}/bin/${agentPackage}";
         "@AGENT_DISPLAY_NAME@" = agentDisplayName;
+        "@PROFILE_SUMMARY_SCRIPT@" = builtins.toString ../../modules/profiles/local/host/profile-summary.py;
+        "@PYTHON3@" = "${pkgs.python3}/bin/python3";
       } ../../modules/base/tests/agent-version-smoke.sh;
     };
 

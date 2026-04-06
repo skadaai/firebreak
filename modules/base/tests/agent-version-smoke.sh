@@ -141,4 +141,14 @@ if missing:
     raise SystemExit(f"missing required request fields: {', '.join(missing)}")
 PY
 
+if [ "${FIREBREAK_PRINT_PROFILE:-0}" = "1" ]; then
+  profile_summary_path=$runtime_dir/profile-summary.json
+  if [ -f "$profile_summary_path" ]; then
+    printf '\n%s\n' "@AGENT_DISPLAY_NAME@ cold-boot profile:"
+    cat "$profile_summary_path"
+  else
+    @PYTHON3@ @PROFILE_SUMMARY_SCRIPT@ "$runtime_dir"
+  fi
+fi
+
 printf '%s\n' "$output"

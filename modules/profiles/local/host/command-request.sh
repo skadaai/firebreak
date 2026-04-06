@@ -7,6 +7,7 @@ firebreak_reset_command_response_dir() {
     "$command_response_dir/exit_code" \
     "$command_response_dir/stdout" \
     "$command_response_dir/stderr" \
+    "$command_response_dir/profile-guest.tsv" \
     "$command_response_dir/command-signals.stream" \
     "$command_response_dir/command-processes.txt" \
     "$command_response_dir/command-tty.txt"

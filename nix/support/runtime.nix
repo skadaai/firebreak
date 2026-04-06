@@ -191,6 +191,8 @@ EOF
         "@FIREBREAK_CLOUD_HYPERVISOR_VSOCK_LIB@" = renderedCloudHypervisorVsockLib;
         "@FIREBREAK_LOCAL_COMMAND_REQUEST_LIB@" = builtins.readFile ../../modules/profiles/local/host/command-request.sh;
         "@FIREBREAK_LOCAL_INSTANCE_CONTROLLER_LIB@" = builtins.readFile ../../modules/profiles/local/host/local-instance-controller.sh;
+        "@FIREBREAK_PROFILE_SUMMARY_SCRIPT@" = builtins.toString ../../modules/profiles/local/host/profile-summary.py;
+        "@PYTHON3@" = "${pkgs.python3}/bin/python3";
       }) ../../modules/profiles/local/host/run-wrapper.sh;
     };
 

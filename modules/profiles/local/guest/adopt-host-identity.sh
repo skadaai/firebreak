@@ -1,5 +1,7 @@
 set -eu
 
+@FIREBREAK_PROFILE_LIB@
+
 warn() {
   echo "$*" >&2
 }
@@ -30,8 +32,11 @@ uid_file=@HOST_META_MOUNT@/host-uid
 gid_file=@HOST_META_MOUNT@/host-gid
 
 if ! [ -r "$uid_file" ] || ! [ -r "$gid_file" ]; then
+  firebreak_profile_guest_mark adopt-host-identity skipped missing-host-meta
   exit 0
 fi
+
+firebreak_profile_guest_mark adopt-host-identity start
 
 target_uid=$(@CAT@ "$uid_file")
 target_gid=$(@CAT@ "$gid_file")
@@ -82,3 +87,5 @@ fi
 if ! @CHOWN@ -R @DEV_USER@:"$target_group_name" @DEV_HOME@; then
   warn "could not fully normalize ownership under @DEV_HOME@"
 fi
+
+firebreak_profile_guest_mark adopt-host-identity done

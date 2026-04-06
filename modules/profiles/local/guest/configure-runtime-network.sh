@@ -1,16 +1,22 @@
 set -eu
 
+@FIREBREAK_PROFILE_LIB@
+
 guest_ipv4_cidr_file=@HOST_META_MOUNT@/network-guest-ipv4-cidr
 gateway_ipv4_file=@HOST_META_MOUNT@/network-gateway-ipv4
 dns_servers_file=@HOST_META_MOUNT@/network-dns-servers
 
 if ! [ -r "$guest_ipv4_cidr_file" ]; then
+  firebreak_profile_guest_mark configure-runtime-network skipped missing-guest-ipv4
   exit 0
 fi
 
 if ! [ -r "$gateway_ipv4_file" ]; then
+  firebreak_profile_guest_mark configure-runtime-network skipped missing-gateway
   exit 0
 fi
+
+firebreak_profile_guest_mark configure-runtime-network start
 
 network_interface=$(ip -o link show | awk -F': ' '$2 != "lo" { print $2; exit }')
 if [ -z "$network_interface" ]; then
@@ -45,3 +51,5 @@ if [ -r "$dns_servers_file" ]; then
     chmod 0644 /etc/resolv.conf
   fi
 fi
+
+firebreak_profile_guest_mark configure-runtime-network done

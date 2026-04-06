@@ -1,6 +1,7 @@
 set -eu
 
 @FIREBREAK_AGENT_COMMAND_REQUEST_LIB@
+@FIREBREAK_PROFILE_LIB@
 
 metadata=@HOST_META_MOUNT@/mount-path
 session_mode=agent
@@ -35,6 +36,7 @@ log_phase() {
   phase=$1
   timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   printf '%s %s\n' "[firebreak-session]" "$timestamp $phase"
+  firebreak_profile_guest_mark prepare-agent-session "$phase"
 }
 
 sync_guest_state_files() {
@@ -67,6 +69,7 @@ if ! [ -r "$metadata" ]; then
   exit 1
 fi
 
+log_phase prepare-agent-session-start
 log_phase prepare-agent-session-metadata-ready
 candidate=$(cat "$metadata")
 if [ -z "$candidate" ]; then

@@ -58,9 +58,11 @@ let
   };
   renderedAgentCommandRequestLib = renderTemplate baseScriptVars ./guest/agent-command-request.sh;
   renderedAgentCommandStateLib = renderTemplate baseScriptVars ./guest/agent-command-state.sh;
+  renderedProfileLib = renderTemplate baseScriptVars ./guest/profile.sh;
   scriptVars = baseScriptVars // {
     "@FIREBREAK_AGENT_COMMAND_REQUEST_LIB@" = renderedAgentCommandRequestLib;
     "@FIREBREAK_AGENT_COMMAND_STATE_LIB@" = renderedAgentCommandStateLib;
+    "@FIREBREAK_PROFILE_LIB@" = renderedProfileLib;
   };
 
   adoptHostIdentityScript = pkgs.writeShellScript "adopt-host-identity"
@@ -98,10 +100,13 @@ let
     name = "firebreak-cloud-hypervisor-egress-relay";
     runtimeInputs = with pkgs; [ python3 ];
     text = ''
+      ${renderedProfileLib}
+      firebreak_profile_guest_mark guest-egress-proxy service-start
       export FIREBREAK_GUEST_EGRESS_PROXY_HOST='127.0.0.1'
       export FIREBREAK_GUEST_EGRESS_PROXY_PORT='${toString cfg.guestEgress.proxyPort}'
       export FIREBREAK_GUEST_EGRESS_HOST_CID='2'
       export FIREBREAK_GUEST_EGRESS_HOST_PORT='${toString cfg.guestEgress.proxyPort}'
+      firebreak_profile_guest_mark guest-egress-proxy relay-exec
       exec python3 ${guestEgressRelayProgram}
     '';
   };
@@ -109,8 +114,11 @@ let
     name = "firebreak-cloud-hypervisor-port-publish-relay";
     runtimeInputs = with pkgs; [ python3 ];
     text = ''
+      ${renderedProfileLib}
+      firebreak_profile_guest_mark guest-port-publish-relay service-start '${lib.concatStringsSep "," guestPublishedTcpPorts}'
       export FIREBREAK_GUEST_PORT_PUBLISH_TARGET_HOST='127.0.0.1'
       export FIREBREAK_GUEST_PORT_PUBLISH_PORTS='${lib.concatStringsSep "," guestPublishedTcpPorts}'
+      firebreak_profile_guest_mark guest-port-publish-relay relay-exec
       exec python3 ${guestPortPublishRelayProgram}
     '';
   };

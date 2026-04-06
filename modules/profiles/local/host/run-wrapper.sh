@@ -264,6 +264,8 @@ worker_bridge_server_script=$host_runtime_dir/firebreak-worker-bridge-host.sh
 worker_helper_script=$host_runtime_dir/firebreak-worker.sh
 worker_bridge_enabled=@WORKER_BRIDGE_ENABLED@
 wrapper_trace_log=$host_runtime_dir/wrapper-trace.log
+profile_host_events_file=$host_runtime_dir/profile-host.tsv
+profile_summary_file=$host_runtime_dir/profile-summary.json
 attach_pty_log=$host_runtime_dir/attach-pty.log
 agent_term=$(normalize_term_name "${TERM:-}")
 agent_columns=$(sanitize_positive_dimension "${COLUMNS:-}")
@@ -283,11 +285,28 @@ if { [ -z "$agent_columns" ] || [ -z "$agent_lines" ]; } && command -v stty >/de
   fi
 fi
 
+profile_sanitize_field() {
+  printf '%s' "$1" | tr '\t\r\n' '   '
+}
+
+profile_host_mark() {
+  profile_component=$1
+  profile_phase=$2
+  profile_detail=${3:-}
+  printf '%s\t%s\t%s\t%s\n' \
+    "$(date -u +%s%3N)" \
+    "$(profile_sanitize_field "$profile_component")" \
+    "$(profile_sanitize_field "$profile_phase")" \
+    "$(profile_sanitize_field "$profile_detail")" \
+    >>"$profile_host_events_file" 2>/dev/null || true
+}
+
 trace_wrapper() {
   wrapper_trace_dir=${wrapper_trace_log%/*}
   if ! [ -d "$wrapper_trace_dir" ]; then
     return 0
   fi
+  profile_host_mark wrapper "$1"
   printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >>"$wrapper_trace_log" 2>/dev/null || true
 }
 
@@ -506,6 +525,7 @@ fi
 rm -f "$control_socket"
 shared_state_root_env_file=$host_meta_dir/firebreak-shared-state.env
 : >"$wrapper_trace_log"
+: >"$profile_host_events_file"
 : >"$attach_pty_log"
 
 if [ "$local_controller_mode" = "daemon" ]; then
@@ -520,6 +540,8 @@ cat >"$runtime_debug_file" <<EOF
   "control_socket": "$(printf '%s' "$control_socket" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "agent_exec_output_dir": "$(printf '%s' "$host_exec_output_dir" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "wrapper_trace_log": "$(printf '%s' "$wrapper_trace_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "profile_host_events_file": "$(printf '%s' "$profile_host_events_file" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "profile_summary_file": "$(printf '%s' "$profile_summary_file" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "attach_pty_log": "$(printf '%s' "$attach_pty_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "runner_stdout_log": "$(printf '%s' "$runner_stdout_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "runner_stderr_log": "$(printf '%s' "$runner_stderr_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
@@ -1782,6 +1804,7 @@ else
   ) || runner_status=$?
 fi
 trace_wrapper "runner-exit:$runner_status"
+@PYTHON3@ @FIREBREAK_PROFILE_SUMMARY_SCRIPT@ "$host_runtime_dir" "$profile_summary_file" >/dev/null 2>&1 || true
 
 if [ "$agent_session_mode" = "agent-exec" ]; then
   if [ -f "$host_exec_output_dir/stdout" ]; then

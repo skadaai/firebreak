@@ -3,6 +3,7 @@ set -eu
 
 @FIREBREAK_AGENT_COMMAND_REQUEST_LIB@
 @FIREBREAK_AGENT_COMMAND_STATE_LIB@
+@FIREBREAK_PROFILE_LIB@
 
 command_shell_init_file=@COMMAND_SHELL_INIT_FILE@
 power_action=${FIREBREAK_AGENT_POWER_ACTION:-poweroff}
@@ -43,11 +44,14 @@ exit_code_path=@AGENT_EXEC_OUTPUT_MOUNT@/exit_code
 rm -f "$stdout_path" "$stderr_path" "$exit_code_path"
 
 if command -v firebreak-bootstrap-wait >/dev/null 2>&1; then
+  firebreak_profile_guest_mark run-agent-exec bootstrap-wait-start
   write_command_state bootstrap-wait running agent-exec 0
   if firebreak-bootstrap-wait; then
+    firebreak_profile_guest_mark run-agent-exec bootstrap-wait-done
     :
   else
     status=$?
+    firebreak_profile_guest_mark run-agent-exec bootstrap-wait-error "$status"
     write_command_state bootstrap-wait error agent-exec "$status"
     printf "%s\n" "$status" >"$exit_code_path"
     if [ "$power_action" = "poweroff" ]; then
@@ -62,9 +66,11 @@ if [ -n "$command_shell_init_file" ]; then
   . "$command_shell_init_file"
 fi
 
+firebreak_profile_guest_mark run-agent-exec command-start "$FIREBREAK_AGENT_COMMAND"
 write_command_state command-start running agent-exec 0
 eval "$FIREBREAK_AGENT_COMMAND" >"$stdout_path" 2>"$stderr_path" || status=$?
 write_command_state command-exit completed agent-exec "$status"
+firebreak_profile_guest_mark run-agent-exec command-exit "$status"
 printf "%s\n" "$status" >"$exit_code_path"
 if [ "$power_action" = "poweroff" ]; then
   sudo poweroff >/dev/null 2>&1 || true

@@ -30,6 +30,10 @@ lookup_user_by_uid() {
 
 uid_file=@HOST_META_MOUNT@/host-uid
 gid_file=@HOST_META_MOUNT@/host-gid
+home_owner_file=@DEV_HOME@/.firebreak-owner
+identity_changed=0
+
+mkdir -p @DEV_HOME@
 
 if ! [ -r "$uid_file" ] || ! [ -r "$gid_file" ]; then
   firebreak_profile_guest_mark adopt-host-identity skipped missing-host-meta
@@ -58,6 +62,19 @@ esac
 current_uid=$(@ID@ -u @DEV_USER@)
 current_gid=$(@ID@ -g @DEV_USER@)
 target_group_name=@DEV_USER@
+current_group_name=$(@ID@ -gn @DEV_USER@)
+home_owner=""
+
+if [ -r "$home_owner_file" ]; then
+  home_owner=$(@CAT@ "$home_owner_file" 2>/dev/null || true)
+fi
+
+if [ "$current_uid" = "$target_uid" ] &&
+   [ "$current_gid" = "$target_gid" ] &&
+   [ "$home_owner" = "${target_uid}:${target_gid}" ]; then
+  firebreak_profile_guest_mark adopt-host-identity skipped already-aligned
+  exit 0
+fi
 
 if [ "$current_gid" != "$target_gid" ]; then
   existing_group_name=$(lookup_group_by_gid "$target_gid" || true)
@@ -65,6 +82,8 @@ if [ "$current_gid" != "$target_gid" ]; then
     target_group_name=$existing_group_name
   elif ! @GROUPMOD@ -g "$target_gid" @DEV_USER@; then
     warn "could not change @DEV_USER@ group to gid $target_gid; keeping guest gid $current_gid"
+  else
+    identity_changed=1
   fi
 fi
 
@@ -74,18 +93,26 @@ if [ "$current_uid" != "$target_uid" ]; then
     warn "host uid $target_uid is already used by $existing_user_name in the guest; keeping guest uid $current_uid"
   elif ! @USERMOD@ -u "$target_uid" @DEV_USER@; then
     warn "could not change @DEV_USER@ uid to $target_uid; keeping guest uid $current_uid"
+  else
+    identity_changed=1
   fi
 fi
 
-current_group_name=$(@ID@ -gn @DEV_USER@)
 if [ "$current_group_name" != "$target_group_name" ]; then
   if ! @USERMOD@ -g "$target_group_name" @DEV_USER@; then
     warn "could not switch @DEV_USER@ primary group to $target_group_name"
+  else
+    identity_changed=1
   fi
 fi
 
-if ! @CHOWN@ -R @DEV_USER@:"$target_group_name" @DEV_HOME@; then
-  warn "could not fully normalize ownership under @DEV_HOME@"
+if [ "$identity_changed" = "1" ] || [ "$home_owner" != "${target_uid}:${target_gid}" ]; then
+  if ! @CHOWN@ -R @DEV_USER@:"$target_group_name" @DEV_HOME@; then
+    warn "could not fully normalize ownership under @DEV_HOME@"
+  fi
 fi
+
+printf '%s\n' "${target_uid}:${target_gid}" > "$home_owner_file"
+@CHOWN@ @DEV_USER@:"$target_group_name" "$home_owner_file"
 
 firebreak_profile_guest_mark adopt-host-identity done

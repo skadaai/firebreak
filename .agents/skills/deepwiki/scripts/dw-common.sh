@@ -2,6 +2,7 @@
 
 DEEPWIKI_PACKAGE="@qwadratic/deepwiki-cli"
 deepwiki_retry_count="${DEEPWIKI_RETRY_COUNT:-3}"
+deepwiki_progress_mode="${DEEPWIKI_PROGRESS_MODE:-auto}"
 
 run_deepwiki_cli() {
   local status=0
@@ -44,6 +45,56 @@ is_transient_deepwiki_error() {
     (.error? // "") as $error
     | ($error | test("HTTP 50[234]|Gateway Time-out|Bad Gateway|Service Unavailable"; "i"))
   ' "$response_path" >/dev/null 2>&1
+}
+
+deepwiki_first_ndjson_error() {
+  local response_path="$1"
+  jq -rse '
+    [
+      .[]
+      | if has("queries") then .queries[0].error? else .error? end
+      | select(type == "string" and length > 0)
+    ]
+    | first // empty
+  ' "$response_path"
+}
+
+deepwiki_ndjson_has_no_error() {
+  local response_path="$1"
+  jq -e -s '
+    all(
+      .[];
+      if has("queries") then .queries[0].error? == null else .error? == null end
+    )
+  ' "$response_path" >/dev/null 2>&1
+}
+
+is_transient_deepwiki_ndjson_error() {
+  local response_path="$1"
+  local error_message
+
+  error_message="$(deepwiki_first_ndjson_error "$response_path")"
+  [ -n "$error_message" ] || return 1
+
+  printf '%s\n' "$error_message" \
+    | grep -Eiq 'HTTP 50[234]|Gateway Time-out|Bad Gateway|Service Unavailable'
+}
+
+deepwiki_progress_enabled() {
+  case "$deepwiki_progress_mode" in
+    always|plain)
+      return 0
+      ;;
+    quiet|never)
+      return 1
+      ;;
+    auto|"")
+      [ -t 2 ]
+      ;;
+    *)
+      [ -t 2 ]
+      ;;
+  esac
 }
 
 run_deepwiki_json_with_retry() {

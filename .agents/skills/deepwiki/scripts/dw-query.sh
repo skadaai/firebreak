@@ -10,6 +10,7 @@
 #   1. Answer prose
 #   2. Sources: list of file paths DeepWiki used from that same response
 #   3. Thread-ID: message_id to use with --id for follow-up queries
+#   Progress, when enabled, is written to stderr only.
 #
 # Options:
 #   --mode       deep (default) | fast | codemap
@@ -25,12 +26,217 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./dw-common.sh
 . "$script_dir/dw-common.sh"
 
+progress_phase=""
+progress_source_count=0
+progress_reference_count=0
+progress_heartbeat_pid=""
+progress_started_at="$(date +%s)"
+
 usage() {
   cat >&2 <<'EOF'
 Usage: dw-query.sh "question" owner/repo [owner/repo2 ...]
                    [--mode deep|fast|codemap] [--context "text"]
                    [--id query-id] [--mermaid] [--sources-only] [--json]
 EOF
+}
+
+progress_log() {
+  if deepwiki_progress_enabled; then
+    printf '> %s\n' "$1" >&2
+  fi
+}
+
+set_progress_phase() {
+  local phase="$1"
+  local message="$2"
+
+  if [ "$progress_phase" != "$phase" ]; then
+    progress_phase="$phase"
+    progress_log "$message"
+  fi
+}
+
+start_progress_heartbeat() {
+  if ! deepwiki_progress_enabled; then
+    return
+  fi
+
+  (
+    while :; do
+      sleep 15 || exit 0
+      elapsed="$(( $(date +%s) - progress_started_at ))"
+      printf '> Still working... %ss elapsed\n' "$elapsed" >&2
+    done
+  ) &
+  progress_heartbeat_pid=$!
+}
+
+stop_progress_heartbeat() {
+  if [ -n "$progress_heartbeat_pid" ]; then
+    kill "$progress_heartbeat_pid" 2>/dev/null || true
+    wait "$progress_heartbeat_pid" 2>/dev/null || true
+    progress_heartbeat_pid=""
+  fi
+}
+
+handle_stream_event() {
+  local line="$1"
+  local event_type=""
+  local all_done=""
+  local source_count=""
+
+  if ! deepwiki_progress_enabled; then
+    return
+  fi
+
+  event_type="$(printf '%s\n' "$line" | jq -r 'if has("queries") then "envelope" else (.type // empty) end' 2>/dev/null || true)"
+
+  case "$event_type" in
+    envelope)
+      if printf '%s\n' "$line" | jq -e 'any(.queries[0].response[]?; .type == "file_contents")' >/dev/null 2>&1; then
+        source_count="$(printf '%s\n' "$line" | jq -r '[.queries[0].response[]? | select(.type == "file_contents")] | length')"
+        progress_source_count=$((progress_source_count + source_count))
+        set_progress_phase "searching" "Searching codebase..."
+      fi
+      ;;
+    loading_indexes)
+      all_done="$(printf '%s\n' "$line" | jq -r '.data.all_done // empty' 2>/dev/null || true)"
+      if [ "$all_done" = "true" ]; then
+        progress_log "Indexes ready."
+      else
+        set_progress_phase "indexing" "Loading repo indexes..."
+      fi
+      ;;
+    file_contents)
+      progress_source_count=$((progress_source_count + 1))
+      set_progress_phase "searching" "Searching codebase..."
+      if [ $((progress_source_count % 25)) -eq 0 ]; then
+        progress_log "Searching codebase... (${progress_source_count} source files inspected)"
+      fi
+      ;;
+    chunk|summary_chunk)
+      if [ "$progress_phase" != "finalizing" ] && [ "$progress_phase" != "done" ]; then
+        set_progress_phase "answering" "Synthesizing answer..."
+      fi
+      ;;
+    reference)
+      progress_reference_count=$((progress_reference_count + 1))
+      if [ "$progress_phase" != "answering" ]; then
+        set_progress_phase "answering" "Grounding answer..."
+      elif [ $((progress_reference_count % 10)) -eq 0 ]; then
+        progress_log "Grounding answer... (${progress_reference_count} references)"
+      fi
+      ;;
+    summary_done)
+      set_progress_phase "finalizing" "Summary complete. Finalizing answer..."
+      ;;
+    done)
+      set_progress_phase "done" "Response complete."
+      ;;
+  esac
+}
+
+extract_answer_text() {
+  local stream_path="$1"
+  jq -rjse '
+    def events:
+      .[]
+      | if has("queries") then .queries[0].response[]? else . end;
+    ([events | select(.type == "chunk") | .data // empty] | join("")) as $chunks
+    | if $chunks != "" then
+        $chunks
+      else
+        [events | select(.type == "summary_chunk") | .data // empty] | join("")
+      end
+  ' "$stream_path"
+}
+
+extract_source_paths() {
+  local stream_path="$1"
+  jq -rse '
+    def events:
+      .[]
+      | if has("queries") then .queries[0].response[]? else . end;
+    ([events | select(.type == "file_contents") | .data[1]? | select(type == "string" and length > 0)] | unique) as $file_paths
+    | if ($file_paths | length) > 0 then
+        $file_paths[]
+      else
+        [
+          events
+          | select(.type == "reference")
+          | .data.file_path?
+          | sub("^Repo [^:]+: "; "")
+          | select(type == "string" and length > 0)
+        ]
+        | unique[]
+      end
+  ' "$stream_path"
+}
+
+extract_thread_id() {
+  local stream_path="$1"
+  jq -rse '
+    .[]
+    | select(has("queries"))
+    | .queries[0].message_id? // empty
+  ' "$stream_path"
+}
+
+run_stream_query_with_retry() {
+  local output_path="$1"
+  shift
+
+  local attempt=1
+  local delay=2
+  local status
+  local stream_args=("$@" --stream)
+  local line
+
+  while :; do
+    : >"$output_path"
+    progress_phase=""
+    progress_source_count=0
+    progress_reference_count=0
+    progress_started_at="$(date +%s)"
+    start_progress_heartbeat
+
+    if while IFS= read -r line; do
+      printf '%s\n' "$line" >>"$output_path"
+      handle_stream_event "$line"
+    done < <(run_deepwiki_cli "${stream_args[@]}"); then
+      status=0
+    else
+      status=$?
+    fi
+
+    stop_progress_heartbeat
+
+    if [ "$status" -eq 0 ] && deepwiki_ndjson_has_no_error "$output_path"; then
+      return 0
+    fi
+
+    if [ "$attempt" -ge "$deepwiki_retry_count" ]; then
+      if [ -s "$output_path" ]; then
+        cat "$output_path" >&2
+      else
+        echo '{"error":"DeepWiki request failed"}' >&2
+      fi
+      return 1
+    fi
+
+    if is_transient_deepwiki_ndjson_error "$output_path"; then
+      progress_log "DeepWiki service unavailable. Retrying..."
+      sleep "$delay"
+      attempt=$((attempt + 1))
+      delay=$((delay * 2))
+      continue
+    fi
+
+    if [ -s "$output_path" ]; then
+      cat "$output_path" >&2
+    fi
+    return 1
+  done
 }
 
 if [[ $# -eq 0 ]]; then
@@ -107,30 +313,33 @@ ARGS+=(-m "$MODE")
 [[ "$MERMAID" == true ]] && ARGS+=(--mermaid)
 
 TMP_JSON="$(mktemp)"
-cleanup() { rm -f "$TMP_JSON"; }
+TMP_STREAM="$(mktemp)"
+cleanup() {
+  stop_progress_heartbeat
+  rm -f "$TMP_JSON" "$TMP_STREAM"
+}
 trap cleanup EXIT
 
-run_deepwiki_json_with_retry "$TMP_JSON" "${ARGS[@]}"
-
 if [[ "$RAW_JSON" == true ]]; then
+  run_deepwiki_json_with_retry "$TMP_JSON" "${ARGS[@]}"
   cat "$TMP_JSON"
   exit 0
 fi
 
+run_stream_query_with_retry "$TMP_STREAM" "${ARGS[@]}"
+
 if [[ "$SOURCES_ONLY" == true ]]; then
-  jq -r '.. | objects | select(.type? == "file_contents") | .data[1]? // empty' "$TMP_JSON" \
-    | awk '!seen[$0]++'
+  extract_source_paths "$TMP_STREAM"
   exit 0
 fi
 
 # Answer prose
-jq -rj '.. | objects | select(.type? == "chunk" or .type? == "summary_chunk") | .data? // empty' "$TMP_JSON"
+extract_answer_text "$TMP_STREAM"
 
 echo
 
 # Source files from the same response
-SOURCES="$(jq -r '.. | objects | select(.type? == "file_contents") | .data[1]? // empty' "$TMP_JSON" \
-  | awk '!seen[$0]++')"
+SOURCES="$(extract_source_paths "$TMP_STREAM")"
 if [[ -n "$SOURCES" ]]; then
   echo "Sources:"
   echo "$SOURCES" | sed 's/^/- /'
@@ -138,7 +347,7 @@ if [[ -n "$SOURCES" ]]; then
 fi
 
 # Thread ID for follow-up queries
-THREAD_ID="$(jq -r '.queries[0].message_id? // empty' "$TMP_JSON")"
+THREAD_ID="$(extract_thread_id "$TMP_STREAM")"
 if [[ -n "$THREAD_ID" ]]; then
   echo "Thread-ID: $THREAD_ID"
 fi

@@ -17,7 +17,7 @@ DeepWiki (deepwiki.com) provides AI-generated wiki-style answers over public Git
 
 Use it **aggressively and early**. Do not rely on memorised knowledge for external tools; it may be stale, wrong, or version-mismatched.
 
-The wrapper scripts in this skill are the default interface. They hide the raw JSON shape and jq extraction so agents can ask one question with one command.
+The wrapper scripts in this skill are the default interface. They hide the raw JSON shape and jq extraction so agents can ask one question with one command. They try `bunx` first, then fall back to `npx`, then `pnpx` when those launchers are available. For formatted query output, the wrapper uses DeepWiki's structured stream internally: progress goes to `stderr`, while the final answer, sources, and thread ID stay on `stdout`.
 
 ---
 
@@ -66,10 +66,11 @@ One request. One response. Output:
 2. **Sources** — file paths DeepWiki used from that same response
 3. **Thread-ID** — message ID for follow-up threading with `--id`
 
-**Always use the default mode (`deep`).** Only use `--mode fast` for quick orientation when the answer is not going into code. Use `--mode codemap` for architecture, control flow, and code trace questions.
+**Always use the default mode (`deep`) first.** If `deep` is timing out, stalling, or returning upstream errors, try `--mode fast` before abandoning the CLI entirely. `fast` is still grounded in the indexed repo and is usually a better fallback than MCP for straightforward questions. Use `--mode codemap` for architecture, control flow, and code trace questions.
 
 `deep` mode can take a very long time. That is expected. Do not build short timeouts into the wrapper or assume a long wait means the query is stuck. If you intentionally want to cap waiting time for one call, wrap the script with the host `timeout` command yourself.
 Otherwise, wait patiently for it to return.
+By default, progress is shown only when `stderr` is a TTY. Override that with `DEEPWIKI_PROGRESS_MODE=plain` to force plain progress lines or `DEEPWIKI_PROGRESS_MODE=quiet` to suppress them.
 
 #### Examples
 
@@ -79,6 +80,9 @@ Otherwise, wait patiently for it to return.
 
 # If you intentionally want to cap how long you are willing to wait, do it outside the wrapper
 timeout 5m ./scripts/dw-query.sh "How does the plugin lifecycle work?" vitejs/vite
+
+# Force plain progress lines even when stderr is not a TTY
+DEEPWIKI_PROGRESS_MODE=plain ./scripts/dw-query.sh "How does the plugin lifecycle work?" vitejs/vite
 
 # Quick orientation only
 ./scripts/dw-query.sh "What is this repo for?" withastro/starlight --mode fast
@@ -192,9 +196,9 @@ mcp__deepwiki__read_wiki_contents({ repoName: "owner/repo", topic: "authenticati
 ## Error Handling
 
 - Repository not found: verify the `owner/repo`, check `UPSTREAM_REPOS.md`, read the upstream `README.md` on GitHub, follow README links, or do a targeted web search.
-- Service unavailable: if the CLI returns upstream 502/504-style failures, retry once or twice, then fall back to `mcp__deepwiki__ask_question`, `mcp__deepwiki__read_wiki_structure`, or `mcp__deepwiki__read_wiki_contents`. If both CLI and MCP fail, use upstream docs and note the limitation.
+- Service unavailable: if the CLI returns upstream 502/504-style failures in `deep` mode, retry once or twice, then try `--mode fast` for the same question before falling back to `mcp__deepwiki__ask_question`, `mcp__deepwiki__read_wiki_structure`, or `mcp__deepwiki__read_wiki_contents`. If both CLI and MCP fail, use upstream docs and note the limitation.
 - Long-running deep mode: expect `deep` mode to take time. Only use the host `timeout` command when you intentionally want to bound the wait for one call, for example `timeout 10m ./scripts/dw-query.sh "..." owner/repo`.
-- Server-side query timeout: if DeepWiki returns a JSON error such as `{"error":"Query timed out after 240s"}`, treat it as a completed but inconclusive upstream result. Do not auto-retry the same deep query blindly; narrow the question, switch to `fast` or `codemap` if appropriate, or fall back to MCP and upstream docs.
+- Server-side query timeout: if DeepWiki returns a JSON error such as `{"error":"Query timed out after 240s"}`, treat it as a completed but inconclusive upstream result. Do not auto-retry the same deep query blindly; narrow the question, switch to `fast` or `codemap` if appropriate, and only then fall back to MCP or upstream docs.
 - Courteous usage: batch related questions, reuse printed `Thread-ID` values for follow-ups, and avoid spamming warm or repeated deep queries when one threaded conversation will do.
 
 ---

@@ -56,6 +56,14 @@ is_progress_chunk_text() {
   ' >/dev/null 2>&1
 }
 
+is_blank_chunk_text() {
+  local chunk_text="$1"
+  printf '%s' "$chunk_text" | jq -Rn '
+    input
+    | test("^[[:space:]]*$")
+  ' >/dev/null 2>&1
+}
+
 set_progress_phase() {
   local phase="$1"
   local message="$2"
@@ -139,6 +147,9 @@ handle_stream_event() {
       ;;
     chunk|summary_chunk)
       chunk_text="$(printf '%s\n' "$line" | jq -r '.data // ""' 2>/dev/null || true)"
+      if is_blank_chunk_text "$chunk_text"; then
+        return 0
+      fi
       if is_progress_chunk_text "$chunk_text"; then
         chunk_text="$(printf '%s' "$chunk_text" | sed -e 's/^[[:space:]]*>[[:space:]]*//' -e 's/[[:space:]]*$//')"
         case "$chunk_text" in
@@ -178,14 +189,16 @@ extract_answer_text() {
     def events:
       .[]
       | if has("queries") then .queries[0].response[]? else . end;
+    def blank_chunk:
+      ((.data // "") | test("^[[:space:]]*$"));
     def progress_chunk:
       .type == "chunk"
       and ((.data // "") | test("^[[:space:]]*(> [^\\n]+[[:space:]]*)+$"));
-    ([events | select(.type == "chunk" and (progress_chunk | not)) | .data // empty] | join("")) as $chunks
+    ([events | select(.type == "chunk" and (progress_chunk | not) and (blank_chunk | not)) | .data // empty] | join("")) as $chunks
     | if $chunks != "" then
         $chunks
       else
-        [events | select(.type == "summary_chunk") | .data // empty] | join("")
+        [events | select(.type == "summary_chunk" and (blank_chunk | not)) | .data // empty] | join("")
       end
   ' "$stream_path"
 }

@@ -122,6 +122,8 @@ EOF
     sharedCredentialSlots ? { },
     workerBridgeEnabled ? false,
     localPublishedHostPortsJson ? "[]",
+    guestEgressEnabled ? false,
+    guestEgressProxyPort ? 3128,
   }:
     let
       runnerWrapper = pkgs.writeShellScript "firebreak-runner-wrapper" ''
@@ -129,6 +131,37 @@ EOF
         . ${runner}/bin/firebreak-runner-extra-args
         exec ${runner}/bin/microvm-run "$@" "''${firebreak_extra_args[@]}"
       '';
+      wrapperTemplateVars = {
+        "@HOST_SYSTEM@" = system;
+        "@RUNTIME_BACKEND@" = runtimeBackend;
+        "@CONTROL_SOCKET@" = "${controlSocketName}.socket";
+        "@NETWORK_MAC@" = networkMac;
+        "@DEFAULT_AGENT_COMMAND@" = defaultAgentCommand;
+        "@RUNNER@" = "${runnerWrapper}";
+        "@STATE_SUBDIR@" = agentConfigSubdir;
+        "@DEFAULT_STATE_ROOT@" = defaultAgentConfigHostDir;
+        "@DEFAULT_CREDENTIAL_SLOTS_HOST_DIR@" = defaultCredentialSlotsHostDir;
+        "@WORKSPACE_BOOTSTRAP_CONFIG_HOST_DIR@" = workspaceBootstrapConfigHostDir;
+        "@HOST_CONFIG_ADOPTION_ENABLED@" = if hostConfigAdoptionEnabled then "1" else "0";
+        "@AGENT_ENV_PREFIX@" = agentEnvPrefix;
+        "@SHARED_STATE_ROOT_ENABLED@" = if (sharedStateRoots.enable or false) then "1" else "0";
+        "@SHARED_CREDENTIAL_SLOTS_ENABLED@" = if (sharedCredentialSlots.enable or false) then "1" else "0";
+        "@LOCAL_PUBLISHED_HOST_PORTS_JSON@" = localPublishedHostPortsJson;
+        "@GUEST_EGRESS_ENABLED@" = if guestEgressEnabled then "1" else "0";
+        "@GUEST_EGRESS_PROXY_PORT@" = toString guestEgressProxyPort;
+        "@FIREBREAK_FLAKE_REF@" = "path:${builtins.toString ../../.}";
+        "@WORKER_BRIDGE_ENABLED@" = if workerBridgeEnabled then "1" else "0";
+      };
+      renderedCloudHypervisorNetworkLib = renderTemplate
+        (wrapperTemplateVars // {
+          "@FIREBREAK_CLOUD_HYPERVISOR_PORT_PUBLISH_PROXY_PY@" = builtins.readFile ../../modules/profiles/local/host/cloud-hypervisor-port-publish.py;
+        })
+        ../../modules/profiles/local/host/cloud-hypervisor-network.sh;
+      renderedCloudHypervisorVsockLib = renderTemplate
+        (wrapperTemplateVars // {
+          "@FIREBREAK_CLOUD_HYPERVISOR_EGRESS_PROXY_PY@" = builtins.readFile ../../modules/profiles/local/host/cloud-hypervisor-egress-proxy.py;
+        })
+        ../../modules/profiles/local/host/cloud-hypervisor-vsock.sh;
     in
     pkgs.writeShellApplication {
       inherit name;
@@ -150,31 +183,15 @@ EOF
           socat
           virtiofsd
         ];
-      text = renderTemplate {
-        "@HOST_SYSTEM@" = system;
-        "@RUNTIME_BACKEND@" = runtimeBackend;
-        "@CONTROL_SOCKET@" = "${controlSocketName}.socket";
-        "@NETWORK_MAC@" = networkMac;
-        "@DEFAULT_AGENT_COMMAND@" = defaultAgentCommand;
-        "@RUNNER@" = "${runnerWrapper}";
-        "@STATE_SUBDIR@" = agentConfigSubdir;
-        "@DEFAULT_STATE_ROOT@" = defaultAgentConfigHostDir;
-        "@DEFAULT_CREDENTIAL_SLOTS_HOST_DIR@" = defaultCredentialSlotsHostDir;
-        "@WORKSPACE_BOOTSTRAP_CONFIG_HOST_DIR@" = workspaceBootstrapConfigHostDir;
-        "@HOST_CONFIG_ADOPTION_ENABLED@" = if hostConfigAdoptionEnabled then "1" else "0";
-        "@AGENT_ENV_PREFIX@" = agentEnvPrefix;
-        "@SHARED_STATE_ROOT_ENABLED@" = if (sharedStateRoots.enable or false) then "1" else "0";
-        "@SHARED_CREDENTIAL_SLOTS_ENABLED@" = if (sharedCredentialSlots.enable or false) then "1" else "0";
-        "@LOCAL_PUBLISHED_HOST_PORTS_JSON@" = localPublishedHostPortsJson;
+      text = renderTemplate (wrapperTemplateVars // {
         "@FIREBREAK_PROJECT_CONFIG_LIB@" = builtins.readFile ../../modules/base/host/firebreak-project-config.sh;
-        "@FIREBREAK_FLAKE_REF@" = "path:${builtins.toString ../../.}";
         "@FIREBREAK_WORKER_LIB@" = builtins.readFile ../../modules/base/host/firebreak-worker.sh;
         "@FIREBREAK_WORKER_BRIDGE_HOST_LIB@" = builtins.readFile ../../modules/profiles/local/host/firebreak-worker-bridge-host.sh;
-        "@FIREBREAK_CLOUD_HYPERVISOR_NETWORK_LIB@" = builtins.readFile ../../modules/profiles/local/host/cloud-hypervisor-network.sh;
+        "@FIREBREAK_CLOUD_HYPERVISOR_NETWORK_LIB@" = renderedCloudHypervisorNetworkLib;
+        "@FIREBREAK_CLOUD_HYPERVISOR_VSOCK_LIB@" = renderedCloudHypervisorVsockLib;
         "@FIREBREAK_LOCAL_COMMAND_REQUEST_LIB@" = builtins.readFile ../../modules/profiles/local/host/command-request.sh;
         "@FIREBREAK_LOCAL_INSTANCE_CONTROLLER_LIB@" = builtins.readFile ../../modules/profiles/local/host/local-instance-controller.sh;
-        "@WORKER_BRIDGE_ENABLED@" = if workerBridgeEnabled then "1" else "0";
-      } ../../modules/profiles/local/host/run-wrapper.sh;
+      }) ../../modules/profiles/local/host/run-wrapper.sh;
     };
 
   mkLocalVmPackage = {
@@ -194,6 +211,8 @@ EOF
     sharedCredentialSlots ? { },
     workerBridgeEnabled ? false,
     localPublishedHostPortsJson ? "[]",
+    guestEgressEnabled ? false,
+    guestEgressProxyPort ? 3128,
   }:
     mkWorkloadPackage {
       inherit
@@ -211,7 +230,9 @@ EOF
         sharedStateRoots
         sharedCredentialSlots
         workerBridgeEnabled
-        localPublishedHostPortsJson;
+        localPublishedHostPortsJson
+        guestEgressEnabled
+        guestEgressProxyPort;
       runner = runnerPackage;
     };
 
@@ -264,6 +285,8 @@ EOF
         runtimeBackend = nixosConfiguration.config.workloadVm.runtimeBackend;
         networkMac = nixosConfiguration.config.workloadVm.macAddress;
         localPublishedHostPortsJson = nixosConfiguration.config.workloadVm.localPublishedHostPortsJson;
+        guestEgressEnabled = nixosConfiguration.config.workloadVm.guestEgress.enable;
+        guestEgressProxyPort = nixosConfiguration.config.workloadVm.guestEgress.proxyPort;
       };
     in {
       inherit nixosConfiguration package runnerPackage;

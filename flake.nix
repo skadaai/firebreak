@@ -80,6 +80,9 @@
             mkFirebreakCliSurfaceSmokePackage
             mkWorkerFirebreakBridgeProbePackage
             mkLocalControllerSmokePackage
+            mkCloudHypervisorEgressProxySmokePackage
+            mkCloudHypervisorPortPublishSmokePackage
+            mkPortPublishRuntimeSmokePackage
             mkFirebreakCliPackage
             mkLoopPackage
             mkLoopSmokePackage

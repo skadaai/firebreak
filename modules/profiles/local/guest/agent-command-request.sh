@@ -74,7 +74,8 @@ ensure_command_request_loaded() {
     return 0
   fi
 
-  eval "$(load_command_request)"
+  command_request_assignments=$(load_command_request) || return 1
+  eval "$command_request_assignments"
   export \
     command_request_loaded \
     command_request_id \

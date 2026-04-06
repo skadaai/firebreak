@@ -2,6 +2,7 @@ set -eu
 
 @FIREBREAK_PROJECT_CONFIG_LIB@
 @FIREBREAK_CLOUD_HYPERVISOR_NETWORK_LIB@
+@FIREBREAK_CLOUD_HYPERVISOR_VSOCK_LIB@
 @FIREBREAK_LOCAL_COMMAND_REQUEST_LIB@
 @FIREBREAK_LOCAL_INSTANCE_CONTROLLER_LIB@
 
@@ -257,12 +258,6 @@ virtiofsd_hostruntime_log=$host_runtime_dir/v-runtime.log
 virtiofsd_shared_state_root_log=$host_runtime_dir/v-shared-cfg.log
 virtiofsd_shared_credential_slots_log=$host_runtime_dir/v-credential-slots.log
 virtiofsd_agent_tools_log=$host_runtime_dir/v-tools.log
-hostcwd_socket=$host_runtime_dir/cwd.sock
-ro_store_socket=$runner_workdir/ro-store.sock
-hostruntime_socket=$host_runtime_dir/runtime.sock
-shared_state_root_socket=$host_runtime_dir/shared-cfg.sock
-shared_credential_slots_socket=$host_runtime_dir/credential-slots.sock
-agent_tools_socket=$host_runtime_dir/tools.sock
 worker_bridge_dir=$host_runtime_share_dir/worker-bridge
 worker_bridge_server_log=$host_runtime_dir/worker-bridge.log
 worker_bridge_server_script=$host_runtime_dir/firebreak-worker-bridge-host.sh
@@ -289,7 +284,11 @@ if { [ -z "$agent_columns" ] || [ -z "$agent_lines" ]; } && command -v stty >/de
 fi
 
 trace_wrapper() {
-  printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >>"$wrapper_trace_log"
+  wrapper_trace_dir=${wrapper_trace_log%/*}
+  if ! [ -d "$wrapper_trace_dir" ]; then
+    return 0
+  fi
+  printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >>"$wrapper_trace_log" 2>/dev/null || true
 }
 
 require_absolute_host_path "$shared_state_root_host_dir" "FIREBREAK_STATE_ROOT"
@@ -337,6 +336,12 @@ else
 fi
 
 runtime_debug_file=$runner_workdir/.firebreak-runtime.json
+ro_store_socket=$runner_workdir/ro-store.sock
+hostcwd_socket=$runner_workdir/hostcwd.sock
+hostruntime_socket=$runner_workdir/hostruntime.sock
+shared_state_root_socket=$runner_workdir/hoststateroot.sock
+shared_credential_slots_socket=$runner_workdir/hostcredentialslots.sock
+agent_tools_socket=$runner_workdir/hostagenttools.sock
 cloud_hypervisor_tap_interface=""
 cloud_hypervisor_host_ipv4=""
 cloud_hypervisor_guest_ipv4=""
@@ -444,6 +449,7 @@ fi
 
 # shellcheck disable=SC2329
 cleanup() {
+  cloud_hypervisor_cleanup_guest_egress
   cloud_hypervisor_cleanup_local_network
   if [ -n "${ro_store_virtiofsd_pid:-}" ]; then
     kill "$ro_store_virtiofsd_pid" 2>/dev/null || true
@@ -627,6 +633,7 @@ if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-
   write_command_request
 fi
 
+cloud_hypervisor_setup_guest_egress
 cloud_hypervisor_setup_local_network
 
 case "$runtime_backend" in
@@ -688,7 +695,7 @@ fi
 run_runner() {
   if [ "$runtime_backend" = "vfkit" ]; then
     if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
-      env \
+      exec env \
         MICROVM_VFKIT_HOST_META_DIR="$host_meta_dir" \
         MICROVM_VFKIT_HOST_CWD_DIR="$host_cwd" \
         MICROVM_VFKIT_SHARED_STATE_ROOT_DIR="$shared_state_root_host_dir" \
@@ -698,7 +705,7 @@ run_runner() {
         MICROVM_VFKIT_WORKER_BRIDGE_DIR="$worker_bridge_dir" \
         @RUNNER@ "$@"
     else
-      env \
+      exec env \
         MICROVM_VFKIT_HOST_META_DIR="$host_meta_dir" \
         MICROVM_VFKIT_HOST_CWD_DIR="$host_cwd" \
         MICROVM_VFKIT_SHARED_STATE_ROOT_DIR="$shared_state_root_host_dir" \
@@ -716,7 +723,7 @@ run_runner() {
   fi
 
   if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
-    env \
+    exec env \
       MICROVM_RO_STORE_SOCKET="$ro_store_socket" \
       MICROVM_CLOUD_HYPERVISOR_TAP_INTERFACE="$cloud_hypervisor_tap_interface" \
       MICROVM_HOST_RUNTIME_SOCKET="$hostruntime_socket" \
@@ -742,13 +749,60 @@ run_runner() {
   fi
 }
 
+wait_for_agent_exec_completion() {
+  runner_pid=$1
+  exit_code_path=$host_exec_output_dir/exit_code
+  max_polls=${FIREBREAK_AGENT_EXEC_WAIT_POLLS:-9000}
+  poll_sleep_seconds=${FIREBREAK_AGENT_EXEC_WAIT_SLEEP_SECONDS:-0.1}
+  poll_count=0
+
+  while [ "$poll_count" -lt "$max_polls" ]; do
+    if [ -f "$exit_code_path" ]; then
+      return 0
+    fi
+    if ! kill -0 "$runner_pid" 2>/dev/null; then
+      return 1
+    fi
+    sleep "$poll_sleep_seconds"
+    poll_count=$((poll_count + 1))
+  done
+
+  return 2
+}
+
+stop_agent_exec_runner() {
+  runner_pid=$1
+
+  if ! kill -0 "$runner_pid" 2>/dev/null; then
+    return 0
+  fi
+
+  kill "$runner_pid" 2>/dev/null || true
+  for _ in $(seq 1 30); do
+    if ! kill -0 "$runner_pid" 2>/dev/null; then
+      return 0
+    fi
+    sleep 0.1
+  done
+
+  kill -9 "$runner_pid" 2>/dev/null || true
+}
+
 runner_status=0
 trace_wrapper "runner-start"
 if [ "$agent_session_mode" = "agent-exec" ]; then
   (
     cd "$runner_workdir"
     run_runner "$@"
-  ) >"$runner_stdout_log" 2>"$runner_stderr_log" || runner_status=$?
+  ) >"$runner_stdout_log" 2>"$runner_stderr_log" &
+  runner_pid=$!
+  if wait_for_agent_exec_completion "$runner_pid"; then
+    trace_wrapper "agent-exec-command-finished"
+    stop_agent_exec_runner "$runner_pid"
+  else
+    trace_wrapper "agent-exec-command-finished-missing"
+  fi
+  wait "$runner_pid" || runner_status=$?
 elif [ "$agent_session_mode" = "agent-attach-exec" ]; then
   attach_runner_script=$host_runtime_dir/attached-runner.sh
   attach_relay_script=$host_runtime_dir/attach-relay.py
@@ -786,8 +840,11 @@ command_signal_stream_path = os.environ.get("FIREBREAK_ATTACH_COMMAND_SIGNAL_STR
 def trace_event(target_path: str, message: str) -> None:
     if not target_path:
         return
-    with open(target_path, "a", encoding="utf-8") as handle:
-        handle.write(message + "\n")
+    try:
+        with open(target_path, "a", encoding="utf-8") as handle:
+            handle.write(message + "\n")
+    except OSError:
+        pass
 
 
 def current_attach_stage() -> str:

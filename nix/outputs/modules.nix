@@ -13,5 +13,6 @@
   firebreak-claude-code = import ../../modules/claude-code/module.nix;
   firebreak-credential-fixture = import ../../modules/credential-fixture/module.nix;
   firebreak-interactive-echo = import ../../modules/interactive-echo/module.nix;
+  firebreak-port-publish-fixture = import ../../modules/port-publish-fixture/module.nix;
   default = self.nixosModules.firebreak-codex;
 }

@@ -1,8 +1,4 @@
-cloud_hypervisor_local_network_requested() {
-  if [ "${FIREBREAK_FULL_GUEST_NETWORK:-0}" = "1" ]; then
-    return 0
-  fi
-
+cloud_hypervisor_local_port_publish_requested() {
   LOCAL_PUBLISHED_HOST_PORTS_JSON='@LOCAL_PUBLISHED_HOST_PORTS_JSON@' \
     python3 - <<'PY'
 import json
@@ -24,7 +20,12 @@ PY
 
 cloud_hypervisor_setup_local_network() {
   [ "$runtime_backend" = "cloud-hypervisor" ] || return 0
-  cloud_hypervisor_local_network_requested || return 0
+  cloud_hypervisor_start_rootless_port_publishers
+
+  if [ "${FIREBREAK_FULL_GUEST_NETWORK:-0}" != "1" ]; then
+    return 0
+  fi
+
   host_kernel=$(uname -s 2>/dev/null || printf '%s' unknown)
   case "$host_kernel" in
     Linux) ;;
@@ -39,7 +40,6 @@ cloud_hypervisor_setup_local_network() {
   cloud_hypervisor_write_guest_network_metadata
   cloud_hypervisor_create_tap_interface
   cloud_hypervisor_enable_nat
-  cloud_hypervisor_start_port_publishers
   export MICROVM_CLOUD_HYPERVISOR_TAP_INTERFACE=$cloud_hypervisor_tap_interface
 }
 
@@ -164,38 +164,10 @@ cloud_hypervisor_write_guest_network_metadata() {
   printf '%s\n' "$cloud_hypervisor_tap_interface" > "$host_meta_dir/network-tap-interface"
 }
 
-cloud_hypervisor_create_tap_interface() {
-  cloud_hypervisor_run_privileged "$cloud_hypervisor_ip_command" link delete "$cloud_hypervisor_tap_interface" 2>/dev/null || true
-  cloud_hypervisor_run_privileged "$cloud_hypervisor_ip_command" tuntap add name "$cloud_hypervisor_tap_interface" mode tap user "$host_uid"
-  cloud_hypervisor_run_privileged "$cloud_hypervisor_ip_command" addr add "$cloud_hypervisor_host_ipv4_cidr" dev "$cloud_hypervisor_tap_interface"
-  cloud_hypervisor_run_privileged "$cloud_hypervisor_ip_command" link set "$cloud_hypervisor_tap_interface" up
-  trace_wrapper "cloud-hypervisor-tap-ready:$cloud_hypervisor_tap_interface"
-}
+cloud_hypervisor_start_rootless_port_publishers() {
+  [ "$runtime_backend" = "cloud-hypervisor" ] || return 0
+  cloud_hypervisor_local_port_publish_requested || return 0
 
-cloud_hypervisor_enable_nat() {
-  cloud_hypervisor_run_privileged "$cloud_hypervisor_iptables_command" -w -t nat -A POSTROUTING \
-    -s "$cloud_hypervisor_subnet_cidr" \
-    -o "$cloud_hypervisor_outbound_interface" \
-    -j MASQUERADE
-  cloud_hypervisor_masquerade_rule=1
-
-  cloud_hypervisor_run_privileged "$cloud_hypervisor_iptables_command" -w -A FORWARD \
-    -i "$cloud_hypervisor_tap_interface" \
-    -o "$cloud_hypervisor_outbound_interface" \
-    -j ACCEPT
-  cloud_hypervisor_forward_rule_outbound=1
-
-  cloud_hypervisor_run_privileged "$cloud_hypervisor_iptables_command" -w -A FORWARD \
-    -i "$cloud_hypervisor_outbound_interface" \
-    -o "$cloud_hypervisor_tap_interface" \
-    -m conntrack \
-    --ctstate RELATED,ESTABLISHED \
-    -j ACCEPT
-  cloud_hypervisor_forward_rule_established=1
-  trace_wrapper "cloud-hypervisor-nat-ready:$cloud_hypervisor_outbound_interface"
-}
-
-cloud_hypervisor_start_port_publishers() {
   publish_spec_file=$host_runtime_dir/cloud-hypervisor-port-publish.tsv
   : > "$publish_spec_file"
 
@@ -228,11 +200,20 @@ with open(target, "w", encoding="utf-8") as handle:
 PY
 
   cloud_hypervisor_proxy_pids=""
+  cloud_hypervisor_port_publish_proxy_script=$host_runtime_dir/cloud-hypervisor-port-publish.py
+  cat >"$cloud_hypervisor_port_publish_proxy_script" <<'PY'
+@FIREBREAK_CLOUD_HYPERVISOR_PORT_PUBLISH_PROXY_PY@
+PY
+  chmod 0555 "$cloud_hypervisor_port_publish_proxy_script"
+
   while IFS=$'\t' read -r host_address host_port guest_port; do
     [ -n "$host_address" ] || continue
-    socat \
-      "TCP-LISTEN:${host_port},bind=${host_address},reuseaddr,fork" \
-      "TCP:${cloud_hypervisor_guest_ipv4}:${guest_port}" >"$host_runtime_dir/port-${host_port}.log" 2>&1 &
+    env \
+      FIREBREAK_CH_PUBLISH_LISTEN_HOST="$host_address" \
+      FIREBREAK_CH_PUBLISH_LISTEN_PORT="$host_port" \
+      FIREBREAK_CH_PUBLISH_MUX_SOCKET="$runner_workdir/notify.vsock" \
+      FIREBREAK_CH_PUBLISH_GUEST_PORT="$guest_port" \
+      python3 "$cloud_hypervisor_port_publish_proxy_script" >"$host_runtime_dir/port-${host_port}.log" 2>&1 &
     proxy_pid=$!
     sleep 0.2
     if ! kill -0 "$proxy_pid" 2>/dev/null; then
@@ -243,4 +224,35 @@ PY
     cloud_hypervisor_proxy_pids="${cloud_hypervisor_proxy_pids:+$cloud_hypervisor_proxy_pids }$proxy_pid"
     trace_wrapper "cloud-hypervisor-port-publish:${host_address}:${host_port}->${guest_port}"
   done < "$publish_spec_file"
+}
+
+cloud_hypervisor_create_tap_interface() {
+  cloud_hypervisor_run_privileged "$cloud_hypervisor_ip_command" link delete "$cloud_hypervisor_tap_interface" 2>/dev/null || true
+  cloud_hypervisor_run_privileged "$cloud_hypervisor_ip_command" tuntap add name "$cloud_hypervisor_tap_interface" mode tap user "$host_uid"
+  cloud_hypervisor_run_privileged "$cloud_hypervisor_ip_command" addr add "$cloud_hypervisor_host_ipv4_cidr" dev "$cloud_hypervisor_tap_interface"
+  cloud_hypervisor_run_privileged "$cloud_hypervisor_ip_command" link set "$cloud_hypervisor_tap_interface" up
+  trace_wrapper "cloud-hypervisor-tap-ready:$cloud_hypervisor_tap_interface"
+}
+
+cloud_hypervisor_enable_nat() {
+  cloud_hypervisor_run_privileged "$cloud_hypervisor_iptables_command" -w -t nat -A POSTROUTING \
+    -s "$cloud_hypervisor_subnet_cidr" \
+    -o "$cloud_hypervisor_outbound_interface" \
+    -j MASQUERADE
+  cloud_hypervisor_masquerade_rule=1
+
+  cloud_hypervisor_run_privileged "$cloud_hypervisor_iptables_command" -w -A FORWARD \
+    -i "$cloud_hypervisor_tap_interface" \
+    -o "$cloud_hypervisor_outbound_interface" \
+    -j ACCEPT
+  cloud_hypervisor_forward_rule_outbound=1
+
+  cloud_hypervisor_run_privileged "$cloud_hypervisor_iptables_command" -w -A FORWARD \
+    -i "$cloud_hypervisor_outbound_interface" \
+    -o "$cloud_hypervisor_tap_interface" \
+    -m conntrack \
+    --ctstate RELATED,ESTABLISHED \
+    -j ACCEPT
+  cloud_hypervisor_forward_rule_established=1
+  trace_wrapper "cloud-hypervisor-nat-ready:$cloud_hypervisor_outbound_interface"
 }

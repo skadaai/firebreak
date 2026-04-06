@@ -12,9 +12,13 @@
   firebreak-test-smoke-codex-warm-reuse = self.packages.${system}.firebreak-test-smoke-codex-warm-reuse;
   firebreak-internal-runner-interactive-echo = self.packages.${system}.firebreak-internal-runner-interactive-echo;
   firebreak-interactive-echo-system = localVmArtifacts.firebreak-interactive-echo.nixosConfiguration.config.system.build.toplevel;
+  firebreak-port-publish-fixture-system = localVmArtifacts.firebreak-port-publish-fixture.nixosConfiguration.config.system.build.toplevel;
   firebreak-test-smoke-firebreak-cli-surface = self.packages.${system}.firebreak-test-smoke-firebreak-cli-surface;
   firebreak-test-smoke-worker-proxy-script = self.packages.${system}.firebreak-test-smoke-worker-proxy-script;
   firebreak-test-smoke-local-controller = self.packages.${system}.firebreak-test-smoke-local-controller;
+  firebreak-test-smoke-cloud-hypervisor-egress-proxy = self.packages.${system}.firebreak-test-smoke-cloud-hypervisor-egress-proxy;
+  firebreak-test-smoke-cloud-hypervisor-port-publish = self.packages.${system}.firebreak-test-smoke-cloud-hypervisor-port-publish;
+  firebreak-test-smoke-port-publish-runtime = self.packages.${system}.firebreak-test-smoke-port-publish-runtime;
   firebreak-test-smoke-npx-launcher = self.packages.${system}.firebreak-test-smoke-npx-launcher;
   firebreak-test-smoke-project-config-and-doctor = self.packages.${system}.firebreak-test-smoke-project-config-and-doctor;
   firebreak-test-smoke-internal-loop = self.packages.${system}.firebreak-test-smoke-internal-loop;

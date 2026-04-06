@@ -14,6 +14,9 @@
   mkFirebreakCliSurfaceSmokePackage,
   mkWorkerFirebreakBridgeProbePackage,
   mkLocalControllerSmokePackage,
+  mkCloudHypervisorEgressProxySmokePackage,
+  mkCloudHypervisorPortPublishSmokePackage,
+  mkPortPublishRuntimeSmokePackage,
   mkFirebreakCliPackage,
   mkLoopPackage,
   mkLoopSmokePackage,
@@ -79,6 +82,7 @@
   };
 
   firebreak-interactive-echo = localVmArtifacts.firebreak-interactive-echo.package;
+  firebreak-port-publish-fixture = localVmArtifacts.firebreak-port-publish-fixture.package;
 
   firebreak-credential-fixture = localVmArtifacts.firebreak-credential-fixture.package;
 
@@ -139,6 +143,19 @@
 
   firebreak-test-smoke-local-controller = mkLocalControllerSmokePackage {
     name = "firebreak-test-smoke-local-controller";
+  };
+
+  firebreak-test-smoke-cloud-hypervisor-egress-proxy = mkCloudHypervisorEgressProxySmokePackage {
+    name = "firebreak-test-smoke-cloud-hypervisor-egress-proxy";
+  };
+
+  firebreak-test-smoke-cloud-hypervisor-port-publish = mkCloudHypervisorPortPublishSmokePackage {
+    name = "firebreak-test-smoke-cloud-hypervisor-port-publish";
+  };
+
+  firebreak-test-smoke-port-publish-runtime = mkPortPublishRuntimeSmokePackage {
+    name = "firebreak-test-smoke-port-publish-runtime";
+    fixturePackage = "firebreak-port-publish-fixture";
   };
 
   firebreak-internal-validate = mkValidationPackage {

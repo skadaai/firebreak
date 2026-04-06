@@ -4,12 +4,17 @@ let
   backendSpec = runtimeBackends.specFor cfg.runtimeBackend;
   devHome = "/var/lib/${cfg.devUser}";
   runtimeHostMount = "/run/firebreak-host-runtime";
+  hostCwdShareSocket = "hostcwd.sock";
+  hostRuntimeShareSocket = "hostruntime.sock";
+  sharedStateRootShareSocket = "hoststateroot.sock";
+  sharedCredentialSlotsShareSocket = "hostcredentialslots.sock";
+  agentToolsShareSocket = "hostagenttools.sock";
   hostMetaMount = "${runtimeHostMount}/meta";
   workerExecOutputMount = "${runtimeHostMount}/exec-output";
   workerBridgeMount = "${runtimeHostMount}/worker-bridge";
   hostMetaFsType = backendSpec.localHostMetaFsType;
 
-  scriptVars = {
+  baseScriptVars = {
     "@AGENT_VM_NAME@" = cfg.name;
     "@BASH@" = "${pkgs.bashInteractive}/bin/bash";
     "@BRANDING_NAME@" = cfg.brandingName;
@@ -24,9 +29,7 @@ let
     "@AGENT_EXEC_OUTPUT_MOUNT@" = cfg.workerExecOutputMount;
     "@AGENT_TOOLS_ENABLED@" = if cfg.toolRuntimesEnabled then "1" else "0";
     "@AGENT_TOOLS_MOUNT@" = cfg.toolRuntimesMount;
-    "@FIREBREAK_AGENT_COMMAND_REQUEST_LIB@" = builtins.readFile ./guest/agent-command-request.sh;
     "@AGENT_SESSION_MODE_FILE@" = cfg.workerSessionModeFile;
-    "@FIREBREAK_AGENT_COMMAND_STATE_LIB@" = builtins.readFile ./guest/agent-command-state.sh;
     "@HOST_META_MOUNT@" = cfg.hostMetaMount;
     "@ID@" = "${pkgs.coreutils}/bin/id";
     "@GROUPMOD@" = "${pkgs.shadow}/bin/groupmod";
@@ -42,6 +45,7 @@ let
     "@PYTHON3@" = "${pkgs.python3}/bin/python3";
     "@START_DIR_FILE@" = cfg.startDirFile;
     "@RUNUSER@" = "${pkgs.util-linux}/bin/runuser";
+    "@RUNTIME_BACKEND@" = cfg.runtimeBackend;
     "@SHARED_AGENT_WRAPPER_BIN_DIR@" = cfg.sharedToolWrapperBinDir;
     "@USERMOD@" = "${pkgs.shadow}/bin/usermod";
     "@WORKER_BRIDGE_ENABLED@" = if cfg.workerBridgeEnabled then "1" else "0";
@@ -50,6 +54,13 @@ let
     "@WORKER_LOCAL_HELPER@" = "firebreak-worker-local-helper";
     "@WORKER_LOCAL_STATE_DIR@" = cfg.workerLocalStateDir;
     "@WORKSPACE_MOUNT@" = cfg.workspaceMount;
+    "@NETWORK_MAC@" = cfg.macAddress;
+  };
+  renderedAgentCommandRequestLib = renderTemplate baseScriptVars ./guest/agent-command-request.sh;
+  renderedAgentCommandStateLib = renderTemplate baseScriptVars ./guest/agent-command-state.sh;
+  scriptVars = baseScriptVars // {
+    "@FIREBREAK_AGENT_COMMAND_REQUEST_LIB@" = renderedAgentCommandRequestLib;
+    "@FIREBREAK_AGENT_COMMAND_STATE_LIB@" = renderedAgentCommandStateLib;
   };
 
   adoptHostIdentityScript = pkgs.writeShellScript "adopt-host-identity"
@@ -63,6 +74,46 @@ let
     (renderTemplate scriptVars ./guest/prepare-agent-session.sh);
   configureRuntimeNetworkScript = pkgs.writeShellScript "configure-runtime-network"
     (renderTemplate scriptVars ./guest/configure-runtime-network.sh);
+  guestEgressRelayProgram = pkgs.writeText "firebreak-cloud-hypervisor-egress-relay.py"
+    (builtins.readFile ./guest/cloud-hypervisor-egress-relay.py);
+  localPublishedHostPorts = builtins.fromJSON cfg.localPublishedHostPortsJson;
+  guestPublishedTcpPorts =
+    lib.unique
+      (map
+        (forward: toString ((forward.guest or { }).port))
+        (builtins.filter
+          (forward:
+            ((forward.from or "host") == "host") &&
+            ((forward.proto or "tcp") == "tcp") &&
+            ((forward.guest or { }) ? port))
+          localPublishedHostPorts));
+  cloudHypervisorVsockEnabled =
+    cfg.runtimeBackend == "cloud-hypervisor" && (
+      cfg.guestEgress.enable ||
+      guestPublishedTcpPorts != [ ]
+    );
+  guestPortPublishRelayProgram = pkgs.writeText "firebreak-cloud-hypervisor-port-publish-relay.py"
+    (builtins.readFile ./guest/cloud-hypervisor-port-publish-relay.py);
+  guestEgressRelayScript = pkgs.writeShellApplication {
+    name = "firebreak-cloud-hypervisor-egress-relay";
+    runtimeInputs = with pkgs; [ python3 ];
+    text = ''
+      export FIREBREAK_GUEST_EGRESS_PROXY_HOST='127.0.0.1'
+      export FIREBREAK_GUEST_EGRESS_PROXY_PORT='${toString cfg.guestEgress.proxyPort}'
+      export FIREBREAK_GUEST_EGRESS_HOST_CID='2'
+      export FIREBREAK_GUEST_EGRESS_HOST_PORT='${toString cfg.guestEgress.proxyPort}'
+      exec python3 ${guestEgressRelayProgram}
+    '';
+  };
+  guestPortPublishRelayScript = pkgs.writeShellApplication {
+    name = "firebreak-cloud-hypervisor-port-publish-relay";
+    runtimeInputs = with pkgs; [ python3 ];
+    text = ''
+      export FIREBREAK_GUEST_PORT_PUBLISH_TARGET_HOST='127.0.0.1'
+      export FIREBREAK_GUEST_PORT_PUBLISH_PORTS='${lib.concatStringsSep "," guestPublishedTcpPorts}'
+      exec python3 ${guestPortPublishRelayProgram}
+    '';
+  };
   firebreakWorkerEngineScript = pkgs.writeShellScript "firebreak-worker-engine"
     (builtins.readFile ../../base/host/firebreak-worker.sh);
   firebreakWorkerEngineRuntimeInputs = with pkgs; [
@@ -151,12 +202,31 @@ in {
     workloadVm.hostMetaMount = lib.mkDefault hostMetaMount;
     workloadVm.workerExecOutputMount = lib.mkDefault workerExecOutputMount;
     workloadVm.workerBridgeMount = lib.mkDefault workerBridgeMount;
+    workloadVm.guestEgress.enable = lib.mkDefault (builtins.elem "guest-egress" cfg.requiredCapabilities);
+
+    environment.variables = lib.mkIf cfg.guestEgress.enable {
+      HTTP_PROXY = "http://127.0.0.1:${toString cfg.guestEgress.proxyPort}";
+      HTTPS_PROXY = "http://127.0.0.1:${toString cfg.guestEgress.proxyPort}";
+      http_proxy = "http://127.0.0.1:${toString cfg.guestEgress.proxyPort}";
+      https_proxy = "http://127.0.0.1:${toString cfg.guestEgress.proxyPort}";
+      NO_PROXY = "127.0.0.1,localhost,::1";
+      no_proxy = "127.0.0.1,localhost,::1";
+    };
 
     fileSystems.${runtimeHostMount} = {
       device = "hostruntime";
       fsType = hostMetaFsType;
       options = [
         "defaults"
+        "x-systemd.after=systemd-modules-load.service"
+      ];
+    };
+    fileSystems.${cfg.toolRuntimesMount} = lib.mkIf (cfg.runtimeBackend == "cloud-hypervisor" && cfg.toolRuntimesEnabled) {
+      device = "hostagenttools";
+      fsType = "virtiofs";
+      options = [
+        "defaults"
+        "exec"
         "x-systemd.after=systemd-modules-load.service"
       ];
     };
@@ -223,11 +293,49 @@ in {
       };
     };
 
+    systemd.services.guest-egress-proxy = lib.mkIf (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) {
+      description = "Expose rootless guest egress through Cloud Hypervisor vsock";
+      wantedBy = [ "multi-user.target" ];
+      before = [ "dev-console.service" ]
+        ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
+      after = [ "prepare-agent-session.service" ];
+      requires = [ "prepare-agent-session.service" ];
+
+      serviceConfig = {
+        ExecStart = "${guestEgressRelayScript}/bin/firebreak-cloud-hypervisor-egress-relay";
+        Restart = "always";
+        RestartSec = 1;
+        Type = "simple";
+        StandardOutput = "journal+console";
+        StandardError = "journal+console";
+      };
+    };
+
+    systemd.services.guest-port-publish-relay = lib.mkIf (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) {
+      description = "Expose localhost TCP services through the Cloud Hypervisor vsock mux";
+      wantedBy = [ "multi-user.target" ];
+      before = [ "dev-console.service" ]
+        ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
+      after = [ "prepare-agent-session.service" ];
+      requires = [ "prepare-agent-session.service" ];
+
+      serviceConfig = {
+        ExecStart = "${guestPortPublishRelayScript}/bin/firebreak-cloud-hypervisor-port-publish-relay";
+        Restart = "always";
+        RestartSec = 1;
+        Type = "simple";
+        StandardOutput = "journal+console";
+        StandardError = "journal+console";
+      };
+    };
+
     systemd.services.dev-bootstrap = lib.mkIf bootstrapEnabled {
       after = [ "prepare-agent-session.service" ]
-        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service";
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service";
       requires = [ "prepare-agent-session.service" ]
-        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service";
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service";
     };
 
     systemd.services."serial-getty@ttyS0".enable = false;
@@ -246,9 +354,13 @@ in {
       wantedBy = [ "multi-user.target" ];
       after = [ "adopt-host-identity.service" "prepare-agent-session.service" ]
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service"
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
       requires = [ "adopt-host-identity.service" "prepare-agent-session.service" ]
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service"
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
       wants = [ ];
       conflicts = [ "serial-getty@ttyS0.service" ];
@@ -276,9 +388,13 @@ in {
       wantedBy = [ "multi-user.target" ];
       after = [ "prepare-agent-session.service" ]
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service"
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
       requires = [ "prepare-agent-session.service" ]
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service"
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
 
       serviceConfig = {
@@ -295,6 +411,53 @@ in {
     };
 
     microvm.extraArgsScript = lib.optionalString (cfg.runtimeBackend != "vfkit") "${runtimeExtraArgsScript}";
+    microvm.shares = lib.mkAfter (
+      lib.optionals (cfg.runtimeBackend == "cloud-hypervisor") [
+        {
+          proto = "virtiofs";
+          tag = "hostcwd";
+          socket = hostCwdShareSocket;
+          source = "/run/firebreak/hostcwd";
+          mountPoint = cfg.workspaceMount;
+        }
+        {
+          proto = "virtiofs";
+          tag = "hostruntime";
+          socket = hostRuntimeShareSocket;
+          source = "/run/firebreak/hostruntime";
+          mountPoint = runtimeHostMount;
+        }
+      ]
+      ++ lib.optionals (cfg.runtimeBackend == "cloud-hypervisor" && cfg.sharedStateRoots.enable) [
+        {
+          proto = "virtiofs";
+          tag = "hoststateroot";
+          socket = sharedStateRootShareSocket;
+          source = "/run/firebreak/hoststateroot";
+          mountPoint = cfg.sharedStateRoots.hostMount;
+        }
+      ]
+      ++ lib.optionals (cfg.runtimeBackend == "cloud-hypervisor" && cfg.sharedCredentialSlots.enable) [
+        {
+          proto = "virtiofs";
+          tag = "hostcredentialslots";
+          socket = sharedCredentialSlotsShareSocket;
+          source = "/run/firebreak/hostcredentialslots";
+          mountPoint = cfg.sharedCredentialSlots.hostMount;
+        }
+      ]
+      ++ lib.optionals (cfg.runtimeBackend == "cloud-hypervisor" && cfg.toolRuntimesEnabled) [
+        {
+          proto = "virtiofs";
+          tag = "hostagenttools";
+          socket = agentToolsShareSocket;
+          source = "/run/firebreak/hostagenttools";
+          mountPoint = cfg.toolRuntimesMount;
+        }
+      ]
+    );
+
+    microvm.vsock.cid = lib.mkIf cloudHypervisorVsockEnabled (lib.mkDefault cfg.guestEgress.vsockCID);
 
     workloadVm.runtimeManagedRoStore = cfg.runtimeBackend != "vfkit";
   };

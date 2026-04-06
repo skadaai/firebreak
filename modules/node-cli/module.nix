@@ -359,6 +359,7 @@ in {
     ];
 
     workloadVm = {
+      requiredCapabilities = [ "guest-egress" ];
       brandingTagline = tagline;
       localPublishedHostPortsJson = builtins.toJSON (
         builtins.filter (forward: (forward.from or "host") == "host") forwardPorts

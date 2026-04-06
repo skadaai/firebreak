@@ -41,6 +41,7 @@ let
       roStoreShareProto = "virtiofs";
       capabilities = [
         "interactive-console"
+        "guest-egress"
         "workspace-share"
         "host-meta-share"
         "shared-state-root"

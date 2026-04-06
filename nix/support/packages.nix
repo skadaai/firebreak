@@ -252,6 +252,44 @@ rec {
       } ../../modules/profiles/local/tests/test-smoke-local-controller.sh;
     };
 
+  mkCloudHypervisorEgressProxySmokePackage = { name }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        coreutils
+        python3
+      ];
+      text = renderTemplate {
+        "@PROXY_SCRIPT@" = builtins.toString ../../modules/profiles/local/host/cloud-hypervisor-egress-proxy.py;
+      } ../../modules/profiles/local/tests/test-smoke-cloud-hypervisor-egress-proxy.sh;
+    };
+
+  mkCloudHypervisorPortPublishSmokePackage = { name }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        coreutils
+        python3
+      ];
+      text = renderTemplate {
+        "@PROXY_SCRIPT@" = builtins.toString ../../modules/profiles/local/host/cloud-hypervisor-port-publish.py;
+      } ../../modules/profiles/local/tests/test-smoke-cloud-hypervisor-port-publish.sh;
+    };
+
+  mkPortPublishRuntimeSmokePackage = { name, fixturePackage }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        bash
+        coreutils
+        git
+        python3
+      ];
+      text = renderTemplate {
+        "@FIXTURE_PACKAGE_BIN@" = "${self.packages.${system}.${fixturePackage}}/bin/${fixturePackage}";
+      } ../../modules/profiles/local/tests/test-smoke-port-publish-runtime.sh;
+    };
+
   mkCloudJobPackage = {
     name,
     runnerName,
@@ -317,6 +355,7 @@ rec {
         "@CODEX_VERSION_BIN@" = "${self.packages.${system}.firebreak-test-smoke-codex-version}/bin/firebreak-test-smoke-codex-version";
         "@CODEX_WARM_REUSE_BIN@" = "${self.packages.${system}.firebreak-test-smoke-codex-warm-reuse}/bin/firebreak-test-smoke-codex-warm-reuse";
         "@CLAUDE_SMOKE_BIN@" = "${self.packages.${system}.firebreak-test-smoke-claude-code}/bin/firebreak-test-smoke-claude-code";
+        "@PORT_PUBLISH_RUNTIME_BIN@" = "${self.packages.${system}.firebreak-test-smoke-port-publish-runtime}/bin/firebreak-test-smoke-port-publish-runtime";
         "@CLOUD_SMOKE_BIN@" = cloudSmokeBin;
         "@CLOUD_SUITE_USAGE@" =
           if includeCloudSuite then
@@ -334,7 +373,13 @@ rec {
   }:
     pkgs.writeShellApplication {
       inherit name;
-      runtimeInputs = with pkgs; [ coreutils ];
+      runtimeInputs = with pkgs; [
+        coreutils
+        git
+        gnugrep
+        gnused
+        python3
+      ];
       text = renderTemplate {
         "@AGENT_PACKAGE_BIN@" = "${self.packages.${system}.${agentPackage}}/bin/${agentPackage}";
         "@AGENT_DISPLAY_NAME@" = agentDisplayName;

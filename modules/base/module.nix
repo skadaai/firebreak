@@ -147,6 +147,32 @@ in {
       description = "Runtime capabilities that must be provided by the selected backend.";
     };
 
+    guestEgress = mkOption {
+      default = { };
+      description = "Rootless guest egress contract for local runtimes.";
+      type = types.submodule ({ ... }: {
+        options = {
+          enable = mkOption {
+            type = types.bool;
+            default = false;
+            description = "Whether the workload expects outbound guest egress through the runtime.";
+          };
+
+          vsockCID = mkOption {
+            type = types.ints.positive;
+            default = 52;
+            description = "Guest vsock CID used for Cloud Hypervisor rootless guest egress.";
+          };
+
+          proxyPort = mkOption {
+            type = types.port;
+            default = 3128;
+            description = "Guest localhost port used for the rootless guest egress proxy.";
+          };
+        };
+      });
+    };
+
     devUser = mkOption {
       type = types.str;
       default = "dev";

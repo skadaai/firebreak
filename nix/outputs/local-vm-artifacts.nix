@@ -52,6 +52,15 @@ in
     defaultAgentConfigHostDir = "$HOME/.firebreak";
   };
 
+  firebreak-port-publish-fixture = mkLocalVmArtifacts {
+    name = "firebreak-port-publish-fixture";
+    extraModules = [ self.nixosModules.firebreak-port-publish-fixture ];
+    controlSocketName = "firebreak-port-publish-fixture";
+    defaultAgentCommand = "bash";
+    agentConfigSubdir = "port-publish-fixture";
+    defaultAgentConfigHostDir = "$HOME/.firebreak";
+  };
+
 } // lib.optionalAttrs includeCloud {
   firebreak-codex-cloud = mkLocalVmArtifacts {
     name = "firebreak-codex-cloud";

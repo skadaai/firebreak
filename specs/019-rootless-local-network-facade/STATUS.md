@@ -7,7 +7,7 @@ last_updated: 2026-04-06
 
 ## Current phase
 
-Executing slice 1.
+Slice 3 is complete.
 
 ## What is landed
 
@@ -17,9 +17,14 @@ Executing slice 1.
 - launcher-level Linux host-network preflight has been removed
 - Cloud Hypervisor host-side networking setup is now conditional and only runs when a launch explicitly requests it
 - guest runtime network configuration is now a no-op when no host networking metadata was prepared
+- Cloud Hypervisor local guest egress now uses a rootless host proxy and guest relay over `vsock`
+- Cloud Hypervisor local TCP publishing now uses a rootless host listener and guest relay over `vsock`
+- the shared local wrapper now keeps rootless publishing separate from privileged full guest networking
+- dedicated host-side smokes cover the rootless egress helper and the rootless TCP publish helper
+- a real forwarded-port workload now passes end to end on the rootless publish path
+- validation now distinguishes rootless local Cloud Hypervisor suites from privileged full-guest-network suites
 
 ## What remains open
 
-- rootless `guest-egress` over `vsock`
-- rootless localhost TCP publishing over `vsock`
 - deciding the final role of privileged `full-guest-network`
+- expanding snapshot and warm-instance reuse on top of the rootless local networking facade

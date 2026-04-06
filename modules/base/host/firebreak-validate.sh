@@ -16,6 +16,7 @@ Named suites:
   test-smoke-codex-version
   test-smoke-codex-warm-reuse
   test-smoke-claude-code
+  test-smoke-port-publish-runtime
 @CLOUD_SUITE_USAGE@
 EOF
   exit 1
@@ -90,7 +91,7 @@ case "$state_dir" in
     ;;
 esac
 
-required_capability="local-hypervisor"
+required_capability="rootless-local-hypervisor"
 missing_capability=""
 
 case "$suite_name" in
@@ -110,6 +111,9 @@ case "$suite_name" in
   test-smoke-claude-code)
     suite_command="@CLAUDE_SMOKE_BIN@"
     ;;
+  test-smoke-port-publish-runtime)
+    suite_command="@PORT_PUBLISH_RUNTIME_BIN@"
+    ;;
 @CLOUD_SUITE_CASE@
   *)
     echo "unknown validation suite: $suite_name" >&2
@@ -121,9 +125,34 @@ if [ -n "${FIREBREAK_VALIDATION_FORCE_BLOCKED_REASON:-}" ]; then
   missing_capability=$FIREBREAK_VALIDATION_FORCE_BLOCKED_REASON
 else
   if [ "$required_capability" = "local-hypervisor" ]; then
+    required_capability="rootless-local-hypervisor"
+  fi
+
+  if [ "$required_capability" = "rootless-local-hypervisor" ]; then
     case "$host_os:$host_arch" in
       Linux:*)
-        required_capability="cloud-hypervisor-local-host"
+        required_capability="cloud-hypervisor-rootless-local-host"
+        if ! [ -r /dev/kvm ]; then
+          missing_capability="kvm-unavailable"
+        elif ! [ -w /dev/kvm ]; then
+          missing_capability="kvm-not-writable"
+        fi
+        ;;
+      Darwin:arm64|Darwin:aarch64)
+        required_capability="apple-silicon-vfkit"
+        ;;
+      Darwin:*)
+        required_capability="apple-silicon-vfkit"
+        missing_capability="unsupported-intel-mac"
+        ;;
+      *)
+        missing_capability="unsupported-host-platform"
+        ;;
+    esac
+  elif [ "$required_capability" = "full-guest-network" ]; then
+    case "$host_os:$host_arch" in
+      Linux:*)
+        required_capability="cloud-hypervisor-full-guest-network"
         if ! [ -r /dev/kvm ]; then
           missing_capability="kvm-unavailable"
         elif ! [ -w /dev/kvm ]; then
@@ -141,13 +170,6 @@ else
         elif ! sudo -n "$(command -v iptables)" -w -L >/dev/null 2>&1; then
           missing_capability="sudo-firewall-denied"
         fi
-        ;;
-      Darwin:arm64|Darwin:aarch64)
-        required_capability="apple-silicon-vfkit"
-        ;;
-      Darwin:*)
-        required_capability="apple-silicon-vfkit"
-        missing_capability="unsupported-intel-mac"
         ;;
       *)
         missing_capability="unsupported-host-platform"

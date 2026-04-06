@@ -33,6 +33,9 @@ mkdir -p "$src_dir"
           continue
           ;;
       esac
+      if [ ! -e "$path" ] && [ ! -L "$path" ]; then
+        continue
+      fi
       cp -a --parents "$path" "$src_dir"
     done
 )

@@ -30,6 +30,7 @@ let
 in {
   config = {
     workloadVm = {
+      guestSudoEnable = lib.mkDefault false;
       requiredCapabilities = [ "guest-egress" ];
       name = lib.mkDefault vmName;
       sharedStateRoots = {

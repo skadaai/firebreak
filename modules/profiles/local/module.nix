@@ -153,7 +153,7 @@ let
     runtimeInputs = with pkgs; [
       bash
       coreutils
-      sudo
+      systemd
     ];
     text = renderTemplate scriptVars ./guest/run-agent-exec.sh;
   };

@@ -189,6 +189,12 @@ in {
       description = "Home directory for the interactive development user inside the MicroVM.";
     };
 
+    guestSudoEnable = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Whether the workload enables guest sudo support for the development user.";
+    };
+
     workspaceMount = mkOption {
       type = types.str;
       default = "/workspace";
@@ -615,7 +621,8 @@ in {
       shell = pkgs.bashInteractive;
     };
 
-    security.sudo.wheelNeedsPassword = false;
+    security.sudo.enable = cfg.guestSudoEnable;
+    security.sudo.wheelNeedsPassword = lib.mkIf cfg.guestSudoEnable false;
 
     assertions = [
       {

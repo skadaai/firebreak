@@ -440,7 +440,7 @@ PY
             write_command_state bootstrap-wait error agent-attach-exec "$status"
             printf "%s\n" "$status" >"$exit_code_path"
             printf "%s\n" "bootstrap-wait-error:$status" >"$stage_path"
-            sudo poweroff >/dev/null 2>&1 || true
+            systemctl poweroff >/dev/null 2>&1 || true
             exit "$status"
           fi
         fi
@@ -461,7 +461,7 @@ PY
         write_command_state command-exit completed agent-attach-exec "$status"
         printf "%s\n" "command-exit:$status" >"$stage_path"
         emit_command_stream_marker command-exit "$status"
-        sudo poweroff >/dev/null 2>&1 || true
+        systemctl poweroff >/dev/null 2>&1 || true
         exit "$status"
       '
     fi

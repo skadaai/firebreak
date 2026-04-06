@@ -76,7 +76,7 @@ if command -v firebreak-bootstrap-wait >/dev/null 2>&1; then
     write_command_state bootstrap-wait error agent-exec "$status"
     printf "%s\n" "$status" >"$exit_code_path"
     if [ "$power_action" = "poweroff" ]; then
-      sudo poweroff >/dev/null 2>&1 || true
+      systemctl poweroff >/dev/null 2>&1 || true
     fi
     exit "$status"
   fi
@@ -95,6 +95,6 @@ write_command_state command-exit completed agent-exec "$status"
 firebreak_profile_guest_mark run-agent-exec command-exit "$status"
 printf "%s\n" "$status" >"$exit_code_path"
 if [ "$power_action" = "poweroff" ]; then
-  sudo poweroff >/dev/null 2>&1 || true
+  systemctl poweroff >/dev/null 2>&1 || true
 fi
 exit "$status"

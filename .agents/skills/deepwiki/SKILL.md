@@ -36,7 +36,7 @@ The wrapper scripts in this skill are the default interface. They hide the raw J
 
 ## Two Access Modes
 
-```
+```text
 1. CLI (primary)  → scripts/dw-query.sh  — full capability: deep, codemap, threading
 2. MCP (fallback) → mcp.deepwiki.com     — basic ask_question only, no mode selection
 ```
@@ -154,7 +154,7 @@ Alternate endpoint if SSE fails: `https://mcp.deepwiki.com/mcp`. No API key requ
 
 #### `ask_question`
 
-```
+```javascript
 mcp__deepwiki__ask_question({
   repoName: "owner/repo",
   question: "How does X work?"
@@ -165,13 +165,13 @@ mcp__deepwiki__ask_question({
 
 Returns the table of contents. Use to survey available documentation before asking.
 
-```
+```javascript
 mcp__deepwiki__read_wiki_structure({ repoName: "owner/repo" })
 ```
 
 #### `read_wiki_contents`
 
-```
+```javascript
 mcp__deepwiki__read_wiki_contents({ repoName: "owner/repo", topic: "authentication" })
 ```
 
@@ -201,7 +201,7 @@ mcp__deepwiki__read_wiki_contents({ repoName: "owner/repo", topic: "authenticati
 
 ## Workflow
 
-```
+```text
 1. Check UPSTREAM_REPOS.md for the canonical owner/repo.
 
 2. If not listed:

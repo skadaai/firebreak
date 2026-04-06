@@ -57,6 +57,6 @@ trap cleanup EXIT
 run_deepwiki_json_with_retry "$tmp_json" status "$REPO"
 cat "$tmp_json"
 
-if jq -e '.indexed == false or .status == "not_indexed"' "$tmp_json" > /dev/null 2>&1; then
+if ! jq -e '.indexed == true or .status == "completed" or .status == "indexed"' "$tmp_json" > /dev/null 2>&1; then
   exit 1
 fi

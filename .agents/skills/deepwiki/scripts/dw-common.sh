@@ -49,10 +49,9 @@ run_deepwiki_json_with_retry() {
 
   local attempt=1
   local delay=2
-  local status=0
+  local status
 
   while :; do
-    status=0
     if run_deepwiki_cli "$@" >"$output_path"; then
       status=0
     else

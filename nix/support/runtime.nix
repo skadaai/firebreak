@@ -73,6 +73,23 @@ EOF
       chmod 0555 "$out/bin/firebreak-runner-extra-args"
     '';
 
+  mkVarVolumeSeedImage = {
+    name,
+    sizeMiB,
+  }:
+    pkgs.runCommand "${name}-var-seed.img" {
+      nativeBuildInputs = with pkgs; [
+        coreutils
+        e2fsprogs
+      ];
+    } ''
+      mkdir -p "$out"
+      image="$out/${name}-var.img"
+      truncate -s ${toString sizeMiB}M "$image"
+      mkfs.ext4 -F "$image" >/dev/null
+      printf '%s\n' "$image" > "$out/path"
+    '';
+
   mkWorkloadVm = {
     name,
     extraModules ? [ ],
@@ -111,6 +128,8 @@ EOF
     runtimeBackend,
     controlSocketName,
     networkMac,
+    varVolumeImage,
+    varVolumeSeedImage,
     defaultAgentCommand ? "",
     agentConfigSubdir ? "agent",
     defaultAgentConfigHostDir,
@@ -136,6 +155,8 @@ EOF
         "@RUNTIME_BACKEND@" = runtimeBackend;
         "@CONTROL_SOCKET@" = "${controlSocketName}.socket";
         "@NETWORK_MAC@" = networkMac;
+        "@VAR_VOLUME_IMAGE@" = varVolumeImage;
+        "@VAR_VOLUME_SEED_IMAGE@" = varVolumeSeedImage;
         "@DEFAULT_AGENT_COMMAND@" = defaultAgentCommand;
         "@RUNNER@" = "${runnerWrapper}";
         "@STATE_SUBDIR@" = agentConfigSubdir;
@@ -202,6 +223,8 @@ EOF
     runtimeBackend,
     controlSocketName ? name,
     networkMac,
+    varVolumeImage,
+    varVolumeSeedImage,
     defaultAgentCommand ? "",
     agentConfigSubdir ? "agent",
     defaultAgentConfigHostDir ? "$HOME/.firebreak",
@@ -222,6 +245,8 @@ EOF
         runtimeBackend
         controlSocketName
         networkMac
+        varVolumeImage
+        varVolumeSeedImage
         defaultAgentCommand
         agentConfigSubdir
         defaultAgentConfigHostDir
@@ -269,6 +294,10 @@ EOF
           };
       };
       runnerPackage = mkRunnerPackage nixosConfiguration.config.microvm.declaredRunner;
+      varVolumeSeedImage = mkVarVolumeSeedImage {
+        inherit name;
+        sizeMiB = nixosConfiguration.config.workloadVm.varVolumeSizeMiB;
+      };
       package = mkLocalVmPackage {
         inherit
           name
@@ -286,12 +315,14 @@ EOF
           workerBridgeEnabled;
         runtimeBackend = nixosConfiguration.config.workloadVm.runtimeBackend;
         networkMac = nixosConfiguration.config.workloadVm.macAddress;
+        varVolumeImage = nixosConfiguration.config.workloadVm.varVolumeImage;
+        varVolumeSeedImage = "${varVolumeSeedImage}/${name}-var.img";
         localPublishedHostPortsJson = nixosConfiguration.config.workloadVm.localPublishedHostPortsJson;
         guestEgressEnabled = nixosConfiguration.config.workloadVm.guestEgress.enable;
         guestEgressProxyPort = nixosConfiguration.config.workloadVm.guestEgress.proxyPort;
       };
     in {
-      inherit nixosConfiguration package runnerPackage;
+      inherit nixosConfiguration package runnerPackage varVolumeSeedImage;
   };
 in {
   inherit

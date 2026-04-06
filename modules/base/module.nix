@@ -483,6 +483,12 @@ in {
       description = "Disk image backing the persistent /var volume.";
     };
 
+    varVolumeSeedImage = mkOption {
+      type = types.str;
+      default = "";
+      description = "Optional preformatted /var image used by the runtime wrapper to seed cold instances without formatting at launch.";
+    };
+
     controlSocket = mkOption {
       type = types.str;
       default = "${cfg.name}.socket";

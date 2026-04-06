@@ -38,6 +38,8 @@ instance_ephemeral=${FIREBREAK_INSTANCE_EPHEMERAL:-0}
 debug_keep_runtime=${FIREBREAK_DEBUG_KEEP_RUNTIME:-0}
 runner_workdir=$host_cwd
 control_socket=$default_control_socket
+var_volume_image_name=@VAR_VOLUME_IMAGE@
+var_volume_seed_image=@VAR_VOLUME_SEED_IMAGE@
 
 reject_whitespace_path() {
   path=$1
@@ -510,6 +512,25 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+seed_var_volume_if_missing() {
+  image_path=$1
+
+  if [ -z "$image_path" ] || [ -e "$image_path" ]; then
+    return 0
+  fi
+
+  if [ -z "$var_volume_seed_image" ] || ! [ -r "$var_volume_seed_image" ]; then
+    return 0
+  fi
+
+  image_dir=$(dirname "$image_path")
+  mkdir -p "$image_dir"
+  trace_wrapper "var-volume-seed-start:$image_path"
+  cp --reflink=auto --sparse=always "$var_volume_seed_image" "$image_path"
+  chmod 0644 "$image_path"
+  trace_wrapper "var-volume-seed-done:$image_path"
+}
+
 mkdir -p "$host_meta_dir"
 mkdir -p "$host_exec_output_dir"
 mkdir -p "$host_agent_tools_dir"
@@ -523,6 +544,7 @@ if [ "$host_agent_tools_dir" != "$default_host_agent_tools_dir" ] \
   trace_wrapper "agent-tools-seeded"
 fi
 rm -f "$control_socket"
+seed_var_volume_if_missing "$runner_workdir/$var_volume_image_name"
 shared_state_root_env_file=$host_meta_dir/firebreak-shared-state.env
 : >"$wrapper_trace_log"
 : >"$profile_host_events_file"

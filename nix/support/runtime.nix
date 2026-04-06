@@ -128,6 +128,7 @@ EOF
     runtimeBackend,
     controlSocketName,
     networkMac,
+    varVolumeEnabled ? true,
     varVolumeImage,
     varVolumeSeedImage,
     defaultAgentCommand ? "",
@@ -155,6 +156,7 @@ EOF
         "@RUNTIME_BACKEND@" = runtimeBackend;
         "@CONTROL_SOCKET@" = "${controlSocketName}.socket";
         "@NETWORK_MAC@" = networkMac;
+        "@VAR_VOLUME_ENABLED@" = if varVolumeEnabled then "1" else "0";
         "@VAR_VOLUME_IMAGE@" = varVolumeImage;
         "@VAR_VOLUME_SEED_IMAGE@" = varVolumeSeedImage;
         "@DEFAULT_AGENT_COMMAND@" = defaultAgentCommand;
@@ -223,6 +225,7 @@ EOF
     runtimeBackend,
     controlSocketName ? name,
     networkMac,
+    varVolumeEnabled ? true,
     varVolumeImage,
     varVolumeSeedImage,
     defaultAgentCommand ? "",
@@ -245,6 +248,7 @@ EOF
         runtimeBackend
         controlSocketName
         networkMac
+        varVolumeEnabled
         varVolumeImage
         varVolumeSeedImage
         defaultAgentCommand
@@ -294,10 +298,15 @@ EOF
           };
       };
       runnerPackage = mkRunnerPackage nixosConfiguration.config.microvm.declaredRunner;
-      varVolumeSeedImage = mkVarVolumeSeedImage {
-        inherit name;
-        sizeMiB = nixosConfiguration.config.workloadVm.varVolumeSizeMiB;
-      };
+      varVolumeEnabled = nixosConfiguration.config.workloadVm.varVolumeEnabled;
+      varVolumeSeedImage =
+        if varVolumeEnabled then
+          mkVarVolumeSeedImage {
+            inherit name;
+            sizeMiB = nixosConfiguration.config.workloadVm.varVolumeSizeMiB;
+          }
+        else
+          null;
       package = mkLocalVmPackage {
         inherit
           name
@@ -315,8 +324,13 @@ EOF
           workerBridgeEnabled;
         runtimeBackend = nixosConfiguration.config.workloadVm.runtimeBackend;
         networkMac = nixosConfiguration.config.workloadVm.macAddress;
+        inherit varVolumeEnabled;
         varVolumeImage = nixosConfiguration.config.workloadVm.varVolumeImage;
-        varVolumeSeedImage = "${varVolumeSeedImage}/${name}-var.img";
+        varVolumeSeedImage =
+          if varVolumeSeedImage == null then
+            ""
+          else
+            "${varVolumeSeedImage}/${name}-var.img";
         localPublishedHostPortsJson = nixosConfiguration.config.workloadVm.localPublishedHostPortsJson;
         guestEgressEnabled = nixosConfiguration.config.workloadVm.guestEgress.enable;
         guestEgressProxyPort = nixosConfiguration.config.workloadVm.guestEgress.proxyPort;

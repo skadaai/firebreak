@@ -171,6 +171,17 @@ firebreak_doctor_workspace_state_path() {
   printf '%s\n' "$host_root/workspaces/$project_key/$config_subdir"
 }
 
+firebreak_doctor_default_vm_state_root() {
+  case "$(firebreak_doctor_local_runtime)" in
+    cloud-hypervisor|vfkit)
+      printf '%s\n' "/home/dev/.firebreak"
+      ;;
+    *)
+      printf '%s\n' "/var/lib/dev/.firebreak"
+      ;;
+  esac
+}
+
 firebreak_doctor_resolve_tool_state() {
   tool_label=$1
   tool_prefix=$2
@@ -192,7 +203,7 @@ firebreak_doctor_resolve_tool_state() {
       printf '%s|%s|%s|%s\n' "$tool_label" "$tool_mode" "$(firebreak_doctor_workspace_state_path "$tool_host_root" "$state_subdir")" "$tool_specific_state_var"
       ;;
     vm)
-      printf '%s|%s|%s|%s\n' "$tool_label" "$tool_mode" "/var/lib/dev/.firebreak/$state_subdir" "$tool_specific_state_var"
+      printf '%s|%s|%s|%s\n' "$tool_label" "$tool_mode" "$(firebreak_doctor_default_vm_state_root)/$state_subdir" "$tool_specific_state_var"
       ;;
     fresh)
       printf '%s|%s|%s|%s\n' "$tool_label" "$tool_mode" "/run/firebreak-state-fresh/$state_subdir" "$tool_specific_state_var"

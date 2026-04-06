@@ -14,6 +14,7 @@ resolved_firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPD
 firebreak_state_root=${FIREBREAK_STATE_DIR:-${XDG_STATE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.local/state}/firebreak}
 default_firebreak_state_root=${XDG_STATE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.local/state}/firebreak
 worker_state_dir=${FIREBREAK_WORKER_STATE_DIR:-$firebreak_state_root/worker-broker}
+firebreak_socket_root=${FIREBREAK_SOCKET_DIR:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/firebreak-sockets}
 specific_state_mode_var=@AGENT_ENV_PREFIX@_STATE_MODE
 specific_state_mode=${!specific_state_mode_var:-}
 state_mode=${specific_state_mode:-${FIREBREAK_STATE_MODE:-host}}
@@ -38,6 +39,7 @@ instance_ephemeral=${FIREBREAK_INSTANCE_EPHEMERAL:-0}
 debug_keep_runtime=${FIREBREAK_DEBUG_KEEP_RUNTIME:-0}
 runner_workdir=$host_cwd
 control_socket=$default_control_socket
+var_volume_enabled=@VAR_VOLUME_ENABLED@
 var_volume_image_name=@VAR_VOLUME_IMAGE@
 var_volume_seed_image=@VAR_VOLUME_SEED_IMAGE@
 
@@ -239,6 +241,7 @@ reject_whitespace_path "$resolved_firebreak_tmp_root" "Firebreak temporary runti
 reject_whitespace_path "$firebreak_state_root" "Firebreak state root"
 reject_whitespace_path "$default_firebreak_state_root" "default Firebreak state root"
 reject_whitespace_path "$worker_state_dir" "Firebreak worker state directory"
+reject_whitespace_path "$firebreak_socket_root" "Firebreak runtime socket root"
 if [ "$runtime_backend" = "vfkit" ]; then
   reject_comma_path "$host_cwd" "current working directory"
   reject_comma_path "$resolved_firebreak_tmp_root" "Firebreak temporary runtime directory"
@@ -356,13 +359,35 @@ else
   control_socket=$default_instance_dir/$default_control_socket
 fi
 
+case "$firebreak_socket_root" in
+  /*) ;;
+  *)
+    echo "FIREBREAK_SOCKET_DIR must resolve to an absolute host path: $firebreak_socket_root" >&2
+    exit 1
+    ;;
+esac
+
+mkdir -p "$firebreak_socket_root"
+socket_key_output=$(printf '%s' "$runner_workdir:$default_control_socket" | sha256sum) || {
+  echo "failed to derive Firebreak runtime launch directory key" >&2
+  exit 1
+}
+socket_key=${socket_key_output%% *}
+socket_key=$(printf '%.16s' "$socket_key")
+runner_launch_dir=$firebreak_socket_root/$socket_key
+if [ -L "$runner_launch_dir" ] || [ -e "$runner_launch_dir" ]; then
+  rm -rf "$runner_launch_dir"
+fi
+ln -s "$runner_workdir" "$runner_launch_dir"
+
 runtime_debug_file=$runner_workdir/.firebreak-runtime.json
-ro_store_socket=$runner_workdir/ro-store.sock
-hostcwd_socket=$runner_workdir/hostcwd.sock
-hostruntime_socket=$runner_workdir/hostruntime.sock
-shared_state_root_socket=$runner_workdir/hoststateroot.sock
-shared_credential_slots_socket=$runner_workdir/hostcredentialslots.sock
-agent_tools_socket=$runner_workdir/hostagenttools.sock
+control_socket=$runner_launch_dir/$default_control_socket
+ro_store_socket=$runner_launch_dir/ro-store.sock
+hostcwd_socket=$runner_launch_dir/hostcwd.sock
+hostruntime_socket=$runner_launch_dir/hostruntime.sock
+shared_state_root_socket=$runner_launch_dir/hoststateroot.sock
+shared_credential_slots_socket=$runner_launch_dir/hostcredentialslots.sock
+agent_tools_socket=$runner_launch_dir/hostagenttools.sock
 cloud_hypervisor_tap_interface=""
 cloud_hypervisor_host_ipv4=""
 cloud_hypervisor_guest_ipv4=""
@@ -503,7 +528,15 @@ cleanup() {
   if [ "$local_controller_mode" = "daemon" ]; then
     local_controller_clear_state
   fi
-  rm -f "$control_socket"
+  rm -f \
+    "$control_socket" \
+    "$ro_store_socket" \
+    "$hostcwd_socket" \
+    "$hostruntime_socket" \
+    "$shared_state_root_socket" \
+    "$shared_credential_slots_socket" \
+    "$agent_tools_socket"
+  rm -f "$runner_launch_dir"
   if [ "$debug_keep_runtime" = "1" ]; then
     echo "keeping Firebreak runtime directory: $host_runtime_dir" >&2
   else
@@ -544,7 +577,18 @@ if [ "$host_agent_tools_dir" != "$default_host_agent_tools_dir" ] \
   trace_wrapper "agent-tools-seeded"
 fi
 rm -f "$control_socket"
-seed_var_volume_if_missing "$runner_workdir/$var_volume_image_name"
+rm -f \
+  "$ro_store_socket" \
+  "$hostcwd_socket" \
+  "$hostruntime_socket" \
+  "$shared_state_root_socket" \
+  "$shared_credential_slots_socket" \
+  "$agent_tools_socket"
+rm -f "$runner_launch_dir"
+ln -s "$runner_workdir" "$runner_launch_dir"
+if [ "$var_volume_enabled" = "1" ]; then
+  seed_var_volume_if_missing "$runner_workdir/$var_volume_image_name"
+fi
 shared_state_root_env_file=$host_meta_dir/firebreak-shared-state.env
 : >"$wrapper_trace_log"
 : >"$profile_host_events_file"
@@ -558,6 +602,7 @@ cat >"$runtime_debug_file" <<EOF
 {
   "host_runtime_dir": "$(printf '%s' "$host_runtime_dir" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "runner_workdir": "$(printf '%s' "$runner_workdir" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "runner_launch_dir": "$(printf '%s' "$runner_launch_dir" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "session_mode": "$(printf '%s' "$agent_session_mode" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "control_socket": "$(printf '%s' "$control_socket" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "agent_exec_output_dir": "$(printf '%s' "$host_exec_output_dir" | sed 's/\\/\\\\/g; s/"/\\"/g')",
@@ -838,7 +883,7 @@ runner_status=0
 trace_wrapper "runner-start"
 if [ "$agent_session_mode" = "agent-exec" ]; then
   (
-    cd "$runner_workdir"
+    cd "$runner_launch_dir"
     run_runner "$@"
   ) >"$runner_stdout_log" 2>"$runner_stderr_log" &
   runner_pid=$!
@@ -860,7 +905,7 @@ elif [ "$agent_session_mode" = "agent-attach-exec" ]; then
   done
   cat >"$attach_runner_script" <<EOF
 set -eu
-cd '$(printf '%s' "$runner_workdir" | sed "s/'/'\\''/g")'
+cd '$(printf '%s' "$runner_launch_dir" | sed "s/'/'\\''/g")'
 export MICROVM_RO_STORE_SOCKET='$(printf '%s' "$ro_store_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_CLOUD_HYPERVISOR_TAP_INTERFACE='$(printf '%s' "$cloud_hypervisor_tap_interface" | sed "s/'/'\\\\''/g")'
 export MICROVM_HOST_RUNTIME_SOCKET='$(printf '%s' "$hostruntime_socket" | sed "s/'/'\\\\''/g")'
@@ -1823,7 +1868,7 @@ EOF
   fi
 else
   (
-    cd "$runner_workdir"
+    cd "$runner_launch_dir"
     run_runner "$@"
   ) || runner_status=$?
 fi

@@ -55,7 +55,7 @@ guest_script=$workspace_dir/guest-bridge-check.sh
 cat >"$guest_script" <<'INNER_EOF'
 set -eu
 
-stale_lock_dir=/var/lib/dev/.local/state/firebreak/worker-local/spawn-locks/bridge-process.lock
+stale_lock_dir=@WORKER_LOCAL_STATE_DIR@/spawn-locks/bridge-process.lock
 mkdir -p "$stale_lock_dir"
 printf '%s\n' 999999 >"$stale_lock_dir/pid"
 

@@ -2,7 +2,7 @@
 let
   cfg = config.workloadVm;
   backendSpec = runtimeBackends.specFor cfg.runtimeBackend;
-  devHome = "/var/lib/${cfg.devUser}";
+  devHome = cfg.devHome;
   runtimeHostMount = "/run/firebreak-host-runtime";
   hostCwdShareSocket = "hostcwd.sock";
   hostRuntimeShareSocket = "hostruntime.sock";
@@ -209,6 +209,8 @@ in {
       "workspace-share"
       "host-meta-share"
     ];
+    workloadVm.devHome = lib.mkDefault "/home/${cfg.devUser}";
+    workloadVm.varVolumeEnabled = lib.mkDefault false;
 
     users.users.root.password = "";
     users.users.${cfg.devUser}.password = "";

@@ -2,7 +2,10 @@
 let
   cfg = config.workloadVm;
   backendSpec = runtimeBackends.specFor cfg.runtimeBackend;
-  devHome = "/var/lib/${cfg.devUser}";
+  devHome = cfg.devHome;
+  sharedStateRootsLib = renderTemplate {
+    "@DEV_HOME@" = devHome;
+  } ./guest/shared-state-roots.sh;
   localBin =
     if cfg.toolRuntimesEnabled then
       "${cfg.toolRuntimesMount}/.local/bin"
@@ -25,13 +28,14 @@ let
     lib.concatMapStringsSep "\n" (value: "  ${lib.escapeShellArg value}") values;
   resolveStateRootScript = pkgs.writeShellScript "firebreak-resolve-state-root"
     (renderTemplate {
-      "@FIREBREAK_SHARED_STATE_ROOT_LIB@" = builtins.readFile ./guest/shared-state-roots.sh;
+      "@DEV_HOME@" = devHome;
+      "@FIREBREAK_SHARED_STATE_ROOT_LIB@" = sharedStateRootsLib;
     } ./guest/resolve-state-root.sh);
   sharedToolWrapperPackages = lib.mapAttrsToList
     (wrapperName: wrapper:
       pkgs.writeShellScriptBin wrapperName
         (renderTemplate {
-          "@FIREBREAK_SHARED_STATE_ROOT_LIB@" = builtins.readFile ./guest/shared-state-roots.sh;
+          "@FIREBREAK_SHARED_STATE_ROOT_LIB@" = sharedStateRootsLib;
           "@FIREBREAK_SHARED_CREDENTIAL_SLOT_LIB@" = builtins.readFile ./guest/shared-credential-slots.sh;
           "@WRAPPER_NAME@" = wrapperName;
           "@WRAPPER_DISPLAY_NAME@" = wrapper.displayName;
@@ -177,6 +181,12 @@ in {
       type = types.str;
       default = "dev";
       description = "Interactive development user inside the MicroVM.";
+    };
+
+    devHome = mkOption {
+      type = types.str;
+      default = "/var/lib/${cfg.devUser}";
+      description = "Home directory for the interactive development user inside the MicroVM.";
     };
 
     workspaceMount = mkOption {
@@ -471,6 +481,12 @@ in {
       description = "Size of the persistent /var volume in MiB.";
     };
 
+    varVolumeEnabled = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Whether the workload attaches a dedicated writable /var volume.";
+    };
+
     memoryMiB = mkOption {
       type = types.ints.positive;
       default = 1024;
@@ -664,11 +680,11 @@ in {
         id = "vm-user";
         mac = cfg.macAddress;
       };
-      volumes = [ {
+      volumes = lib.optional cfg.varVolumeEnabled {
         mountPoint = "/var";
         image = cfg.varVolumeImage;
         size = cfg.varVolumeSizeMiB;
-      } ];
+      };
       shares = [ {
         # keep a declared host store share so microvm.nix can derive the guest
         # /nix/store mount logic without building a separate store disk image.

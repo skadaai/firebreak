@@ -36,7 +36,7 @@ case "$mode" in
     state_dir=$(resolve_workspace_state_dir "$state_subdir")
     ;;
   vm)
-    state_dir=${FIREBREAK_SHARED_STATE_ROOT_VM_ROOT:-/var/lib/dev/.firebreak}/$state_subdir
+    state_dir=${FIREBREAK_SHARED_STATE_ROOT_VM_ROOT:-@DEV_HOME@/.firebreak}/$state_subdir
     ;;
   fresh)
     state_dir=${FIREBREAK_SHARED_STATE_ROOT_FRESH_ROOT:-/run/firebreak-state-fresh}/$state_subdir

@@ -1,7 +1,7 @@
 { config, lib, pkgs, renderTemplate, ... }:
 let
   cfg = config.workloadVm;
-  devHome = "/var/lib/${cfg.devUser}";
+  devHome = cfg.devHome;
 
   qemu9pOptions = [
     "nofail"

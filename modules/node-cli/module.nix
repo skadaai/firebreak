@@ -30,7 +30,7 @@ moduleArgs@{
 let
   cfg = config.workloadVm;
   backendSpec = runtimeBackends.specFor cfg.runtimeBackend;
-  devHome = "/var/lib/${cfg.devUser}";
+  devHome = cfg.devHome;
   toolsMount = cfg.toolRuntimesMount;
   localBin = "${devHome}/.local/bin";
   xdgConfigHome = "${devHome}/.config";

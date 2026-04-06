@@ -217,7 +217,7 @@ if [ "$state_dir_preexists" = "0" ] && [ -e "$repo_root/@STATE_DIR_NAME@" ]; the
   echo "workspace mode should not create a Firebreak-managed project config overlay: $repo_root/@STATE_DIR_NAME@" >&2
   exit 1
 fi
-run_scenario @AGENT_PACKAGE@ vm "/var/lib/dev/@STATE_DIR_NAME@" "shell override uses vm config"
+run_scenario @AGENT_PACKAGE@ vm "@VM_STATE_ROOT@/@STATE_DIR_NAME@" "shell override uses vm config"
 run_scenario @AGENT_PACKAGE@ host "/run/firebreak-state-root/@STATE_SUBDIR@" "shell override uses host config" "$host_config_root"
 
 printf '%s\n' "Firebreak smoke test passed"

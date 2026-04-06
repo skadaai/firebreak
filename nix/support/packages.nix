@@ -25,6 +25,7 @@ rec {
         "@AGENT_BIN@" = agentBin;
         "@STATE_DIR_NAME@" = agentConfigDirName;
         "@STATE_SUBDIR@" = agentConfigSubdir;
+        "@VM_STATE_ROOT@" = "/home/dev/.firebreak";
         "@AGENT_DISPLAY_NAME@" = agentDisplayName;
         "@AGENT_PACKAGE@" = agentPackage;
         "@DEFAULT_STATE_ROOT@" = defaultAgentConfigHostDir;
@@ -610,6 +611,7 @@ rec {
       text = renderTemplate {
         "@AGENT_BIN@" = "${self.packages.${system}.firebreak}/bin/firebreak";
         "@BRIDGE_VM_BIN@" = "${bridgeVm.package}/bin/firebreak-worker-guest-bridge-smoke-vm";
+        "@WORKER_LOCAL_STATE_DIR@" = "/home/dev/.local/state/firebreak/worker-local";
       } ../../modules/base/tests/test-smoke-worker-guest-bridge.sh;
     };
 

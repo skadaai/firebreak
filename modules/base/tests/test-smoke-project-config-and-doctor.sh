@@ -130,7 +130,7 @@ doctor_output=$(FIREBREAK_STATE_MODE=vm firebreak_cmd doctor)
 require_pattern "$doctor_output" "codex_state" "doctor codex summary"
 require_pattern "$doctor_output" "workspace ($expected_workspace_state_path)" "Codex-specific state precedence"
 require_pattern "$doctor_output" "claude_state" "doctor claude summary"
-require_pattern "$doctor_output" "vm (/var/lib/dev/.firebreak/claude)" "environment overrides project file for generic state mode"
+require_pattern "$doctor_output" "vm (/home/dev/.firebreak/claude)" "environment overrides project file for generic state mode"
 require_pattern "$doctor_output" "codex_credentials" "doctor codex credential summary"
 require_pattern "$doctor_output" "backup ($HOME/.firebreak/credentials/backup/codex)" "Codex-specific credential slot precedence"
 require_pattern "$doctor_output" "claude_credentials" "doctor claude credential summary"

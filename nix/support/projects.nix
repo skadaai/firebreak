@@ -185,7 +185,7 @@ __FIREBREAK_WRAPPER_INFO__
         ({ config, pkgs, ... }:
           let
             cfg = config.workloadVm;
-            devHome = "/var/lib/${cfg.devUser}";
+            devHome = cfg.devHome;
             stateRoot = "${devHome}/.cache/firebreak-workspaces/${name}";
             workspaceOwnedPaths = [
               stateRoot

@@ -18,7 +18,7 @@ moduleArgs:
 let
   inherit (moduleArgs) config lib pkgs renderTemplate;
   cfg = config.workloadVm;
-  devHome = "/var/lib/${cfg.devUser}";
+  devHome = cfg.devHome;
   scriptVars = {
     "@DEV_HOME@" = devHome;
     "@DEV_USER@" = cfg.devUser;

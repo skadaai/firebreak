@@ -184,21 +184,42 @@ current_bootstrap_phase=toolchain-install-start
 write_bootstrap_state "$current_bootstrap_phase" "running" "$package_spec"
 log_phase "toolchain-install-start $package_spec"
 
-runuser -u "$dev_user" -- env \
-  HOME="$dev_home" \
-  XDG_CONFIG_HOME="$xdg_config_home" \
-  XDG_CACHE_HOME="$xdg_cache_home" \
-  XDG_STATE_HOME="$xdg_state_home" \
-  TMPDIR="$install_tmp" \
-  npm_config_cache="$npm_cache_dir" \
-  npm_config_prefix="$install_prefix" \
-  npm_config_audit=false \
-  npm_config_fund=false \
-  npm_config_update_notifier=false \
-  npm_config_loglevel=warn \
-  CI=1 \
-  PATH="$local_bin:$PATH" \
-  sh -s "$package_node_modules" "$package_spec" <<'EOF'
+bootstrap_env=(
+  "HOME=$dev_home"
+  "XDG_CONFIG_HOME=$xdg_config_home"
+  "XDG_CACHE_HOME=$xdg_cache_home"
+  "XDG_STATE_HOME=$xdg_state_home"
+  "TMPDIR=$install_tmp"
+  "npm_config_cache=$npm_cache_dir"
+  "npm_config_prefix=$install_prefix"
+  "npm_config_audit=false"
+  "npm_config_fund=false"
+  "npm_config_update_notifier=false"
+  "npm_config_loglevel=warn"
+  "CI=1"
+  "PATH=$local_bin:$PATH"
+)
+
+if [ -n "${HTTP_PROXY:-}" ]; then
+  bootstrap_env+=("HTTP_PROXY=$HTTP_PROXY" "npm_config_proxy=$HTTP_PROXY")
+fi
+if [ -n "${HTTPS_PROXY:-}" ]; then
+  bootstrap_env+=("HTTPS_PROXY=$HTTPS_PROXY" "npm_config_https_proxy=$HTTPS_PROXY")
+fi
+if [ -n "${http_proxy:-}" ]; then
+  bootstrap_env+=("http_proxy=$http_proxy")
+fi
+if [ -n "${https_proxy:-}" ]; then
+  bootstrap_env+=("https_proxy=$https_proxy")
+fi
+if [ -n "${NO_PROXY:-}" ]; then
+  bootstrap_env+=("NO_PROXY=$NO_PROXY" "npm_config_noproxy=$NO_PROXY")
+fi
+if [ -n "${no_proxy:-}" ]; then
+  bootstrap_env+=("no_proxy=$no_proxy")
+fi
+
+runuser -u "$dev_user" -- env "${bootstrap_env[@]}" sh -s "$package_node_modules" "$package_spec" <<'EOF'
 set -eu
 mkdir -p \
   "$XDG_CONFIG_HOME" \

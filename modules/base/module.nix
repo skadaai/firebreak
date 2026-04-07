@@ -663,6 +663,14 @@ in {
       wantedBy = [ "multi-user.target" ];
       before = [ "getty.target" "serial-getty@ttyS0.service" ];
       after = [ "local-fs.target" ];
+      environment = lib.mkIf cfg.guestEgress.enable {
+        HTTP_PROXY = "http://127.0.0.1:${toString cfg.guestEgress.proxyPort}";
+        HTTPS_PROXY = "http://127.0.0.1:${toString cfg.guestEgress.proxyPort}";
+        http_proxy = "http://127.0.0.1:${toString cfg.guestEgress.proxyPort}";
+        https_proxy = "http://127.0.0.1:${toString cfg.guestEgress.proxyPort}";
+        NO_PROXY = "127.0.0.1,localhost,::1";
+        no_proxy = "127.0.0.1,localhost,::1";
+      };
 
       serviceConfig = {
         Type = "oneshot";

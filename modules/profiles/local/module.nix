@@ -223,8 +223,12 @@ in {
     networking.useDHCP = lib.mkForce (cfg.runtimeBackend != "cloud-hypervisor");
     networking.firewall.enable = lib.mkForce false;
 
+    services.resolved.enable = lib.mkForce false;
     services.timesyncd.enable = lib.mkForce false;
 
+    boot.initrd.systemd.suppressedUnits = [
+      "systemd-vconsole-setup.service"
+    ];
     systemd.suppressedSystemUnits = [
       "systemd-journal-catalog-update.service"
     ];

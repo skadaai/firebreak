@@ -14,7 +14,7 @@ moduleArgs:
   credentialLoginArgs ? [ ],
   credentialLoginMaterialization ? "none",
   extraSystemPackages ? [ ],
-  extraEnvironmentPathPackages ? [ ],
+  extraEnvironmentPackages ? [ ],
 }:
 let
   inherit (moduleArgs) config lib pkgs renderTemplate;
@@ -58,8 +58,8 @@ in {
       defaultCommand = binName;
       promptCommand = promptCommand;
       environmentOverlay = {
-        enable = extraEnvironmentPathPackages != [ ];
-        package.pathPrefixes = map (pathPackage: "${pathPackage}/bin") extraEnvironmentPathPackages;
+        enable = extraEnvironmentPackages != [ ];
+        package.packages = extraEnvironmentPackages;
       };
       extraSystemPackages = [ package ] ++ extraSystemPackages;
       shellInit = renderTemplate scriptVars ./guest/shell-init.sh;

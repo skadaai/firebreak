@@ -24,5 +24,5 @@ moduleArgs@{ pkgs, ... }:
   ];
   credentialLoginArgs = [ "auth" "login" ];
   credentialLoginMaterialization = "slot-root";
-  extraEnvironmentPathPackages = with pkgs; [ ripgrep ];
+  extraEnvironmentPackages = with pkgs; [ ripgrep ];
 }

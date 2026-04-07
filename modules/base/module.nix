@@ -288,6 +288,12 @@ in {
             description = "Package-declared additive environment inputs exported by Firebreak itself.";
             type = types.submodule ({ ... }: {
               options = {
+                packages = mkOption {
+                  type = types.listOf types.package;
+                  default = [ ];
+                  description = "Package outputs whose bin directories are exported by the resolved environment overlay.";
+                };
+
                 pathPrefixes = mkOption {
                   type = types.listOf types.str;
                   default = [ ];
@@ -753,6 +759,9 @@ in {
     environment.systemPackages =
       cfg.extraSystemPackages
       ++ lib.optional (sharedToolWrapperPackage != null) sharedToolWrapperPackage;
+
+    workloadVm.environmentOverlay.package.pathPrefixes =
+      lib.mkAfter (map (pkg: "${pkg}/bin") cfg.environmentOverlay.package.packages);
 
     workloadVm.sharedToolWrapperBinDir = sharedToolWrapperBinDir;
 

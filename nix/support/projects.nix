@@ -352,7 +352,7 @@ __FIREBREAK_WRAPPER_INFO__
               brandingTagline = tagline;
               environmentOverlay = {
                 enable = true;
-                package.pathPrefixes = map (pkg: "${pkg}/bin") tools;
+                package.packages = tools;
                 projectNix.enable = true;
               };
               extraSystemPackages = [ launchScript readyScript ];
@@ -526,7 +526,6 @@ __FIREBREAK_WRAPPER_INFO__
           bootstrapPackages
         else
           (_: bootstrapPackages);
-      runtimeToolBinPrefixes = map (pkg: "${pkg}/bin") (packageSet pkgs);
 
       readyCommandName = "${name}-ready";
       launchCommandName = "${name}-launch";
@@ -562,7 +561,7 @@ __FIREBREAK_WRAPPER_INFO__
           extraBootstrapPackages = bootstrapPackageSet pkgs;
         })
         ({ ... }: {
-          workloadVm.environmentOverlay.package.pathPrefixes = runtimeToolBinPrefixes;
+          workloadVm.environmentOverlay.package.packages = packageSet pkgs;
         })
       ] ++ extraModules;
     };

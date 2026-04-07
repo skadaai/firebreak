@@ -32,6 +32,7 @@ Environment overlay implementation plus boot-base split.
 - project-local Nix auto-detection now also accepts constrained `shell.nix` and `default.nix` development environments using the pinned Firebreak `nixpkgs` input instead of ambient host `NIX_PATH`
 - the local Cloud Hypervisor boot base now strips more generic NixOS login and name-resolution machinery from the common path, including `resolvconf`, `nscd`, `logind`, `systemd-user-sessions`, `lastlog2-import`, and `getty.target`
 - the local Cloud Hypervisor boot base now disables D-Bus and the hostnamed/localed/timedated services that sit outside Firebreak's hot path
+- package-owned overlay dependencies can now be declared as Nix package objects and normalized into overlay path prefixes by the shared base module, removing more ad hoc per-module `\"${pkg}/bin\"` wiring
 
 ## What remains open
 

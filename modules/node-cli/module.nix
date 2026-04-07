@@ -533,7 +533,7 @@ in {
       brandingTagline = tagline;
       environmentOverlay = {
         enable = true;
-        package.pathPrefixes = [ "${pkgs.nodejs_20}/bin" ];
+        package.packages = [ pkgs.nodejs_20 ];
       };
       localPublishedHostPortsJson = builtins.toJSON (
         builtins.filter (forward: (forward.from or "host") == "host") forwardPorts

@@ -352,9 +352,10 @@ __FIREBREAK_WRAPPER_INFO__
               brandingTagline = tagline;
               environmentOverlay = {
                 enable = true;
+                package.pathPrefixes = map (pkg: "${pkg}/bin") tools;
                 projectNix.enable = true;
               };
-              extraSystemPackages = tools ++ [ launchScript readyScript ];
+              extraSystemPackages = [ launchScript readyScript ];
               bootstrapPackages = sharedBootstrapPackages ++ bootstrapTools;
               bootstrapConditionScript = "${bootstrapConditionScript}";
               bootstrapScript = ''
@@ -525,6 +526,7 @@ __FIREBREAK_WRAPPER_INFO__
           bootstrapPackages
         else
           (_: bootstrapPackages);
+      runtimeToolBinPrefixes = map (pkg: "${pkg}/bin") (packageSet pkgs);
 
       readyCommandName = "${name}-ready";
       launchCommandName = "${name}-launch";
@@ -556,8 +558,11 @@ __FIREBREAK_WRAPPER_INFO__
           installBinScripts = effectiveInstallBinScripts;
           proxyLocalUpstreams = derivedProxyLocalUpstreams;
           vmName = name;
-          extraSystemPackages = packageSet pkgs ++ installBinSystemPackages;
+          extraSystemPackages = installBinSystemPackages;
           extraBootstrapPackages = bootstrapPackageSet pkgs;
+        })
+        ({ ... }: {
+          workloadVm.environmentOverlay.package.pathPrefixes = runtimeToolBinPrefixes;
         })
       ] ++ extraModules;
     };

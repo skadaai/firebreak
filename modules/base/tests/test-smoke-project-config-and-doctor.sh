@@ -330,6 +330,42 @@ PACKAGE_ENVIRONMENT_ENV_FILE=$package_environment_env_file bash -lc '
   command -v jq >/dev/null 2>&1
 '
 
+jq_store_path=$(nix --accept-flake-config --extra-experimental-features 'nix-command flakes' eval --raw nixpkgs#jq.outPath)
+package_path_environment_json=$(
+  FIREBREAK_PACKAGE_IDENTITY=package-path-smoke \
+    FIREBREAK_PACKAGE_ENVIRONMENT_PATHS_JSON="[\"$jq_store_path/bin\"]" \
+    FIREBREAK_PACKAGE_ENVIRONMENT_EXPORTS_JSON='{"FIREBREAK_TEST_OVERLAY":"1"}' \
+    environment_cmd environment resolve --json
+)
+PACKAGE_PATH_ENVIRONMENT_JSON=$package_path_environment_json python3 - <<'PY'
+import json
+import os
+
+obj = json.loads(os.environ["PACKAGE_PATH_ENVIRONMENT_JSON"])
+
+assert obj["source"] == "package-only"
+assert obj["kind"] == "none"
+assert obj["identity"]
+assert obj["env_file"]
+PY
+
+package_path_environment_env_file=$(PACKAGE_PATH_ENVIRONMENT_JSON=$package_path_environment_json python3 - <<'PY'
+import json
+import os
+
+obj = json.loads(os.environ["PACKAGE_PATH_ENVIRONMENT_JSON"])
+print(obj["env_file"])
+PY
+)
+
+PACKAGE_PATH_ENVIRONMENT_ENV_FILE=$package_path_environment_env_file bash -lc '
+  set -eu
+  export PATH=/usr/bin:/bin
+  . "$PACKAGE_PATH_ENVIRONMENT_ENV_FILE"
+  command -v jq >/dev/null 2>&1
+  [ "$FIREBREAK_TEST_OVERLAY" = "1" ]
+'
+
 environment_auto_json=$(
   FIREBREAK_ENVIRONMENT_PROJECT_NIX_ENABLED=1 \
     environment_cmd environment resolve --json

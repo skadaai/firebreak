@@ -417,10 +417,10 @@ in {
 
     systemd.services.dev-bootstrap = lib.mkIf bootstrapEnabled {
       after = [ "prepare-agent-session.service" ]
-        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && needsFullGuestNetwork) "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service";
       requires = [ "prepare-agent-session.service" ]
-        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && needsFullGuestNetwork) "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service";
     };
 

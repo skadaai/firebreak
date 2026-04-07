@@ -551,7 +551,7 @@ function sanitizeId(text: string): string {
 }
 
 function escapeLabel(text: string): string {
-  return text.replace(/"/g, "#quot;").replace(/\n/g, " ");
+  return text.replace(/"/g, "&quot;").replace(/\n/g, " ");
 }
 
 function shortPath(path: string): string {

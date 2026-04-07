@@ -40,6 +40,11 @@ Do not use bare `session` to mean the host-side work unit.
 
 ## Separation Of Concerns
 
+- Firebreak runtime evolution should be understood in three layers:
+  - boot base: kernel, initrd, service graph, and Firebreak-owned guest/runtime semantics
+  - environment overlay: package-declared and project-declared dependencies resolved by Firebreak
+  - state layer: shared auth, tool state, caches, and workspace mounts
+- package or project customization should extend the environment layer, not redefine the Firebreak boot base.
 - `modules/base` owns the shared guest runtime, common VM settings, reusable shell behavior, and generic smoke validation.
 - `modules/profiles/local` owns local-only launch behavior such as dynamic host cwd sharing, host identity adoption, task preparation, and the interactive console.
 - `modules/profiles/cloud` owns cloud-only guest behavior such as fixed workspace semantics, prompt-driven agent execution, and non-interactive job completion.

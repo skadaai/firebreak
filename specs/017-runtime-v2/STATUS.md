@@ -7,7 +7,7 @@ last_updated: 2026-04-05
 
 ## Current phase
 
-Executing the Linux local runtime replacement and cold-boot reduction slices.
+Executing the Linux local runtime replacement and cold-boot reduction slices, with the next architectural phase now defined as small boot-semantic bases plus cached environment overlays rather than per-package full guest images.
 
 ## What is landed
 
@@ -27,6 +27,13 @@ Executing the Linux local runtime replacement and cold-boot reduction slices.
 - warm local controller requests are now serialized per instance, stale warm daemons are invalidated on build changes, and controller lifecycle tracing exists in the wrapper logs
 - the runtime now has a cheap host-side warm-controller smoke suite that can be run through flake checks and internal validation without booting a VM
 - the runtime now also exposes a real `test-smoke-codex-warm-reuse` suite for repeated stable local commands against one controller-owned VM lifetime
+- local packaged Node CLI bootstrap has been decoupled from shell startup and now begins on the host in parallel with VM boot
+
+## Newly defined follow-on direction
+
+- [specs/020-minimal-boot-bases-and-environment-overlays/SPEC.md](../020-minimal-boot-bases-and-environment-overlays/SPEC.md) now defines the next runtime-performance and ecosystem-customization direction
+- Firebreak will pursue a small number of boot-semantic bases plus host-resolved cached Nix environment overlays
+- Firebreak will not pursue one full guest image per package as the long-term customization model
 
 ## What remains open
 
@@ -35,6 +42,8 @@ Executing the Linux local runtime replacement and cold-boot reduction slices.
 - snapshot preparation and restore on the local Cloud Hypervisor backend
 - deletion of remaining stale runtime assumptions and warnings that no longer fit the accepted backend contract
 - future cloud backend selection and implementation
+- formal environment overlay support for package-declared and project-local Nix dependencies
+- smaller explicit boot bases for `command` and `interactive` local launches
 
 ## Current sources of truth
 

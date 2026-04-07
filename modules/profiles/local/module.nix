@@ -262,6 +262,9 @@ in {
     systemd.services."systemd-logind".enable = lib.mkForce false;
     systemd.services."systemd-timedated".enable = lib.mkForce false;
     systemd.services."systemd-user-sessions".enable = lib.mkForce false;
+    systemd.sockets."systemd-hostnamed".enable = lib.mkForce false;
+    systemd.sockets."systemd-localed".enable = lib.mkForce false;
+    systemd.sockets."systemd-timedated".enable = lib.mkForce false;
     systemd.services.systemd-networkd.enable = lib.mkForce needsFullGuestNetwork;
     systemd.services.systemd-networkd-persistent-storage.enable = lib.mkForce needsFullGuestNetwork;
     systemd.timers."systemd-tmpfiles-clean".enable = lib.mkForce false;

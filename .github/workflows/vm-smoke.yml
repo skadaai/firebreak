@@ -1,4 +1,15 @@
 name: Firebreak Smoke
+description: Run smoke tests for Firebreak repository - requires KVM, longer feedback loop for PRs.
+
+on:
+  workflow_run:
+    workflows: ["Firebreak Checks"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number (e.g. 42) — leave empty to use current branch"
+        required: false
 
 on:
   pull_request:
@@ -17,8 +28,10 @@ concurrency:
 jobs:
   firebreak-test-smoke-codex:
     name: firebreak test-smoke codex
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: namespace-profile-amd64
-    # if: github.event_name == 'workflow_dispatch' || vars.ENABLE_SELF_HOSTED_VM_SMOKE == '1'
     # runs-on:
     #   - self-hosted
     #   - linux
@@ -28,6 +41,12 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+
+      - name: Checkout PR head if pr_number provided
+        if: ${{ inputs.pr_number != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr checkout ${{ inputs.pr_number }}
 
       - name: Install Nix
         uses: cachix/install-nix-action@v31

@@ -1,4 +1,5 @@
-name: CI
+name: Firebreak Checks
+description: Run CI checks for Firebreak repository - no KVM needed, faster feedback loop for PRs.
 
 on:
   pull_request:

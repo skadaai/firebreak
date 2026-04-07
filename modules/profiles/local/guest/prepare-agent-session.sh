@@ -70,6 +70,9 @@ if ! [ -r "$metadata" ]; then
 fi
 
 log_phase prepare-agent-session-start
+log_phase prepare-agent-session-adopt-host-identity-start
+@ADOPT_HOST_IDENTITY_SCRIPT@
+log_phase prepare-agent-session-adopt-host-identity-done
 log_phase prepare-agent-session-metadata-ready
 candidate=$(cat "$metadata")
 if [ -z "$candidate" ]; then

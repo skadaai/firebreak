@@ -281,35 +281,15 @@ in {
         "x-systemd.after=systemd-modules-load.service"
       ];
     };
-    systemd.services.adopt-host-identity = {
-      description = "Align guest development user with the host user identity";
-      wantedBy = [ "basic.target" ];
-      before = [ "prepare-agent-session.service" "serial-getty@ttyS0.service" ]
-        ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
+    systemd.services.prepare-agent-session = {
+      description = "Prepare the workspace and agent session paths";
+      wantedBy = [ "multi-user.target" ];
+      before = [ "dev-console.service" ];
       after = [ "local-fs.target" ];
 
       path = with pkgs; [
         coreutils
         shadow
-      ];
-
-      serviceConfig = {
-        ExecStart = adoptHostIdentityScript;
-        Type = "oneshot";
-        RemainAfterExit = true;
-        StandardOutput = "journal+console";
-        StandardError = "journal+console";
-      };
-    };
-
-    systemd.services.prepare-agent-session = {
-      description = "Prepare the workspace and agent session paths";
-      wantedBy = [ "multi-user.target" ];
-      before = [ "dev-console.service" ];
-      after = [ "local-fs.target" "adopt-host-identity.service" ];
-
-      path = with pkgs; [
-        coreutils
         util-linux
       ];
 
@@ -451,12 +431,12 @@ in {
     systemd.services.dev-console = {
       description = "Interactive dev shell on ttyS0";
       wantedBy = [ "multi-user.target" ];
-      after = [ "cold-command-exec.service" "adopt-host-identity.service" "prepare-agent-session.service" ]
+      after = [ "cold-command-exec.service" "prepare-agent-session.service" ]
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service"
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
-      requires = [ "adopt-host-identity.service" "prepare-agent-session.service" ]
+      requires = [ "prepare-agent-session.service" ]
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service"

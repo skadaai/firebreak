@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 const BASE_URL = process.env.DEEPWIKI_API_URL ?? "https://api.devin.ai";
 const POLL_INTERVAL_MS = 2000;
 const HEARTBEAT_INTERVAL_MS = 15000;
+const API_TIMEOUT_MS = 30000;
 
 const ENGINE_MAP = {
   fast: "multihop_faster",
@@ -90,11 +91,13 @@ interface Codemap {
 
 class DeepWikiError extends Error {
   details?: Record<string, unknown>;
+  retryable: boolean;
 
-  constructor(message: string, details?: Record<string, unknown>) {
+  constructor(message: string, details?: Record<string, unknown>, retryable = false) {
     super(message);
     this.name = "DeepWikiError";
     this.details = details;
+    this.retryable = retryable;
   }
 }
 
@@ -148,6 +151,14 @@ function isBlankText(text: string): boolean {
   return /^\s*$/.test(text);
 }
 
+function isProgressLine(line: string): boolean {
+  return /^(?:progress:|status:|step:|eta:)/i.test(line)
+    || /\bETA\b/i.test(line)
+    || /\bPROGRESS\b/i.test(line)
+    || /\b\d+\s*\/\s*\d+\b/.test(line)
+    || /\b\d{1,3}%\b/.test(line);
+}
+
 function extractProgressLines(text: string): string[] {
   const lines = text
     .split("\n")
@@ -155,7 +166,10 @@ function extractProgressLines(text: string): string[] {
     .filter(Boolean);
   if (lines.length === 0) return [];
   if (!lines.every((line) => line.startsWith("> "))) return [];
-  return lines.map((line) => line.slice(2).trim()).filter(Boolean);
+  const stripped = lines.map((line) => line.slice(2).trim()).filter(Boolean);
+  if (stripped.length === 0) return [];
+  if (!stripped.every((line) => isProgressLine(line))) return [];
+  return stripped;
 }
 
 function cleanReferencePath(rawPath: string): string {
@@ -172,22 +186,60 @@ function extractQueryError(result: QueryResult): string | null {
 
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${BASE_URL}${path}`;
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options?.headers ?? {}),
-    },
-  });
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    throw new DeepWikiError(`HTTP ${response.status}: ${response.statusText}`, {
-      url,
-      body,
-      status: response.status,
+  const timeoutController = new AbortController();
+  const externalSignal = options?.signal;
+  const timer = setTimeout(() => timeoutController.abort("deepwiki-api-timeout"), API_TIMEOUT_MS);
+  const abortController = new AbortController();
+
+  const abortFromExternal = () => abortController.abort(externalSignal?.reason);
+  const abortFromTimeout = () => abortController.abort("deepwiki-api-timeout");
+
+  try {
+    if (externalSignal) {
+      if (externalSignal.aborted) {
+        abortFromExternal();
+      } else {
+        externalSignal.addEventListener("abort", abortFromExternal, { once: true });
+      }
+    }
+    timeoutController.signal.addEventListener("abort", abortFromTimeout, { once: true });
+
+    const response = await fetch(url, {
+      ...options,
+      signal: abortController.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options?.headers ?? {}),
+      },
     });
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      throw new DeepWikiError(`HTTP ${response.status}: ${response.statusText}`, {
+        url,
+        body,
+        status: response.status,
+      });
+    }
+    return (await response.json()) as T;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const isAbort = error instanceof DOMException && error.name === "AbortError";
+    const timedOut = abortController.signal.aborted && timeoutController.signal.aborted;
+    if (isAbort || timedOut) {
+      throw new DeepWikiError("DeepWiki API request timed out", {
+        url,
+        timeout_ms: API_TIMEOUT_MS,
+      }, true);
+    }
+    if (error instanceof DeepWikiError) {
+      throw error;
+    }
+    throw new DeepWikiError(message, { url });
+  } finally {
+    clearTimeout(timer);
+    timeoutController.signal.removeEventListener("abort", abortFromTimeout);
+    externalSignal?.removeEventListener("abort", abortFromExternal);
   }
-  return (await response.json()) as T;
 }
 
 class ProgressTracker {
@@ -337,22 +389,22 @@ function extractAnswerText(result: QueryResult): string {
 
 function extractSourcePaths(result: QueryResult): string[] {
   const events = extractEvents(result);
-  const directFiles = events
-    .filter((event) => event.type === "file_contents")
-    .map((event) => (Array.isArray(event.data) ? event.data[1] : null))
+  const references = events
+    .filter((event) => event.type === "reference")
+    .map((event) => {
+      const data = event.data as { file_path?: string } | undefined;
+      return typeof data?.file_path === "string" ? cleanReferencePath(data.file_path) : null;
+    })
     .filter((value): value is string => typeof value === "string" && value.length > 0);
-  if (directFiles.length > 0) {
-    return [...new Set(directFiles)];
+  if (references.length > 0) {
+    return [...new Set(references)];
   }
 
   return [
     ...new Set(
       events
-        .filter((event) => event.type === "reference")
-        .map((event) => {
-          const data = event.data as { file_path?: string } | undefined;
-          return typeof data?.file_path === "string" ? cleanReferencePath(data.file_path) : null;
-        })
+        .filter((event) => event.type === "file_contents")
+        .map((event) => (Array.isArray(event.data) ? event.data[1] : null))
         .filter((value): value is string => typeof value === "string" && value.length > 0),
     ),
   ];
@@ -377,7 +429,7 @@ function extractCodemap(result: QueryResult): Codemap | null {
   return null;
 }
 
-async function submitQuery(question: string, options: QueryOptions, queryId: string): Promise<void> {
+async function submitQuery(question: string, options: QueryOptions, queryId: string): Promise<string> {
   const request: QueryRequest = {
     engine_id: ENGINE_MAP[options.mode],
     user_query: question,
@@ -390,10 +442,21 @@ async function submitQuery(question: string, options: QueryOptions, queryId: str
     generate_summary: options.summary,
   };
 
-  await api("/ada/query", {
-    method: "POST",
-    body: JSON.stringify(request),
-  });
+  try {
+    await api("/ada/query", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    return queryId;
+  } catch (error) {
+    if (error instanceof DeepWikiError) {
+      throw new DeepWikiError(error.message, {
+        ...(error.details ?? {}),
+        query_id: queryId,
+      }, error.retryable);
+    }
+    throw error;
+  }
 }
 
 async function getQuery(queryId: string): Promise<QueryResult> {
@@ -402,7 +465,16 @@ async function getQuery(queryId: string): Promise<QueryResult> {
 
 async function waitForQuery(queryId: string, tracker: ProgressTracker): Promise<QueryResult> {
   while (true) {
-    const result = await getQuery(queryId);
+    let result: QueryResult;
+    try {
+      result = await getQuery(queryId);
+    } catch (error) {
+      if (error instanceof DeepWikiError && error.retryable) {
+        await sleep(POLL_INTERVAL_MS);
+        continue;
+      }
+      throw error;
+    }
     const query = latestQuery(result);
     if (!query) {
       await sleep(POLL_INTERVAL_MS);
@@ -730,8 +802,7 @@ function parseStatusArgs(args: string[]): StatusOptions {
 
 async function startQuery(question: string, options: QueryOptions): Promise<string> {
   const queryId = options.queryId || randomUUID();
-  await submitQuery(question, options, queryId);
-  return queryId;
+  return submitQuery(question, options, queryId);
 }
 
 function renderCompletedQuery(result: QueryResult, options: QueryOptions): void {
@@ -767,9 +838,8 @@ async function runQuery(question: string, options: QueryOptions): Promise<void> 
 
   try {
     tracker.startQuery(queryId);
-    await submitQuery(question, options, queryId);
+    options.queryId = await submitQuery(question, options, queryId);
     const result = await waitForQuery(queryId, tracker);
-    options.queryId = queryId;
     renderCompletedQuery(result, options);
   } finally {
     tracker.stop();

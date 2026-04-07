@@ -23,13 +23,15 @@ In this repository, the primary interface is the Bun TypeScript client at `scrip
 
 Always try the TypeScript client first. Use MCP only when the CLI path is unavailable or clearly broken.
 
+All command examples below assume your working directory is `.agents/skills/deepwiki`.
+
 ## When To Use DeepWiki
 
 - Understand how an upstream library or framework really works before writing code against it
 - Verify API shapes, configuration formats, method signatures, or command semantics
 - Inspect architecture, control flow, or code paths in an external repository
 - Resolve ambiguity between multiple implementation approaches
-- Onboard into a new technology stack quickly and accuratelym without guessing work.
+- Onboard into a new technology stack quickly and accurately without guessing work.
 
 Default rule: if you are unsure how an external tool behaves, query DeepWiki before guessing.
 

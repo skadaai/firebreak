@@ -72,6 +72,9 @@ if [ -n "$command_request_start_dir" ]; then
 fi
 
 log_phase prepare-cold-agent-exec-start
+log_phase prepare-cold-agent-exec-adopt-host-identity-start
+@ADOPT_HOST_IDENTITY_SCRIPT@
+log_phase prepare-cold-agent-exec-adopt-host-identity-done
 sync_guest_state_files
 sync_guest_session_request_files
 

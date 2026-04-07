@@ -62,6 +62,7 @@ let
   renderedAgentCommandStateLib = renderTemplate baseScriptVars ./guest/agent-command-state.sh;
   renderedProfileLib = renderTemplate baseScriptVars ./guest/profile.sh;
   scriptVars = baseScriptVars // {
+    "@ADOPT_HOST_IDENTITY_SCRIPT@" = "${adoptHostIdentityScript}";
     "@FIREBREAK_AGENT_COMMAND_REQUEST_LIB@" = renderedAgentCommandRequestLib;
     "@FIREBREAK_AGENT_COMMAND_STATE_LIB@" = renderedAgentCommandStateLib;
     "@FIREBREAK_PROFILE_LIB@" = renderedProfileLib;
@@ -223,8 +224,10 @@ in {
     networking.useDHCP = lib.mkForce (cfg.runtimeBackend != "cloud-hypervisor");
     networking.firewall.enable = lib.mkForce false;
 
+    security.enableWrappers = lib.mkForce false;
     services.resolved.enable = lib.mkForce false;
     services.timesyncd.enable = lib.mkForce false;
+    services.logrotate.enable = lib.mkForce false;
 
     boot.initrd.systemd.suppressedUnits = [
       "systemd-vconsole-setup.service"
@@ -241,6 +244,9 @@ in {
     systemd.suppressedSystemUnits = [
       "systemd-journal-catalog-update.service"
     ];
+    systemd.services."systemd-update-done".enable = lib.mkForce false;
+    systemd.services."systemd-update-utmp".enable = lib.mkForce false;
+    systemd.timers."systemd-tmpfiles-clean".enable = lib.mkForce false;
     systemd.services.systemd-vconsole-setup.enable = lib.mkForce false;
     systemd.services.reload-systemd-vconsole-setup.enable = lib.mkForce false;
 
@@ -320,7 +326,7 @@ in {
       description = "Prepare minimal guest state for cold non-interactive command execution";
       wantedBy = [ "firebreak-cold-exec.target" ];
       before = [ "cold-command-exec.service" ];
-      after = [ "local-fs.target" "adopt-host-identity.service" ];
+      after = [ "local-fs.target" ];
 
       path = with pkgs; [
         coreutils
@@ -394,11 +400,11 @@ in {
     systemd.services.cold-command-exec = {
       description = "Cold non-interactive command execution";
       wantedBy = [ "firebreak-cold-exec.target" ];
-      after = [ "adopt-host-identity.service" "prepare-cold-agent-exec.service" ]
+      after = [ "prepare-cold-agent-exec.service" ]
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service";
-      requires = [ "adopt-host-identity.service" "prepare-cold-agent-exec.service" ]
+      requires = [ "prepare-cold-agent-exec.service" ]
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service";

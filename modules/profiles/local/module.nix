@@ -75,6 +75,8 @@ let
     '';
   prepareAgentSessionScript = pkgs.writeShellScript "prepare-agent-session"
     (renderTemplate scriptVars ./guest/prepare-agent-session.sh);
+  prepareColdAgentExecScript = pkgs.writeShellScript "prepare-cold-agent-exec"
+    (renderTemplate scriptVars ./guest/prepare-cold-agent-exec.sh);
   configureRuntimeNetworkScript = pkgs.writeShellScript "configure-runtime-network"
     (renderTemplate scriptVars ./guest/configure-runtime-network.sh);
   guestEgressRelayProgram = pkgs.writeText "firebreak-cloud-hypervisor-egress-relay.py"
@@ -282,7 +284,7 @@ in {
 
     systemd.services.prepare-agent-session = {
       description = "Prepare the workspace and agent session paths";
-      wantedBy = [ "basic.target" ];
+      wantedBy = [ "multi-user.target" ];
       before = [ "dev-console.service" ];
       after = [ "local-fs.target" "adopt-host-identity.service" ];
 
@@ -300,12 +302,31 @@ in {
       };
     };
 
+    systemd.services.prepare-cold-agent-exec = {
+      description = "Prepare minimal guest state for cold non-interactive command execution";
+      wantedBy = [ "firebreak-cold-exec.target" ];
+      before = [ "cold-command-exec.service" ];
+      after = [ "local-fs.target" "adopt-host-identity.service" ];
+
+      path = with pkgs; [
+        coreutils
+        util-linux
+      ];
+
+      serviceConfig = {
+        ExecStart = prepareColdAgentExecScript;
+        Type = "oneshot";
+        RemainAfterExit = true;
+        StandardOutput = "journal+console";
+        StandardError = "journal+console";
+      };
+    };
+
     systemd.services.configure-runtime-network = lib.mkIf (cfg.runtimeBackend == "cloud-hypervisor") {
       description = "Configure runtime networking for the local Cloud Hypervisor backend";
       wantedBy = [ "basic.target" ];
       before = [ "dev-console.service" ] ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
-      after = [ "prepare-agent-session.service" ];
-      requires = [ "prepare-agent-session.service" ];
+      after = [ "local-fs.target" ];
 
       path = with pkgs; [
         coreutils
@@ -327,8 +348,7 @@ in {
       wantedBy = [ "basic.target" ];
       before = [ "dev-console.service" ]
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
-      after = [ "prepare-agent-session.service" ];
-      requires = [ "prepare-agent-session.service" ];
+      after = [ "local-fs.target" ];
 
       serviceConfig = {
         ExecStart = "${guestEgressRelayScript}/bin/firebreak-cloud-hypervisor-egress-relay";
@@ -345,8 +365,7 @@ in {
       wantedBy = [ "basic.target" ];
       before = [ "dev-console.service" ]
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
-      after = [ "prepare-agent-session.service" ];
-      requires = [ "prepare-agent-session.service" ];
+      after = [ "local-fs.target" ];
 
       serviceConfig = {
         ExecStart = "${guestPortPublishRelayScript}/bin/firebreak-cloud-hypervisor-port-publish-relay";
@@ -360,12 +379,12 @@ in {
 
     systemd.services.cold-command-exec = {
       description = "Cold non-interactive command execution";
-      wantedBy = [ "basic.target" ];
-      after = [ "adopt-host-identity.service" "prepare-agent-session.service" ]
+      wantedBy = [ "firebreak-cold-exec.target" ];
+      after = [ "adopt-host-identity.service" "prepare-cold-agent-exec.service" ]
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service";
-      requires = [ "adopt-host-identity.service" "prepare-agent-session.service" ]
+      requires = [ "adopt-host-identity.service" "prepare-cold-agent-exec.service" ]
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service";
@@ -374,7 +393,6 @@ in {
         ExecCondition = coldCommandExecConditionScript;
         ExecStart = "${runAgentExecScript}/bin/firebreak-run-agent-exec";
         Type = "simple";
-        User = cfg.devUser;
         WorkingDirectory = devHome;
         StandardOutput = "journal+console";
         StandardError = "journal+console";

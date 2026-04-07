@@ -9,6 +9,10 @@ command_shell_init_file=@COMMAND_SHELL_INIT_FILE@
 power_action=${FIREBREAK_AGENT_POWER_ACTION:-poweroff}
 bootstrap_wait_enabled=@COLD_EXEC_BOOTSTRAP_WAIT_ENABLED@
 
+if [ "$(@ID@ -u)" = "0" ]; then
+  exec @RUNUSER@ -u @DEV_USER@ -- "$0"
+fi
+
 if ! [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
   echo "agent exec output share is unavailable at @AGENT_EXEC_OUTPUT_MOUNT@" >&2
   exit 1

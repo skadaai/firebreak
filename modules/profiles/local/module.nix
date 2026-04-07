@@ -218,6 +218,8 @@ in {
       "workspace-share"
       "host-meta-share"
     ];
+    workloadVm.bootBases.command.systemdUnit = lib.mkDefault "firebreak-cold-exec.target";
+    workloadVm.bootBases.interactive.systemdUnit = lib.mkDefault "firebreak-interactive.target";
     workloadVm.devHome = lib.mkDefault "/home/${cfg.devUser}";
     workloadVm.varVolumeEnabled = lib.mkDefault false;
 
@@ -290,8 +292,12 @@ in {
     };
     systemd.services.prepare-agent-session = {
       description = "Prepare the workspace and agent session paths";
-      wantedBy = [ "multi-user.target" ];
-      before = [ "dev-console.service" ];
+      wantedBy = [ "firebreak-interactive.target" ];
+      before = [
+        "dev-bootstrap.service"
+        "dev-console.service"
+        "local-command-agent.service"
+      ];
       after = [ "local-fs.target" ];
 
       path = with pkgs; [
@@ -415,7 +421,16 @@ in {
       ];
     };
 
+    systemd.targets.firebreak-interactive = {
+      description = "Minimal interactive session target";
+      after = [ "basic.target" ];
+      wants = [
+        "basic.target"
+      ];
+    };
+
     systemd.services.dev-bootstrap = lib.mkIf bootstrapEnabled {
+      wantedBy = lib.mkForce [ "firebreak-interactive.target" ];
       after = [ "prepare-agent-session.service" ]
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && needsFullGuestNetwork) "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service";
@@ -438,8 +453,8 @@ in {
 
     systemd.services.dev-console = {
       description = "Interactive dev shell on ttyS0";
-      wantedBy = [ "multi-user.target" ];
-      after = [ "cold-command-exec.service" "prepare-agent-session.service" ]
+      wantedBy = [ "firebreak-interactive.target" ];
+      after = [ "prepare-agent-session.service" ]
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && needsFullGuestNetwork) "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service";
@@ -470,7 +485,7 @@ in {
 
     systemd.services.local-command-agent = {
       description = "Warm local command agent";
-      wantedBy = [ "multi-user.target" ];
+      wantedBy = [ "firebreak-interactive.target" ];
       after = [ "prepare-agent-session.service" ]
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && needsFullGuestNetwork) "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"

@@ -181,6 +181,8 @@ EOF
     environmentOverlayPackagePathsJson ? "[]",
     environmentOverlayPackageExportsJson ? "{}",
     environmentOverlayProjectNixEnabled ? false,
+    commandBootBaseSystemdUnit ? "",
+    interactiveBootBaseSystemdUnit ? "",
   }:
     let
       runnerWrapper = pkgs.writeShellScript "firebreak-runner-wrapper" ''
@@ -216,6 +218,8 @@ EOF
         "@ENVIRONMENT_OVERLAY_PACKAGE_PATHS_JSON@" = environmentOverlayPackagePathsJson;
         "@ENVIRONMENT_OVERLAY_PACKAGE_EXPORTS_JSON@" = environmentOverlayPackageExportsJson;
         "@ENVIRONMENT_OVERLAY_PROJECT_NIX_ENABLED@" = if environmentOverlayProjectNixEnabled then "1" else "0";
+        "@COMMAND_BOOT_BASE_SYSTEMD_UNIT@" = commandBootBaseSystemdUnit;
+        "@INTERACTIVE_BOOT_BASE_SYSTEMD_UNIT@" = interactiveBootBaseSystemdUnit;
       };
       renderedCloudHypervisorNetworkLib = renderTemplate
         (wrapperTemplateVars // {
@@ -293,6 +297,8 @@ EOF
     environmentOverlayPackagePathsJson ? "[]",
     environmentOverlayPackageExportsJson ? "{}",
     environmentOverlayProjectNixEnabled ? false,
+    commandBootBaseSystemdUnit ? "",
+    interactiveBootBaseSystemdUnit ? "",
   }:
     mkWorkloadPackage {
       inherit
@@ -320,7 +326,9 @@ EOF
         environmentOverlayEnable
         environmentOverlayPackagePathsJson
         environmentOverlayPackageExportsJson
-        environmentOverlayProjectNixEnabled;
+        environmentOverlayProjectNixEnabled
+        commandBootBaseSystemdUnit
+        interactiveBootBaseSystemdUnit;
       runner = runnerPackage;
     };
 
@@ -403,6 +411,10 @@ EOF
           builtins.toJSON nixosConfiguration.config.workloadVm.environmentOverlay.package.exports;
         environmentOverlayProjectNixEnabled =
           nixosConfiguration.config.workloadVm.environmentOverlay.projectNix.enable;
+        commandBootBaseSystemdUnit =
+          nixosConfiguration.config.workloadVm.bootBases.command.systemdUnit;
+        interactiveBootBaseSystemdUnit =
+          nixosConfiguration.config.workloadVm.bootBases.interactive.systemdUnit;
       };
     in {
       inherit nixosConfiguration package runnerPackage varVolumeSeedImage;

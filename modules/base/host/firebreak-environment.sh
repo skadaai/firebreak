@@ -1,3 +1,4 @@
+# shellcheck disable=SC2329
 firebreak_environment_usage() {
   cat <<'EOF' >&2
 usage:
@@ -50,6 +51,7 @@ firebreak_environment_hash_file() {
   return 1
 }
 
+# shellcheck disable=SC2329
 firebreak_environment_json_escape() {
   value=$1
   value=$(printf '%s' "$value" | awk 'BEGIN { ORS = "" } { gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\n/, "\\n"); print }')
@@ -71,7 +73,6 @@ firebreak_reset_environment_state() {
   FIREBREAK_RESOLVED_ENVIRONMENT_MANIFEST_FILE=""
   FIREBREAK_RESOLVED_ENVIRONMENT_IDENTITY=""
   FIREBREAK_RESOLVED_ENVIRONMENT_REUSED="0"
-  FIREBREAK_RESOLVED_ENVIRONMENT_READY="0"
   FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_PATHS_JSON='[]'
   FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_EXPORTS_JSON='{}'
   FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_IDENTITY=""
@@ -322,6 +323,7 @@ firebreak_environment_write_package_installable_overlay() {
   while IFS= read -r output_path; do
     [ -n "$output_path" ] || continue
     if [ -d "$output_path/bin" ]; then
+      # shellcheck disable=SC2016
       printf 'if [ -d %s ]; then export PATH=%s:"$PATH"; fi\n' \
         "$(printf '%q' "$output_path/bin")" \
         "$(printf '%q' "$output_path/bin")" >>"$target_file"
@@ -386,7 +388,6 @@ firebreak_materialize_environment_cache() {
   mkdir -p "$FIREBREAK_RESOLVED_ENVIRONMENT_CACHE_DIR"
   if [ -f "$FIREBREAK_RESOLVED_ENVIRONMENT_ENV_FILE" ] && [ -f "$FIREBREAK_RESOLVED_ENVIRONMENT_MANIFEST_FILE" ]; then
     FIREBREAK_RESOLVED_ENVIRONMENT_REUSED=1
-    FIREBREAK_RESOLVED_ENVIRONMENT_READY=1
     return 0
   fi
 
@@ -419,7 +420,6 @@ firebreak_materialize_environment_cache() {
 
   mv -f "$tmp_env_file" "$FIREBREAK_RESOLVED_ENVIRONMENT_ENV_FILE"
   firebreak_environment_write_manifest
-  FIREBREAK_RESOLVED_ENVIRONMENT_READY=1
 }
 
 firebreak_resolve_environment() {
@@ -433,8 +433,12 @@ firebreak_resolve_environment() {
   fi
 
   FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_ENABLED=${FIREBREAK_ENVIRONMENT_PROJECT_NIX_ENABLED:-0}
-  FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_PATHS_JSON=${FIREBREAK_PACKAGE_ENVIRONMENT_PATHS_JSON:-[]}
-  FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_EXPORTS_JSON=${FIREBREAK_PACKAGE_ENVIRONMENT_EXPORTS_JSON:-{}}
+  FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_PATHS_JSON="${FIREBREAK_PACKAGE_ENVIRONMENT_PATHS_JSON:-[]}"
+  if [ -n "${FIREBREAK_PACKAGE_ENVIRONMENT_EXPORTS_JSON+x}" ]; then
+    FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_EXPORTS_JSON=$FIREBREAK_PACKAGE_ENVIRONMENT_EXPORTS_JSON
+  else
+    FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_EXPORTS_JSON='{}'
+  fi
   FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_IDENTITY=${FIREBREAK_PACKAGE_IDENTITY:-}
   FIREBREAK_RESOLVED_ENVIRONMENT_BOOT_BASE=${FIREBREAK_BOOT_BASE:-interactive}
   FIREBREAK_RESOLVED_ENVIRONMENT_RUNTIME_VERSION=${FIREBREAK_RUNTIME_GENERATION:-firebreak-cli}
@@ -485,6 +489,7 @@ EOF
   firebreak_environment_resolve_cache_paths
 }
 
+# shellcheck disable=SC2329
 firebreak_environment_resolve_command() {
   environment_output=text
 

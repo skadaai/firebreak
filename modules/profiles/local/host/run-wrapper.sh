@@ -33,6 +33,8 @@ environment_overlay_enabled=@ENVIRONMENT_OVERLAY_ENABLE@
 environment_overlay_package_paths_json='@ENVIRONMENT_OVERLAY_PACKAGE_PATHS_JSON@'
 environment_overlay_package_exports_json='@ENVIRONMENT_OVERLAY_PACKAGE_EXPORTS_JSON@'
 environment_overlay_project_nix_enabled=@ENVIRONMENT_OVERLAY_PROJECT_NIX_ENABLED@
+command_boot_base_systemd_unit='@COMMAND_BOOT_BASE_SYSTEMD_UNIT@'
+interactive_boot_base_systemd_unit='@INTERACTIVE_BOOT_BASE_SYSTEMD_UNIT@'
 agent_command_override=""
 shell_command_override=${AGENT_VM_COMMAND:-}
 shared_state_root_host_dir=""
@@ -223,6 +225,19 @@ append_matching_env_defaults() {
   done <<EOF
 $(env)
 EOF
+}
+
+select_boot_base() {
+  case "$agent_session_mode" in
+    agent-exec)
+      firebreak_boot_base='command'
+      firebreak_systemd_unit=$command_boot_base_systemd_unit
+      ;;
+    *)
+      firebreak_boot_base='interactive'
+      firebreak_systemd_unit=$interactive_boot_base_systemd_unit
+      ;;
+  esac
 }
 
 default_state_root=$(resolve_host_dir "${FIREBREAK_STATE_ROOT:-@DEFAULT_STATE_ROOT@}")
@@ -767,15 +782,9 @@ if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-
   write_command_request
 fi
 
+select_boot_base
+
 if [ "$environment_overlay_enabled" = "1" ]; then
-  case "$agent_session_mode" in
-    agent-exec|agent-attach-exec|agent-service)
-      firebreak_boot_base=command
-      ;;
-    *)
-      firebreak_boot_base=interactive
-      ;;
-  esac
   FIREBREAK_ENVIRONMENT_CACHE_ROOT=$firebreak_state_root/environments \
     FIREBREAK_ENVIRONMENT_PROJECT_NIX_ENABLED=$environment_overlay_project_nix_enabled \
     FIREBREAK_PACKAGE_ENVIRONMENT_PATHS_JSON=$environment_overlay_package_paths_json \
@@ -859,11 +868,6 @@ if [ "$worker_bridge_enabled" = "1" ]; then
 fi
 
 run_runner() {
-  firebreak_systemd_unit=""
-  if [ "$agent_session_mode" = "agent-exec" ]; then
-    firebreak_systemd_unit="firebreak-cold-exec.target"
-  fi
-
   if [ "$runtime_backend" = "vfkit" ]; then
     if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
       exec env \

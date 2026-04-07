@@ -313,6 +313,42 @@ in {
       });
     };
 
+    bootBases = mkOption {
+      default = { };
+      description = "Firebreak-owned boot-base targets used by the runtime wrapper to select a smaller guest boot graph per session type.";
+      type = types.submodule ({ ... }: {
+        options = {
+          command = mkOption {
+            default = { };
+            description = "Boot base for non-interactive command execution.";
+            type = types.submodule ({ ... }: {
+              options = {
+                systemdUnit = mkOption {
+                  type = types.str;
+                  default = "";
+                  description = "Optional systemd unit passed on the kernel command line when Firebreak selects the command boot base.";
+                };
+              };
+            });
+          };
+
+          interactive = mkOption {
+            default = { };
+            description = "Boot base for interactive shells and attached worker sessions.";
+            type = types.submodule ({ ... }: {
+              options = {
+                systemdUnit = mkOption {
+                  type = types.str;
+                  default = "";
+                  description = "Optional systemd unit passed on the kernel command line when Firebreak selects the interactive boot base.";
+                };
+              };
+            });
+          };
+        };
+      });
+    };
+
     defaultCommand = mkOption {
       type = types.nullOr types.str;
       default = null;

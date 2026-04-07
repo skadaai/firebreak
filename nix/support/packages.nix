@@ -25,7 +25,7 @@ rec {
         "@AGENT_BIN@" = agentBin;
         "@STATE_DIR_NAME@" = agentConfigDirName;
         "@STATE_SUBDIR@" = agentConfigSubdir;
-        "@VM_STATE_ROOT@" = "/home/dev/.firebreak";
+        "@VM_STATE_ROOT@" = "/home/dev";
         "@AGENT_DISPLAY_NAME@" = agentDisplayName;
         "@AGENT_PACKAGE@" = agentPackage;
         "@DEFAULT_STATE_ROOT@" = defaultAgentConfigHostDir;

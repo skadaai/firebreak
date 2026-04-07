@@ -460,6 +460,132 @@ assert obj["project_nix_source"] == "legacyPackages.x86_64-linux.default"
 assert obj["installable"].endswith("#legacyPackages.x86_64-linux.default")
 PY
 
+shell_file_environment_dir=$smoke_tmp_dir/shell-file-environment
+mkdir -p "$shell_file_environment_dir"
+cat >"$shell_file_environment_dir/shell.nix" <<'EOF'
+with import <nixpkgs> {};
+mkShell {
+  packages = [ hello ];
+  FOO = "shell";
+}
+EOF
+cat >"$shell_file_environment_dir/default.nix" <<'EOF'
+with import <nixpkgs> {};
+mkShell {
+  packages = [ hello ];
+  FOO = "default";
+}
+EOF
+
+shell_file_environment_json=$(
+  (
+    cd "$shell_file_environment_dir"
+    FIREBREAK_ENVIRONMENT_PROJECT_NIX_ENABLED=1 \
+      nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run "path:$repo_root#firebreak" -- environment resolve --json
+  )
+)
+SHELL_FILE_ENVIRONMENT_JSON=$shell_file_environment_json python3 - <<'PY'
+import json
+import os
+
+obj = json.loads(os.environ["SHELL_FILE_ENVIRONMENT_JSON"])
+
+assert obj["source"] == "project-nix"
+assert obj["kind"] == "devshell"
+assert obj["project_nix_enabled"] is True
+assert obj["project_nix_source"] == "shell.nix"
+assert obj["project_nix_file"].endswith("/shell.nix")
+assert obj["project_lock_hash"]
+assert obj["installable"].startswith("file:")
+PY
+
+shell_file_environment_env_file=$(SHELL_FILE_ENVIRONMENT_JSON=$shell_file_environment_json python3 - <<'PY'
+import json
+import os
+
+obj = json.loads(os.environ["SHELL_FILE_ENVIRONMENT_JSON"])
+print(obj["env_file"])
+PY
+)
+
+SHELL_FILE_ENVIRONMENT_ENV_FILE=$shell_file_environment_env_file bash -lc '
+  set -eu
+  export PATH=/usr/bin:/bin
+  . "$SHELL_FILE_ENVIRONMENT_ENV_FILE"
+  command -v hello >/dev/null 2>&1
+  [ "$FOO" = "shell" ]
+'
+
+default_file_environment_dir=$smoke_tmp_dir/default-file-environment
+mkdir -p "$default_file_environment_dir"
+cat >"$default_file_environment_dir/default.nix" <<'EOF'
+with import <nixpkgs> {};
+mkShell {
+  packages = [ hello ];
+  FOO = "default-only";
+}
+EOF
+
+default_file_environment_json=$(
+  (
+    cd "$default_file_environment_dir"
+    FIREBREAK_ENVIRONMENT_PROJECT_NIX_ENABLED=1 \
+      nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run "path:$repo_root#firebreak" -- environment resolve --json
+  )
+)
+DEFAULT_FILE_ENVIRONMENT_JSON=$default_file_environment_json python3 - <<'PY'
+import json
+import os
+
+obj = json.loads(os.environ["DEFAULT_FILE_ENVIRONMENT_JSON"])
+
+assert obj["source"] == "project-nix"
+assert obj["kind"] == "devshell"
+assert obj["project_nix_enabled"] is True
+assert obj["project_nix_source"] == "default.nix"
+assert obj["project_nix_file"].endswith("/default.nix")
+assert obj["project_lock_hash"]
+assert obj["installable"].startswith("file:")
+PY
+
+default_file_environment_env_file=$(DEFAULT_FILE_ENVIRONMENT_JSON=$default_file_environment_json python3 - <<'PY'
+import json
+import os
+
+obj = json.loads(os.environ["DEFAULT_FILE_ENVIRONMENT_JSON"])
+print(obj["env_file"])
+PY
+)
+
+DEFAULT_FILE_ENVIRONMENT_ENV_FILE=$default_file_environment_env_file bash -lc '
+  set -eu
+  export PATH=/usr/bin:/bin
+  . "$DEFAULT_FILE_ENVIRONMENT_ENV_FILE"
+  command -v hello >/dev/null 2>&1
+  [ "$FOO" = "default-only" ]
+'
+
+explicit_file_environment_json=$(
+  (
+    cd "$default_file_environment_dir"
+    FIREBREAK_ENVIRONMENT_MODE=devshell \
+      FIREBREAK_ENVIRONMENT_INSTALLABLE=./default.nix \
+      nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run "path:$repo_root#firebreak" -- environment resolve --json
+  )
+)
+EXPLICIT_FILE_ENVIRONMENT_JSON=$explicit_file_environment_json python3 - <<'PY'
+import json
+import os
+
+obj = json.loads(os.environ["EXPLICIT_FILE_ENVIRONMENT_JSON"])
+
+assert obj["source"] == "explicit"
+assert obj["kind"] == "devshell"
+assert obj["installable"].startswith("file:")
+assert obj["installable"].endswith("/default.nix")
+assert obj["project_nix_file"].endswith("/default.nix")
+PY
+
 exact_worker_state_dir=$smoke_tmp_dir/exact-worker-state
 mkdir -p "$exact_worker_state_dir"
 exact_worker_debug_json=$(

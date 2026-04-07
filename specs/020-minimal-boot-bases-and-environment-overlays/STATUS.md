@@ -29,6 +29,7 @@ Environment overlay implementation plus boot-base split.
 - packaged-agent helper tools can now come from environment overlay path prefixes on the command path, so helper binaries like `ripgrep` no longer need to inflate the guest image
 - packaged Node CLI runtimes now enable their environment overlay by default and export `nodejs_20` through that overlay instead of baking Node into the guest image
 - project-local Nix auto-detection now explicitly accepts `devShells.<system>.default`, `packages.<system>.default`, and `legacyPackages.<system>.default`, and fails fast when a workspace opts in but does not expose one of those supported defaults
+- project-local Nix auto-detection now also accepts constrained `shell.nix` and `default.nix` development environments using the pinned Firebreak `nixpkgs` input instead of ambient host `NIX_PATH`
 - the local Cloud Hypervisor boot base now strips more generic NixOS login and name-resolution machinery from the common path, including `resolvconf`, `nscd`, `logind`, `systemd-user-sessions`, `lastlog2-import`, and `getty.target`
 - the local Cloud Hypervisor boot base now disables D-Bus and the hostnamed/localed/timedated services that sit outside Firebreak's hot path
 

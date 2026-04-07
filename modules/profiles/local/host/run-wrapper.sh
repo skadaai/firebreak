@@ -11,6 +11,7 @@ host_cwd=$PWD
 host_uid=$(id -u)
 host_gid=$(id -g)
 firebreak_load_project_config
+export FIREBREAK_NIXPKGS_PATH='@FIREBREAK_NIXPKGS_PATH@'
 resolved_firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
 firebreak_state_root=${FIREBREAK_STATE_DIR:-${XDG_STATE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.local/state}/firebreak}
 default_firebreak_state_root=${XDG_STATE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.local/state}/firebreak

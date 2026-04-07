@@ -222,6 +222,7 @@ EOF
         "@ENVIRONMENT_OVERLAY_PROJECT_NIX_ENABLED@" = if environmentOverlayProjectNixEnabled then "1" else "0";
         "@COMMAND_BOOT_BASE_SYSTEMD_UNIT@" = commandBootBaseSystemdUnit;
         "@INTERACTIVE_BOOT_BASE_SYSTEMD_UNIT@" = interactiveBootBaseSystemdUnit;
+        "@FIREBREAK_NIXPKGS_PATH@" = "${pkgs.path}";
       };
       renderedCloudHypervisorNetworkLib = renderTemplate
         (wrapperTemplateVars // {

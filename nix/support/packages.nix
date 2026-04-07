@@ -691,6 +691,7 @@ rec {
       text = ''
         export FIREBREAK_LIBEXEC_DIR='${firebreakLibexec}/libexec'
         export FIREBREAK_FLAKE_REF='${firebreakFlakeRef}'
+        export FIREBREAK_NIXPKGS_PATH='${pkgs.path}'
         export FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG='1'
         export FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes'
         exec bash "$FIREBREAK_LIBEXEC_DIR/firebreak.sh" "$@"

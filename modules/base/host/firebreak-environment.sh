@@ -66,7 +66,7 @@ firebreak_reset_environment_state() {
   FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_ENABLED="0"
   FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_SOURCE="none"
   FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_LOCK_HASH=""
-  FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_FLAKE_FILE=""
+  FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_FILE=""
   FIREBREAK_RESOLVED_ENVIRONMENT_CACHE_ROOT=""
   FIREBREAK_RESOLVED_ENVIRONMENT_CACHE_DIR=""
   FIREBREAK_RESOLVED_ENVIRONMENT_ENV_FILE=""
@@ -82,6 +82,7 @@ firebreak_reset_environment_state() {
   FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_KIND=""
   FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_INSTALLABLE=""
   FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_SOURCE="none"
+  FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_FILE=""
   FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_ERROR=""
 }
 
@@ -131,6 +132,33 @@ firebreak_environment_installable_kind() {
   esac
 }
 
+firebreak_environment_is_file_target() {
+  case "$1" in
+    file:*)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+firebreak_environment_print_dev_env_json() {
+  target=$1
+
+  if firebreak_environment_is_file_target "$target"; then
+    file_path=${target#file:}
+    if [ -z "${FIREBREAK_NIXPKGS_PATH:-}" ]; then
+      echo "FIREBREAK_NIXPKGS_PATH is required to resolve project-local shell.nix/default.nix environments" >&2
+      return 1
+    fi
+    firebreak_environment_nix_command print-dev-env --json -I "nixpkgs=$FIREBREAK_NIXPKGS_PATH" --file "$file_path"
+    return 0
+  fi
+
+  firebreak_environment_nix_command print-dev-env --json "$target"
+}
+
 firebreak_environment_resolve_explicit_installable() {
   explicit_installable=${FIREBREAK_ENVIRONMENT_INSTALLABLE:-}
   if [ -z "$explicit_installable" ]; then
@@ -138,11 +166,24 @@ firebreak_environment_resolve_explicit_installable() {
   fi
 
   case "$explicit_installable" in
+    ./*.nix)
+      printf 'file:%s/%s\n' "$FIREBREAK_RESOLVED_PROJECT_ROOT" "${explicit_installable#./}"
+      ;;
+    /*.nix)
+      printf 'file:%s\n' "$explicit_installable"
+      ;;
     .#*)
       printf 'path:%s%s\n' "$FIREBREAK_RESOLVED_PROJECT_ROOT" "${explicit_installable#.}"
       ;;
     \#*)
       printf 'path:%s%s\n' "$FIREBREAK_RESOLVED_PROJECT_ROOT" "$explicit_installable"
+      ;;
+    *.nix)
+      if [ -f "$FIREBREAK_RESOLVED_PROJECT_ROOT/$explicit_installable" ]; then
+        printf 'file:%s/%s\n' "$FIREBREAK_RESOLVED_PROJECT_ROOT" "$explicit_installable"
+      else
+        printf '%s\n' "$explicit_installable"
+      fi
       ;;
     *)
       printf '%s\n' "$explicit_installable"
@@ -156,7 +197,7 @@ firebreak_environment_try_eval() {
 
   case "$mode" in
     devshell)
-      firebreak_environment_nix_command print-dev-env --json "$installable" >/dev/null 2>&1
+      firebreak_environment_print_dev_env_json "$installable" >/dev/null 2>&1
       ;;
     package)
       firebreak_environment_nix_command build --no-link --print-out-paths "$installable" >/dev/null 2>&1
@@ -171,6 +212,7 @@ firebreak_environment_detect_project_installable() {
   FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_KIND=""
   FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_INSTALLABLE=""
   FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_SOURCE="none"
+  FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_FILE=""
   FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_ERROR=""
 
   if [ "${FIREBREAK_ENVIRONMENT_PROJECT_NIX_ENABLED:-0}" != "1" ]; then
@@ -178,39 +220,69 @@ firebreak_environment_detect_project_installable() {
   fi
 
   project_flake_file=$FIREBREAK_RESOLVED_PROJECT_ROOT/flake.nix
-  if ! [ -f "$project_flake_file" ]; then
-    return 1
-  fi
-
   project_flake_ref="path:$FIREBREAK_RESOLVED_PROJECT_ROOT"
   host_system=${FIREBREAK_HOST_SYSTEM:-$(uname -m | tr '[:upper:]' '[:lower:]')-linux}
   default_devshell="$project_flake_ref#devShells.$host_system.default"
   default_package="$project_flake_ref#packages.$host_system.default"
   legacy_default_package="$project_flake_ref#legacyPackages.$host_system.default"
+  project_shell_file=$FIREBREAK_RESOLVED_PROJECT_ROOT/shell.nix
+  project_default_file=$FIREBREAK_RESOLVED_PROJECT_ROOT/default.nix
 
-  if firebreak_environment_try_eval "$default_devshell" devshell; then
-    FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_KIND="devshell"
-    FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_INSTALLABLE=$default_devshell
-    FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_SOURCE="devShells.$host_system.default"
-    return 0
+  if [ -f "$project_flake_file" ]; then
+    FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_FILE=$project_flake_file
+
+    if firebreak_environment_try_eval "$default_devshell" devshell; then
+      FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_KIND="devshell"
+      FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_INSTALLABLE=$default_devshell
+      FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_SOURCE="devShells.$host_system.default"
+      return 0
+    fi
+
+    if firebreak_environment_try_eval "$default_package" package; then
+      FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_KIND="package"
+      FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_INSTALLABLE=$default_package
+      FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_SOURCE="packages.$host_system.default"
+      return 0
+    fi
+
+    if firebreak_environment_try_eval "$legacy_default_package" package; then
+      FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_KIND="package"
+      FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_INSTALLABLE=$legacy_default_package
+      FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_SOURCE="legacyPackages.$host_system.default"
+      return 0
+    fi
+
+    FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_ERROR="project-local Nix is enabled, but Firebreak could not map $project_flake_ref to a supported default environment. Expected one of: devShells.$host_system.default, packages.$host_system.default, or legacyPackages.$host_system.default"
+    return 2
   fi
 
-  if firebreak_environment_try_eval "$default_package" package; then
-    FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_KIND="package"
-    FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_INSTALLABLE=$default_package
-    FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_SOURCE="packages.$host_system.default"
-    return 0
+  if [ -f "$project_shell_file" ]; then
+    if firebreak_environment_try_eval "file:$project_shell_file" devshell; then
+      FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_KIND="devshell"
+      FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_INSTALLABLE="file:$project_shell_file"
+      FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_SOURCE="shell.nix"
+      FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_FILE=$project_shell_file
+      return 0
+    fi
+
+    FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_ERROR="project-local Nix is enabled, but Firebreak could not evaluate $project_shell_file as a supported shell environment"
+    return 2
   fi
 
-  if firebreak_environment_try_eval "$legacy_default_package" package; then
-    FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_KIND="package"
-    FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_INSTALLABLE=$legacy_default_package
-    FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_SOURCE="legacyPackages.$host_system.default"
-    return 0
+  if [ -f "$project_default_file" ]; then
+    if firebreak_environment_try_eval "file:$project_default_file" devshell; then
+      FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_KIND="devshell"
+      FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_INSTALLABLE="file:$project_default_file"
+      FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_SOURCE="default.nix"
+      FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_FILE=$project_default_file
+      return 0
+    fi
+
+    FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_ERROR="project-local Nix is enabled, but Firebreak could not evaluate $project_default_file as a supported shell environment"
+    return 2
   fi
 
-  FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_ERROR="project-local Nix is enabled, but Firebreak could not map $project_flake_ref to a supported default environment. Expected one of: devShells.$host_system.default, packages.$host_system.default, or legacyPackages.$host_system.default"
-  return 2
+  return 1
 }
 
 firebreak_environment_resolve_cache_paths() {
@@ -296,7 +368,7 @@ firebreak_environment_write_devshell_overlay() {
   tmp_json=$(mktemp)
   trap 'rm -f "$tmp_json"' RETURN
 
-  if ! firebreak_environment_nix_command print-dev-env --json "$installable" >"$tmp_json"; then
+  if ! firebreak_environment_print_dev_env_json "$installable" >"$tmp_json"; then
     echo "failed to resolve Firebreak devshell environment: $installable" >&2
     return 1
   fi
@@ -392,7 +464,7 @@ firebreak_environment_write_manifest() {
     FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_IDENTITY=$FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_IDENTITY \
     FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_INSTALLABLES_JSON=$FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_INSTALLABLES_JSON \
     FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_PATHS_JSON=$FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_PATHS_JSON \
-    FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_FLAKE_FILE=$FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_FLAKE_FILE \
+    FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_FILE=$FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_FILE \
     FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_LOCK_HASH=$FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_LOCK_HASH \
     FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_ENABLED=$FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_ENABLED \
     FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_SOURCE=$FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_SOURCE \
@@ -416,7 +488,7 @@ manifest = {
     "package_identity": os.environ.get("FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_IDENTITY", ""),
     "package_installables_json": os.environ.get("FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_INSTALLABLES_JSON", "[]"),
     "package_paths_json": os.environ.get("FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_PATHS_JSON", "[]"),
-    "project_flake_file": os.environ.get("FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_FLAKE_FILE", ""),
+    "project_nix_file": os.environ.get("FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_FILE", ""),
     "project_lock_hash": os.environ.get("FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_LOCK_HASH", ""),
     "project_nix_enabled": os.environ.get("FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_ENABLED", "0") == "1",
     "project_nix_source": os.environ.get("FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_SOURCE", "none"),
@@ -491,14 +563,7 @@ firebreak_resolve_environment() {
   FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_IDENTITY=${FIREBREAK_PACKAGE_IDENTITY:-}
   FIREBREAK_RESOLVED_ENVIRONMENT_BOOT_BASE=${FIREBREAK_BOOT_BASE:-interactive}
   FIREBREAK_RESOLVED_ENVIRONMENT_RUNTIME_VERSION=${FIREBREAK_RUNTIME_GENERATION:-firebreak-cli}
-  FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_FLAKE_FILE=$FIREBREAK_RESOLVED_PROJECT_ROOT/flake.nix
-
-  project_lock_file=$FIREBREAK_RESOLVED_PROJECT_ROOT/flake.lock
-  if project_lock_hash=$(firebreak_environment_hash_file "$project_lock_file" 2>/dev/null); then
-    FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_LOCK_HASH=$project_lock_hash
-  elif project_flake_hash=$(firebreak_environment_hash_file "$FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_FLAKE_FILE" 2>/dev/null); then
-    FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_LOCK_HASH=$project_flake_hash
-  fi
+  FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_FILE=""
 
   if [ "$FIREBREAK_RESOLVED_ENVIRONMENT_MODE" = "off" ]; then
     FIREBREAK_RESOLVED_ENVIRONMENT_SOURCE="disabled"
@@ -509,6 +574,11 @@ firebreak_resolve_environment() {
 
   if resolved_installable=$(firebreak_environment_resolve_explicit_installable); then
     FIREBREAK_RESOLVED_ENVIRONMENT_INSTALLABLE=$resolved_installable
+    if firebreak_environment_is_file_target "$resolved_installable"; then
+      FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_FILE=${resolved_installable#file:}
+    elif [ -f "$FIREBREAK_RESOLVED_PROJECT_ROOT/flake.nix" ]; then
+      FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_FILE=$FIREBREAK_RESOLVED_PROJECT_ROOT/flake.nix
+    fi
     if [ "$FIREBREAK_RESOLVED_ENVIRONMENT_MODE" = "devshell" ] || [ "$FIREBREAK_RESOLVED_ENVIRONMENT_MODE" = "package" ]; then
       FIREBREAK_RESOLVED_ENVIRONMENT_KIND=$FIREBREAK_RESOLVED_ENVIRONMENT_MODE
     else
@@ -522,6 +592,7 @@ firebreak_resolve_environment() {
   if firebreak_environment_detect_project_installable; then
     FIREBREAK_RESOLVED_ENVIRONMENT_KIND=$FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_KIND
     FIREBREAK_RESOLVED_ENVIRONMENT_INSTALLABLE=$FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_INSTALLABLE
+    FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_FILE=$FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_FILE
     FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_SOURCE=$FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_SOURCE
     FIREBREAK_RESOLVED_ENVIRONMENT_SOURCE="project-nix"
   else
@@ -535,6 +606,13 @@ firebreak_resolve_environment() {
   if [ -z "$FIREBREAK_RESOLVED_ENVIRONMENT_SOURCE" ] || [ "$FIREBREAK_RESOLVED_ENVIRONMENT_SOURCE" = "none" ]; then
     FIREBREAK_RESOLVED_ENVIRONMENT_SOURCE="package-only"
     FIREBREAK_RESOLVED_ENVIRONMENT_KIND="none"
+  fi
+
+  project_lock_file=$FIREBREAK_RESOLVED_PROJECT_ROOT/flake.lock
+  if project_lock_hash=$(firebreak_environment_hash_file "$project_lock_file" 2>/dev/null); then
+    FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_LOCK_HASH=$project_lock_hash
+  elif project_nix_hash=$(firebreak_environment_hash_file "$FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_FILE" 2>/dev/null); then
+    FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_LOCK_HASH=$project_nix_hash
   fi
 
   firebreak_environment_resolve_cache_paths
@@ -574,6 +652,7 @@ firebreak_environment_resolve_command() {
   "env_file": "$(firebreak_environment_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_ENV_FILE")",
   "manifest_file": "$(firebreak_environment_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_MANIFEST_FILE")",
   "project_nix_enabled": $([ "$FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_ENABLED" = "1" ] && printf 'true' || printf 'false'),
+  "project_nix_file": "$(firebreak_environment_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_FILE")",
   "project_nix_source": "$(firebreak_environment_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_SOURCE")",
   "project_lock_hash": "$(firebreak_environment_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_LOCK_HASH")",
   "package_identity": "$(firebreak_environment_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_IDENTITY")",

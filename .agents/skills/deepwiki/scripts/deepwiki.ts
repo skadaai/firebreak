@@ -218,7 +218,7 @@ async function api<T>(path: string, options?: RequestInit): Promise<T> {
         url,
         body,
         status: response.status,
-      });
+      }, response.status === 502 || response.status === 503 || response.status === 504);
     }
     return (await response.json()) as T;
   } catch (error) {
@@ -793,6 +793,7 @@ function parseStatusArgs(args: string[]): StatusOptions {
     }
     if (arg === "--help" || arg === "-h") usage(0);
     if (arg.startsWith("-")) fail(`Unknown flag: ${arg}`);
+    if (repo !== "") fail("status accepts exactly one owner/repo.");
     repo = arg;
   }
 

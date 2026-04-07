@@ -233,9 +233,9 @@ mcp__deepwiki__read_wiki_contents({ repoName: "owner/repo", topic: "authenticati
 
 The client requires exact `owner/repo` format.
 
-1. Check `./UPSTREAM_REPOS.md` first.
+1. Check `UPSTREAM_REPOS.md` first.
 
-The project maintains `./UPSTREAM_REPOS.md` mapping technologies to their canonical GitHub repo names. Always check it first. If the technology is listed, use the specified `owner/repo` for queries.
+The project maintains `UPSTREAM_REPOS.md` mapping technologies to their canonical GitHub repo names. Always check it first. If the technology is listed, use the specified `owner/repo` for queries.
 
 2. If not listed:
    - search the web for `{technology name} GitHub`

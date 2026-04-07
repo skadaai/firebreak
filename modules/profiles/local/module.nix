@@ -191,7 +191,8 @@ let
   '';
   bootstrapEnabled = cfg.bootstrapScript != null;
 in {
-  config = {
+  config = lib.mkMerge [
+    {
     assertions = [
       {
         assertion =
@@ -510,5 +511,25 @@ in {
     microvm.vsock.cid = lib.mkIf cloudHypervisorVsockEnabled (lib.mkDefault cfg.guestEgress.vsockCID);
 
     workloadVm.runtimeManagedRoStore = cfg.runtimeBackend != "vfkit";
-  };
+    }
+
+    (lib.mkIf (cfg.runtimeBackend == "cloud-hypervisor") {
+      # Keep the local Cloud Hypervisor initrd focused on the devices we
+      # actually expose instead of the generic host-hardware autodetect set.
+      boot.initrd.availableKernelModules = lib.mkForce [
+        "virtio_blk"
+        "virtio_mmio"
+        "virtio_pci"
+        "virtiofs"
+      ];
+
+      boot.initrd.kernelModules = lib.mkForce [
+        "dm_mod"
+        "virtio_blk"
+        "virtio_mmio"
+        "virtio_pci"
+        "virtiofs"
+      ];
+    })
+  ];
 }

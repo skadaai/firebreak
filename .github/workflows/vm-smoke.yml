@@ -11,13 +11,6 @@ on:
         description: "PR number (e.g. 42) — leave empty to use current branch"
         required: false
 
-on:
-  pull_request:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
-
 permissions:
   contents: read
 

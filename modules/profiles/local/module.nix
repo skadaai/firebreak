@@ -425,6 +425,7 @@ in {
     };
 
     systemd.services."serial-getty@ttyS0".enable = false;
+    systemd.services."serial-getty@hvc0".enable = false;
 
     environment.systemPackages =
       lib.optionals cfg.workerBridgeEnabled [
@@ -449,7 +450,7 @@ in {
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service"
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
       wants = [ ];
-      conflicts = [ "serial-getty@ttyS0.service" ];
+      conflicts = [ "serial-getty@ttyS0.service" "serial-getty@hvc0.service" ];
 
       serviceConfig = {
         ExecCondition = devConsoleConditionScript;
@@ -458,7 +459,7 @@ in {
         StandardInput = "tty-force";
         StandardOutput = "tty";
         StandardError = "tty";
-        TTYPath = "/dev/ttyS0";
+        TTYPath = "/dev/console";
         TTYReset = true;
         TTYVHangup = true;
         TTYVTDisallocate = true;

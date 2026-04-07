@@ -531,6 +531,10 @@ in {
     workloadVm = {
       requiredCapabilities = [ "guest-egress" ];
       brandingTagline = tagline;
+      environmentOverlay = {
+        enable = true;
+        package.pathPrefixes = [ "${pkgs.nodejs_20}/bin" ];
+      };
       localPublishedHostPortsJson = builtins.toJSON (
         builtins.filter (forward: (forward.from or "host") == "host") forwardPorts
       );
@@ -539,7 +543,6 @@ in {
       toolRuntimesEnabled = true;
       memoryMiB = lib.mkDefault memoryMiB;
       extraSystemPackages = with pkgs; [
-        nodejs_20
         bootstrapWaitScript
         launchScript
         readyScript

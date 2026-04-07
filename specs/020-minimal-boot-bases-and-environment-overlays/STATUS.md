@@ -27,6 +27,7 @@ Environment overlay implementation plus boot-base split.
 - package overlays can now declare Nix installables directly, and those installables participate in the environment identity, cache materialization, and doctor/smoke coverage
 - recipe-owned runtime tool packages for workspace and packaged Node CLI sandboxes now resolve through environment overlay path prefixes instead of being baked into the guest image
 - packaged-agent helper tools can now come from environment overlay path prefixes on the command path, so helper binaries like `ripgrep` no longer need to inflate the guest image
+- packaged Node CLI runtimes now enable their environment overlay by default and export `nodejs_20` through that overlay instead of baking Node into the guest image
 - project-local Nix auto-detection now explicitly accepts `devShells.<system>.default`, `packages.<system>.default`, and `legacyPackages.<system>.default`, and fails fast when a workspace opts in but does not expose one of those supported defaults
 - the local Cloud Hypervisor boot base now strips more generic NixOS login and name-resolution machinery from the common path, including `resolvconf`, `nscd`, `logind`, `systemd-user-sessions`, `lastlog2-import`, and `getty.target`
 

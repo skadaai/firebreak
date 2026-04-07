@@ -294,6 +294,12 @@ in {
                   description = "Store-backed bin directories prepended to PATH by the resolved environment overlay.";
                 };
 
+                installables = mkOption {
+                  type = types.listOf types.str;
+                  default = [ ];
+                  description = "Nix installables that Firebreak resolves on the host and exports into the additive environment overlay.";
+                };
+
                 exports = mkOption {
                   type = types.attrsOf types.str;
                   default = { };

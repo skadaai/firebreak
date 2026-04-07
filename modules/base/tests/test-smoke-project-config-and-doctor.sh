@@ -296,6 +296,40 @@ if [ "$FOO_VALUE" != "bar" ]; then
   exit 1
 fi
 
+package_environment_json=$(
+  FIREBREAK_PACKAGE_IDENTITY=package-smoke \
+    FIREBREAK_PACKAGE_ENVIRONMENT_INSTALLABLES_JSON='["nixpkgs#jq"]' \
+    environment_cmd environment resolve --json
+)
+PACKAGE_ENVIRONMENT_JSON=$package_environment_json python3 - <<'PY'
+import json
+import os
+
+obj = json.loads(os.environ["PACKAGE_ENVIRONMENT_JSON"])
+
+assert obj["source"] == "package-only"
+assert obj["kind"] == "none"
+assert json.loads(obj["package_installables_json"]) == ["nixpkgs#jq"]
+assert obj["identity"]
+assert obj["env_file"]
+PY
+
+package_environment_env_file=$(PACKAGE_ENVIRONMENT_JSON=$package_environment_json python3 - <<'PY'
+import json
+import os
+
+obj = json.loads(os.environ["PACKAGE_ENVIRONMENT_JSON"])
+print(obj["env_file"])
+PY
+)
+
+PACKAGE_ENVIRONMENT_ENV_FILE=$package_environment_env_file bash -lc '
+  set -eu
+  export PATH=/usr/bin:/bin
+  . "$PACKAGE_ENVIRONMENT_ENV_FILE"
+  command -v jq >/dev/null 2>&1
+'
+
 environment_auto_json=$(
   FIREBREAK_ENVIRONMENT_PROJECT_NIX_ENABLED=1 \
     environment_cmd environment resolve --json

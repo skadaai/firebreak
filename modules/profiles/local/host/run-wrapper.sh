@@ -30,6 +30,7 @@ runtime_generation=@RUNNER@
 package_name=@PACKAGE_NAME@
 tool_runtime_seed_script=@TOOL_RUNTIME_SEED_SCRIPT@
 environment_overlay_enabled=@ENVIRONMENT_OVERLAY_ENABLE@
+environment_overlay_package_installables_json='@ENVIRONMENT_OVERLAY_PACKAGE_INSTALLABLES_JSON@'
 environment_overlay_package_paths_json='@ENVIRONMENT_OVERLAY_PACKAGE_PATHS_JSON@'
 environment_overlay_package_exports_json='@ENVIRONMENT_OVERLAY_PACKAGE_EXPORTS_JSON@'
 environment_overlay_project_nix_enabled=@ENVIRONMENT_OVERLAY_PROJECT_NIX_ENABLED@
@@ -615,6 +616,7 @@ start_environment_overlay_materialization() {
     if \
       FIREBREAK_ENVIRONMENT_CACHE_ROOT=$firebreak_state_root/environments \
       FIREBREAK_ENVIRONMENT_PROJECT_NIX_ENABLED=$environment_overlay_project_nix_enabled \
+      FIREBREAK_PACKAGE_ENVIRONMENT_INSTALLABLES_JSON=$environment_overlay_package_installables_json \
       FIREBREAK_PACKAGE_ENVIRONMENT_PATHS_JSON=$environment_overlay_package_paths_json \
       FIREBREAK_PACKAGE_ENVIRONMENT_EXPORTS_JSON=$environment_overlay_package_exports_json \
       FIREBREAK_PACKAGE_IDENTITY=$package_name \
@@ -625,6 +627,7 @@ start_environment_overlay_materialization() {
       && \
       FIREBREAK_ENVIRONMENT_CACHE_ROOT=$firebreak_state_root/environments \
       FIREBREAK_ENVIRONMENT_PROJECT_NIX_ENABLED=$environment_overlay_project_nix_enabled \
+      FIREBREAK_PACKAGE_ENVIRONMENT_INSTALLABLES_JSON=$environment_overlay_package_installables_json \
       FIREBREAK_PACKAGE_ENVIRONMENT_PATHS_JSON=$environment_overlay_package_paths_json \
       FIREBREAK_PACKAGE_ENVIRONMENT_EXPORTS_JSON=$environment_overlay_package_exports_json \
       FIREBREAK_PACKAGE_IDENTITY=$package_name \

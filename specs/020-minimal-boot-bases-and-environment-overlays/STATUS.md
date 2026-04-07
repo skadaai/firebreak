@@ -24,6 +24,7 @@ Environment overlay implementation plus boot-base split.
 - local runtimes now select explicit `command` and `interactive` boot bases through the shared runtime contract instead of ad hoc wrapper logic
 - local interactive services now boot under `firebreak-interactive.target`, while one-shot command execution continues to use `firebreak-cold-exec.target`
 - local environment resolution and materialization now run in the background so that host environment work can overlap with guest boot, with the guest waiting only when it actually needs the resolved overlay
+- package overlays can now declare Nix installables directly, and those installables participate in the environment identity, cache materialization, and doctor/smoke coverage
 
 ## What remains open
 

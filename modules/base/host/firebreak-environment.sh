@@ -73,6 +73,7 @@ firebreak_reset_environment_state() {
   FIREBREAK_RESOLVED_ENVIRONMENT_MANIFEST_FILE=""
   FIREBREAK_RESOLVED_ENVIRONMENT_IDENTITY=""
   FIREBREAK_RESOLVED_ENVIRONMENT_REUSED="0"
+  FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_INSTALLABLES_JSON='[]'
   FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_PATHS_JSON='[]'
   FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_EXPORTS_JSON='{}'
   FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_IDENTITY=""
@@ -178,18 +179,15 @@ firebreak_environment_detect_project_installable() {
   default_package="$project_flake_ref#packages.$host_system.default"
 
   if firebreak_environment_try_eval "$default_devshell" devshell; then
-    FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_SOURCE="devShells.$host_system.default"
-    printf '%s|%s\n' "devshell" "$default_devshell"
+    printf '%s|%s|%s\n' "devshell" "$default_devshell" "devShells.$host_system.default"
     return 0
   fi
 
   if firebreak_environment_try_eval "$default_package" package; then
-    FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_SOURCE="packages.$host_system.default"
-    printf '%s|%s\n' "package" "$default_package"
+    printf '%s|%s|%s\n' "package" "$default_package" "packages.$host_system.default"
     return 0
   fi
 
-  FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_SOURCE="none"
   return 1
 }
 
@@ -208,6 +206,7 @@ firebreak_environment_resolve_cache_paths() {
       FIREBREAK_RESOLVED_ENVIRONMENT_MODE=$FIREBREAK_RESOLVED_ENVIRONMENT_MODE \
       FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_EXPORTS_JSON=$FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_EXPORTS_JSON \
       FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_IDENTITY=$FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_IDENTITY \
+      FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_INSTALLABLES_JSON=$FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_INSTALLABLES_JSON \
       FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_PATHS_JSON=$FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_PATHS_JSON \
       FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_LOCK_HASH=$FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_LOCK_HASH \
       FIREBREAK_RESOLVED_PROJECT_ROOT=$FIREBREAK_RESOLVED_PROJECT_ROOT \
@@ -223,6 +222,7 @@ payload = {
     "mode": os.environ.get("FIREBREAK_RESOLVED_ENVIRONMENT_MODE", ""),
     "package_exports_json": os.environ.get("FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_EXPORTS_JSON", "{}"),
     "package_identity": os.environ.get("FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_IDENTITY", ""),
+    "package_installables_json": os.environ.get("FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_INSTALLABLES_JSON", "[]"),
     "package_paths_json": os.environ.get("FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_PATHS_JSON", "[]"),
     "project_lock_hash": os.environ.get("FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_LOCK_HASH", ""),
     "project_root": os.environ.get("FIREBREAK_RESOLVED_PROJECT_ROOT", ""),
@@ -239,6 +239,13 @@ PY
 
 firebreak_environment_write_package_overlay() {
   target_file=$1
+
+  while IFS= read -r installable; do
+    [ -n "$installable" ] || continue
+    firebreak_environment_write_package_installable_overlay "$installable" "$target_file"
+  done <<EOF
+$(firebreak_environment_list_installables "$FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_INSTALLABLES_JSON")
+EOF
 
   PACKAGE_EXPORTS_JSON=$FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_EXPORTS_JSON \
     PACKAGE_PATHS_JSON=$FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_PATHS_JSON \
@@ -333,6 +340,23 @@ $output_paths
 EOF
 }
 
+firebreak_environment_list_installables() {
+  installables_json=$1
+  INSTALLABLES_JSON=$installables_json "$(firebreak_environment_python)" - <<'PY'
+import json
+import os
+
+values = json.loads(os.environ["INSTALLABLES_JSON"])
+if not isinstance(values, list):
+    raise SystemExit("Firebreak package installables must decode to a JSON list")
+
+for value in values:
+    if not isinstance(value, str) or not value:
+        raise SystemExit("Firebreak package installables must be non-empty strings")
+    print(value)
+PY
+}
+
 firebreak_environment_write_manifest() {
   PROJECT_ROOT=$FIREBREAK_RESOLVED_PROJECT_ROOT \
     ENV_CACHE_DIR=$FIREBREAK_RESOLVED_ENVIRONMENT_CACHE_DIR \
@@ -344,6 +368,7 @@ firebreak_environment_write_manifest() {
     FIREBREAK_RESOLVED_ENVIRONMENT_MODE=$FIREBREAK_RESOLVED_ENVIRONMENT_MODE \
     FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_EXPORTS_JSON=$FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_EXPORTS_JSON \
     FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_IDENTITY=$FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_IDENTITY \
+    FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_INSTALLABLES_JSON=$FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_INSTALLABLES_JSON \
     FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_PATHS_JSON=$FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_PATHS_JSON \
     FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_FLAKE_FILE=$FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_FLAKE_FILE \
     FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_LOCK_HASH=$FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_LOCK_HASH \
@@ -367,6 +392,7 @@ manifest = {
     "mode": os.environ.get("FIREBREAK_RESOLVED_ENVIRONMENT_MODE", ""),
     "package_exports_json": os.environ.get("FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_EXPORTS_JSON", "{}"),
     "package_identity": os.environ.get("FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_IDENTITY", ""),
+    "package_installables_json": os.environ.get("FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_INSTALLABLES_JSON", "[]"),
     "package_paths_json": os.environ.get("FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_PATHS_JSON", "[]"),
     "project_flake_file": os.environ.get("FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_FLAKE_FILE", ""),
     "project_lock_hash": os.environ.get("FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_LOCK_HASH", ""),
@@ -433,6 +459,7 @@ firebreak_resolve_environment() {
   fi
 
   FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_ENABLED=${FIREBREAK_ENVIRONMENT_PROJECT_NIX_ENABLED:-0}
+  FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_INSTALLABLES_JSON="${FIREBREAK_PACKAGE_ENVIRONMENT_INSTALLABLES_JSON:-[]}"
   FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_PATHS_JSON="${FIREBREAK_PACKAGE_ENVIRONMENT_PATHS_JSON:-[]}"
   if [ -n "${FIREBREAK_PACKAGE_ENVIRONMENT_EXPORTS_JSON+x}" ]; then
     FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_EXPORTS_JSON=$FIREBREAK_PACKAGE_ENVIRONMENT_EXPORTS_JSON
@@ -470,13 +497,14 @@ firebreak_resolve_environment() {
     return 0
   fi
 
-  if IFS='|' read -r detected_kind detected_installable <<EOF
+  if IFS='|' read -r detected_kind detected_installable detected_source <<EOF
 $(firebreak_environment_detect_project_installable || true)
 EOF
   then
     if [ -n "${detected_installable:-}" ]; then
       FIREBREAK_RESOLVED_ENVIRONMENT_KIND=$detected_kind
       FIREBREAK_RESOLVED_ENVIRONMENT_INSTALLABLE=$detected_installable
+      FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_SOURCE=${detected_source:-none}
       FIREBREAK_RESOLVED_ENVIRONMENT_SOURCE="project-nix"
     fi
   fi
@@ -518,6 +546,7 @@ firebreak_environment_resolve_command() {
   "kind": "$(firebreak_environment_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_KIND")",
   "installable": "$(firebreak_environment_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_INSTALLABLE")",
   "identity": "$(firebreak_environment_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_IDENTITY")",
+  "package_installables_json": "$(firebreak_environment_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_INSTALLABLES_JSON")",
   "cache_dir": "$(firebreak_environment_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_CACHE_DIR")",
   "env_file": "$(firebreak_environment_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_ENV_FILE")",
   "manifest_file": "$(firebreak_environment_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_MANIFEST_FILE")",
@@ -539,6 +568,7 @@ EOF
   printf '%-24s %s\n' "source" "$FIREBREAK_RESOLVED_ENVIRONMENT_SOURCE"
   printf '%-24s %s\n' "kind" "$FIREBREAK_RESOLVED_ENVIRONMENT_KIND"
   printf '%-24s %s\n' "installable" "${FIREBREAK_RESOLVED_ENVIRONMENT_INSTALLABLE:-none}"
+  printf '%-24s %s\n' "package_installables" "$FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_INSTALLABLES_JSON"
   printf '%-24s %s\n' "identity" "$FIREBREAK_RESOLVED_ENVIRONMENT_IDENTITY"
   printf '%-24s %s\n' "cache_dir" "$FIREBREAK_RESOLVED_ENVIRONMENT_CACHE_DIR"
   printf '%-24s %s\n' "env_file" "$FIREBREAK_RESOLVED_ENVIRONMENT_ENV_FILE"

@@ -178,6 +178,7 @@ EOF
     guestEgressProxyPort ? 3128,
     toolRuntimeSeedScript ? "",
     environmentOverlayEnable ? true,
+    environmentOverlayPackageInstallablesJson ? "[]",
     environmentOverlayPackagePathsJson ? "[]",
     environmentOverlayPackageExportsJson ? "{}",
     environmentOverlayProjectNixEnabled ? false,
@@ -215,6 +216,7 @@ EOF
         "@FIREBREAK_FLAKE_REF@" = "path:${builtins.toString ../../.}";
         "@WORKER_BRIDGE_ENABLED@" = if workerBridgeEnabled then "1" else "0";
         "@ENVIRONMENT_OVERLAY_ENABLE@" = if environmentOverlayEnable then "1" else "0";
+        "@ENVIRONMENT_OVERLAY_PACKAGE_INSTALLABLES_JSON@" = environmentOverlayPackageInstallablesJson;
         "@ENVIRONMENT_OVERLAY_PACKAGE_PATHS_JSON@" = environmentOverlayPackagePathsJson;
         "@ENVIRONMENT_OVERLAY_PACKAGE_EXPORTS_JSON@" = environmentOverlayPackageExportsJson;
         "@ENVIRONMENT_OVERLAY_PROJECT_NIX_ENABLED@" = if environmentOverlayProjectNixEnabled then "1" else "0";
@@ -294,6 +296,7 @@ EOF
     guestEgressProxyPort ? 3128,
     toolRuntimeSeedScript ? "",
     environmentOverlayEnable ? true,
+    environmentOverlayPackageInstallablesJson ? "[]",
     environmentOverlayPackagePathsJson ? "[]",
     environmentOverlayPackageExportsJson ? "{}",
     environmentOverlayProjectNixEnabled ? false,
@@ -324,6 +327,7 @@ EOF
         guestEgressProxyPort
         toolRuntimeSeedScript
         environmentOverlayEnable
+        environmentOverlayPackageInstallablesJson
         environmentOverlayPackagePathsJson
         environmentOverlayPackageExportsJson
         environmentOverlayProjectNixEnabled
@@ -405,6 +409,8 @@ EOF
           else
             nixosConfiguration.config.workloadVm.toolRuntimeSeedScript;
         environmentOverlayEnable = nixosConfiguration.config.workloadVm.environmentOverlay.enable;
+        environmentOverlayPackageInstallablesJson =
+          builtins.toJSON nixosConfiguration.config.workloadVm.environmentOverlay.package.installables;
         environmentOverlayPackagePathsJson =
           builtins.toJSON nixosConfiguration.config.workloadVm.environmentOverlay.package.pathPrefixes;
         environmentOverlayPackageExportsJson =

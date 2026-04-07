@@ -229,6 +229,15 @@ in {
     boot.initrd.systemd.suppressedUnits = [
       "systemd-vconsole-setup.service"
     ];
+    boot.kernelModules = lib.mkForce [ ];
+    boot.blacklistedKernelModules = [
+      "drm"
+      "intel_pstate"
+      "rfkill"
+      "efi_pstore"
+      "atkbd"
+      "loop"
+    ];
     systemd.suppressedSystemUnits = [
       "systemd-journal-catalog-update.service"
     ];

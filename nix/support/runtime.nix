@@ -176,6 +176,7 @@ EOF
     localPublishedHostPortsJson ? "[]",
     guestEgressEnabled ? false,
     guestEgressProxyPort ? 3128,
+    toolRuntimeSeedScript ? "",
   }:
     let
       runnerWrapper = pkgs.writeShellScript "firebreak-runner-wrapper" ''
@@ -232,6 +233,9 @@ EOF
           sudo
           util-linux
         ]
+        ++ lib.optionals (toolRuntimeSeedScript != "") [
+          nodejs_20
+        ]
         ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
           iproute2
           iptables
@@ -248,6 +252,7 @@ EOF
         "@FIREBREAK_LOCAL_INSTANCE_CONTROLLER_LIB@" = builtins.readFile ../../modules/profiles/local/host/local-instance-controller.sh;
         "@FIREBREAK_PROFILE_SUMMARY_SCRIPT@" = builtins.toString ../../modules/profiles/local/host/profile-summary.py;
         "@PYTHON3@" = "${pkgs.python3}/bin/python3";
+        "@TOOL_RUNTIME_SEED_SCRIPT@" = toolRuntimeSeedScript;
       }) ../../modules/profiles/local/host/run-wrapper.sh;
     };
 
@@ -273,6 +278,7 @@ EOF
     localPublishedHostPortsJson ? "[]",
     guestEgressEnabled ? false,
     guestEgressProxyPort ? 3128,
+    toolRuntimeSeedScript ? "",
   }:
     mkWorkloadPackage {
       inherit
@@ -295,7 +301,8 @@ EOF
         workerBridgeEnabled
         localPublishedHostPortsJson
         guestEgressEnabled
-        guestEgressProxyPort;
+        guestEgressProxyPort
+        toolRuntimeSeedScript;
       runner = runnerPackage;
     };
 
@@ -366,6 +373,11 @@ EOF
         localPublishedHostPortsJson = nixosConfiguration.config.workloadVm.localPublishedHostPortsJson;
         guestEgressEnabled = nixosConfiguration.config.workloadVm.guestEgress.enable;
         guestEgressProxyPort = nixosConfiguration.config.workloadVm.guestEgress.proxyPort;
+        toolRuntimeSeedScript =
+          if nixosConfiguration.config.workloadVm.toolRuntimeSeedScript == null then
+            ""
+          else
+            nixosConfiguration.config.workloadVm.toolRuntimeSeedScript;
       };
     in {
       inherit nixosConfiguration package runnerPackage varVolumeSeedImage;

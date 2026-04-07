@@ -257,6 +257,12 @@ in {
       description = "Guest path for an optional host-shared directory used to persist bootstrap-managed tool runtimes across VM launches.";
     };
 
+    toolRuntimeSeedScript = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = "Optional host-side script used by the local runtime wrapper to preseed a persistent tool-runtime directory before the guest bootstrap path runs.";
+    };
+
     defaultCommand = mkOption {
       type = types.nullOr types.str;
       default = null;

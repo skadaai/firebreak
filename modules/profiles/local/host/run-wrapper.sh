@@ -26,6 +26,7 @@ agent_session_mode=agent
 default_agent_command=@DEFAULT_AGENT_COMMAND@
 runtime_backend=@RUNTIME_BACKEND@
 runtime_generation=@RUNNER@
+tool_runtime_seed_script=@TOOL_RUNTIME_SEED_SCRIPT@
 agent_command_override=""
 shell_command_override=${AGENT_VM_COMMAND:-}
 shared_state_root_host_dir=""
@@ -269,6 +270,7 @@ worker_bridge_server_script=$host_runtime_dir/firebreak-worker-bridge-host.sh
 worker_helper_script=$host_runtime_dir/firebreak-worker.sh
 worker_project_config_script=$host_runtime_dir/firebreak-project-config.sh
 worker_bridge_enabled=@WORKER_BRIDGE_ENABLED@
+tool_runtime_seed_log=$host_runtime_dir/tool-runtime-seed.log
 wrapper_trace_log=$host_runtime_dir/wrapper-trace.log
 profile_host_events_file=$host_runtime_dir/profile-host.tsv
 profile_summary_file=$host_runtime_dir/profile-summary.json
@@ -553,6 +555,27 @@ remove_runtime_socket_artifacts() {
   done
 }
 
+start_tool_runtime_seed() {
+  if [ -z "$tool_runtime_seed_script" ]; then
+    return 0
+  fi
+  if ! [ -x "$tool_runtime_seed_script" ]; then
+    echo "configured tool runtime seed script is not executable: $tool_runtime_seed_script" >&2
+    exit 1
+  fi
+
+  trace_wrapper "agent-tools-host-seed-start"
+  (
+    if "$tool_runtime_seed_script" "$host_agent_tools_dir" >"$tool_runtime_seed_log" 2>&1; then
+      trace_wrapper "agent-tools-host-seed-ready"
+    else
+      seed_status=$?
+      trace_wrapper "agent-tools-host-seed-error:$seed_status"
+      exit "$seed_status"
+    fi
+  ) &
+}
+
 seed_var_volume_if_missing() {
   image_path=$1
 
@@ -584,6 +607,7 @@ if [ "$host_agent_tools_dir" != "$default_host_agent_tools_dir" ] \
   cp -a "$default_host_agent_tools_dir"/. "$host_agent_tools_dir"/
   trace_wrapper "agent-tools-seeded"
 fi
+start_tool_runtime_seed
 rm -f "$control_socket"
 remove_runtime_socket_artifacts \
   "$ro_store_socket" \

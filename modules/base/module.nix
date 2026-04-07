@@ -71,6 +71,9 @@ let
       ""
     else
       "${sharedToolWrapperPackage}/bin";
+  environmentOverlayReadyFlag = "${cfg.hostMetaMount}/firebreak-environment.ready";
+  environmentOverlayErrorFlag = "${cfg.hostMetaMount}/firebreak-environment.error";
+  environmentOverlayLogFile = "${cfg.hostMetaMount}/firebreak-environment.log";
   missingRequiredCapabilities =
     builtins.filter
       (capability: !(builtins.elem capability backendSpec.capabilities))
@@ -102,7 +105,11 @@ let
     "@SHARED_TOOL_WRAPPER_ENV_EXPORTS@" = lib.optionalString (sharedToolWrapperBinDir != "") ''
       export FIREBREAK_SHARED_TOOL_WRAPPER_BIN_DIR=${lib.escapeShellArg sharedToolWrapperBinDir}
     '';
+    "@ENVIRONMENT_OVERLAY_ENABLED@" = if cfg.environmentOverlay.enable then "1" else "0";
     "@ENVIRONMENT_OVERLAY_ENV_FILE@" = environmentOverlayEnvFile;
+    "@ENVIRONMENT_OVERLAY_READY_FLAG@" = environmentOverlayReadyFlag;
+    "@ENVIRONMENT_OVERLAY_ERROR_FLAG@" = environmentOverlayErrorFlag;
+    "@ENVIRONMENT_OVERLAY_LOG_FILE@" = environmentOverlayLogFile;
   };
 
   baseShellInit = renderTemplate scriptVars ./guest/shell-init.sh;

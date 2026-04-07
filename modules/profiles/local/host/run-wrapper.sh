@@ -296,6 +296,9 @@ wrapper_trace_log=$host_runtime_dir/wrapper-trace.log
 profile_host_events_file=$host_runtime_dir/profile-host.tsv
 profile_summary_file=$host_runtime_dir/profile-summary.json
 attach_pty_log=$host_runtime_dir/attach-pty.log
+environment_overlay_ready_flag=$host_meta_dir/firebreak-environment.ready
+environment_overlay_error_flag=$host_meta_dir/firebreak-environment.error
+environment_overlay_log=$host_meta_dir/firebreak-environment.log
 agent_term=$(normalize_term_name "${TERM:-}")
 agent_columns=$(sanitize_positive_dimension "${COLUMNS:-}")
 agent_lines=$(sanitize_positive_dimension "${LINES:-}")
@@ -549,6 +552,10 @@ cleanup() {
     kill "$worker_bridge_server_pid" 2>/dev/null || true
     wait "$worker_bridge_server_pid" 2>/dev/null || true
   fi
+  if [ -n "${environment_overlay_pid:-}" ]; then
+    kill "$environment_overlay_pid" 2>/dev/null || true
+    wait "$environment_overlay_pid" 2>/dev/null || true
+  fi
   if [ "$local_controller_mode" = "daemon" ]; then
     local_controller_clear_state
   fi
@@ -595,6 +602,48 @@ start_tool_runtime_seed() {
       exit "$seed_status"
     fi
   ) &
+}
+
+start_environment_overlay_materialization() {
+  if [ "$environment_overlay_enabled" != "1" ]; then
+    return 0
+  fi
+
+  rm -f "$environment_overlay_env_file" "$environment_overlay_ready_flag" "$environment_overlay_error_flag" "$environment_overlay_log"
+  trace_wrapper "environment-overlay-start"
+  (
+    if \
+      FIREBREAK_ENVIRONMENT_CACHE_ROOT=$firebreak_state_root/environments \
+      FIREBREAK_ENVIRONMENT_PROJECT_NIX_ENABLED=$environment_overlay_project_nix_enabled \
+      FIREBREAK_PACKAGE_ENVIRONMENT_PATHS_JSON=$environment_overlay_package_paths_json \
+      FIREBREAK_PACKAGE_ENVIRONMENT_EXPORTS_JSON=$environment_overlay_package_exports_json \
+      FIREBREAK_PACKAGE_IDENTITY=$package_name \
+      FIREBREAK_BOOT_BASE=$firebreak_boot_base \
+      FIREBREAK_RUNTIME_GENERATION=$runtime_generation \
+      FIREBREAK_HOST_SYSTEM=@HOST_SYSTEM@ \
+      firebreak_resolve_environment \
+      && \
+      FIREBREAK_ENVIRONMENT_CACHE_ROOT=$firebreak_state_root/environments \
+      FIREBREAK_ENVIRONMENT_PROJECT_NIX_ENABLED=$environment_overlay_project_nix_enabled \
+      FIREBREAK_PACKAGE_ENVIRONMENT_PATHS_JSON=$environment_overlay_package_paths_json \
+      FIREBREAK_PACKAGE_ENVIRONMENT_EXPORTS_JSON=$environment_overlay_package_exports_json \
+      FIREBREAK_PACKAGE_IDENTITY=$package_name \
+      FIREBREAK_BOOT_BASE=$firebreak_boot_base \
+      FIREBREAK_RUNTIME_GENERATION=$runtime_generation \
+      FIREBREAK_HOST_SYSTEM=@HOST_SYSTEM@ \
+      firebreak_materialize_environment_cache
+    then
+      cp "$FIREBREAK_RESOLVED_ENVIRONMENT_ENV_FILE" "$environment_overlay_env_file"
+      : >"$environment_overlay_ready_flag"
+      trace_wrapper "environment-overlay-ready:$FIREBREAK_RESOLVED_ENVIRONMENT_SOURCE:$FIREBREAK_RESOLVED_ENVIRONMENT_KIND"
+    else
+      overlay_status=$?
+      printf '%s\n' "$overlay_status" >"$environment_overlay_error_flag"
+      trace_wrapper "environment-overlay-error:$overlay_status"
+      exit "$overlay_status"
+    fi
+  ) >"$environment_overlay_log" 2>&1 &
+  environment_overlay_pid=$!
 }
 
 seed_var_volume_if_missing() {
@@ -784,29 +833,7 @@ fi
 
 select_boot_base
 
-if [ "$environment_overlay_enabled" = "1" ]; then
-  FIREBREAK_ENVIRONMENT_CACHE_ROOT=$firebreak_state_root/environments \
-    FIREBREAK_ENVIRONMENT_PROJECT_NIX_ENABLED=$environment_overlay_project_nix_enabled \
-    FIREBREAK_PACKAGE_ENVIRONMENT_PATHS_JSON=$environment_overlay_package_paths_json \
-    FIREBREAK_PACKAGE_ENVIRONMENT_EXPORTS_JSON=$environment_overlay_package_exports_json \
-    FIREBREAK_PACKAGE_IDENTITY=$package_name \
-    FIREBREAK_BOOT_BASE=$firebreak_boot_base \
-    FIREBREAK_RUNTIME_GENERATION=$runtime_generation \
-    FIREBREAK_HOST_SYSTEM=@HOST_SYSTEM@ \
-    firebreak_resolve_environment
-  FIREBREAK_ENVIRONMENT_CACHE_ROOT=$firebreak_state_root/environments \
-    FIREBREAK_ENVIRONMENT_PROJECT_NIX_ENABLED=$environment_overlay_project_nix_enabled \
-    FIREBREAK_PACKAGE_ENVIRONMENT_PATHS_JSON=$environment_overlay_package_paths_json \
-    FIREBREAK_PACKAGE_ENVIRONMENT_EXPORTS_JSON=$environment_overlay_package_exports_json \
-    FIREBREAK_PACKAGE_IDENTITY=$package_name \
-    FIREBREAK_BOOT_BASE=$firebreak_boot_base \
-    FIREBREAK_RUNTIME_GENERATION=$runtime_generation \
-    FIREBREAK_HOST_SYSTEM=@HOST_SYSTEM@ \
-    firebreak_materialize_environment_cache
-  if [ -r "$FIREBREAK_RESOLVED_ENVIRONMENT_ENV_FILE" ]; then
-    cp "$FIREBREAK_RESOLVED_ENVIRONMENT_ENV_FILE" "$environment_overlay_env_file"
-  fi
-fi
+start_environment_overlay_materialization
 
 cloud_hypervisor_setup_guest_egress
 cloud_hypervisor_setup_local_network

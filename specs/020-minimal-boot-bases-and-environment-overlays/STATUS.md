@@ -23,9 +23,9 @@ Environment overlay implementation plus boot-base split.
 - workspace-style project artifacts now opt into constrained project-local flake environment resolution
 - local runtimes now select explicit `command` and `interactive` boot bases through the shared runtime contract instead of ad hoc wrapper logic
 - local interactive services now boot under `firebreak-interactive.target`, while one-shot command execution continues to use `firebreak-cold-exec.target`
+- local environment resolution and materialization now run in the background so that host environment work can overlap with guest boot, with the guest waiting only when it actually needs the resolved overlay
 
 ## What remains open
 
 - continuing the package-default environment model beyond the initial overlay contract
 - continuing the kernel/initrd and guest service-graph reduction against those bases
-- overlapping environment resolution and materialization with guest boot where possible

@@ -14,6 +14,7 @@ moduleArgs:
   credentialLoginArgs ? [ ],
   credentialLoginMaterialization ? "none",
   extraSystemPackages ? [ ],
+  extraEnvironmentPathPackages ? [ ],
 }:
 let
   inherit (moduleArgs) config lib pkgs renderTemplate;
@@ -56,6 +57,10 @@ in {
       sharedCredentialSlots.enable = true;
       defaultCommand = binName;
       promptCommand = promptCommand;
+      environmentOverlay = {
+        enable = extraEnvironmentPathPackages != [ ];
+        package.pathPrefixes = map (pathPackage: "${pathPackage}/bin") extraEnvironmentPathPackages;
+      };
       extraSystemPackages = [ package ] ++ extraSystemPackages;
       shellInit = renderTemplate scriptVars ./guest/shell-init.sh;
     };

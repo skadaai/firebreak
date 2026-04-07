@@ -220,6 +220,12 @@ in {
 
     services.timesyncd.enable = lib.mkForce false;
 
+    systemd.suppressedSystemUnits = [
+      "systemd-journal-catalog-update.service"
+    ];
+    systemd.services.systemd-vconsole-setup.enable = lib.mkForce false;
+    systemd.services.reload-systemd-vconsole-setup.enable = lib.mkForce false;
+
     workloadVm.hostMetaMount = lib.mkDefault hostMetaMount;
     workloadVm.workerExecOutputMount = lib.mkDefault workerExecOutputMount;
     workloadVm.workerBridgeMount = lib.mkDefault workerBridgeMount;

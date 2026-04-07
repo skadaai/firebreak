@@ -201,15 +201,25 @@ if [ "$start_dir" != "@WORKSPACE_MOUNT@" ]; then
     rm -f "$start_dir"
   fi
 
-  if ! mountpoint -q "$start_dir"; then
+  if ! [ -L "$start_dir" ]; then
     parent=$(dirname "$start_dir")
-    mkdir -p "$parent" "$start_dir"
+    mkdir -p "$parent"
 
-    if [ -e "$start_dir" ] && ! [ -d "$start_dir" ]; then
-      echo "refusing to replace existing non-directory path: $start_dir"
-    else
-      mount --bind @WORKSPACE_MOUNT@ "$start_dir"
+    if [ -d "$start_dir" ]; then
+      if mountpoint -q "$start_dir"; then
+        echo "refusing to replace existing mountpoint: $start_dir" >&2
+        exit 1
+      fi
+      if ! rmdir "$start_dir" 2>/dev/null; then
+        echo "refusing to replace existing non-empty directory path: $start_dir" >&2
+        exit 1
+      fi
+    elif [ -e "$start_dir" ]; then
+      echo "refusing to replace existing non-directory path: $start_dir" >&2
+      exit 1
     fi
+
+    ln -s @WORKSPACE_MOUNT@ "$start_dir"
   fi
   log_phase prepare-agent-session-bind-workspace-done
 fi

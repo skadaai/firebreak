@@ -25,6 +25,7 @@ Environment overlay implementation plus boot-base split.
 - local interactive services now boot under `firebreak-interactive.target`, while one-shot command execution continues to use `firebreak-cold-exec.target`
 - local environment resolution and materialization now run in the background so that host environment work can overlap with guest boot, with the guest waiting only when it actually needs the resolved overlay
 - package overlays can now declare Nix installables directly, and those installables participate in the environment identity, cache materialization, and doctor/smoke coverage
+- project-local Nix auto-detection now explicitly accepts `devShells.<system>.default`, `packages.<system>.default`, and `legacyPackages.<system>.default`, and fails fast when a workspace opts in but does not expose one of those supported defaults
 
 ## What remains open
 

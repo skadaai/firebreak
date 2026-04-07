@@ -346,6 +346,84 @@ assert obj["project_nix_enabled"] is True
 assert obj["project_nix_source"] == "devShells.x86_64-linux.default"
 PY
 
+unsupported_environment_flake_dir=$smoke_tmp_dir/unsupported-environment-flake
+mkdir -p "$unsupported_environment_flake_dir"
+cat >"$unsupported_environment_flake_dir/flake.nix" <<EOF
+{
+  description = "firebreak unsupported environment smoke";
+  inputs.firebreak.url = "path:$repo_root";
+  inputs.nixpkgs.follows = "firebreak/nixpkgs";
+  outputs = { self, nixpkgs, firebreak }:
+    let
+      system = "x86_64-linux";
+      pkgs = import nixpkgs { inherit system; };
+    in {
+      packages.\${system}.demo = pkgs.hello;
+    };
+}
+EOF
+
+set +e
+unsupported_environment_output=$(
+  (
+    cd "$unsupported_environment_flake_dir"
+    FIREBREAK_ENVIRONMENT_PROJECT_NIX_ENABLED=1 \
+      nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run "path:$repo_root#firebreak" -- environment resolve --json
+  ) 2>&1
+)
+unsupported_environment_status=$?
+set -e
+
+if [ "$unsupported_environment_status" -eq 0 ]; then
+  printf '%s\n' "$unsupported_environment_output" >&2
+  echo "unsupported project-local environment should fail fast" >&2
+  exit 1
+fi
+
+require_pattern "$unsupported_environment_output" \
+  "could not map path:" \
+  "unsupported project-local environment failure"
+require_pattern "$unsupported_environment_output" \
+  "devShells.x86_64-linux.default, packages.x86_64-linux.default, or legacyPackages.x86_64-linux.default" \
+  "supported default workspace environment guidance"
+
+legacy_environment_flake_dir=$smoke_tmp_dir/legacy-environment-flake
+mkdir -p "$legacy_environment_flake_dir"
+cat >"$legacy_environment_flake_dir/flake.nix" <<EOF
+{
+  description = "firebreak legacyPackages environment smoke";
+  inputs.firebreak.url = "path:$repo_root";
+  inputs.nixpkgs.follows = "firebreak/nixpkgs";
+  outputs = { self, nixpkgs, firebreak }:
+    let
+      system = "x86_64-linux";
+      pkgs = import nixpkgs { inherit system; };
+    in {
+      legacyPackages.\${system}.default = pkgs.hello;
+    };
+}
+EOF
+
+legacy_environment_json=$(
+  (
+    cd "$legacy_environment_flake_dir"
+    FIREBREAK_ENVIRONMENT_PROJECT_NIX_ENABLED=1 \
+      nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run "path:$repo_root#firebreak" -- environment resolve --json
+  )
+)
+LEGACY_ENVIRONMENT_JSON=$legacy_environment_json python3 - <<'PY'
+import json
+import os
+
+obj = json.loads(os.environ["LEGACY_ENVIRONMENT_JSON"])
+
+assert obj["source"] == "project-nix"
+assert obj["kind"] == "package"
+assert obj["project_nix_enabled"] is True
+assert obj["project_nix_source"] == "legacyPackages.x86_64-linux.default"
+assert obj["installable"].endswith("#legacyPackages.x86_64-linux.default")
+PY
+
 exact_worker_state_dir=$smoke_tmp_dir/exact-worker-state
 mkdir -p "$exact_worker_state_dir"
 exact_worker_debug_json=$(

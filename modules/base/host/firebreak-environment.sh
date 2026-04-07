@@ -79,6 +79,10 @@ firebreak_reset_environment_state() {
   FIREBREAK_RESOLVED_ENVIRONMENT_PACKAGE_IDENTITY=""
   FIREBREAK_RESOLVED_ENVIRONMENT_BOOT_BASE=""
   FIREBREAK_RESOLVED_ENVIRONMENT_RUNTIME_VERSION=""
+  FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_KIND=""
+  FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_INSTALLABLE=""
+  FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_SOURCE="none"
+  FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_ERROR=""
 }
 
 firebreak_environment_nix_command() {
@@ -164,6 +168,11 @@ firebreak_environment_try_eval() {
 }
 
 firebreak_environment_detect_project_installable() {
+  FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_KIND=""
+  FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_INSTALLABLE=""
+  FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_SOURCE="none"
+  FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_ERROR=""
+
   if [ "${FIREBREAK_ENVIRONMENT_PROJECT_NIX_ENABLED:-0}" != "1" ]; then
     return 1
   fi
@@ -177,18 +186,31 @@ firebreak_environment_detect_project_installable() {
   host_system=${FIREBREAK_HOST_SYSTEM:-$(uname -m | tr '[:upper:]' '[:lower:]')-linux}
   default_devshell="$project_flake_ref#devShells.$host_system.default"
   default_package="$project_flake_ref#packages.$host_system.default"
+  legacy_default_package="$project_flake_ref#legacyPackages.$host_system.default"
 
   if firebreak_environment_try_eval "$default_devshell" devshell; then
-    printf '%s|%s|%s\n' "devshell" "$default_devshell" "devShells.$host_system.default"
+    FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_KIND="devshell"
+    FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_INSTALLABLE=$default_devshell
+    FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_SOURCE="devShells.$host_system.default"
     return 0
   fi
 
   if firebreak_environment_try_eval "$default_package" package; then
-    printf '%s|%s|%s\n' "package" "$default_package" "packages.$host_system.default"
+    FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_KIND="package"
+    FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_INSTALLABLE=$default_package
+    FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_SOURCE="packages.$host_system.default"
     return 0
   fi
 
-  return 1
+  if firebreak_environment_try_eval "$legacy_default_package" package; then
+    FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_KIND="package"
+    FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_INSTALLABLE=$legacy_default_package
+    FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_SOURCE="legacyPackages.$host_system.default"
+    return 0
+  fi
+
+  FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_ERROR="project-local Nix is enabled, but Firebreak could not map $project_flake_ref to a supported default environment. Expected one of: devShells.$host_system.default, packages.$host_system.default, or legacyPackages.$host_system.default"
+  return 2
 }
 
 firebreak_environment_resolve_cache_paths() {
@@ -497,15 +519,16 @@ firebreak_resolve_environment() {
     return 0
   fi
 
-  if IFS='|' read -r detected_kind detected_installable detected_source <<EOF
-$(firebreak_environment_detect_project_installable || true)
-EOF
-  then
-    if [ -n "${detected_installable:-}" ]; then
-      FIREBREAK_RESOLVED_ENVIRONMENT_KIND=$detected_kind
-      FIREBREAK_RESOLVED_ENVIRONMENT_INSTALLABLE=$detected_installable
-      FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_SOURCE=${detected_source:-none}
-      FIREBREAK_RESOLVED_ENVIRONMENT_SOURCE="project-nix"
+  if firebreak_environment_detect_project_installable; then
+    FIREBREAK_RESOLVED_ENVIRONMENT_KIND=$FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_KIND
+    FIREBREAK_RESOLVED_ENVIRONMENT_INSTALLABLE=$FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_INSTALLABLE
+    FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_SOURCE=$FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_SOURCE
+    FIREBREAK_RESOLVED_ENVIRONMENT_SOURCE="project-nix"
+  else
+    detect_status=$?
+    if [ "$detect_status" -eq 2 ]; then
+      echo "$FIREBREAK_DETECTED_PROJECT_ENVIRONMENT_ERROR" >&2
+      return 1
     fi
   fi
 

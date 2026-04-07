@@ -58,11 +58,6 @@ let
       lib.filter (value: value != null)
         (lib.mapAttrsToList (_commandName: upstream: upstream.packageSpec or null) proxyLocalUpstreams)
     );
-  proxyLocalUpstreamSystemPackages =
-    lib.unique (
-      lib.filter (value: value != null)
-        (lib.mapAttrsToList (_commandName: upstream: upstream.package or null) proxyLocalUpstreams)
-    );
   installBinNames = builtins.attrNames installBinScripts;
   proxyLocalUpstreamNames = builtins.attrNames proxyLocalUpstreams;
   proxyLocalUpstreamInstallArgs = lib.escapeShellArgs proxyLocalUpstreamSpecs;
@@ -548,7 +543,7 @@ in {
         bootstrapWaitScript
         launchScript
         readyScript
-      ] ++ proxyLocalUpstreamSystemPackages ++ extraSystemPackages;
+      ] ++ extraSystemPackages;
       bootstrapPackages = with pkgs; [
         bash
         coreutils

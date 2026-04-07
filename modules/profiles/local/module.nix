@@ -104,10 +104,11 @@ let
     (builtins.readFile ./guest/cloud-hypervisor-port-publish-relay.py);
   guestEgressRelayScript = pkgs.writeShellApplication {
     name = "firebreak-cloud-hypervisor-egress-relay";
-    runtimeInputs = with pkgs; [ python3 ];
+    runtimeInputs = with pkgs; [ iproute2 python3 ];
     text = ''
       ${renderedProfileLib}
       firebreak_profile_guest_mark guest-egress-proxy service-start
+      ip link set lo up 2>/dev/null || true
       export FIREBREAK_GUEST_EGRESS_PROXY_HOST='127.0.0.1'
       export FIREBREAK_GUEST_EGRESS_PROXY_PORT='${toString cfg.guestEgress.proxyPort}'
       export FIREBREAK_GUEST_EGRESS_HOST_CID='2'
@@ -118,10 +119,11 @@ let
   };
   guestPortPublishRelayScript = pkgs.writeShellApplication {
     name = "firebreak-cloud-hypervisor-port-publish-relay";
-    runtimeInputs = with pkgs; [ python3 ];
+    runtimeInputs = with pkgs; [ iproute2 python3 ];
     text = ''
       ${renderedProfileLib}
       firebreak_profile_guest_mark guest-port-publish-relay service-start '${lib.concatStringsSep "," guestPublishedTcpPorts}'
+      ip link set lo up 2>/dev/null || true
       export FIREBREAK_GUEST_PORT_PUBLISH_TARGET_HOST='127.0.0.1'
       export FIREBREAK_GUEST_PORT_PUBLISH_PORTS='${lib.concatStringsSep "," guestPublishedTcpPorts}'
       firebreak_profile_guest_mark guest-port-publish-relay relay-exec
@@ -327,7 +329,7 @@ in {
       };
     };
 
-    systemd.services.configure-runtime-network = lib.mkIf (cfg.runtimeBackend == "cloud-hypervisor") {
+    systemd.services.configure-runtime-network = lib.mkIf (cfg.runtimeBackend == "cloud-hypervisor" && needsFullGuestNetwork) {
       description = "Configure runtime networking for the local Cloud Hypervisor backend";
       wantedBy = [ "basic.target" ];
       before = [ "dev-console.service" ] ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
@@ -386,11 +388,11 @@ in {
       description = "Cold non-interactive command execution";
       wantedBy = [ "firebreak-cold-exec.target" ];
       after = [ "prepare-cold-agent-exec.service" ]
-        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && needsFullGuestNetwork) "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service";
       requires = [ "prepare-cold-agent-exec.service" ]
-        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && needsFullGuestNetwork) "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service";
 
@@ -437,12 +439,12 @@ in {
       description = "Interactive dev shell on ttyS0";
       wantedBy = [ "multi-user.target" ];
       after = [ "cold-command-exec.service" "prepare-agent-session.service" ]
-        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && needsFullGuestNetwork) "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service"
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
       requires = [ "prepare-agent-session.service" ]
-        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && needsFullGuestNetwork) "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service"
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
@@ -471,12 +473,12 @@ in {
       description = "Warm local command agent";
       wantedBy = [ "multi-user.target" ];
       after = [ "prepare-agent-session.service" ]
-        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && needsFullGuestNetwork) "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service"
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
       requires = [ "prepare-agent-session.service" ]
-        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor") "configure-runtime-network.service"
+        ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && needsFullGuestNetwork) "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service"
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";

@@ -211,7 +211,7 @@ PY
     env \
       FIREBREAK_CH_PUBLISH_LISTEN_HOST="$host_address" \
       FIREBREAK_CH_PUBLISH_LISTEN_PORT="$host_port" \
-      FIREBREAK_CH_PUBLISH_MUX_SOCKET="$runner_workdir/notify.vsock" \
+      FIREBREAK_CH_PUBLISH_MUX_SOCKET="$runner_launch_dir/notify.vsock" \
       FIREBREAK_CH_PUBLISH_GUEST_PORT="$guest_port" \
       python3 "$cloud_hypervisor_port_publish_proxy_script" >"$host_runtime_dir/port-${host_port}.log" 2>&1 &
     proxy_pid=$!

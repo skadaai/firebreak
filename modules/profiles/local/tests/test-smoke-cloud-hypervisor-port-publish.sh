@@ -89,6 +89,14 @@ for _ in $(seq 1 50); do
   sleep 0.1
 done
 
+for _ in $(seq 1 50); do
+  if kill -0 "$proxy_pid" 2>/dev/null; then
+    sleep 0.1
+    break
+  fi
+  sleep 0.1
+done
+
 response=$(python3 - <<'PY'
 import socket
 
@@ -115,6 +123,8 @@ case "$response" in
   *"200 OK"* ) ;;
   *)
     printf '%s\n' "$response" >&2
+    cat "$proxy_log" >&2 || true
+    cat "$mux_log" >&2 || true
     echo "port publish smoke did not proxy HTTP 200" >&2
     exit 1
     ;;
@@ -124,6 +134,8 @@ case "$response" in
   *"rootless publish ok"* ) ;;
   *)
     printf '%s\n' "$response" >&2
+    cat "$proxy_log" >&2 || true
+    cat "$mux_log" >&2 || true
     echo "port publish smoke did not proxy upstream body" >&2
     exit 1
     ;;

@@ -3,7 +3,7 @@ cloud_hypervisor_setup_guest_egress() {
   cloud_hypervisor_guest_egress_enabled=@GUEST_EGRESS_ENABLED@
   [ "$cloud_hypervisor_guest_egress_enabled" = "1" ] || return 0
 
-  cloud_hypervisor_vsock_path=$runner_workdir/notify.vsock
+  cloud_hypervisor_vsock_path=$runner_launch_dir/notify.vsock
   cloud_hypervisor_guest_egress_socket=${cloud_hypervisor_vsock_path}_@GUEST_EGRESS_PROXY_PORT@
   cloud_hypervisor_guest_egress_script=$host_runtime_dir/cloud-hypervisor-egress-proxy.py
   cloud_hypervisor_guest_egress_log=$host_runtime_dir/cloud-hypervisor-egress.log

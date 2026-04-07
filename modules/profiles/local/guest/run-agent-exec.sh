@@ -7,6 +7,7 @@ set -eu
 
 command_shell_init_file=@COMMAND_SHELL_INIT_FILE@
 power_action=${FIREBREAK_AGENT_POWER_ACTION:-poweroff}
+bootstrap_wait_enabled=@COLD_EXEC_BOOTSTRAP_WAIT_ENABLED@
 
 if ! [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
   echo "agent exec output share is unavailable at @AGENT_EXEC_OUTPUT_MOUNT@" >&2
@@ -64,7 +65,7 @@ capture_systemd_boot_profile() {
   firebreak_profile_guest_mark run-agent-exec systemd-profile-done
 }
 
-if command -v firebreak-bootstrap-wait >/dev/null 2>&1; then
+if [ "$bootstrap_wait_enabled" = "1" ] && command -v firebreak-bootstrap-wait >/dev/null 2>&1; then
   firebreak_profile_guest_mark run-agent-exec bootstrap-wait-start
   write_command_state bootstrap-wait running agent-exec 0
   if firebreak-bootstrap-wait; then

@@ -569,6 +569,12 @@ in {
       description = "Optional ExecCondition script used to skip dev-bootstrap entirely when cached tool state is already valid.";
     };
 
+    coldExecBootstrapWaitEnable = mkOption {
+      type = types.bool;
+      default = bootstrapEnabled;
+      description = "Whether cold non-interactive command execution should wait for the optional bootstrap service to report readiness.";
+    };
+
     workerBridgeEnabled = mkOption {
       type = types.bool;
       default = false;

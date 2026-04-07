@@ -784,9 +784,15 @@ if [ "$worker_bridge_enabled" = "1" ]; then
 fi
 
 run_runner() {
+  firebreak_systemd_unit=""
+  if [ "$agent_session_mode" = "agent-exec" ]; then
+    firebreak_systemd_unit="firebreak-cold-exec.target"
+  fi
+
   if [ "$runtime_backend" = "vfkit" ]; then
     if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
       exec env \
+        FIREBREAK_SYSTEMD_UNIT="$firebreak_systemd_unit" \
         MICROVM_VFKIT_HOST_META_DIR="$host_meta_dir" \
         MICROVM_VFKIT_HOST_CWD_DIR="$host_cwd" \
         MICROVM_VFKIT_SHARED_STATE_ROOT_DIR="$shared_state_root_host_dir" \
@@ -797,6 +803,7 @@ run_runner() {
         @RUNNER@ "$@"
     else
       exec env \
+        FIREBREAK_SYSTEMD_UNIT="$firebreak_systemd_unit" \
         MICROVM_VFKIT_HOST_META_DIR="$host_meta_dir" \
         MICROVM_VFKIT_HOST_CWD_DIR="$host_cwd" \
         MICROVM_VFKIT_SHARED_STATE_ROOT_DIR="$shared_state_root_host_dir" \
@@ -815,6 +822,7 @@ run_runner() {
 
   if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
     exec env \
+      FIREBREAK_SYSTEMD_UNIT="$firebreak_systemd_unit" \
       MICROVM_RO_STORE_SOCKET="$ro_store_socket" \
       MICROVM_CLOUD_HYPERVISOR_TAP_INTERFACE="$cloud_hypervisor_tap_interface" \
       MICROVM_HOST_RUNTIME_SOCKET="$hostruntime_socket" \
@@ -827,6 +835,7 @@ run_runner() {
       @RUNNER@ "$@"
   else
     env \
+      FIREBREAK_SYSTEMD_UNIT="$firebreak_systemd_unit" \
       MICROVM_RO_STORE_SOCKET="$ro_store_socket" \
       MICROVM_CLOUD_HYPERVISOR_TAP_INTERFACE="$cloud_hypervisor_tap_interface" \
       MICROVM_HOST_RUNTIME_SOCKET="$hostruntime_socket" \

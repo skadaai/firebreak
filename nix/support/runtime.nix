@@ -12,6 +12,7 @@ let
         coreutils
         gnugrep
         gnused
+        python3
       ];
     } ''
       mkdir -p "$out"
@@ -38,6 +39,37 @@ let
         substituteInPlace "$out/bin/microvm-run" \
           --replace-fail '-enable-kvm -cpu host,+x2apic,-sgx' '$(if [ -r /dev/kvm ]; then printf "%s" "-enable-kvm -cpu host,+x2apic,-sgx"; else printf "%s" "-cpu max"; fi)'
       fi
+
+      ${pkgs.python3}/bin/python3 - "$out/bin/microvm-run" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+match = re.search(r"--cmdline '([^']*)'", text)
+if match is None:
+    raise SystemExit("microvm-run compatibility wrapper could not locate cloud-hypervisor --cmdline")
+
+firebreak_cmdline_setup = (
+    "firebreak_cmdline='" + match.group(1) + "'\n"
+    "if [ -n \"''${FIREBREAK_SYSTEMD_UNIT:-}\" ]; then\n"
+    "  case \" $firebreak_cmdline \" in\n"
+    "    *\" systemd.unit=\"*)\n"
+    "      firebreak_cmdline=$(printf '%s\\n' \"$firebreak_cmdline\" | sed -E \"s@(^| )systemd\\\\.unit=[^ ]+@ systemd.unit=''${FIREBREAK_SYSTEMD_UNIT}@\")\n"
+    "      firebreak_cmdline=''${firebreak_cmdline# }\n"
+    "      ;;\n"
+    "    *)\n"
+    "      firebreak_cmdline=\"$firebreak_cmdline systemd.unit=''${FIREBREAK_SYSTEMD_UNIT}\"\n"
+    "      ;;\n"
+    "  esac\n"
+    "fi\n\n"
+)
+
+text = text.replace("runtime_args=$(", firebreak_cmdline_setup + "runtime_args=$(", 1)
+text = re.sub(r"--cmdline '([^']*)'", '--cmdline "$firebreak_cmdline"', text, count=1)
+path.write_text(text)
+PY
 
       cat > "$out/bin/firebreak-runner-extra-args" <<'EOF'
 firebreak_extra_args=()

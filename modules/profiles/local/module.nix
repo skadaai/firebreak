@@ -22,6 +22,7 @@ let
     "@CAT@" = "${pkgs.coreutils}/bin/cat";
     "@CHOWN@" = "${pkgs.coreutils}/bin/chown";
     "@COMMAND_SHELL_INIT_FILE@" = cfg.commandShellInitFile;
+    "@COLD_EXEC_BOOTSTRAP_WAIT_ENABLED@" = if cfg.coldExecBootstrapWaitEnable then "1" else "0";
     "@DEV_HOME@" = devHome;
     "@DEV_USER@" = cfg.devUser;
     "@AGENT_COMMAND@" = if cfg.defaultCommand == null then "" else cfg.defaultCommand;
@@ -378,6 +379,15 @@ in {
         StandardOutput = "journal+console";
         StandardError = "journal+console";
       };
+    };
+
+    systemd.targets.firebreak-cold-exec = {
+      description = "Minimal cold command execution target";
+      after = [ "basic.target" ];
+      wants = [
+        "basic.target"
+        "cold-command-exec.service"
+      ];
     };
 
     systemd.services.dev-bootstrap = lib.mkIf bootstrapEnabled {

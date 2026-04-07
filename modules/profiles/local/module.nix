@@ -46,6 +46,7 @@ let
     "@PYTHON3@" = "${pkgs.python3}/bin/python3";
     "@START_DIR_FILE@" = cfg.startDirFile;
     "@RUNUSER@" = "${pkgs.util-linux}/bin/runuser";
+    "@SETPRIV@" = "${pkgs.util-linux}/bin/setpriv";
     "@RUNTIME_BACKEND@" = cfg.runtimeBackend;
     "@SHARED_AGENT_WRAPPER_BIN_DIR@" = cfg.sharedToolWrapperBinDir;
     "@USERMOD@" = "${pkgs.shadow}/bin/usermod";

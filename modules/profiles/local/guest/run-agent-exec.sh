@@ -10,7 +10,25 @@ power_action=${FIREBREAK_AGENT_POWER_ACTION:-poweroff}
 bootstrap_wait_enabled=@COLD_EXEC_BOOTSTRAP_WAIT_ENABLED@
 
 if [ "$(@ID@ -u)" = "0" ]; then
-  exec @RUNUSER@ -u @DEV_USER@ -- "$0"
+  firebreak_profile_guest_mark run-agent-exec privilege-drop-start @DEV_USER@
+  target_uid=$(@ID@ -u @DEV_USER@)
+  target_gid=$(@ID@ -g @DEV_USER@)
+  exec env \
+    FIREBREAK_AGENT_PRIV_DROP_DONE=1 \
+    USER=@DEV_USER@ \
+    LOGNAME=@DEV_USER@ \
+    HOME=@DEV_HOME@ \
+    SHELL=@BASH@ \
+    @SETPRIV@ \
+      --reuid "$target_uid" \
+      --regid "$target_gid" \
+      --init-groups \
+      "$0"
+fi
+
+if [ "${FIREBREAK_AGENT_PRIV_DROP_DONE:-0}" = "1" ] && [ "$(@ID@ -u)" = "0" ]; then
+  echo "failed to drop privileges for firebreak-run-agent-exec" >&2
+  exit 1
 fi
 
 if ! [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then

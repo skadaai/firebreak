@@ -3,6 +3,7 @@ let
   cfg = config.workloadVm;
   backendSpec = runtimeBackends.specFor cfg.runtimeBackend;
   devHome = cfg.devHome;
+  systemBin = "${config.system.path}/bin";
   sharedStateRootsLib = renderTemplate {
     "@DEV_HOME@" = devHome;
   } ./guest/shared-state-roots.sh;
@@ -77,6 +78,7 @@ let
   scriptVars = {
     "@DEV_HOME@" = devHome;
     "@DEV_USER@" = cfg.devUser;
+    "@SYSTEM_BIN@" = systemBin;
     "@START_DIR_FILE@" = cfg.startDirFile;
     "@WORKER_KINDS_FILE@" = cfg.workerKindsFile;
     "@WORKER_LOCAL_STATE_DIR@" = cfg.workerLocalStateDir;

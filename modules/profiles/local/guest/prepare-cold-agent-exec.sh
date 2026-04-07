@@ -35,6 +35,21 @@ sync_guest_state_files() {
   chmod 0644 @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
 }
 
+sync_guest_session_request_files() {
+  printf '%s\n' "$command_request_session_mode" > @AGENT_SESSION_MODE_FILE@
+  chmod 0644 @AGENT_SESSION_MODE_FILE@
+
+  if [ -n "$command_request_command" ]; then
+    printf '%s\n' "$command_request_command" > @AGENT_COMMAND_FILE@
+    chmod 0644 @AGENT_COMMAND_FILE@
+  else
+    rm -f @AGENT_COMMAND_FILE@
+  fi
+
+  printf '%s\n' "$start_dir" > @START_DIR_FILE@
+  chmod 0644 @START_DIR_FILE@
+}
+
 if ! [ -d @WORKSPACE_MOUNT@ ]; then
   echo "workspace mount is unavailable at @WORKSPACE_MOUNT@" >&2
   exit 1
@@ -58,6 +73,7 @@ fi
 
 log_phase prepare-cold-agent-exec-start
 sync_guest_state_files
+sync_guest_session_request_files
 
 if [ "$start_dir" != "@WORKSPACE_MOUNT@" ]; then
   log_phase prepare-cold-agent-exec-bind-workspace-start

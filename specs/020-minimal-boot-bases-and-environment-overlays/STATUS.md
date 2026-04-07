@@ -33,7 +33,6 @@ Environment overlay implementation plus boot-base split.
 - the local Cloud Hypervisor boot base now strips more generic NixOS login and name-resolution machinery from the common path, including `resolvconf`, `nscd`, `logind`, `systemd-user-sessions`, `lastlog2-import`, and `getty.target`
 - the local Cloud Hypervisor boot base now disables D-Bus and the hostnamed/localed/timedated services that sit outside Firebreak's hot path
 - the local Cloud Hypervisor boot base now also disables the matching hostnamed/localed/timedated socket units, closing the remaining socket-activation regression on the Claude local path
-- the local Cloud Hypervisor boot base now overrides `systemd.package` to compile out hostnamed/localed/timedated/logind and bootloader support instead of only carrying and masking those helpers at runtime
 - package-owned overlay dependencies can now be declared as Nix package objects and normalized into overlay path prefixes by the shared base module, removing more ad hoc per-module `\"${pkg}/bin\"` wiring
 
 ## What remains open

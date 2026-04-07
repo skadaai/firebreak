@@ -13,13 +13,6 @@ let
   workerExecOutputMount = "${runtimeHostMount}/exec-output";
   workerBridgeMount = "${runtimeHostMount}/worker-bridge";
   hostMetaFsType = backendSpec.localHostMetaFsType;
-  localSystemdPackage = pkgs.systemd.override {
-    withBootloader = false;
-    withHostnamed = false;
-    withLocaled = false;
-    withLogind = false;
-    withTimedated = false;
-  };
 
   baseScriptVars = {
     "@AGENT_VM_NAME@" = cfg.name;
@@ -245,7 +238,6 @@ in {
     services.timesyncd.enable = lib.mkForce false;
     services.logrotate.enable = lib.mkForce false;
     services.nscd.enable = lib.mkForce false;
-    systemd.package = lib.mkForce localSystemdPackage;
 
     boot.initrd.systemd.suppressedUnits = [
       "systemd-vconsole-setup.service"

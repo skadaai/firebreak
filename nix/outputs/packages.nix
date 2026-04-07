@@ -29,6 +29,7 @@
   mkValidationPackage,
   mkValidationSmokePackage,
   mkWorkerFirebreakAttachSmokePackage,
+  mkWorkerClaudeVersionSmokePackage,
   mkWorkerInteractiveClaudeDirectExitSmokePackage,
   mkWorkerInteractiveClaudeDirectSmokePackage,
   mkWorkerInteractiveCodexDirectSmokePackage,
@@ -188,6 +189,11 @@
   firebreak-test-smoke-worker-firebreak-attach = mkWorkerFirebreakAttachSmokePackage {
     name = "firebreak-test-smoke-worker-firebreak-attach";
     workerPackage = "firebreak-worker";
+  };
+
+  firebreak-test-smoke-worker-claude-version = mkWorkerClaudeVersionSmokePackage {
+    name = "firebreak-test-smoke-worker-claude-version";
+    firebreakPackage = "firebreak";
   };
 
   firebreak-test-smoke-worker-interactive-claude-direct = mkWorkerInteractiveClaudeDirectSmokePackage {

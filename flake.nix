@@ -95,6 +95,7 @@
             mkValidationPackage
             mkValidationSmokePackage
             mkWorkerFirebreakAttachSmokePackage
+            mkWorkerClaudeVersionSmokePackage
             mkWorkerInteractiveClaudeDirectExitSmokePackage
             mkWorkerInteractiveClaudeDirectSmokePackage
             mkWorkerInteractiveCodexDirectSmokePackage

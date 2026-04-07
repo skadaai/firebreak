@@ -509,6 +509,22 @@ rec {
       } ../../modules/base/tests/test-smoke-worker-firebreak-attach.sh;
     };
 
+  mkWorkerClaudeVersionSmokePackage = { name, firebreakPackage }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        bash
+        coreutils
+        findutils
+        gnugrep
+        gnused
+      ];
+      text = renderTemplate {
+        "@AGENT_BIN@" = "${self.packages.${system}.${firebreakPackage}}/bin/${firebreakPackage}";
+        "@REPO_ROOT@" = builtins.toString ../../.;
+      } ../../modules/base/tests/test-smoke-worker-claude-version.sh;
+    };
+
   mkWorkerInteractiveClaudeDirectSmokePackage = { name, firebreakPackage }:
     pkgs.writeShellApplication {
       inherit name;

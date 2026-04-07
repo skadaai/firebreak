@@ -229,11 +229,14 @@ in {
     networking.useDHCP = lib.mkForce (cfg.runtimeBackend != "cloud-hypervisor");
     networking.useNetworkd = lib.mkForce (cfg.runtimeBackend != "cloud-hypervisor" || needsFullGuestNetwork);
     networking.firewall.enable = lib.mkForce false;
+    networking.resolvconf.enable = lib.mkForce needsFullGuestNetwork;
 
     security.enableWrappers = lib.mkForce false;
+    system.nssModules = lib.mkForce [ ];
     services.resolved.enable = lib.mkForce false;
     services.timesyncd.enable = lib.mkForce false;
     services.logrotate.enable = lib.mkForce false;
+    services.nscd.enable = lib.mkForce false;
 
     boot.initrd.systemd.suppressedUnits = [
       "systemd-vconsole-setup.service"
@@ -252,12 +255,16 @@ in {
     ];
     systemd.services."systemd-update-done".enable = lib.mkForce false;
     systemd.services."systemd-update-utmp".enable = lib.mkForce false;
+    systemd.services."lastlog2-import".enable = lib.mkForce false;
+    systemd.services."systemd-logind".enable = lib.mkForce false;
+    systemd.services."systemd-user-sessions".enable = lib.mkForce false;
     systemd.services.systemd-networkd.enable = lib.mkForce needsFullGuestNetwork;
     systemd.services.systemd-networkd-persistent-storage.enable = lib.mkForce needsFullGuestNetwork;
     systemd.timers."systemd-tmpfiles-clean".enable = lib.mkForce false;
     systemd.services.systemd-vconsole-setup.enable = lib.mkForce false;
     systemd.services.reload-systemd-vconsole-setup.enable = lib.mkForce false;
     systemd.network.enable = lib.mkForce needsFullGuestNetwork;
+    systemd.targets.getty.enable = lib.mkForce false;
 
     workloadVm.hostMetaMount = lib.mkDefault hostMetaMount;
     workloadVm.workerExecOutputMount = lib.mkDefault workerExecOutputMount;
@@ -441,6 +448,7 @@ in {
 
     systemd.services."serial-getty@ttyS0".enable = false;
     systemd.services."serial-getty@hvc0".enable = false;
+    systemd.services."getty@tty1".enable = false;
 
     environment.systemPackages =
       lib.optionals cfg.workerBridgeEnabled [

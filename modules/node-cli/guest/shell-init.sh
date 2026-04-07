@@ -29,6 +29,8 @@ if [ -r /run/firebreak-worker/worker-modes ]; then
   fi
 fi
 
+@SHELL_BOOTSTRAP_FUNCTIONS@
+
 firebreak_refresh_cli() {
   printf "Refreshing @NAME@ CLI...\n"
 

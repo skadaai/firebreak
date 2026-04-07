@@ -68,6 +68,20 @@ let
   proxyLocalUpstreamInstallArgs = lib.escapeShellArgs proxyLocalUpstreamSpecs;
   installBinNamesArgs = lib.escapeShellArgs installBinNames;
   proxyLocalUpstreamNamesArgs = lib.escapeShellArgs proxyLocalUpstreamNames;
+  shellBootstrapFunctionNames =
+    lib.unique ([ binName ] ++ installBinNames);
+  shellBootstrapFunctions =
+    lib.concatStringsSep "\n\n"
+      (map
+        (commandName: ''
+          ${commandName}() {
+            if command -v firebreak-bootstrap-wait >/dev/null 2>&1; then
+              firebreak-bootstrap-wait
+            fi
+            command ${commandName} "$@"
+          }
+        '')
+        shellBootstrapFunctionNames);
   upstreamInstallBinScriptSnippet =
     lib.concatStringsSep "\n"
       (map
@@ -148,6 +162,9 @@ let
       workspace=${cfg.workspaceMount}
       exec bash -lc '
         set -eu
+        if command -v firebreak-bootstrap-wait >/dev/null 2>&1; then
+          firebreak-bootstrap-wait
+        fi
         ${launchEnvironmentExports}
         cd "$1"
         ${launchCommand}
@@ -334,6 +351,7 @@ PY
     "@PACKAGE_SPEC@" = packageSpec;
     "@POST_INSTALL_SCRIPT@" = postInstallScript;
     "@READY_COMMAND_NAME@" = readyCommandName;
+    "@SHELL_BOOTSTRAP_FUNCTIONS@" = shellBootstrapFunctions;
     "@TMPDIR@" = installTmp;
     "@XDG_CACHE_HOME@" = xdgCacheHome;
     "@XDG_CONFIG_HOME@" = xdgConfigHome;

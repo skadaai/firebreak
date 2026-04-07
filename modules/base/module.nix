@@ -659,9 +659,8 @@ in {
     '';
 
     systemd.services.dev-bootstrap = lib.mkIf bootstrapEnabled {
-      description = "Install persistent developer tools before login";
+      description = "Install persistent developer tools";
       wantedBy = [ "multi-user.target" ];
-      before = [ "getty.target" "serial-getty@ttyS0.service" ];
       after = [ "local-fs.target" ];
       environment = lib.mkIf cfg.guestEgress.enable {
         HTTP_PROXY = "http://127.0.0.1:${toString cfg.guestEgress.proxyPort}";
@@ -675,8 +674,8 @@ in {
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
-        StandardOutput = "journal+console";
-        StandardError = "journal+console";
+        StandardOutput = "journal";
+        StandardError = "journal";
       } // lib.optionalAttrs (cfg.bootstrapConditionScript != null) {
         ExecCondition = cfg.bootstrapConditionScript;
       };

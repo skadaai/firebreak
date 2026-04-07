@@ -267,6 +267,7 @@ worker_bridge_dir=$host_runtime_share_dir/worker-bridge
 worker_bridge_server_log=$host_runtime_dir/worker-bridge.log
 worker_bridge_server_script=$host_runtime_dir/firebreak-worker-bridge-host.sh
 worker_helper_script=$host_runtime_dir/firebreak-worker.sh
+worker_project_config_script=$host_runtime_dir/firebreak-project-config.sh
 worker_bridge_enabled=@WORKER_BRIDGE_ENABLED@
 wrapper_trace_log=$host_runtime_dir/wrapper-trace.log
 profile_host_events_file=$host_runtime_dir/profile-host.tsv
@@ -627,13 +628,16 @@ EOF
 trace_wrapper "wrapper-start"
 
 if [ "$worker_bridge_enabled" = "1" ]; then
+  cat >"$worker_project_config_script" <<'__FIREBREAK_PROJECT_CONFIG_SCRIPT__'
+@FIREBREAK_PROJECT_CONFIG_LIB@
+__FIREBREAK_PROJECT_CONFIG_SCRIPT__
   cat >"$worker_helper_script" <<'__FIREBREAK_WORKER_SCRIPT__'
 @FIREBREAK_WORKER_LIB@
 __FIREBREAK_WORKER_SCRIPT__
   cat >"$worker_bridge_server_script" <<'__FIREBREAK_WORKER_BRIDGE_HOST_SCRIPT__'
 @FIREBREAK_WORKER_BRIDGE_HOST_LIB@
 __FIREBREAK_WORKER_BRIDGE_HOST_SCRIPT__
-  chmod 0555 "$worker_helper_script" "$worker_bridge_server_script"
+  chmod 0555 "$worker_project_config_script" "$worker_helper_script" "$worker_bridge_server_script"
 fi
 
 spawn_virtiofsd() {

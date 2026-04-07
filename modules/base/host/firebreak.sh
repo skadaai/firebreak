@@ -8,6 +8,7 @@ fi
 command=${1:-}
 
 . "$firebreak_libexec_dir/firebreak-project-config.sh"
+. "$firebreak_libexec_dir/firebreak-environment.sh"
 . "$firebreak_libexec_dir/firebreak-init.sh"
 . "$firebreak_libexec_dir/firebreak-doctor.sh"
 
@@ -325,6 +326,7 @@ Skada Firebreak
 usage:
   firebreak init [--force] [--stdout] [--interactive] [--non-interactive]
   firebreak doctor [--verbose] [--json]
+  firebreak environment resolve [--json]
   firebreak vms [--json]
   firebreak run <vm> [--shell] [--launch-mode <run|shell>] [--worker-mode <vm|local|name=vm|name=local>] [-- <vm args...>]
   firebreak worker <subcommand> ...
@@ -333,6 +335,7 @@ usage:
 Available commands:
   init        Interactively write Firebreak project defaults
   doctor      Explain resolved config and launch readiness
+  environment Resolve the additive Firebreak environment overlay
   vms         List the public Firebreak VM workloads
   run         Launch a public Firebreak VM workload
   worker      Manage host-brokered Firebreak workers
@@ -350,6 +353,26 @@ case "$command" in
   doctor)
     shift
     firebreak_doctor_command "$@"
+    ;;
+  environment)
+    shift
+    environment_subcommand=${1:-}
+    case "$environment_subcommand" in
+      resolve)
+        shift
+        firebreak_environment_resolve_command "$@"
+        ;;
+      ""|--help|-h|help)
+        cat <<'EOF'
+usage:
+  firebreak environment resolve [--json]
+EOF
+        ;;
+      *)
+        echo "unknown firebreak environment subcommand: $environment_subcommand" >&2
+        exit 1
+        ;;
+    esac
     ;;
   vms)
     shift

@@ -253,6 +253,12 @@ firebreak_doctor_command() {
   done
 
   firebreak_load_project_config
+  FIREBREAK_ENVIRONMENT_CACHE_ROOT=${XDG_STATE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.local/state}/firebreak/environments
+  firebreak_resolve_environment
+  environment_reused=no
+  if [ -f "$FIREBREAK_RESOLVED_ENVIRONMENT_ENV_FILE" ] && [ -f "$FIREBREAK_RESOLVED_ENVIRONMENT_MANIFEST_FILE" ]; then
+    environment_reused=yes
+  fi
 
   cwd_whitespace=no
   case "$PWD" in
@@ -295,12 +301,15 @@ EOF
     if [ "$doctor_verbose" = "1" ]; then
       verbose_json_fields=$(cat <<EOF
 ,
-  "details": {
-    "cwd": "$(firebreak_doctor_json_escape "$PWD")",
-    "project_root_source": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_PROJECT_ROOT_SOURCE")",
-    "git_common_dir": "$(firebreak_doctor_json_escape "${git_common_dir:-unknown}")",
-    "ignored_keys": [$(firebreak_doctor_json_array "$FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS")]
-  }
+    "details": {
+      "cwd": "$(firebreak_doctor_json_escape "$PWD")",
+      "project_root_source": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_PROJECT_ROOT_SOURCE")",
+      "git_common_dir": "$(firebreak_doctor_json_escape "${git_common_dir:-unknown}")",
+      "ignored_keys": [$(firebreak_doctor_json_array "$FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS")],
+      "environment_identity": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_IDENTITY")",
+      "environment_cache_dir": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_CACHE_DIR")",
+      "environment_env_file": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_ENV_FILE")"
+    }
 EOF
 )
     fi
@@ -316,6 +325,18 @@ EOF
   "cwd": "$(firebreak_doctor_json_escape "$PWD")",
   "cwd_whitespace": $([ "$cwd_whitespace" = "yes" ] && printf 'true' || printf 'false'),
   "launch_mode": "$(firebreak_doctor_json_escape "$launch_mode")",
+  "environment": {
+    "mode": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_MODE")",
+    "source": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_SOURCE")",
+    "kind": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_KIND")",
+    "installable": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_INSTALLABLE")",
+    "identity": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_IDENTITY")",
+    "cache_dir": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_CACHE_DIR")",
+    "env_file": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_ENV_FILE")",
+    "project_nix_enabled": $([ "$FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_ENABLED" = "1" ] && printf 'true' || printf 'false'),
+    "project_nix_source": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_SOURCE")",
+    "reused": $([ "$environment_reused" = "yes" ] && printf 'true' || printf 'false')
+  },
   "git_common_dir": "$(firebreak_doctor_json_escape "${git_common_dir:-unknown}")",
   "primary_checkout": "$(firebreak_doctor_json_escape "$primary_checkout")",
   "kvm": "$(firebreak_doctor_json_escape "$kvm_state")",
@@ -348,6 +369,8 @@ EOF
   firebreak_doctor_report_line "host_platform" "$host_platform"
   firebreak_doctor_report_line "local_runtime" "$local_runtime"
   firebreak_doctor_report_line "launch_mode" "$launch_mode"
+  firebreak_doctor_report_line "environment" "$FIREBREAK_RESOLVED_ENVIRONMENT_SOURCE/$FIREBREAK_RESOLVED_ENVIRONMENT_KIND (${FIREBREAK_RESOLVED_ENVIRONMENT_IDENTITY})"
+  firebreak_doctor_report_line "environment_cache" "$environment_reused ($FIREBREAK_RESOLVED_ENVIRONMENT_CACHE_DIR)"
   firebreak_doctor_report_line "cwd_whitespace" "$cwd_whitespace"
   firebreak_doctor_report_line "primary_checkout" "$primary_checkout"
   firebreak_doctor_report_line "kvm" "$kvm_state"
@@ -364,6 +387,8 @@ EOF
     firebreak_doctor_report_line "cwd" "$PWD"
     firebreak_doctor_report_line "git_common_dir" "${git_common_dir:-unknown}"
     firebreak_doctor_report_line "ignored_keys" "${FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS:-none}"
+    firebreak_doctor_report_line "environment_installable" "${FIREBREAK_RESOLVED_ENVIRONMENT_INSTALLABLE:-none}"
+    firebreak_doctor_report_line "environment_env_file" "$FIREBREAK_RESOLVED_ENVIRONMENT_ENV_FILE"
     firebreak_doctor_report_line "codex_selector" "$codex_source_var / $codex_slot_source_var"
     firebreak_doctor_report_line "claude_selector" "$claude_source_var / $claude_slot_source_var"
   fi
@@ -412,6 +437,9 @@ EOF
   fi
   if [ -n "$FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS" ]; then
     printf '%s\n' "- Remove unsupported keys from .firebreak.env or keep them in the shell environment instead."
+  fi
+  if [ "$FIREBREAK_RESOLVED_ENVIRONMENT_SOURCE" = "project-nix" ] && [ "$environment_reused" != "yes" ]; then
+    printf '%s\n' "- Run 'firebreak environment resolve' once to materialize the current project environment overlay cache."
   fi
   if [ "$cwd_whitespace" != "yes" ] \
     && [ "$primary_checkout" != "no" ] \

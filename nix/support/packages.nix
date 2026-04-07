@@ -667,6 +667,7 @@ rec {
         install -m 0555 ${../../modules/base/host/firebreak.sh} "$out/libexec/firebreak.sh"
         install -m 0555 ${../../modules/base/host/firebreak-init.sh} "$out/libexec/firebreak-init.sh"
         install -m 0555 ${../../modules/base/host/firebreak-doctor.sh} "$out/libexec/firebreak-doctor.sh"
+        install -m 0555 ${../../modules/base/host/firebreak-environment.sh} "$out/libexec/firebreak-environment.sh"
         install -m 0555 ${../../modules/base/host/firebreak-project-config.sh} "$out/libexec/firebreak-project-config.sh"
         install -m 0555 ${../../modules/base/host/firebreak-worker.sh} "$out/libexec/firebreak-worker.sh"
       '';

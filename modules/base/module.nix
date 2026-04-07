@@ -13,6 +13,7 @@ let
     else
       "${devHome}/.local/bin";
   sharedStateRootsEnvFile = "${cfg.hostMetaMount}/firebreak-shared-state.env";
+  environmentOverlayEnvFile = "${cfg.hostMetaMount}/firebreak-environment.env";
   renderCredentialFileBindings = bindings:
     lib.concatStringsSep "\n" (map
       (binding: "${binding.slotPath}\t${binding.runtimePath}\t${if binding.required then "1" else "0"}")
@@ -101,6 +102,7 @@ let
     "@SHARED_TOOL_WRAPPER_ENV_EXPORTS@" = lib.optionalString (sharedToolWrapperBinDir != "") ''
       export FIREBREAK_SHARED_TOOL_WRAPPER_BIN_DIR=${lib.escapeShellArg sharedToolWrapperBinDir}
     '';
+    "@ENVIRONMENT_OVERLAY_ENV_FILE@" = environmentOverlayEnvFile;
   };
 
   baseShellInit = renderTemplate scriptVars ./guest/shell-init.sh;
@@ -261,6 +263,54 @@ in {
       type = types.nullOr types.str;
       default = null;
       description = "Optional host-side script used by the local runtime wrapper to preseed a persistent tool-runtime directory before the guest bootstrap path runs.";
+    };
+
+    environmentOverlay = mkOption {
+      default = { };
+      description = "Host-resolved additive environment overlay contract for package defaults and optional project-local Nix inputs.";
+      type = types.submodule ({ ... }: {
+        options = {
+          enable = mkOption {
+            type = types.bool;
+            default = false;
+            description = "Whether Firebreak materializes the additive environment overlay contract for this workload.";
+          };
+
+          package = mkOption {
+            default = { };
+            description = "Package-declared additive environment inputs exported by Firebreak itself.";
+            type = types.submodule ({ ... }: {
+              options = {
+                pathPrefixes = mkOption {
+                  type = types.listOf types.str;
+                  default = [ ];
+                  description = "Store-backed bin directories prepended to PATH by the resolved environment overlay.";
+                };
+
+                exports = mkOption {
+                  type = types.attrsOf types.str;
+                  default = { };
+                  description = "Additive environment variables exported by the resolved environment overlay.";
+                };
+              };
+            });
+          };
+
+          projectNix = mkOption {
+            default = { };
+            description = "Optional constrained project-local Nix environment detection and resolution.";
+            type = types.submodule ({ ... }: {
+              options = {
+                enable = mkOption {
+                  type = types.bool;
+                  default = false;
+                  description = "Whether Firebreak should attempt constrained project-local flake environment resolution for this workload.";
+                };
+              };
+            });
+          };
+        };
+      });
     };
 
     defaultCommand = mkOption {

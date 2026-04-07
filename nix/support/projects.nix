@@ -350,6 +350,10 @@ __FIREBREAK_WRAPPER_INFO__
           in {
             workloadVm = {
               brandingTagline = tagline;
+              environmentOverlay = {
+                enable = true;
+                projectNix.enable = true;
+              };
               extraSystemPackages = tools ++ [ launchScript readyScript ];
               bootstrapPackages = sharedBootstrapPackages ++ bootstrapTools;
               bootstrapConditionScript = "${bootstrapConditionScript}";

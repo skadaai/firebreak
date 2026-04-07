@@ -177,6 +177,10 @@ EOF
     guestEgressEnabled ? false,
     guestEgressProxyPort ? 3128,
     toolRuntimeSeedScript ? "",
+    environmentOverlayEnable ? true,
+    environmentOverlayPackagePathsJson ? "[]",
+    environmentOverlayPackageExportsJson ? "{}",
+    environmentOverlayProjectNixEnabled ? false,
   }:
     let
       runnerWrapper = pkgs.writeShellScript "firebreak-runner-wrapper" ''
@@ -193,6 +197,7 @@ EOF
         "@VAR_VOLUME_IMAGE@" = varVolumeImage;
         "@VAR_VOLUME_SEED_IMAGE@" = varVolumeSeedImage;
         "@DEFAULT_AGENT_COMMAND@" = defaultAgentCommand;
+        "@PACKAGE_NAME@" = name;
         "@RUNNER@" = "${runnerWrapper}";
         "@STATE_SUBDIR@" = agentConfigSubdir;
         "@DEFAULT_STATE_ROOT@" = defaultAgentConfigHostDir;
@@ -207,6 +212,10 @@ EOF
         "@GUEST_EGRESS_PROXY_PORT@" = toString guestEgressProxyPort;
         "@FIREBREAK_FLAKE_REF@" = "path:${builtins.toString ../../.}";
         "@WORKER_BRIDGE_ENABLED@" = if workerBridgeEnabled then "1" else "0";
+        "@ENVIRONMENT_OVERLAY_ENABLE@" = if environmentOverlayEnable then "1" else "0";
+        "@ENVIRONMENT_OVERLAY_PACKAGE_PATHS_JSON@" = environmentOverlayPackagePathsJson;
+        "@ENVIRONMENT_OVERLAY_PACKAGE_EXPORTS_JSON@" = environmentOverlayPackageExportsJson;
+        "@ENVIRONMENT_OVERLAY_PROJECT_NIX_ENABLED@" = if environmentOverlayProjectNixEnabled then "1" else "0";
       };
       renderedCloudHypervisorNetworkLib = renderTemplate
         (wrapperTemplateVars // {
@@ -244,6 +253,7 @@ EOF
         ];
       text = renderTemplate (wrapperTemplateVars // {
         "@FIREBREAK_PROJECT_CONFIG_LIB@" = builtins.readFile ../../modules/base/host/firebreak-project-config.sh;
+        "@FIREBREAK_ENVIRONMENT_LIB@" = builtins.readFile ../../modules/base/host/firebreak-environment.sh;
         "@FIREBREAK_WORKER_LIB@" = builtins.readFile ../../modules/base/host/firebreak-worker.sh;
         "@FIREBREAK_WORKER_BRIDGE_HOST_LIB@" = builtins.readFile ../../modules/profiles/local/host/firebreak-worker-bridge-host.sh;
         "@FIREBREAK_CLOUD_HYPERVISOR_NETWORK_LIB@" = renderedCloudHypervisorNetworkLib;
@@ -279,6 +289,10 @@ EOF
     guestEgressEnabled ? false,
     guestEgressProxyPort ? 3128,
     toolRuntimeSeedScript ? "",
+    environmentOverlayEnable ? true,
+    environmentOverlayPackagePathsJson ? "[]",
+    environmentOverlayPackageExportsJson ? "{}",
+    environmentOverlayProjectNixEnabled ? false,
   }:
     mkWorkloadPackage {
       inherit
@@ -302,7 +316,11 @@ EOF
         localPublishedHostPortsJson
         guestEgressEnabled
         guestEgressProxyPort
-        toolRuntimeSeedScript;
+        toolRuntimeSeedScript
+        environmentOverlayEnable
+        environmentOverlayPackagePathsJson
+        environmentOverlayPackageExportsJson
+        environmentOverlayProjectNixEnabled;
       runner = runnerPackage;
     };
 
@@ -378,6 +396,13 @@ EOF
             ""
           else
             nixosConfiguration.config.workloadVm.toolRuntimeSeedScript;
+        environmentOverlayEnable = nixosConfiguration.config.workloadVm.environmentOverlay.enable;
+        environmentOverlayPackagePathsJson =
+          builtins.toJSON nixosConfiguration.config.workloadVm.environmentOverlay.package.pathPrefixes;
+        environmentOverlayPackageExportsJson =
+          builtins.toJSON nixosConfiguration.config.workloadVm.environmentOverlay.package.exports;
+        environmentOverlayProjectNixEnabled =
+          nixosConfiguration.config.workloadVm.environmentOverlay.projectNix.enable;
       };
     in {
       inherit nixosConfiguration package runnerPackage varVolumeSeedImage;

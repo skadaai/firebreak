@@ -21,6 +21,10 @@ FIREBREAK_STATE_MODE=host
 # FIREBREAK_WORKER_MODE=local
 # FIREBREAK_WORKER_MODES=codex=vm,claude=local
 
+# Optional additive environment overlay selector:
+# FIREBREAK_ENVIRONMENT_MODE=auto
+# FIREBREAK_ENVIRONMENT_INSTALLABLE=.#devShells.x86_64-linux.default
+
 # Optional shared host state root when FIREBREAK_STATE_MODE=host or workspace.
 # Firebreak resolves per-tool and per-workspace subdirectories under this root:
 # FIREBREAK_STATE_ROOT=~/.firebreak

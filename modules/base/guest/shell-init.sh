@@ -1,4 +1,8 @@
 if [ "$USER" = "@DEV_USER@" ]; then
+  if [ -r "@ENVIRONMENT_OVERLAY_ENV_FILE@" ]; then
+    # shellcheck disable=SC1090
+    . "@ENVIRONMENT_OVERLAY_ENV_FILE@"
+  fi
   export PS1='[\u@\h:\w]\$ '
   @SHARED_STATE_ROOT_ENV_EXPORTS@
   @SHARED_CREDENTIAL_SLOT_ENV_EXPORTS@

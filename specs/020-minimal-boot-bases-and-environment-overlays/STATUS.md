@@ -1,5 +1,5 @@
 ---
-status: draft
+status: active
 last_updated: 2026-04-07
 ---
 
@@ -7,7 +7,7 @@ last_updated: 2026-04-07
 
 ## Current phase
 
-Design definition.
+Environment overlay implementation.
 
 ## What is landed already
 
@@ -16,11 +16,14 @@ Design definition.
 - packaged Node CLIs now use a persistent tool-runtime directory
 - local tool bootstrap has been moved off the shell critical path
 - local packaged Node CLI tool bootstrap now begins on the host and overlaps with guest boot
+- Firebreak now has a formal additive environment-overlay contract in the shared VM options
+- Firebreak CLI and `firebreak doctor` can resolve and inspect environment identities and cache paths
+- Firebreak can materialize a cached environment overlay from explicit installables or constrained project-local flake defaults
+- local wrappers can export resolved environment overlays into the guest through host metadata
+- workspace-style project artifacts now opt into constrained project-local flake environment resolution
 
 ## What remains open
 
-- defining the formal environment overlay contract
-- defining the environment identity and cache layout
-- supporting project-local Nix declarations explicitly
+- continuing the package-default environment model beyond the initial overlay contract
 - splitting Firebreak into smaller `command` and `interactive` boot bases
 - continuing the kernel/initrd and guest service-graph reduction against those bases

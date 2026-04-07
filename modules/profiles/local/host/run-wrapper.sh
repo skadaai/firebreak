@@ -1,6 +1,7 @@
 set -eu
 
 @FIREBREAK_PROJECT_CONFIG_LIB@
+@FIREBREAK_ENVIRONMENT_LIB@
 @FIREBREAK_CLOUD_HYPERVISOR_NETWORK_LIB@
 @FIREBREAK_CLOUD_HYPERVISOR_VSOCK_LIB@
 @FIREBREAK_LOCAL_COMMAND_REQUEST_LIB@
@@ -26,7 +27,12 @@ agent_session_mode=agent
 default_agent_command=@DEFAULT_AGENT_COMMAND@
 runtime_backend=@RUNTIME_BACKEND@
 runtime_generation=@RUNNER@
+package_name=@PACKAGE_NAME@
 tool_runtime_seed_script=@TOOL_RUNTIME_SEED_SCRIPT@
+environment_overlay_enabled=@ENVIRONMENT_OVERLAY_ENABLE@
+environment_overlay_package_paths_json='@ENVIRONMENT_OVERLAY_PACKAGE_PATHS_JSON@'
+environment_overlay_package_exports_json='@ENVIRONMENT_OVERLAY_PACKAGE_EXPORTS_JSON@'
+environment_overlay_project_nix_enabled=@ENVIRONMENT_OVERLAY_PROJECT_NIX_ENABLED@
 agent_command_override=""
 shell_command_override=${AGENT_VM_COMMAND:-}
 shared_state_root_host_dir=""
@@ -622,6 +628,7 @@ if [ "$var_volume_enabled" = "1" ]; then
   seed_var_volume_if_missing "$runner_workdir/$var_volume_image_name"
 fi
 shared_state_root_env_file=$host_meta_dir/firebreak-shared-state.env
+environment_overlay_env_file=$host_meta_dir/firebreak-environment.env
 : >"$wrapper_trace_log"
 : >"$profile_host_events_file"
 : >"$attach_pty_log"
@@ -735,6 +742,7 @@ printf '%s\n' "$host_uid" > "$host_meta_dir/host-uid"
 printf '%s\n' "$host_gid" > "$host_meta_dir/host-gid"
 printf '%s\n' "$agent_session_mode" > "$host_meta_dir/worker-session-mode"
 : > "$shared_state_root_env_file"
+: > "$environment_overlay_env_file"
 append_optional_env_default "FIREBREAK_STATE_MODE" "${FIREBREAK_STATE_MODE:-}"
 append_optional_env_default "FIREBREAK_STATE_ROOT" "${FIREBREAK_STATE_ROOT:-}"
 append_matching_env_defaults "_STATE_MODE"
@@ -757,6 +765,38 @@ if [ -n "$agent_command_override" ] && [ "$agent_session_mode" != "agent-exec" ]
 fi
 if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
   write_command_request
+fi
+
+if [ "$environment_overlay_enabled" = "1" ]; then
+  case "$agent_session_mode" in
+    agent-exec|agent-attach-exec|agent-service)
+      firebreak_boot_base=command
+      ;;
+    *)
+      firebreak_boot_base=interactive
+      ;;
+  esac
+  FIREBREAK_ENVIRONMENT_CACHE_ROOT=$firebreak_state_root/environments \
+    FIREBREAK_ENVIRONMENT_PROJECT_NIX_ENABLED=$environment_overlay_project_nix_enabled \
+    FIREBREAK_PACKAGE_ENVIRONMENT_PATHS_JSON=$environment_overlay_package_paths_json \
+    FIREBREAK_PACKAGE_ENVIRONMENT_EXPORTS_JSON=$environment_overlay_package_exports_json \
+    FIREBREAK_PACKAGE_IDENTITY=$package_name \
+    FIREBREAK_BOOT_BASE=$firebreak_boot_base \
+    FIREBREAK_RUNTIME_GENERATION=$runtime_generation \
+    FIREBREAK_HOST_SYSTEM=@HOST_SYSTEM@ \
+    firebreak_resolve_environment
+  FIREBREAK_ENVIRONMENT_CACHE_ROOT=$firebreak_state_root/environments \
+    FIREBREAK_ENVIRONMENT_PROJECT_NIX_ENABLED=$environment_overlay_project_nix_enabled \
+    FIREBREAK_PACKAGE_ENVIRONMENT_PATHS_JSON=$environment_overlay_package_paths_json \
+    FIREBREAK_PACKAGE_ENVIRONMENT_EXPORTS_JSON=$environment_overlay_package_exports_json \
+    FIREBREAK_PACKAGE_IDENTITY=$package_name \
+    FIREBREAK_BOOT_BASE=$firebreak_boot_base \
+    FIREBREAK_RUNTIME_GENERATION=$runtime_generation \
+    FIREBREAK_HOST_SYSTEM=@HOST_SYSTEM@ \
+    firebreak_materialize_environment_cache
+  if [ -r "$FIREBREAK_RESOLVED_ENVIRONMENT_ENV_FILE" ]; then
+    cp "$FIREBREAK_RESOLVED_ENVIRONMENT_ENV_FILE" "$environment_overlay_env_file"
+  fi
 fi
 
 cloud_hypervisor_setup_guest_egress

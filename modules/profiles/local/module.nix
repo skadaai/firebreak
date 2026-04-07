@@ -232,6 +232,28 @@ in {
     boot.initrd.systemd.suppressedUnits = [
       "systemd-vconsole-setup.service"
     ];
+    boot.kernelPatches = lib.optional (cfg.runtimeBackend == "cloud-hypervisor") {
+      name = "firebreak-local-cloud-hypervisor-kernel-trim";
+      patch = null;
+      structuredExtraConfig = with lib.kernel; {
+        ACPI = lib.mkForce yes;
+        XEN_PVH = lib.mkForce yes;
+        VIRTIO_BLK = lib.mkForce yes;
+        VIRTIO_CONSOLE = lib.mkForce yes;
+        VIRTIO_FS = lib.mkForce yes;
+        VIRTIO_NET = lib.mkForce yes;
+        VIRTIO_VSOCKETS = lib.mkForce yes;
+        VSOCKETS = lib.mkForce yes;
+
+        DRM = lib.mkForce no;
+        FB = lib.mkForce no;
+        FRAMEBUFFER_CONSOLE = lib.mkForce no;
+        HID = lib.mkForce no;
+        INPUT = lib.mkForce no;
+        SND = lib.mkForce no;
+        USB_SUPPORT = lib.mkForce no;
+      };
+    };
     boot.kernelModules = lib.mkForce [ ];
     boot.blacklistedKernelModules = [
       "drm"

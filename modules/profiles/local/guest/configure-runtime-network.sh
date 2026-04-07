@@ -6,6 +6,8 @@ guest_ipv4_cidr_file=@HOST_META_MOUNT@/network-guest-ipv4-cidr
 gateway_ipv4_file=@HOST_META_MOUNT@/network-gateway-ipv4
 dns_servers_file=@HOST_META_MOUNT@/network-dns-servers
 
+ip link set lo up 2>/dev/null || true
+
 if ! [ -r "$guest_ipv4_cidr_file" ]; then
   firebreak_profile_guest_mark configure-runtime-network skipped missing-guest-ipv4
   exit 0

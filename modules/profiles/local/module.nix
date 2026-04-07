@@ -94,6 +94,7 @@ let
             ((forward.proto or "tcp") == "tcp") &&
             ((forward.guest or { }) ? port))
           localPublishedHostPorts));
+  needsFullGuestNetwork = builtins.elem "full-guest-network" cfg.requiredCapabilities;
   cloudHypervisorVsockEnabled =
     cfg.runtimeBackend == "cloud-hypervisor" && (
       cfg.guestEgress.enable ||
@@ -222,6 +223,7 @@ in {
     users.users.${cfg.devUser}.password = "";
 
     networking.useDHCP = lib.mkForce (cfg.runtimeBackend != "cloud-hypervisor");
+    networking.useNetworkd = lib.mkForce (cfg.runtimeBackend != "cloud-hypervisor" || needsFullGuestNetwork);
     networking.firewall.enable = lib.mkForce false;
 
     security.enableWrappers = lib.mkForce false;
@@ -246,9 +248,12 @@ in {
     ];
     systemd.services."systemd-update-done".enable = lib.mkForce false;
     systemd.services."systemd-update-utmp".enable = lib.mkForce false;
+    systemd.services.systemd-networkd.enable = lib.mkForce needsFullGuestNetwork;
+    systemd.services.systemd-networkd-persistent-storage.enable = lib.mkForce needsFullGuestNetwork;
     systemd.timers."systemd-tmpfiles-clean".enable = lib.mkForce false;
     systemd.services.systemd-vconsole-setup.enable = lib.mkForce false;
     systemd.services.reload-systemd-vconsole-setup.enable = lib.mkForce false;
+    systemd.network.enable = lib.mkForce needsFullGuestNetwork;
 
     workloadVm.hostMetaMount = lib.mkDefault hostMetaMount;
     workloadVm.workerExecOutputMount = lib.mkDefault workerExecOutputMount;

@@ -261,7 +261,7 @@ firebreak_doctor_command() {
       ;;
   esac
 
-  launch_mode=${FIREBREAK_LAUNCH_MODE:-${FIREBREAK_VM_MODE:-run}}
+  launch_mode=${FIREBREAK_LAUNCH_MODE:-run}
   git_common_dir=$(firebreak_doctor_git_common_dir)
   primary_checkout=$(firebreak_doctor_primary_checkout_state "$git_common_dir")
   host_platform=$(firebreak_doctor_host_platform)

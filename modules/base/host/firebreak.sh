@@ -123,7 +123,7 @@ firebreak_run_command() {
   esac
   shift
 
-  requested_launch_mode=${FIREBREAK_LAUNCH_MODE:-${FIREBREAK_VM_MODE:-}}
+  requested_launch_mode=${FIREBREAK_LAUNCH_MODE:-}
   requested_worker_mode=${FIREBREAK_WORKER_MODE:-}
   requested_worker_modes=${FIREBREAK_WORKER_MODES:-}
 

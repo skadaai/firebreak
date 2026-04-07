@@ -63,6 +63,20 @@ rec {
         printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
       }
 
+      worker_command_needs_attach() {
+        if [ "$#" -eq 0 ]; then
+          return 0
+        fi
+
+        case "$1" in
+          --help|-h|help|--version|-V|version)
+            return 1
+            ;;
+        esac
+
+        return 0
+      }
+
       resolve_command_worker_mode() {
         raw_modes=$1
         if [ -z "$raw_modes" ]; then
@@ -135,7 +149,10 @@ __FIREBREAK_WRAPPER_INFO__
       esac
 
       workspace=$PWD
-      exec firebreak worker run --kind ${lib.escapeShellArg kind} --workspace "$workspace" --attach -- "$@"
+      if worker_command_needs_attach "$@"; then
+        exec firebreak worker run --kind ${lib.escapeShellArg kind} --workspace "$workspace" --attach -- "$@"
+      fi
+      exec firebreak worker run --kind ${lib.escapeShellArg kind} --workspace "$workspace" -- "$@"
     '';
 
   mkWorkspaceProjectArtifacts = {

@@ -529,7 +529,7 @@ cleanup() {
   if [ "$local_controller_mode" = "daemon" ]; then
     local_controller_clear_state
   fi
-  rm -f \
+  remove_runtime_socket_artifacts \
     "$control_socket" \
     "$ro_store_socket" \
     "$hostcwd_socket" \
@@ -545,6 +545,13 @@ cleanup() {
   fi
 }
 trap cleanup EXIT INT TERM
+
+remove_runtime_socket_artifacts() {
+  for runtime_socket_path in "$@"; do
+    [ -n "$runtime_socket_path" ] || continue
+    rm -f "$runtime_socket_path" "$runtime_socket_path.pid"
+  done
+}
 
 seed_var_volume_if_missing() {
   image_path=$1
@@ -578,7 +585,7 @@ if [ "$host_agent_tools_dir" != "$default_host_agent_tools_dir" ] \
   trace_wrapper "agent-tools-seeded"
 fi
 rm -f "$control_socket"
-rm -f \
+remove_runtime_socket_artifacts \
   "$ro_store_socket" \
   "$hostcwd_socket" \
   "$hostruntime_socket" \

@@ -6,137 +6,142 @@ tags:
   - documentation
   - external-tools
   - cli
-version: 2.2.0
+version: 3.0.0
 ---
 
 # DeepWiki Skill
 
 ## Overview
 
-DeepWiki (deepwiki.com) provides AI-generated wiki-style answers over public GitHub repositories. Use it before writing code against an external library, framework, tool, or API. It reflects the actual current state of the codebase — not your training data.
+DeepWiki provides grounded answers over public GitHub repositories. Use it before writing code against an external tool, library, framework, or API.
+
+It reflects the actual current state of the codebase rather than your outdated training data.
 
 Use it **aggressively and early**. Do not rely on memorised knowledge for external tools; it may be stale, wrong, or version-mismatched.
 
-The wrapper scripts in this skill are the default interface. They hide the raw JSON shape and jq extraction so agents can ask one question with one command.
+In this repository, the primary interface is the Bun TypeScript client at `scripts/deepwiki.ts`. It submits a query once, polls the canonical `/ada/query/:id` endpoint until completion, and renders the final answer from the completed query JSON. Progress is derived from intermediate response events and goes to `stderr`; final answer text goes to `stdout`.
 
----
+Always try the TypeScript client first. Use MCP only when the CLI path is unavailable or clearly broken.
 
-## When to Use DeepWiki
+All command examples below assume your working directory is `.agents/skills/deepwiki`.
 
-- Understand how a library or framework works before writing code that uses it
-- Verify the correct API surface, method signatures, or configuration format for a tool
-- Understand architecture, data flow, or internal design of an upstream dependency
-- Investigate why a particular pattern is used in a well-known codebase
-- Resolve ambiguity between two approaches by checking how the authors themselves do it
-- Onboard into a new technology stack quickly and accurately
+## When To Use DeepWiki
 
-**Default rule**: if you are unsure how something works in an external tool, ask DeepWiki before guessing or generating from memory.
+- Understand how an upstream library or framework really works before writing code against it
+- Verify API shapes, configuration formats, method signatures, or command semantics
+- Inspect architecture, control flow, or code paths in an external repository
+- Resolve ambiguity between multiple implementation approaches
+- Onboard into a new technology stack quickly and accurately without guessing work.
 
----
+Default rule: if you are unsure how an external tool behaves, query DeepWiki before guessing.
 
-## Two Access Modes
+## Access Modes
 
 ```text
-1. CLI (primary)  → scripts/dw-query.sh  — full capability: deep, codemap, threading
-2. MCP (fallback) → mcp.deepwiki.com     — basic ask_question only, no mode selection
+1. TS client (primary) -> bun ./scripts/deepwiki.ts
+2. MCP (fallback)      -> mcp.deepwiki.com
 ```
 
-Always try the CLI first.
+## Mode 1 — TS Client
 
----
-
-## Mode 1 — CLI (Primary)
-
-Two scripts in `skills/deepwiki/scripts/`:
-
-- `dw-query.sh` — ask a question; prints the answer, source files, and thread ID from one request
-- `dw-status.sh` — check whether a repo is indexed; optionally warm it
-
-### dw-query.sh
+### Primary commands
 
 ```bash
-./scripts/dw-query.sh "question" owner/repo [owner/repo2 ...]
-                      [--mode deep|fast|codemap] [--context "text"]
-                      [--id thread-id] [--mermaid] [--sources-only] [--json]
+bun ./scripts/deepwiki.ts query "question" owner/repo [owner/repo2 ...] \
+  [--mode deep|fast|codemap] [--context "text"] [--id query-id] \
+  [--mermaid] [--sources-only] [--json]
+
+bun ./scripts/deepwiki.ts start "question" owner/repo [owner/repo2 ...] \
+  [--mode deep|fast|codemap] [--context "text"] [--id query-id] [--no-summary]
+
+bun ./scripts/deepwiki.ts wait query-id [--mode codemap] [--mermaid] \
+  [--sources-only] [--json]
+
+bun ./scripts/deepwiki.ts status owner/repo [--warm]
+bun ./scripts/deepwiki.ts warm owner/repo
+bun ./scripts/deepwiki.ts get query-id
+bun ./scripts/deepwiki.ts list search-term
 ```
 
-One request. One response. Output:
+### Query behavior
 
-1. **Answer prose**
-2. **Sources** — file paths DeepWiki used from that same response
-3. **Thread-ID** — message ID for follow-up threading with `--id`
+- `query` submits and waits until DeepWiki finishes.
+- `start` submits and returns a `query_id` immediately. Use it when `deep` mode may outlive your shell session or host timeout.
+- `wait` reattaches to an existing `query_id` and renders the same final output as `query`.
+- `get` returns the raw query JSON for inspection.
 
-**Always use the default mode (`deep`).** Only use `--mode fast` for quick orientation when the answer is not going into code. Use `--mode codemap` for architecture, control flow, and code trace questions.
+The client prints:
 
-`deep` mode can take a very long time. That is expected. Do not build short timeouts into the wrapper or assume a long wait means the query is stuck. If you intentionally want to cap waiting time for one call, wrap the script with the host `timeout` command yourself.
-Otherwise, wait patiently for it to return.
+1. answer prose
+2. grounded source file paths
+3. `Query-ID` for resuming or follow-up queries
+4. `Message-ID` when DeepWiki returns one
 
-#### Examples
+### Query IDs, not thread IDs
+
+`--id` reuses a DeepWiki `query_id`. It is not the rendered `Message-ID`.
+
+If you want to continue an existing DeepWiki conversation, reuse the previous `Query-ID`:
 
 ```bash
-# Standard implementation research — use this for all implementation work
-./scripts/dw-query.sh "How does the plugin lifecycle work?" vitejs/vite
-
-# If you intentionally want to cap how long you are willing to wait, do it outside the wrapper
-timeout 5m ./scripts/dw-query.sh "How does the plugin lifecycle work?" vitejs/vite
-
-# Quick orientation only
-./scripts/dw-query.sh "What is this repo for?" withastro/starlight --mode fast
-
-# Architecture and execution flow
-./scripts/dw-query.sh "Show the request lifecycle" expressjs/express --mode codemap
-
-# Mermaid diagram (codemap only) — pipe to a file to preserve the diagram
-./scripts/dw-query.sh "Show how hooks execute" facebook/react --mode codemap --mermaid > diagram.mmd
-
-# Compare multiple repos in one query
-./scripts/dw-query.sh "Compare routing approaches" vitejs/vite remix-run/react-router
-
-# Add project-specific context
-./scripts/dw-query.sh "How should I structure this?" prisma/prisma \
-  --context "I am using a multi-tenant SaaS with row-level security"
-
-# Thread a follow-up using the Thread-ID from the previous response
-./scripts/dw-query.sh "How does token refresh work?" supabase/supabase --id <thread-id>
+bun ./scripts/deepwiki.ts query "What changed in the retry path?" owner/repo --id <query-id>
 ```
 
-#### Flags
+If a long-running `deep` query gets interrupted locally, resume it with:
 
-| Flag | Description |
-|---|---|
-| `--mode deep\|fast\|codemap` | Query mode (default: `deep`) |
-| `--context "text"` | Extra context injected into the query |
-| `--id thread-id` | Reuse a previous Thread-ID for follow-up threading |
-| `--mermaid` | Output Mermaid diagram (codemap mode only) |
-| `--sources-only` | Print only source file paths, one per line |
-| `--json` | Print the raw JSON response |
+```bash
+bun ./scripts/deepwiki.ts wait <query-id>
+```
 
-#### Modes
+### Modes
 
 | Mode | When to use |
 |---|---|
-| `deep` | Default — all implementation questions; runs an agentic research loop |
-| `fast` | Quick orientation only — never for implementation guidance |
-| `codemap` | Architecture, data flow, execution paths — returns file-located traces |
+| `deep` | Default for implementation questions and non-trivial research |
+| `fast` | Fallback when `deep` is too slow or unstable for the current question; still usually better than MCP for straightforward repo-grounded questions |
+| `codemap` | Architecture, control flow, trace questions, and Mermaid diagram generation |
 
-### dw-status.sh
+### Progress
+
+`DEEPWIKI_PROGRESS_MODE` controls progress on `stderr`:
+
+| Value | Behavior |
+|---|---|
+| `auto` | show progress only when `stderr` is a TTY |
+| `plain` | always show plain progress lines |
+| `quiet` | suppress progress lines |
+
+### Examples:
 
 ```bash
-./scripts/dw-status.sh owner/repo [--warm]
+# Standard implementation research
+bun ./scripts/deepwiki.ts query "How does the plugin lifecycle work?" vitejs/vite
+
+# Force visible progress even when stderr is not a TTY
+DEEPWIKI_PROGRESS_MODE=plain bun ./scripts/deepwiki.ts query \
+  "How does the plugin lifecycle work?" vitejs/vite
+
+# Cap waiting externally if you intentionally want to stop after a while
+timeout 8m bun ./scripts/deepwiki.ts query \
+  "How does the plugin lifecycle work?" vitejs/vite
+
+# Safer pattern for long deep research: submit, keep the query id, then wait
+bun ./scripts/deepwiki.ts start \
+  "How does the plugin lifecycle work?" vitejs/vite --mode deep
+bun ./scripts/deepwiki.ts wait <query-id>
+
+# Fast-mode fallback before giving up on CLI entirely
+bun ./scripts/deepwiki.ts query \
+  "What is this repo for?" withastro/starlight --mode fast
+
+# Codemap Mermaid
+bun ./scripts/deepwiki.ts query \
+  "Show how hooks execute" facebook/react --mode codemap --mermaid > diagram.mmd
 ```
 
-Exits 0 if indexed, 1 if not. Use before querying an unfamiliar or recently created repo. Pass `--warm` to trigger indexing first (throttled to once per 10 min server-side).
+## Mode 2 — MCP Fallback
 
-```bash
-./scripts/dw-status.sh vitejs/vite
-./scripts/dw-status.sh withastro/starlight --warm
-```
-
----
-
-## Mode 2 — MCP (Fallback)
-
-Use when the CLI scripts are unavailable (no shell access, `bunx` and `npx` not installed, or upstream API breakage).
+Use MCP when the TS client is unavailable or clearly broken.
 
 ```json
 {
@@ -148,7 +153,7 @@ Use when the CLI scripts are unavailable (no shell access, `bunx` and `npx` not 
 }
 ```
 
-Alternate endpoint if SSE fails: `https://mcp.deepwiki.com/mcp`. No API key required.
+Alternate endpoint if SSE fails: `https://mcp.deepwiki.com/mcp`.
 
 ### MCP tools
 
@@ -175,29 +180,27 @@ mcp__deepwiki__read_wiki_structure({ repoName: "owner/repo" })
 mcp__deepwiki__read_wiki_contents({ repoName: "owner/repo", topic: "authentication" })
 ```
 
-### CLI vs MCP
+### TS client vs MCP
 
-| Capability | CLI | MCP |
+| Capability | TS client | MCP |
 |---|---|---|
-| Deep (agentic) mode | ✅ | ❌ |
+| Deep mode | ✅ | ❌ |
+| Fast mode | ✅ | ❌ |
 | Codemap mode | ✅ | ❌ |
 | Multi-repo query | ✅ | ❌ |
-| Follow-up threading | ✅ `--id` | ❌ |
-| Repo index status | ✅ `dw-status.sh` | ❌ |
-| Context injection | ✅ `--context` | ❌ |
-| Source file listing | ✅ `--sources-only` | ❌ |
-
----
+| Query resume via `query_id` | ✅ | ❌ |
+| Repo index status / warm | ✅ | ❌ |
+| Context injection | ✅ | ❌ |
+| Source file listing | ✅ | ❌ |
 
 ## Error Handling
 
-- Repository not found: verify the `owner/repo`, check `UPSTREAM_REPOS.md`, read the upstream `README.md` on GitHub, follow README links, or do a targeted web search.
-- Service unavailable: if the CLI returns upstream 502/504-style failures, retry once or twice, then fall back to `mcp__deepwiki__ask_question`, `mcp__deepwiki__read_wiki_structure`, or `mcp__deepwiki__read_wiki_contents`. If both CLI and MCP fail, use upstream docs and note the limitation.
-- Long-running deep mode: expect `deep` mode to take time. Only use the host `timeout` command when you intentionally want to bound the wait for one call, for example `timeout 10m ./scripts/dw-query.sh "..." owner/repo`.
-- Server-side query timeout: if DeepWiki returns a JSON error such as `{"error":"Query timed out after 240s"}`, treat it as a completed but inconclusive upstream result. Do not auto-retry the same deep query blindly; narrow the question, switch to `fast` or `codemap` if appropriate, or fall back to MCP and upstream docs.
-- Courteous usage: batch related questions, reuse printed `Thread-ID` values for follow-ups, and avoid spamming warm or repeated deep queries when one threaded conversation will do.
-
----
+- Repository not found: verify `owner/repo`, check `UPSTREAM_REPOS.md`, read the upstream `README.md`, follow README links, or do a targeted web search.
+- Service unavailable: if the client gets upstream 502/503/504 failures, retry once or twice, then try the same question with `--mode fast` before falling back to MCP or upstream docs.
+- Long-running deep mode: `deep` may legitimately run for a long time. Do not assume a long wait means the query is broken.
+- Local timeout: if your shell kills `query`, prefer `start` plus `wait`, or rerun `wait` with the printed `Query-ID`.
+- Server-side query timeout: if DeepWiki returns JSON like `{"error":"Query timed out after 240s"}`, treat it as a completed but inconclusive upstream result. Narrow the question, split it, or retry in `fast` mode. Do not blindly rerun the same deep query.
+- Courteous usage: batch related questions, reuse `Query-ID` when continuing the same line of investigation, and avoid repeated warm or duplicate deep queries.
 
 ## Workflow
 
@@ -205,128 +208,72 @@ mcp__deepwiki__read_wiki_contents({ repoName: "owner/repo", topic: "authenticati
 1. Check UPSTREAM_REPOS.md for the canonical owner/repo.
 
 2. If not listed:
-   - Search for the canonical GitHub repo
-   - Run: ./scripts/dw-status.sh owner/repo
-   - If not indexed: ./scripts/dw-status.sh owner/repo --warm
+   - search for the canonical GitHub repo
+   - run: bun ./scripts/deepwiki.ts status owner/repo
+   - if not indexed: bun ./scripts/deepwiki.ts status owner/repo --warm
 
-3. Query (deep mode is the default):
-   ./scripts/dw-query.sh "..." owner/repo
+3. Query:
+   - `deep` first for implementation work
+   - `fast` if `deep` is unstable or too slow for the current question
+   - `codemap` for architecture and traces
 
-4. If the answer raises follow-up questions, thread them using the printed Thread-ID:
-   ./scripts/dw-query.sh "..." owner/repo --id <thread-id>
+  3.1. For long-running deep work:
+    - bun ./scripts/deepwiki.ts start "..." owner/repo
+    - bun ./scripts/deepwiki.ts wait <query-id>
+
+4. If the answer raises follow-up questions, thread them using the printed Query-ID:
+   bun ./scripts/deepwiki.ts query "..." owner/repo --id <query-id>
 
 5. Write code based on the grounded answer, not on memory.
 
 6. Add the repo to UPSTREAM_REPOS.md if it is new to the project.
 ```
 
----
-
 ## Resolving Repo Names
 
-Scripts require exact `owner/repo` format.
+The client requires exact `owner/repo` format.
 
-### Step 1 — Check UPSTREAM_REPOS.md first
+1. Check `UPSTREAM_REPOS.md` first.
 
-The project maintains `./UPSTREAM_REPOS.md` mapping technologies to their canonical GitHub repo names. Always check it first.
+The project maintains `UPSTREAM_REPOS.md` mapping technologies to their canonical GitHub repo names. Always check it first. If the technology is listed, use the specified `owner/repo` for queries.
 
-### Step 2 — If not listed
-
-1. Search the web for `{technology name} github`
-2. Confirm the repo is official (org ownership, stars, README)
-3. Run `./scripts/dw-status.sh owner/repo` to verify it is indexed
-
-### Step 3 — Update UPSTREAM_REPOS.md
-
-After successfully querying a new technology, **add it to UPSTREAM_REPOS.md**:
+2. If not listed:
+   - search the web for `{technology name} GitHub`
+   - confirm the repo is official
+   - run `bun ./scripts/deepwiki.ts status owner/repo`
+3. After successful use, add it to `UPSTREAM_REPOS.md`:
 
 ```markdown
-| {display name} | {owner}/{repo} | {optional notes} |
+| Technology | Upstream repo | Use for |
+|---|---|---|
+| {display name} | {owner}/{repo} | {brief contextual guidance when non-obvious} |
 ```
-
----
 
 ## Query Quality
 
-Specific, action-oriented questions produce better answers in all modes.
+Specific, action-oriented questions produce much better results.
 
-| Vague (avoid) | Specific (prefer) |
+| Vague | Better |
 |---|---|
 | "How does auth work?" | "What OAuth flows does this library support and how do I configure the callback URL?" |
-| "Tell me about plugins" | "What is the lifecycle order of plugin hooks, and which run during build phase only?" |
+| "Tell me about plugins" | "What is the lifecycle order of plugin hooks, and which run only during build?" |
 | "How do I use this?" | "What is the minimal config needed to serve static files with custom cache headers?" |
 
-Include version context when you know it. Use `--context` to add project-specific constraints when they affect the answer.
-
----
+Use `--context` when your project constraints materially affect the answer.
 
 ## Common Mistakes
 
-| Mistake | Correct behaviour |
+| Mistake | Correct behavior |
 |---|---|
-| Using MCP when the CLI works | CLI scripts are primary; MCP is the fallback |
-| Using `--mode fast` for implementation work | Default to `deep`; fast is for orientation only |
-| Starting a new query when a follow-up would do | Use `--id` with the Thread-ID from the previous response |
-| Not checking `dw-status.sh` before querying an obscure repo | Run `dw-status.sh` first; `--warm` if not indexed |
-| Guessing the repo name | Check UPSTREAM_REPOS.md, then verify with `dw-status.sh` |
-| Skipping UPSTREAM_REPOS.md update | Always update it after first use of a new technology |
-
----
-
-## UPSTREAM_REPOS.md Format
-
-Maintain at the project root. Create if it does not exist.
-
-```markdown
-# Upstream Repositories
-
-This file maps external technologies used in this project to their canonical GitHub
-repository names for use with DeepWiki queries.
-
-Update this file whenever you start using a new external tool or library.
-
-| Technology | Upstream repo | Notes / Use for |
-|---|---|---|
-<!-- Add entries below -->
-```
-
----
-
-## Advanced Mode — Raw CLI
-
-Use when you need streaming, custom parsing, or full JSON inspection. The wrapper scripts handle the standard case; use the raw CLI only for advanced needs or to debug a suspected API breakage.
-
-```bash
-# Stream as NDJSON
-bunx @qwadratic/deepwiki-cli query "..." -r owner/repo --stream
-
-# Save full JSON for inspection
-bunx @qwadratic/deepwiki-cli query "..." -r owner/repo -m deep > /tmp/dw-raw.json
-
-# Extract answer prose from saved JSON
-jq -rj '.. | objects | select(.type? == "chunk" or .type? == "summary_chunk") | .data? // empty' /tmp/dw-raw.json
-
-# Inspect response schema
-bunx @qwadratic/deepwiki-cli query "..." -r owner/repo -m fast \
-  | jq 'paths | map(tostring) | join(".")' | head -50
-
-# Retrieve a previous query by ID
-bunx @qwadratic/deepwiki-cli get <queryId>
-
-# Search indexed repos
-bunx @qwadratic/deepwiki-cli list react | jq '.indices[].repo_name'
-```
-
-Raw response schema under `.queries[0].response[]`:
-- `file_contents` — `data` is `[repoName, filePath, sourceCode]`
-- `chunk` / `summary_chunk` — answer prose; concatenate `.data` across all entries
-- `reference` — `{ file_path, range_start, range_end }` citation
-- `summary_done` / `done` — terminal markers; ignore
-
-If the scripts stop working due to an API contract change, use the raw CLI to inspect the new schema and update the scripts accordingly.
-
----
+| Using MCP while the TS client works | Use the TS client first |
+| Using `fast` for implementation work without trying `deep` | Start with `deep` unless the question is just orientation |
+| Treating `Message-ID` as the follow-up identifier | Reuse `Query-ID` with `--id` |
+| Killing a long deep query and starting from scratch | Use `start` + `wait` or rerun `wait` with the same `Query-ID` |
+| Guessing repo names | Check `UPSTREAM_REPOS.md`, then verify with `status` |
+| Skipping `UPSTREAM_REPOS.md` updates | Add new upstream repos after first successful use |
 
 ## Disclaimer
 
-This tool uses reverse-engineered, undocumented API endpoints from `api.devin.ai`. It may break at any time if Cognition changes their API. No auth is required for public repos, but rate limits may apply. If the CLI stops working, fall back to the MCP server.
+This tool uses reverse-engineered, undocumented `api.devin.ai` endpoints. They may change without notice. If the TS client breaks, fall back to MCP or upstream docs.
+
+In case you can fix the TS client, notify the team and submit a PR. If you cannot, use MCP or read the upstream documentation manually.

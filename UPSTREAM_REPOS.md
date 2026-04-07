@@ -6,7 +6,7 @@ Use this file as the default map for `mcp__deepwiki__ask_question` when behavior
 
 | Technology | Upstream repo | Use for |
 | --- | --- | --- |
-| microvm.nix | `microvm-nix/microvm.nix` | runner behavior, MicroVM options, hypervisor integration |
+| microvm.nix | `astro/microvm.nix` | runner behavior, MicroVM options, hypervisor integration; this is the repo indexed by the current DeepWiki CLI |
 | Nixpkgs / NixOS modules | `NixOS/nixpkgs` | package names, module options, service behavior |
 | QEMU | `qemu/qemu` | hypervisor flags, device behavior, virtiofs/QMP details |
 | systemd | `systemd/systemd` | unit ordering, service semantics, shutdown behavior |

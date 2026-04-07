@@ -233,6 +233,7 @@ in {
 
     security.enableWrappers = lib.mkForce false;
     system.nssModules = lib.mkForce [ ];
+    services.dbus.enable = lib.mkForce false;
     services.resolved.enable = lib.mkForce false;
     services.timesyncd.enable = lib.mkForce false;
     services.logrotate.enable = lib.mkForce false;
@@ -256,7 +257,10 @@ in {
     systemd.services."systemd-update-done".enable = lib.mkForce false;
     systemd.services."systemd-update-utmp".enable = lib.mkForce false;
     systemd.services."lastlog2-import".enable = lib.mkForce false;
+    systemd.services."systemd-hostnamed".enable = lib.mkForce false;
+    systemd.services."systemd-localed".enable = lib.mkForce false;
     systemd.services."systemd-logind".enable = lib.mkForce false;
+    systemd.services."systemd-timedated".enable = lib.mkForce false;
     systemd.services."systemd-user-sessions".enable = lib.mkForce false;
     systemd.services.systemd-networkd.enable = lib.mkForce needsFullGuestNetwork;
     systemd.services.systemd-networkd-persistent-storage.enable = lib.mkForce needsFullGuestNetwork;

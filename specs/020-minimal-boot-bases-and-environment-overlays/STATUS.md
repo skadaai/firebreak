@@ -30,6 +30,7 @@ Environment overlay implementation plus boot-base split.
 - packaged Node CLI runtimes now enable their environment overlay by default and export `nodejs_20` through that overlay instead of baking Node into the guest image
 - project-local Nix auto-detection now explicitly accepts `devShells.<system>.default`, `packages.<system>.default`, and `legacyPackages.<system>.default`, and fails fast when a workspace opts in but does not expose one of those supported defaults
 - the local Cloud Hypervisor boot base now strips more generic NixOS login and name-resolution machinery from the common path, including `resolvconf`, `nscd`, `logind`, `systemd-user-sessions`, `lastlog2-import`, and `getty.target`
+- the local Cloud Hypervisor boot base now disables D-Bus and the hostnamed/localed/timedated services that sit outside Firebreak's hot path
 
 ## What remains open
 

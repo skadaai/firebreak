@@ -53,7 +53,7 @@ success_summary=$(firebreak_cmd internal loop run \
   --attempt-id success-run \
   --spec "$spec_path" \
   --plan "Add loop smoke artifact" \
-  --validation-suite test-smoke-codex-version \
+  --validation-suite test-smoke-project-config-and-doctor \
   --write-path . \
   --commit-message "loop smoke commit")
 if ! printf '%s\n' "$success_summary" | grep -q '"result": "completed"'; then
@@ -70,7 +70,7 @@ fi
 success_audit_root=$(extract_json_field "$success_summary" audit_root)
 success_plan_path=$(extract_json_field "$success_summary" plan_path)
 success_review_path=$(extract_json_field "$success_summary" review_path)
-if ! [ -f "$success_plan_path" ] || ! [ -f "$success_review_path" ] || ! [ -f "$success_audit_root/policy.log" ] || ! [ -f "$success_audit_root/validation/test-smoke-codex-version.json" ]; then
+if ! [ -f "$success_plan_path" ] || ! [ -f "$success_review_path" ] || ! [ -f "$success_audit_root/policy.log" ] || ! [ -f "$success_audit_root/validation/test-smoke-project-config-and-doctor.json" ]; then
   printf '%s\n' "$success_summary" >&2
   echo "loop smoke success scenario did not preserve the expected audit trail" >&2
   exit 1
@@ -89,7 +89,7 @@ validation_summary=$(
       --attempt-id validation-blocked-run \
       --spec "$spec_path" \
       --plan "Exercise blocked validation path" \
-      --validation-suite test-smoke-codex-version \
+      --validation-suite test-smoke-project-config-and-doctor \
       --write-path .
 )
 validation_status=$?
@@ -101,7 +101,7 @@ if [ "$validation_status" -eq 0 ] || ! printf '%s\n' "$validation_summary" | gre
 fi
 validation_audit_root=$(extract_json_field "$validation_summary" audit_root)
 validation_plan_path=$(extract_json_field "$validation_summary" plan_path)
-if ! [ -f "$validation_plan_path" ] || ! [ -f "$validation_audit_root/validation/test-smoke-codex-version.json" ]; then
+if ! [ -f "$validation_plan_path" ] || ! [ -f "$validation_audit_root/validation/test-smoke-project-config-and-doctor.json" ]; then
   printf '%s\n' "$validation_summary" >&2
   echo "loop smoke validation-blocked scenario did not preserve validation evidence" >&2
   exit 1
@@ -117,7 +117,7 @@ policy_summary=$(
     --attempt-id policy-blocked-run \
     --spec "$spec_path" \
     --plan "Exercise blocked policy path" \
-    --validation-suite test-smoke-codex-version \
+    --validation-suite test-smoke-project-config-and-doctor \
     --write-path ../escape.txt
 )
 policy_status=$?
@@ -146,7 +146,7 @@ runtime_summary=$(
       --attempt-id runtime-blocked-run \
       --spec "$spec_path" \
       --plan "Exercise runtime limit path" \
-      --validation-suite test-smoke-codex-version \
+      --validation-suite test-smoke-project-config-and-doctor \
       --write-path .
 )
 runtime_status=$?
@@ -175,7 +175,7 @@ parallel_summary=$(
       --attempt-id parallel-blocked-run \
       --spec "$spec_path" \
       --plan "Exercise parallelism limit path" \
-      --validation-suite test-smoke-codex-version \
+      --validation-suite test-smoke-project-config-and-doctor \
       --write-path .
 )
 parallel_status=$?

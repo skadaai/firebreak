@@ -946,6 +946,8 @@ spawn_worker() {
   max_instances=""
   flake_ref=""
   worker_limit_scope=""
+  bridge_host_workspace=${FIREBREAK_WORKER_BRIDGE_HOST_WORKSPACE:-}
+  bridge_guest_workspace=${FIREBREAK_WORKER_BRIDGE_GUEST_WORKSPACE:-}
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -1004,6 +1006,17 @@ spawn_worker() {
   validate_token "$kind" "worker kind"
   require_absolute_dir "$state_dir" "worker state dir"
   require_absolute_dir "$workspace" "worker workspace"
+
+  if [ -n "$bridge_host_workspace" ] && [ -n "$bridge_guest_workspace" ]; then
+    case "$workspace" in
+      "$bridge_guest_workspace")
+        workspace=$bridge_host_workspace
+        ;;
+      "$bridge_guest_workspace"/*)
+        workspace=$bridge_host_workspace${workspace#"$bridge_guest_workspace"}
+        ;;
+    esac
+  fi
 
   case "$backend" in
     process)

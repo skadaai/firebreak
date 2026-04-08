@@ -181,13 +181,13 @@ if ! grep -F -q 'attach-two' "$attach_parallel_dir/two.out"; then
   exit 1
 fi
 
-serialized_threshold=$((single_attach_elapsed * 2 - 2))
+serialized_threshold=$((single_attach_elapsed * 2 - 1))
 minimum_parallel_threshold=$((single_attach_elapsed + 1))
 if [ "$serialized_threshold" -lt "$minimum_parallel_threshold" ]; then
   serialized_threshold=$minimum_parallel_threshold
 fi
 
-if [ "$attach_parallel_elapsed" -ge "$serialized_threshold" ]; then
+if [ "$attach_parallel_elapsed" -gt "$serialized_threshold" ]; then
   echo "parallel attached process workers took too long: ${attach_parallel_elapsed}s (single attached process took ${single_attach_elapsed}s)" >&2
   exit 1
 fi

@@ -45,10 +45,54 @@ trap cleanup EXIT INT TERM
 state_dir=$smoke_tmp_dir/state
 firebreak_state_dir=$smoke_tmp_dir/firebreak-state
 workspace_dir=$smoke_tmp_dir/workspace
-mkdir -p "$state_dir" "$firebreak_state_dir" "$workspace_dir"
+fake_bin_dir=$smoke_tmp_dir/bin
+fake_nix_store_dir=$smoke_tmp_dir/fake-nix-store
+mkdir -p "$state_dir" "$firebreak_state_dir" "$workspace_dir" "$fake_bin_dir" "$fake_nix_store_dir"
+export FAKE_NIX_STORE_DIR="$fake_nix_store_dir"
+
+cat >"$fake_bin_dir/nix" <<'EOF'
+#!/usr/bin/env bash
+set -eu
+
+if [ "${1:-}" = "--version" ]; then
+  printf '%s\n' 'nix smoke shim'
+  exit 0
+fi
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    build)
+      shift
+      break
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+while [ "$#" -gt 0 ] && [ "${1#-}" != "$1" ]; do
+  shift
+done
+
+[ "$#" -gt 0 ] || exit 1
+installable=$1
+package_name=${installable##*#}
+fake_out="$FAKE_NIX_STORE_DIR/$package_name"
+mkdir -p "$fake_out/bin"
+cat >"$fake_out/bin/$package_name" <<SCRIPT
+#!/usr/bin/env bash
+set -eu
+printf '%s\n' 'codex-cli 0.114.0'
+SCRIPT
+chmod +x "$fake_out/bin/$package_name"
+printf '%s\n' "$fake_out"
+EOF
+chmod +x "$fake_bin_dir/nix"
 
 run_attach_version() {
   env \
+    PATH="$fake_bin_dir:$PATH" \
     FIREBREAK_STATE_MODE=outer-leak \
     FIREBREAK_CREDENTIAL_SLOT=outer-leak \
     FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH="$smoke_tmp_dir"/firebreak-worker-credential-slot-leak \

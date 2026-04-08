@@ -30,7 +30,10 @@ def pump_bidirectional(left: socket.socket, right: socket.socket) -> None:
                     chunk = b""
                 if not chunk:
                     return
-                target.sendall(chunk)
+                try:
+                    target.sendall(chunk)
+                except OSError:
+                    return
     finally:
         selector.close()
 

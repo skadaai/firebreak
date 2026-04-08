@@ -1,0 +1,63 @@
+name: Firebreak Hosted Checks
+description: Run hosted Firebreak checks without KVM.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  nix-checks:
+    name: Nix Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run flake checks
+        run: nix --accept-flake-config --extra-experimental-features 'nix-command flakes' flake check --print-build-logs
+
+  hosted-smoke-tests:
+    name: ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - firebreak-test-smoke-project-config-and-doctor
+          - firebreak-test-smoke-npx-launcher
+          - firebreak-test-smoke-firebreak-cli-surface
+          - firebreak-test-smoke-worker-proxy-script
+          - firebreak-test-smoke-local-controller
+          - firebreak-test-smoke-cloud-hypervisor-egress-proxy
+          - firebreak-test-smoke-cloud-hypervisor-port-publish
+          - firebreak-test-smoke-worker
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run hosted smoke test
+        run: nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#${{ matrix.package }}

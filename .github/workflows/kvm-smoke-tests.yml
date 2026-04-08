@@ -1,5 +1,5 @@
 name: Firebreak KVM Smoke Tests
-description: Run KVM-backed Firebreak smoke tests after hosted checks pass.
+# Run KVM-backed Firebreak smoke tests after hosted checks pass.
 
 on:
   workflow_run:

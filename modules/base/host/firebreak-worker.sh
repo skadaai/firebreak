@@ -1018,6 +1018,10 @@ spawn_worker() {
     esac
   fi
 
+  if ! [ -d "$workspace" ] && [ -n "$bridge_host_workspace" ] && [ -d "$bridge_host_workspace" ]; then
+    workspace=$bridge_host_workspace
+  fi
+
   case "$backend" in
     process)
       worker_limit_scope="process"

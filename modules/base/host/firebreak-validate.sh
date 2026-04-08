@@ -12,6 +12,7 @@ usage: firebreak internal validate run SUITE [--state-dir PATH]
 
 Named suites:
   test-smoke-local-controller
+  test-smoke-project-config-and-doctor
   test-smoke-codex
   test-smoke-codex-version
   test-smoke-codex-warm-reuse
@@ -97,6 +98,10 @@ missing_capability=""
 case "$suite_name" in
   test-smoke-local-controller)
     suite_command="@LOCAL_CONTROLLER_SMOKE_BIN@"
+    required_capability="host-shell"
+    ;;
+  test-smoke-project-config-and-doctor)
+    suite_command="@PROJECT_CONFIG_SMOKE_BIN@"
     required_capability="host-shell"
     ;;
   test-smoke-codex)

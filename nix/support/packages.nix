@@ -364,6 +364,7 @@ rec {
       ];
       text = renderTemplate {
         "@LOCAL_CONTROLLER_SMOKE_BIN@" = "${self.packages.${system}.firebreak-test-smoke-local-controller}/bin/firebreak-test-smoke-local-controller";
+        "@PROJECT_CONFIG_SMOKE_BIN@" = "${self.packages.${system}.firebreak-test-smoke-project-config-and-doctor}/bin/firebreak-test-smoke-project-config-and-doctor";
         "@CODEX_SMOKE_BIN@" = "${self.packages.${system}.firebreak-test-smoke-codex}/bin/firebreak-test-smoke-codex";
         "@CODEX_VERSION_BIN@" = "${self.packages.${system}.firebreak-test-smoke-codex-version}/bin/firebreak-test-smoke-codex-version";
         "@CODEX_WARM_REUSE_BIN@" = "${self.packages.${system}.firebreak-test-smoke-codex-warm-reuse}/bin/firebreak-test-smoke-codex-warm-reuse";

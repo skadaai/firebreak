@@ -1,5 +1,5 @@
 name: Firebreak Hosted Checks
-description: Run hosted Firebreak checks without KVM.
+# Run hosted Firebreak checks without KVM.
 
 on:
   pull_request:

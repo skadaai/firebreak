@@ -742,6 +742,7 @@ stop_child() {
   exit 143
 }
 
+trap '' HUP
 trap stop_child INT TERM
 
 printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "launch-script-start" >>"\$trace_path"
@@ -844,6 +845,7 @@ stop_child() {
   exit 143
 }
 
+trap '' HUP
 trap stop_child INT TERM
 
 mkdir -p "\$instance_dir"
@@ -1102,8 +1104,9 @@ spawn_worker() {
     fi
     release_kind_limit_lock
     trap - EXIT INT TERM
+    trap '' HUP
     configure_attach_tty
-    trap restore_attach_tty EXIT INT TERM
+    trap restore_attach_tty EXIT HUP INT TERM
     set +e
     bash "$launch_script"
     attach_status=$?

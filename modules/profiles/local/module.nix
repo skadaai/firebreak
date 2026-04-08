@@ -130,8 +130,11 @@ let
       exec python3 ${guestPortPublishRelayProgram}
     '';
   };
-  firebreakWorkerEngineScript = pkgs.writeShellScript "firebreak-worker-engine"
-    (builtins.readFile ../../base/host/firebreak-worker.sh);
+  firebreakWorkerEngineLibexec = pkgs.runCommand "firebreak-worker-engine-libexec" {} ''
+    mkdir -p "$out/libexec"
+    install -m 0555 ${../../base/host/firebreak-worker.sh} "$out/libexec/firebreak-worker.sh"
+    install -m 0555 ${../../base/host/firebreak-project-config.sh} "$out/libexec/firebreak-project-config.sh"
+  '';
   firebreakWorkerEngineRuntimeInputs = with pkgs; [
     bash
     coreutils
@@ -144,7 +147,7 @@ let
     name = "firebreak-worker-local-helper";
     runtimeInputs = firebreakWorkerEngineRuntimeInputs;
     text = renderTemplate (scriptVars // {
-      "@WORKER_ENGINE_SCRIPT@" = "${firebreakWorkerEngineScript}";
+      "@WORKER_ENGINE_LIBEXEC_DIR@" = "${firebreakWorkerEngineLibexec}/libexec";
     }) ./guest/firebreak-worker-local-helper.sh;
   };
   firebreakWorkerBridgeCli = pkgs.writeShellApplication {

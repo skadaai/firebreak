@@ -784,7 +784,9 @@ start_worker_bridge_server() {
     FIREBREAK_FLAKE_REF='@FIREBREAK_FLAKE_REF@' \
     FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG='1' \
     FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
+    FIREBREAK_WORKER_BRIDGE_GUEST_WORKSPACE='@WORKSPACE_MOUNT@' \
     FIREBREAK_WORKER_BRIDGE_DIR="$worker_bridge_dir" \
+    FIREBREAK_WORKER_BRIDGE_HOST_WORKSPACE="$host_cwd" \
     FIREBREAK_WORKER_STATE_DIR="$worker_state_dir" \
     bash "$worker_bridge_server_script" "$worker_bridge_dir" "$worker_helper_script" >"$worker_bridge_server_log" 2>&1 &
   worker_bridge_server_pid=$!

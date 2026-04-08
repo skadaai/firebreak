@@ -92,7 +92,7 @@ if [ -z "$task_two_runtime_root" ] || [ "$task_one_runtime_root" = "$task_two_ru
   exit 1
 fi
 
-validation_suite=test-smoke-local-controller
+validation_suite=test-smoke-project-config-and-doctor
 
 task_cmd validate --task-id task-one "$validation_suite" >"$task_tmp_dir/task-one.validate.log" 2>&1 &
 validate_one_pid=$!

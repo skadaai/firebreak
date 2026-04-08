@@ -27,6 +27,10 @@ bridge_request_mode() {
   subcommand=${1:-}
   shift || true
   case "$subcommand" in
+    run)
+      printf '%s\n' long
+      return 0
+      ;;
     logs)
       for arg in "$@"; do
         case "$arg" in

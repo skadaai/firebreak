@@ -1,6 +1,7 @@
 {
   self,
   system,
+  includeCloud ? false,
   hostIsLinux,
   lib,
   localVmArtifacts,
@@ -161,7 +162,7 @@
 
   firebreak-internal-validate = mkValidationPackage {
     name = "firebreak-internal-validate";
-    includeCloudSuite = hostIsLinux;
+    includeCloudSuite = includeCloud;
   };
 
   firebreak-test-smoke-internal-validate = mkValidationSmokePackage {
@@ -231,7 +232,7 @@
   firebreak = mkFirebreakCliPackage {
     name = "firebreak";
   };
-} // lib.optionalAttrs hostIsLinux {
+} // lib.optionalAttrs (hostIsLinux && includeCloud) {
   firebreak-internal-runner-codex-cloud = localVmArtifacts.firebreak-codex-cloud.runnerPackage;
   firebreak-internal-runner-claude-code-cloud = localVmArtifacts.firebreak-claude-code-cloud.runnerPackage;
   firebreak-internal-runner-test-cloud = localVmArtifacts.firebreak-cloud-smoke.runnerPackage;

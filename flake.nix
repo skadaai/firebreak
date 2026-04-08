@@ -34,7 +34,7 @@
       localVmArtifacts = lib.genAttrs supportedHostSystems (system:
         import ./nix/outputs/local-vm-artifacts.nix {
           inherit self;
-          includeCloud = supports.${system}.hostIsLinux;
+          includeCloud = false;
           inherit (supports.${system}) mkLocalVmArtifacts pkgs;
         });
     in {
@@ -66,6 +66,7 @@
       packages = lib.genAttrs supportedHostSystems (system:
         import ./nix/outputs/packages.nix {
           inherit self system;
+          includeCloud = false;
           localVmArtifacts = localVmArtifacts.${system};
           inherit (supports.${system})
             hostIsLinux

@@ -301,11 +301,10 @@ run_review() {
   {
     git -C "$worktree_path" diff --name-only
     git -C "$worktree_path" ls-files --others --exclude-standard
-    for managed_dir in .direnv; do
-      if [ -e "$worktree_path/$managed_dir" ]; then
-        find -L "$worktree_path/$managed_dir" -mindepth 1 -type f -printf '%P\n' | sed "s#^#$managed_dir/#"
-      fi
-    done
+    managed_dir=.direnv
+    if [ -e "$worktree_path/$managed_dir" ]; then
+      find -L "$worktree_path/$managed_dir" -mindepth 1 -type f -printf '%P\n' | sed "s#^#$managed_dir/#"
+    fi
   } | sort -u >"$changed_paths_log"
 
   set +e

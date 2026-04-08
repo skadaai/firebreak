@@ -257,6 +257,7 @@ rec {
       runtimeInputs = with pkgs; [
         bash
         coreutils
+        diffutils
         gnused
       ];
       text = renderTemplate {

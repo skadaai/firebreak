@@ -92,9 +92,11 @@ if [ -z "$task_two_runtime_root" ] || [ "$task_one_runtime_root" = "$task_two_ru
   exit 1
 fi
 
-task_cmd validate --task-id task-one test-smoke-codex-version >"$task_tmp_dir/task-one.validate.log" 2>&1 &
+validation_suite=test-smoke-local-controller
+
+task_cmd validate --task-id task-one "$validation_suite" >"$task_tmp_dir/task-one.validate.log" 2>&1 &
 validate_one_pid=$!
-task_cmd validate --task-id task-two test-smoke-codex-version >"$task_tmp_dir/task-two.validate.log" 2>&1 &
+task_cmd validate --task-id task-two "$validation_suite" >"$task_tmp_dir/task-two.validate.log" 2>&1 &
 validate_two_pid=$!
 
 parallel_status=0
@@ -110,17 +112,17 @@ if [ "$parallel_status" -ne 0 ]; then
   exit "$parallel_status"
 fi
 
-if ! find "$task_one_root/validation/test-smoke-codex-version/runs" -name summary.json -print -quit | grep -q .; then
+if ! find "$task_one_root/validation/$validation_suite/runs" -name summary.json -print -quit | grep -q .; then
   echo "task smoke did not preserve validation evidence for task one" >&2
   exit 1
 fi
 
-if ! find "$task_two_root/validation/test-smoke-codex-version/runs" -name summary.json -print -quit | grep -q .; then
+if ! find "$task_two_root/validation/$validation_suite/runs" -name summary.json -print -quit | grep -q .; then
   echo "task smoke did not preserve validation evidence for task two" >&2
   exit 1
 fi
 
-if ! [ -f "$task_one_root/artifacts/latest-validation-test-smoke-codex-version.json" ] || ! [ -f "$task_two_root/artifacts/latest-validation-test-smoke-codex-version.json" ]; then
+if ! [ -f "$task_one_root/artifacts/latest-validation-${validation_suite}.json" ] || ! [ -f "$task_two_root/artifacts/latest-validation-${validation_suite}.json" ]; then
   echo "task smoke did not persist latest validation artifacts for both tasks" >&2
   exit 1
 fi

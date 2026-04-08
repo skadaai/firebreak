@@ -51,6 +51,8 @@ Do not use bare `session` to mean the host-side work unit.
 - `modules/packaged-agent` owns the shared contract for agents baked into the VM image, including state-root resolution and agent-specific environment exports.
 - `modules/node-cli` owns the shared contract for npm-installed packaged CLIs, including bootstrap, persistent install state, and project launch helpers.
 - `modules/node-cli` also owns the generic packaged-node bootstrap readiness contract (`firebreak-bootstrap-wait`) and declarative extra wrapper installation for recipe-owned CLI aliases such as worker proxies.
+- on the local Cloud Hypervisor path, packaged Node CLI delivery should prefer host-seeded shared tool runtimes over guest-time installation on the interactive shell critical path.
+- `firebreak-bootstrap-wait` is a readiness gate, not the installer itself. It validates that the prepared tool runtime is ready and should stay compatible with both host-seeded and guest-fallback bootstrap paths.
 - Agent modules such as `codex` and `claude-code` should stay thin. They should mostly declare package name, binary name, config directory, and any agent-specific packages or environment exports.
 
 ## External Orchestrator Recipes
@@ -62,6 +64,7 @@ External recipes should stay declarative and thin.
 - Install recipe-visible wrapper binaries through `installBinScripts` instead of patching shared Firebreak code.
 - Reuse `firebreak.lib.${system}.mkWorkerProxyScript` when a CLI name should resolve through `firebreak worker`.
 - Keep orchestrator-specific smoke tests under the external recipe itself rather than adding them to Firebreak core.
+- Treat nested `firebreak worker run ...` paths as potentially long-running even for simple commands like `--version`, because the first response can be delayed by host-side `nix build` or substitution work.
 
 ## Adding A New Agent
 

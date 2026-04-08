@@ -16,10 +16,12 @@ Environment overlay implementation plus boot-base split.
 - packaged Node CLIs now use a persistent tool-runtime directory
 - local tool bootstrap has been moved off the shell critical path
 - local packaged Node CLI tool bootstrap now begins on the host and overlaps with guest boot
+- local Cloud Hypervisor packaged Node CLI sandboxes now prefer a host-seeded shared tool-runtime path, with guest bootstrap retained as the fallback path when that prepared shared runtime is unavailable
 - Firebreak now has a formal additive environment-overlay contract in the shared VM options
 - Firebreak CLI and `firebreak doctor` can resolve and inspect environment identities and cache paths
 - Firebreak can materialize a cached environment overlay from explicit installables or constrained project-local flake defaults
 - local wrappers can export resolved environment overlays into the guest through host metadata
+- the packaged Node CLI readiness contract is now explicit: `firebreak-bootstrap-wait` validates the prepared runtime marker and does not itself perform installation work
 - workspace-style project artifacts now opt into constrained project-local flake environment resolution
 - local runtimes now select explicit `command` and `interactive` boot bases through the shared runtime contract instead of ad hoc wrapper logic
 - local interactive services now boot under `firebreak-interactive.target`, while one-shot command execution continues to use `firebreak-cold-exec.target`

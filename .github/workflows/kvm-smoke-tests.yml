@@ -52,6 +52,8 @@ jobs:
           - firebreak-test-smoke-worker-interactive-codex-direct
           - firebreak-test-smoke-worker-guest-bridge
           - firebreak-test-smoke-worker-guest-bridge-interactive
+          # Parked while the dormant cloud/QEMU profile is out of the active CI surface.
+          # - firebreak-test-smoke-cloud-job
 
     steps:
       - name: Check out repository

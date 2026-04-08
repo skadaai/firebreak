@@ -40,4 +40,12 @@
   firebreak-test-smoke-credential-slots = self.packages.${system}.firebreak-test-smoke-credential-slots;
   firebreak-test-smoke-codex-credential-slots = self.packages.${system}.firebreak-test-smoke-codex-credential-slots;
   firebreak-test-smoke-claude-code-credential-slots = self.packages.${system}.firebreak-test-smoke-claude-code-credential-slots;
+  # Parked while the dormant cloud/QEMU profile is out of the active check surface:
+  # firebreak-internal-runner-codex-cloud = self.packages.${system}.firebreak-internal-runner-codex-cloud;
+  # firebreak-codex-cloud-system = localVmArtifacts.firebreak-codex-cloud.nixosConfiguration.config.system.build.toplevel;
+  # firebreak-test-smoke-cloud-job = self.packages.${system}.firebreak-test-smoke-cloud-job;
+  # firebreak-internal-runner-claude-code-cloud = self.packages.${system}.firebreak-internal-runner-claude-code-cloud;
+  # firebreak-claude-code-cloud-system = localVmArtifacts.firebreak-claude-code-cloud.nixosConfiguration.config.system.build.toplevel;
+  # firebreak-internal-runner-test-cloud = self.packages.${system}.firebreak-internal-runner-test-cloud;
+  # firebreak-test-smoke-cloud-system = localVmArtifacts.firebreak-cloud-smoke.nixosConfiguration.config.system.build.toplevel;
 }

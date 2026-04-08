@@ -39,9 +39,7 @@ in {
 
     systemd.services.port-publish-fixture = {
       description = "Rootless port publish fixture HTTP server";
-      wantedBy = [ "multi-user.target" ];
-      after = [ "prepare-agent-session.service" ];
-      requires = [ "prepare-agent-session.service" ];
+      wantedBy = [ "basic.target" ];
 
       serviceConfig = {
         ExecStart = "${portPublishFixtureServer}/bin/port-publish-fixture-server";

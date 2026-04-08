@@ -15,6 +15,7 @@ mkdir -p "$firebreak_tmp_root"
 smoke_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-agent-warm-reuse.XXXXXX")
 workspace_dir=$smoke_tmp_dir/workspace
 state_root=$smoke_tmp_dir/state
+firebreak_state_dir=$state_root
 instance_dir=""
 controller_pid=""
 
@@ -82,6 +83,7 @@ run_version_command() {
     cd "$workspace_dir"
     run_with_clean_firebreak_env \
       FIREBREAK_STATE_ROOT="$state_root" \
+      FIREBREAK_STATE_DIR="$firebreak_state_dir" \
       FIREBREAK_DEBUG_KEEP_RUNTIME=0 \
       @AGENT_PACKAGE_BIN@ --version 2>&1
   )

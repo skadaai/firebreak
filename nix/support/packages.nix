@@ -457,7 +457,10 @@ rec {
         nix
         python3
       ];
-      text = builtins.readFile ../../modules/base/host/firebreak-worker.sh;
+      text = ''
+        export FIREBREAK_LIBEXEC_DIR='${mkFirebreakLibexecPackage}/libexec'
+        exec bash "$FIREBREAK_LIBEXEC_DIR/firebreak-worker.sh" "$@"
+      '';
     };
 
   mkTaskSmokePackage = { name }:

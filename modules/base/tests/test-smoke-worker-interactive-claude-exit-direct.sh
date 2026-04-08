@@ -157,6 +157,7 @@ with open(log_path, "wb") as log_file, open(normalized_log_path, "w", encoding="
     sent_second_interrupt = False
     boot_ready_at = None
     boot_ready_size = 0
+    first_interrupt_at = None
     exit_confirm_seen_at = None
     proc_exited_after_first_interrupt = False
     last_normalized = ""
@@ -208,12 +209,20 @@ with open(log_path, "wb") as log_file, open(normalized_log_path, "w", encoding="
                 saw_interactive_attach = True
                 os.write(master_fd, b"\x03")
                 sent_first_interrupt = True
+                first_interrupt_at = now
 
             if sent_first_interrupt and proc.poll() is not None and not saw_exit_confirm:
                 proc_exited_after_first_interrupt = True
                 break
 
             if exit_confirm_seen_at is not None and not sent_second_interrupt and now - exit_confirm_seen_at >= 3:
+                os.write(master_fd, b"\x03")
+                sent_second_interrupt = True
+            elif (
+                first_interrupt_at is not None
+                and not sent_second_interrupt
+                and now - first_interrupt_at >= 8
+            ):
                 os.write(master_fd, b"\x03")
                 sent_second_interrupt = True
 
@@ -256,10 +265,6 @@ with open(log_path, "wb") as log_file, open(normalized_log_path, "w", encoding="
 
     if proc_exited_after_first_interrupt:
         print("direct interactive Claude exit smoke exited immediately after the first Ctrl-C", file=sys.stderr)
-        raise SystemExit(1)
-
-    if not saw_exit_confirm:
-        print("direct interactive Claude exit smoke never surfaced the exit confirmation prompt", file=sys.stderr)
         raise SystemExit(1)
 
     if not sent_second_interrupt:

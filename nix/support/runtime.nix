@@ -68,6 +68,7 @@ firebreak_cmdline_setup = (
 
 text = text.replace("runtime_args=$(", firebreak_cmdline_setup + "runtime_args=$(", 1)
 text = re.sub(r"--cmdline '([^']*)'", '--cmdline "$firebreak_cmdline"', text, count=1)
+
 path.write_text(text)
 PY
 

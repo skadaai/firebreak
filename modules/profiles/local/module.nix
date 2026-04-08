@@ -272,6 +272,7 @@ in {
     systemd.services.reload-systemd-vconsole-setup.enable = lib.mkForce false;
     systemd.network.enable = lib.mkForce needsFullGuestNetwork;
     systemd.targets.getty.enable = lib.mkForce false;
+    systemd.defaultUnit = lib.mkForce "firebreak-interactive.target";
 
     workloadVm.hostMetaMount = lib.mkDefault hostMetaMount;
     workloadVm.workerExecOutputMount = lib.mkDefault workerExecOutputMount;

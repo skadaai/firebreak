@@ -644,6 +644,7 @@ rec {
       text = renderTemplate {
         "@AGENT_BIN@" = "${self.packages.${system}.firebreak}/bin/firebreak";
         "@BRIDGE_VM_BIN@" = "${bridgeVm.package}/bin/firebreak-worker-guest-bridge-smoke-vm";
+        "@REPO_ROOT@" = builtins.toString ../../.;
         "@WORKER_LOCAL_STATE_DIR@" = "/home/dev/.local/state/firebreak/worker-local";
       } ../../modules/base/tests/test-smoke-worker-guest-bridge.sh;
     };
@@ -663,6 +664,7 @@ rec {
       text = renderTemplate {
         "@AGENT_BIN@" = "${self.packages.${system}.firebreak}/bin/firebreak";
         "@BRIDGE_VM_BIN@" = "${bridgeVm.package}/bin/firebreak-worker-guest-bridge-smoke-vm";
+        "@REPO_ROOT@" = builtins.toString ../../.;
       } ../../modules/base/tests/test-smoke-worker-guest-bridge-interactive.sh;
     };
 

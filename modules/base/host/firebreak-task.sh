@@ -62,6 +62,23 @@ require_primary_checkout() {
   fi
 }
 
+resolve_task_base_ref() {
+  repo_root=$1
+
+  if [ -n "${FIREBREAK_TASK_BASE_REF:-}" ]; then
+    printf '%s\n' "$FIREBREAK_TASK_BASE_REF"
+    return
+  fi
+
+  current_branch=$(git -C "$repo_root" symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+  if [ -n "$current_branch" ]; then
+    printf '%s\n' "$current_branch"
+    return
+  fi
+
+  printf '%s\n' HEAD
+}
+
 sync_primary_checkout_to_worktree() {
   repo_root=$1
   target_worktree=$2
@@ -176,7 +193,7 @@ create_task() {
   task_id=""
   branch=""
   owner=${FIREBREAK_TASK_OWNER:-autonomous-operator}
-  base_ref=${FIREBREAK_TASK_BASE_REF:-main}
+  base_ref=${FIREBREAK_TASK_BASE_REF:-}
   resume_existing=0
 
   while [ "$#" -gt 0 ]; do
@@ -222,6 +239,9 @@ create_task() {
     exit 1
   fi
   require_primary_checkout "$repo_root"
+  if [ -z "$base_ref" ]; then
+    base_ref=$(resolve_task_base_ref "$repo_root")
+  fi
 
   task_root=$state_dir/$task_id
   metadata_path=$task_root/metadata.json

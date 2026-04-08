@@ -3,6 +3,21 @@ set -euo pipefail
 
 log() { printf '[new-worktree] %s\n' "$*" >&2; }
 
+resolve_base_ref() {
+  if [[ -n "${FIREBREAK_WORKTREE_BASE_REF:-}" ]]; then
+    printf '%s\n' "$FIREBREAK_WORKTREE_BASE_REF"
+    return
+  fi
+
+  current_branch=$(git -C "$root" symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+  if [[ -n "$current_branch" ]]; then
+    printf '%s\n' "$current_branch"
+    return
+  fi
+
+  printf '%s\n' HEAD
+}
+
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 branch="${1:-}"
@@ -16,7 +31,7 @@ if [[ -z "$branch" ]]; then
 fi
 
 root="$(git -C "$script_dir/.." rev-parse --show-toplevel)"
-base_ref="${FIREBREAK_WORKTREE_BASE_REF:-main}"
+base_ref="$(resolve_base_ref)"
 if [[ -n "$worktree_name" ]]; then
   worktree_parent="${FIREBREAK_TASK_WORKTREE_ROOT:-${FIREBREAK_WORKTREE_ROOT:-}}"
 else

@@ -61,3 +61,15 @@ jobs:
 
       - name: Run hosted smoke test
         run: nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#${{ matrix.package }}
+
+      - name: Upload hosted smoke artifacts on failure
+        if: failure()
+        uses: namespace-actions/upload-artifact@v1
+        with:
+          name: hosted-smoke-${{ matrix.package }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /home/runner/.cache/firebreak/
+            /home/runner/.cache/firebreak-test/
+            /tmp/firebreak/
+          if-no-files-found: ignore
+          compression-level: 0

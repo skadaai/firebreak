@@ -37,5 +37,6 @@ Environment overlay implementation plus boot-base split.
 
 ## What remains open
 
+- a dedicated public cache layer for high-ROI outer build/substitution reduction, now tracked in [specs/021-public-cache-layer/SPEC.md](../021-public-cache-layer/SPEC.md)
 - continuing the package-default environment model beyond the initial overlay contract
 - continuing the kernel/initrd and guest service-graph reduction against those bases

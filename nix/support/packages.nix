@@ -1,5 +1,16 @@
 { self, system, pkgs, renderTemplate, mkLocalVmArtifacts }:
 rec {
+  mkFirebreakLibexecPackage =
+    pkgs.runCommand "firebreak-libexec" {} ''
+      mkdir -p "$out/libexec"
+      install -m 0555 ${../../modules/base/host/firebreak.sh} "$out/libexec/firebreak.sh"
+      install -m 0555 ${../../modules/base/host/firebreak-init.sh} "$out/libexec/firebreak-init.sh"
+      install -m 0555 ${../../modules/base/host/firebreak-doctor.sh} "$out/libexec/firebreak-doctor.sh"
+      install -m 0555 ${../../modules/base/host/firebreak-environment.sh} "$out/libexec/firebreak-environment.sh"
+      install -m 0555 ${../../modules/base/host/firebreak-project-config.sh} "$out/libexec/firebreak-project-config.sh"
+      install -m 0555 ${../../modules/base/host/firebreak-worker.sh} "$out/libexec/firebreak-worker.sh"
+    '';
+
   mkSmokePackage = {
     name,
     agentPackage,
@@ -475,7 +486,10 @@ rec {
           gnused
           python3
         ];
-        text = builtins.readFile ../../modules/base/host/firebreak-worker.sh;
+        text = ''
+          export FIREBREAK_LIBEXEC_DIR='${mkFirebreakLibexecPackage}/libexec'
+          exec bash "$FIREBREAK_LIBEXEC_DIR/firebreak-worker.sh" "$@"
+        '';
       };
     in
     pkgs.writeShellApplication {
@@ -678,15 +692,6 @@ rec {
 
   mkFirebreakCliPackage = { name }:
     let
-      firebreakLibexec = pkgs.runCommand "firebreak-libexec" {} ''
-        mkdir -p "$out/libexec"
-        install -m 0555 ${../../modules/base/host/firebreak.sh} "$out/libexec/firebreak.sh"
-        install -m 0555 ${../../modules/base/host/firebreak-init.sh} "$out/libexec/firebreak-init.sh"
-        install -m 0555 ${../../modules/base/host/firebreak-doctor.sh} "$out/libexec/firebreak-doctor.sh"
-        install -m 0555 ${../../modules/base/host/firebreak-environment.sh} "$out/libexec/firebreak-environment.sh"
-        install -m 0555 ${../../modules/base/host/firebreak-project-config.sh} "$out/libexec/firebreak-project-config.sh"
-        install -m 0555 ${../../modules/base/host/firebreak-worker.sh} "$out/libexec/firebreak-worker.sh"
-      '';
       firebreakFlakeRef = "path:${builtins.toString ../../.}";
     in
     pkgs.writeShellApplication {
@@ -705,7 +710,7 @@ rec {
         sudo
       ];
       text = ''
-        export FIREBREAK_LIBEXEC_DIR='${firebreakLibexec}/libexec'
+        export FIREBREAK_LIBEXEC_DIR='${mkFirebreakLibexecPackage}/libexec'
         export FIREBREAK_FLAKE_REF='${firebreakFlakeRef}'
         export FIREBREAK_NIXPKGS_PATH='${pkgs.path}'
         export FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG='1'

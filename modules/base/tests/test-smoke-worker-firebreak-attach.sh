@@ -93,6 +93,7 @@ chmod +x "$fake_bin_dir/nix"
 run_attach_version() {
   env \
     PATH="$fake_bin_dir:$PATH" \
+    FIREBREAK_NIX_BIN="$fake_bin_dir/nix" \
     FIREBREAK_STATE_MODE=outer-leak \
     FIREBREAK_CREDENTIAL_SLOT=outer-leak \
     FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH="$smoke_tmp_dir"/firebreak-worker-credential-slot-leak \

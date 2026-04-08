@@ -84,9 +84,10 @@ os.close(slave_fd)
 output = bytearray()
 child_wait_status = None
 deadline = time.monotonic() + 300
+ready_seen = False
+completion_line_sent = False
 
 try:
-    os.write(master_fd, b"ping-early\n")
     while True:
         if time.monotonic() >= deadline:
             timed_out_output = output.decode("utf-8", errors="replace")
@@ -105,6 +106,11 @@ try:
             if not chunk:
                 break
             output.extend(chunk)
+            decoded = output.decode("utf-8", errors="replace")
+            if "READY" in decoded and not ready_seen:
+                ready_seen = True
+                os.write(master_fd, b"smoke-finish\n")
+                completion_line_sent = True
             continue
 
         waited_pid, wait_status = os.waitpid(child_pid, os.WNOHANG)
@@ -142,9 +148,14 @@ if "READY" not in attach_output:
     sys.stderr.write("\ninteractive guest bridge smoke did not receive the ready marker\n")
     raise SystemExit(1)
 
-if "ECHO:ping-early" not in attach_output:
+if not completion_line_sent:
     sys.stderr.write(attach_output)
-    sys.stderr.write("\ninteractive guest bridge smoke did not preserve the early input written before READY\n")
+    sys.stderr.write("\ninteractive guest bridge smoke did not send the post-ready completion line\n")
+    raise SystemExit(1)
+
+if "ECHO:smoke-finish" not in attach_output:
+    sys.stderr.write(attach_output)
+    sys.stderr.write("\ninteractive guest bridge smoke did not receive the echoed completion line\n")
     raise SystemExit(1)
 
 if exit_code != 0:

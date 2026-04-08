@@ -338,16 +338,11 @@ rec {
 
   mkValidationPackage = { name, includeCloudSuite ? true }:
     let
-      cloudSmokeBin =
-        if includeCloudSuite then
-          "${self.packages.${system}.firebreak-test-smoke-cloud-job}/bin/firebreak-test-smoke-cloud-job"
-        else
-          "";
       cloudSuiteCase =
         if includeCloudSuite then
           ''
   test-smoke-cloud-job)
-    suite_command="${cloudSmokeBin}"
+    suite_package="firebreak-test-smoke-cloud-job"
     ;;
 ''
         else
@@ -356,21 +351,16 @@ rec {
     pkgs.writeShellApplication {
       inherit name;
       runtimeInputs = with pkgs; [
+        bash
         coreutils
+        git
         gnused
         iproute2
         iptables
+        nix
         sudo
       ];
       text = renderTemplate {
-        "@LOCAL_CONTROLLER_SMOKE_BIN@" = "${self.packages.${system}.firebreak-test-smoke-local-controller}/bin/firebreak-test-smoke-local-controller";
-        "@PROJECT_CONFIG_SMOKE_BIN@" = "${self.packages.${system}.firebreak-test-smoke-project-config-and-doctor}/bin/firebreak-test-smoke-project-config-and-doctor";
-        "@CODEX_SMOKE_BIN@" = "${self.packages.${system}.firebreak-test-smoke-codex}/bin/firebreak-test-smoke-codex";
-        "@CODEX_VERSION_BIN@" = "${self.packages.${system}.firebreak-test-smoke-codex-version}/bin/firebreak-test-smoke-codex-version";
-        "@CODEX_WARM_REUSE_BIN@" = "${self.packages.${system}.firebreak-test-smoke-codex-warm-reuse}/bin/firebreak-test-smoke-codex-warm-reuse";
-        "@CLAUDE_SMOKE_BIN@" = "${self.packages.${system}.firebreak-test-smoke-claude-code}/bin/firebreak-test-smoke-claude-code";
-        "@PORT_PUBLISH_RUNTIME_BIN@" = "${self.packages.${system}.firebreak-test-smoke-port-publish-runtime}/bin/firebreak-test-smoke-port-publish-runtime";
-        "@CLOUD_SMOKE_BIN@" = cloudSmokeBin;
         "@CLOUD_SUITE_USAGE@" =
           if includeCloudSuite then
             "  test-smoke-cloud-job"

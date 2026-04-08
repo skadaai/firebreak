@@ -5,6 +5,7 @@ command=${1:-}
 suite_name=""
 host_os=$(uname -s 2>/dev/null || printf '%s' unknown)
 host_arch=$(uname -m 2>/dev/null || printf '%s' unknown)
+suite_package=""
 
 usage() {
   cat <<'EOF' >&2
@@ -97,27 +98,27 @@ missing_capability=""
 
 case "$suite_name" in
   test-smoke-local-controller)
-    suite_command="@LOCAL_CONTROLLER_SMOKE_BIN@"
+    suite_package="firebreak-test-smoke-local-controller"
     required_capability="host-shell"
     ;;
   test-smoke-project-config-and-doctor)
-    suite_command="@PROJECT_CONFIG_SMOKE_BIN@"
+    suite_package="firebreak-test-smoke-project-config-and-doctor"
     required_capability="host-shell"
     ;;
   test-smoke-codex)
-    suite_command="@CODEX_SMOKE_BIN@"
+    suite_package="firebreak-test-smoke-codex"
     ;;
   test-smoke-codex-version)
-    suite_command="@CODEX_VERSION_BIN@"
+    suite_package="firebreak-test-smoke-codex-version"
     ;;
   test-smoke-codex-warm-reuse)
-    suite_command="@CODEX_WARM_REUSE_BIN@"
+    suite_package="firebreak-test-smoke-codex-warm-reuse"
     ;;
   test-smoke-claude-code)
-    suite_command="@CLAUDE_SMOKE_BIN@"
+    suite_package="firebreak-test-smoke-claude-code"
     ;;
   test-smoke-port-publish-runtime)
-    suite_command="@PORT_PUBLISH_RUNTIME_BIN@"
+    suite_package="firebreak-test-smoke-port-publish-runtime"
     ;;
 @CLOUD_SUITE_CASE@
   *)
@@ -182,6 +183,14 @@ else
     esac
   fi
 fi
+
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
+if [ -z "$repo_root" ] || ! [ -f "$repo_root/scripts/run-flake.sh" ]; then
+  echo "firebreak internal validate must run from inside the Firebreak repository" >&2
+  exit 1
+fi
+
+suite_command="bash $repo_root/scripts/run-flake.sh run .#$suite_package"
 
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 run_id=${timestamp}-${suite_name}

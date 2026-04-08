@@ -88,5 +88,9 @@ jobs:
             /home/runner/.cache/firebreak-test/
             /cache/firebreak/
             /tmp/firebreak/
+            !/home/runner/.cache/firebreak/**/*.socket
+            !/home/runner/.cache/firebreak-test/**/*.socket
+            !/cache/firebreak/**/*.socket
+            !/tmp/firebreak/**/*.socket
           if-no-files-found: ignore
           compression-level: 0

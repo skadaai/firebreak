@@ -650,26 +650,27 @@ restore_attach_tty() {
 resolve_firebreak_worker_exec() {
   installable=$1
   package_name=$2
+  nix_cmd=${FIREBREAK_NIX_BIN:-nix}
 
   if [ "${FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG:-}" = "1" ] \
     && [ -n "${FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES:-}" ]; then
     build_output=$(
-      nix --accept-flake-config \
+      "$nix_cmd" --accept-flake-config \
         --extra-experimental-features "$FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES" \
         build --no-link --print-out-paths "$installable"
     )
   elif [ "${FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG:-}" = "1" ]; then
     build_output=$(
-      nix --accept-flake-config \
+      "$nix_cmd" --accept-flake-config \
         build --no-link --print-out-paths "$installable"
     )
   elif [ -n "${FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES:-}" ]; then
     build_output=$(
-      nix --extra-experimental-features "$FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES" \
+      "$nix_cmd" --extra-experimental-features "$FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES" \
         build --no-link --print-out-paths "$installable"
     )
   else
-    build_output=$(nix build --no-link --print-out-paths "$installable")
+    build_output=$("$nix_cmd" build --no-link --print-out-paths "$installable")
   fi
 
   resolved_out=$(printf '%s\n' "$build_output" | tail -n 1)

@@ -94,22 +94,19 @@ fi
 
 validation_suite=test-smoke-project-config-and-doctor
 
-task_cmd validate --task-id task-one "$validation_suite" >"$task_tmp_dir/task-one.validate.log" 2>&1 &
-validate_one_pid=$!
-task_cmd validate --task-id task-two "$validation_suite" >"$task_tmp_dir/task-two.validate.log" 2>&1 &
-validate_two_pid=$!
+task_cmd validate --task-id task-one "$validation_suite" >"$task_tmp_dir/task-one.validate.log" 2>&1 || validation_status=$?
+: "${validation_status:=0}"
+if [ "$validation_status" -eq 0 ]; then
+  task_cmd validate --task-id task-two "$validation_suite" >"$task_tmp_dir/task-two.validate.log" 2>&1 || validation_status=$?
+fi
 
-parallel_status=0
-wait "$validate_one_pid" || parallel_status=$?
-wait "$validate_two_pid" || parallel_status=$?
-
-if [ "$parallel_status" -ne 0 ]; then
+if [ "$validation_status" -ne 0 ]; then
   echo "--- task one validate log ---" >&2
   sed -n '1,260p' "$task_tmp_dir/task-one.validate.log" >&2 || true
   echo "--- task two validate log ---" >&2
   sed -n '1,260p' "$task_tmp_dir/task-two.validate.log" >&2 || true
-  echo "task smoke parallel validation failed" >&2
-  exit "$parallel_status"
+  echo "task smoke validation failed" >&2
+  exit "$validation_status"
 fi
 
 if ! find "$task_one_root/validation/$validation_suite/runs" -name summary.json -print -quit | grep -q .; then

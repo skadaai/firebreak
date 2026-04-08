@@ -30,6 +30,7 @@ moduleArgs@{
 let
   cfg = config.workloadVm;
   backendSpec = runtimeBackends.specFor cfg.runtimeBackend;
+  localHostSeedOnlyBootstrap = cfg.toolRuntimesEnabled && cfg.runtimeBackend == "cloud-hypervisor";
   devHome = cfg.devHome;
   toolsMount = cfg.toolRuntimesMount;
   localBin = "${devHome}/.local/bin";
@@ -77,160 +78,174 @@ let
           }
         '')
         shellBootstrapFunctionNames);
-  hostToolRuntimeSeedScript = pkgs.writeShellScript "firebreak-node-cli-host-seed" ''
-    set -eu
+  hostToolRuntimeSeedScript = pkgs.writeShellApplication {
+    name = "firebreak-node-cli-host-seed";
+    runtimeInputs =
+      (with pkgs; [
+        bash
+        coreutils
+        findutils
+        gnugrep
+        gnused
+        nodejs_20
+        python3
+        util-linux
+      ]) ++ extraBootstrapPackages;
+    text = ''
+      set -eu
 
-    tool_home=$1
-    local_bin="$tool_home/.local/bin"
-    xdg_config_home="$tool_home/.config"
-    xdg_cache_home="$tool_home/.cache"
-    xdg_state_home="$tool_home/.local/state"
-    npm_cache_dir="$xdg_cache_home/npm"
-    install_tmp="$xdg_cache_home/tmp"
-    install_prefix="$tool_home/.local"
-    package_node_modules="$install_prefix/lib/node_modules/${packageSpec}"
-    state_root="$xdg_state_home/firebreak-node-cli/${vmName}"
-    state_file="$state_root/install-state"
-    ready_marker="$tool_home/bootstrap-ready"
-    install_state_id='${installStateId}'
-    bootstrap_lock_path="$tool_home/.firebreak-bootstrap.lock"
-    bootstrap_lock_acquired=0
-
-    log_phase() {
-      printf '[firebreak-host-bootstrap] %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1"
-    }
-
-    ensure_dir() {
-      target_path=$1
-      mkdir -p "$target_path"
-      chmod 0755 "$target_path" 2>/dev/null || true
-    }
-
-    acquire_bootstrap_lock() {
-      exec 9>"$bootstrap_lock_path"
-      flock 9
-      bootstrap_lock_acquired=1
-    }
-
-    release_bootstrap_lock() {
-      if [ "$bootstrap_lock_acquired" != "1" ]; then
-        return 0
-      fi
-      flock -u 9 2>/dev/null || true
-      exec 9>&-
+      tool_home=$1
+      local_bin="$tool_home/.local/bin"
+      xdg_config_home="$tool_home/.config"
+      xdg_cache_home="$tool_home/.cache"
+      xdg_state_home="$tool_home/.local/state"
+      npm_cache_dir="$xdg_cache_home/npm"
+      install_tmp="$xdg_cache_home/tmp"
+      install_prefix="$tool_home/.local"
+      package_node_modules="$install_prefix/lib/node_modules/${packageSpec}"
+      state_root="$xdg_state_home/firebreak-node-cli/${vmName}"
+      state_file="$state_root/install-state"
+      ready_marker="$tool_home/bootstrap-ready"
+      install_state_id='${installStateId}'
+      bootstrap_lock_path="$tool_home/.firebreak-bootstrap.lock"
       bootstrap_lock_acquired=0
-    }
 
-    write_ready_marker() {
-      ready_dir=$(dirname "$ready_marker")
-      ensure_dir "$ready_dir"
-      ready_tmp=$(mktemp "$ready_dir/.bootstrap-ready.XXXXXX")
-      printf '%s\n' "$install_state_id" >"$ready_tmp"
-      mv -f "$ready_tmp" "$ready_marker"
-    }
+      log_phase() {
+        printf '[firebreak-host-bootstrap] %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1"
+      }
 
-    wrappers_ready() {
-      for wrapper_name in ${installBinNamesArgs}; do
-        if [ ! -x "$local_bin/$wrapper_name" ]; then
-          return 1
+      ensure_dir() {
+        target_path=$1
+        mkdir -p "$target_path"
+        chmod 0755 "$target_path" 2>/dev/null || true
+      }
+
+      acquire_bootstrap_lock() {
+        exec 9>"$bootstrap_lock_path"
+        flock 9
+        bootstrap_lock_acquired=1
+      }
+
+      release_bootstrap_lock() {
+        if [ "$bootstrap_lock_acquired" != "1" ]; then
+          return 0
         fi
+        flock -u 9 2>/dev/null || true
+        exec 9>&-
+        bootstrap_lock_acquired=0
+      }
+
+      write_ready_marker() {
+        ready_dir=$(dirname "$ready_marker")
+        ensure_dir "$ready_dir"
+        ready_tmp=$(mktemp "$ready_dir/.bootstrap-ready.XXXXXX")
+        printf '%s\n' "$install_state_id" >"$ready_tmp"
+        mv -f "$ready_tmp" "$ready_marker"
+      }
+
+      wrappers_ready() {
+        for wrapper_name in ${installBinNamesArgs}; do
+          if [ ! -x "$local_bin/$wrapper_name" ]; then
+            return 1
+          fi
+        done
+        for wrapper_name in ${proxyLocalUpstreamNamesArgs}; do
+          if [ ! -x "$local_bin/.firebreak-upstream-$wrapper_name" ]; then
+            return 1
+          fi
+        done
+        return 0
+      }
+
+      host_trap() {
+        exit_code=$?
+        release_bootstrap_lock
+        exit "$exit_code"
+      }
+      trap host_trap EXIT INT TERM
+
+      log_phase "toolchain-prepare-start ${displayName}"
+      ensure_dir "$tool_home"
+      acquire_bootstrap_lock
+
+      for bootstrap_dir in \
+        "$state_root" \
+        "$local_bin" \
+        "$install_prefix" \
+        "$install_prefix/lib/node_modules" \
+        "$install_tmp" \
+        "$xdg_config_home" \
+        "$xdg_cache_home" \
+        "$xdg_state_home" \
+        "$npm_cache_dir"; do
+        ensure_dir "$bootstrap_dir"
       done
-      for wrapper_name in ${proxyLocalUpstreamNamesArgs}; do
-        if [ ! -x "$local_bin/.firebreak-upstream-$wrapper_name" ]; then
-          return 1
-        fi
-      done
-      return 0
-    }
 
-    host_trap() {
-      exit_code=$?
-      release_bootstrap_lock
-      exit "$exit_code"
-    }
-    trap host_trap EXIT INT TERM
+      if [ -x "$local_bin/${binName}" ] && [ -r "$state_file" ] && [ "$(cat "$state_file")" = "$install_state_id" ] && [ -r "$ready_marker" ] && wrappers_ready; then
+        log_phase "toolchain-cache-hit ${packageSpec}"
+        exit 0
+      fi
 
-    log_phase "toolchain-prepare-start ${displayName}"
-    ensure_dir "$tool_home"
-    acquire_bootstrap_lock
+      rm -f "$ready_marker"
+      log_phase "toolchain-install-start ${packageSpec}"
 
-    for bootstrap_dir in \
-      "$state_root" \
-      "$local_bin" \
-      "$install_prefix" \
-      "$install_prefix/lib/node_modules" \
-      "$install_tmp" \
-      "$xdg_config_home" \
-      "$xdg_cache_home" \
-      "$xdg_state_home" \
-      "$npm_cache_dir"; do
-      ensure_dir "$bootstrap_dir"
-    done
+      bootstrap_env=(
+        "HOME=$tool_home"
+        "XDG_CONFIG_HOME=$xdg_config_home"
+        "XDG_CACHE_HOME=$xdg_cache_home"
+        "XDG_STATE_HOME=$xdg_state_home"
+        "TMPDIR=$install_tmp"
+        "npm_config_cache=$npm_cache_dir"
+        "npm_config_prefix=$install_prefix"
+        "npm_config_audit=false"
+        "npm_config_fund=false"
+        "npm_config_update_notifier=false"
+        "npm_config_loglevel=warn"
+        "CI=1"
+        "PATH=$local_bin:$PATH"
+      )
 
-    if [ -x "$local_bin/${binName}" ] && [ -r "$state_file" ] && [ "$(cat "$state_file")" = "$install_state_id" ] && [ -r "$ready_marker" ] && wrappers_ready; then
-      log_phase "toolchain-cache-hit ${packageSpec}"
-      exit 0
-    fi
+      if [ -n "''${HTTP_PROXY:-}" ]; then
+        bootstrap_env+=("HTTP_PROXY=$HTTP_PROXY" "npm_config_proxy=$HTTP_PROXY")
+      fi
+      if [ -n "''${HTTPS_PROXY:-}" ]; then
+        bootstrap_env+=("HTTPS_PROXY=$HTTPS_PROXY" "npm_config_https_proxy=$HTTPS_PROXY")
+      fi
+      if [ -n "''${http_proxy:-}" ]; then
+        bootstrap_env+=("http_proxy=$http_proxy")
+      fi
+      if [ -n "''${https_proxy:-}" ]; then
+        bootstrap_env+=("https_proxy=$https_proxy")
+      fi
+      if [ -n "''${NO_PROXY:-}" ]; then
+        bootstrap_env+=("NO_PROXY=$NO_PROXY" "npm_config_noproxy=$NO_PROXY")
+      fi
+      if [ -n "''${no_proxy:-}" ]; then
+        bootstrap_env+=("no_proxy=$no_proxy")
+      fi
 
-    rm -f "$ready_marker"
-    log_phase "toolchain-install-start ${packageSpec}"
+      env "''${bootstrap_env[@]}" sh -s "$package_node_modules" "${packageSpec}" <<'EOF'
+      set -eu
+      mkdir -p \
+        "$XDG_CONFIG_HOME" \
+        "$XDG_CACHE_HOME" \
+        "$XDG_STATE_HOME" \
+        "$npm_config_cache" \
+        "$npm_config_prefix"
+      rm -rf "$1"
+      rm -f "$npm_config_prefix/bin/${binName}"
+      set -- "$2" ${proxyLocalUpstreamInstallArgs}
+      npm install --global --omit=dev "$@"
+      ${postInstallScript}
+      ${installBinScriptSnippet}
+      EOF
 
-    bootstrap_env=(
-      "HOME=$tool_home"
-      "XDG_CONFIG_HOME=$xdg_config_home"
-      "XDG_CACHE_HOME=$xdg_cache_home"
-      "XDG_STATE_HOME=$xdg_state_home"
-      "TMPDIR=$install_tmp"
-      "npm_config_cache=$npm_cache_dir"
-      "npm_config_prefix=$install_prefix"
-      "npm_config_audit=false"
-      "npm_config_fund=false"
-      "npm_config_update_notifier=false"
-      "npm_config_loglevel=warn"
-      "CI=1"
-      "PATH=$local_bin:$PATH"
-    )
-
-    if [ -n "''${HTTP_PROXY:-}" ]; then
-      bootstrap_env+=("HTTP_PROXY=$HTTP_PROXY" "npm_config_proxy=$HTTP_PROXY")
-    fi
-    if [ -n "''${HTTPS_PROXY:-}" ]; then
-      bootstrap_env+=("HTTPS_PROXY=$HTTPS_PROXY" "npm_config_https_proxy=$HTTPS_PROXY")
-    fi
-    if [ -n "''${http_proxy:-}" ]; then
-      bootstrap_env+=("http_proxy=$http_proxy")
-    fi
-    if [ -n "''${https_proxy:-}" ]; then
-      bootstrap_env+=("https_proxy=$https_proxy")
-    fi
-    if [ -n "''${NO_PROXY:-}" ]; then
-      bootstrap_env+=("NO_PROXY=$NO_PROXY" "npm_config_noproxy=$NO_PROXY")
-    fi
-    if [ -n "''${no_proxy:-}" ]; then
-      bootstrap_env+=("no_proxy=$no_proxy")
-    fi
-
-    env "''${bootstrap_env[@]}" sh -s "$package_node_modules" "${packageSpec}" <<'EOF'
-    set -eu
-    mkdir -p \
-      "$XDG_CONFIG_HOME" \
-      "$XDG_CACHE_HOME" \
-      "$XDG_STATE_HOME" \
-      "$npm_config_cache" \
-      "$npm_config_prefix"
-    rm -rf "$1"
-    rm -f "$npm_config_prefix/bin/${binName}"
-    set -- "$2" ${proxyLocalUpstreamInstallArgs}
-    npm install --global --omit=dev "$@"
-    ${postInstallScript}
-    ${installBinScriptSnippet}
-    EOF
-
-    printf '%s\n' "$install_state_id" >"$state_file"
-    write_ready_marker
-    log_phase "toolchain-install-done ${packageSpec}"
-    log_phase "wrapper-ready ${binName}"
-  '';
+      printf '%s\n' "$install_state_id" >"$state_file"
+      write_ready_marker
+      log_phase "toolchain-install-done ${packageSpec}"
+      log_phase "wrapper-ready ${binName}"
+    '';
+  };
   upstreamInstallBinScriptSnippet =
     lib.concatStringsSep "\n"
       (map
@@ -542,24 +557,41 @@ in {
       sharedCredentialSlots = sharedCredentialSlots;
       toolRuntimesEnabled = true;
       memoryMiB = lib.mkDefault memoryMiB;
+      coldExecBootstrapWaitEnable = true;
       extraSystemPackages = with pkgs; [
         bootstrapWaitScript
         launchScript
         readyScript
       ] ++ extraSystemPackages;
-      bootstrapPackages = with pkgs; [
-        bash
-        coreutils
-        findutils
-        gnugrep
-        gnused
-        nodejs_20
-        python3
-        util-linux
-      ] ++ extraBootstrapPackages;
-      bootstrapConditionScript = "${bootstrapConditionScript}";
-      bootstrapScript = renderTemplate scriptVars ./guest/bootstrap.sh;
-      toolRuntimeSeedScript = if cfg.toolRuntimesEnabled then "${hostToolRuntimeSeedScript}" else null;
+      bootstrapPackages =
+        if localHostSeedOnlyBootstrap then
+          [ ]
+        else
+          (with pkgs; [
+            bash
+            coreutils
+            findutils
+            gnugrep
+            gnused
+            nodejs_20
+            python3
+            util-linux
+          ]) ++ extraBootstrapPackages;
+      bootstrapConditionScript =
+        if localHostSeedOnlyBootstrap then
+          null
+        else
+          "${bootstrapConditionScript}";
+      bootstrapScript =
+        if localHostSeedOnlyBootstrap then
+          null
+        else
+          renderTemplate scriptVars ./guest/bootstrap.sh;
+      toolRuntimeSeedScript =
+        if cfg.toolRuntimesEnabled then
+          "${hostToolRuntimeSeedScript}/bin/firebreak-node-cli-host-seed"
+        else
+          null;
       shellInit = renderTemplate scriptVars ./guest/shell-init.sh;
     };
 

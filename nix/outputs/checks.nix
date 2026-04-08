@@ -9,6 +9,7 @@
   firebreak-internal-runner-codex = self.packages.${system}.firebreak-internal-runner-codex;
   firebreak-codex-system = localVmArtifacts.firebreak-codex.nixosConfiguration.config.system.build.toplevel;
   firebreak-test-smoke-codex = self.packages.${system}.firebreak-test-smoke-codex;
+  firebreak-test-smoke-codex-version = self.packages.${system}.firebreak-test-smoke-codex-version;
   firebreak-test-smoke-codex-warm-reuse = self.packages.${system}.firebreak-test-smoke-codex-warm-reuse;
   firebreak-internal-runner-interactive-echo = self.packages.${system}.firebreak-internal-runner-interactive-echo;
   firebreak-interactive-echo-system = localVmArtifacts.firebreak-interactive-echo.nixosConfiguration.config.system.build.toplevel;

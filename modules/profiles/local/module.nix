@@ -374,9 +374,11 @@ in {
     systemd.services.guest-egress-proxy = lib.mkIf (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) {
       description = "Expose rootless guest egress through Cloud Hypervisor vsock";
       wantedBy = [ "basic.target" ];
-      before = [ "dev-console.service" ]
+      before = [ "basic.target" "dev-console.service" ]
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
-      after = [ "local-fs.target" ];
+      after = [ "systemd-modules-load.service" ];
+      conflicts = [ "shutdown.target" ];
+      unitConfig.DefaultDependencies = "no";
 
       serviceConfig = {
         ExecStart = "${guestEgressRelayScript}/bin/firebreak-cloud-hypervisor-egress-relay";
@@ -391,9 +393,11 @@ in {
     systemd.services.guest-port-publish-relay = lib.mkIf (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) {
       description = "Expose localhost TCP services through the Cloud Hypervisor vsock mux";
       wantedBy = [ "basic.target" ];
-      before = [ "dev-console.service" ]
+      before = [ "basic.target" "dev-console.service" ]
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
-      after = [ "local-fs.target" ];
+      after = [ "systemd-modules-load.service" ];
+      conflicts = [ "shutdown.target" ];
+      unitConfig.DefaultDependencies = "no";
 
       serviceConfig = {
         ExecStart = "${guestPortPublishRelayScript}/bin/firebreak-cloud-hypervisor-port-publish-relay";

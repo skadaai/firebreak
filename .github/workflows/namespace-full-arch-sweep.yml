@@ -1,0 +1,158 @@
+name: Firebreak Namespace Full Arch Sweep
+# Run the broadest practical smoke surface across every supported host arch.
+# This is intentionally scheduled outside the pull-request gate.
+# Policy source: guides/ci-multi-arch-testing.md
+
+on:
+  schedule:
+    - cron: '0 5 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: namespace-full-sweep-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prepare-full-sweep-matrices:
+    name: Prepare Full Sweep Matrices
+    runs-on: ubuntu-latest
+    outputs:
+      amd64_linux_matrix: ${{ steps.render.outputs.amd64_linux_matrix }}
+      arm64_linux_matrix: ${{ steps.render.outputs.arm64_linux_matrix }}
+      arm64_darwin_matrix: ${{ steps.render.outputs.arm64_darwin_matrix }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Render full sweep matrices
+        id: render
+        run: |
+          echo "amd64_linux_matrix=$(sh .github/scripts/render-ci-matrix.sh namespace-full x86_64-linux)" >> "$GITHUB_OUTPUT"
+          echo "arm64_linux_matrix=$(sh .github/scripts/render-ci-matrix.sh namespace-full aarch64-linux)" >> "$GITHUB_OUTPUT"
+          echo "arm64_darwin_matrix=$(sh .github/scripts/render-ci-matrix.sh namespace-full aarch64-darwin)" >> "$GITHUB_OUTPUT"
+
+  amd64-linux-full:
+    name: amd64-linux / ${{ matrix.package }} (${{ matrix.shape }})
+    needs: prepare-full-sweep-matrices
+    runs-on:
+      - ${{ format('nscloud-ubuntu-24.04-amd64-{0}-with-cache;github.run-id={1};job.priority=10', matrix.shape, github.run_id) }}
+      - nscloud-cache-tag-firebreak-runtime-amd64-linux
+      - nscloud-cache-allow-commit-from-main
+      - nscloud-cache-allow-commit-from-default
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare-full-sweep-matrices.outputs.amd64_linux_matrix) }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          enable_kvm: true
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            system-features = nixos-test benchmark big-parallel kvm
+
+      - name: Run amd64-linux full smoke sweep
+        run: nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#${{ matrix.package }}
+
+      - name: Upload amd64-linux sweep artifacts on failure
+        if: failure()
+        uses: namespace-actions/upload-artifact@v1
+        with:
+          name: namespace-full-amd64-linux-${{ matrix.package }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /home/runner/.cache/firebreak/
+            /home/runner/.cache/firebreak-test/
+            /cache/firebreak/
+            /tmp/firebreak/
+            !/home/runner/.cache/firebreak/**/*.socket
+            !/home/runner/.cache/firebreak-test/**/*.socket
+            !/cache/firebreak/**/*.socket
+            !/tmp/firebreak/**/*.socket
+          if-no-files-found: ignore
+          compression-level: 0
+
+  arm64-linux-full:
+    name: arm64-linux / ${{ matrix.package }} (${{ matrix.shape }})
+    needs: prepare-full-sweep-matrices
+    runs-on:
+      - ${{ format('nscloud-ubuntu-24.04-arm64-{0}-with-cache;github.run-id={1};job.priority=10', matrix.shape, github.run_id) }}
+      - nscloud-cache-tag-firebreak-runtime-arm64-linux
+      - nscloud-cache-allow-commit-from-main
+      - nscloud-cache-allow-commit-from-default
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare-full-sweep-matrices.outputs.arm64_linux_matrix) }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          enable_kvm: true
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            system-features = nixos-test benchmark big-parallel kvm
+
+      - name: Run arm64-linux full smoke sweep
+        run: nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#${{ matrix.package }}
+
+      - name: Upload arm64-linux sweep artifacts on failure
+        if: failure()
+        uses: namespace-actions/upload-artifact@v1
+        with:
+          name: namespace-full-arm64-linux-${{ matrix.package }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /home/runner/.cache/firebreak/
+            /home/runner/.cache/firebreak-test/
+            /cache/firebreak/
+            /tmp/firebreak/
+            !/home/runner/.cache/firebreak/**/*.socket
+            !/home/runner/.cache/firebreak-test/**/*.socket
+            !/cache/firebreak/**/*.socket
+            !/tmp/firebreak/**/*.socket
+          if-no-files-found: ignore
+          compression-level: 0
+
+  arm64-darwin-full:
+    name: arm64-darwin / ${{ matrix.package }} (${{ matrix.shape }})
+    needs: prepare-full-sweep-matrices
+    runs-on:
+      - ${{ format('nscloud-macos-sequoia-arm64-{0}-with-cache;github.run-id={1};job.priority=10', matrix.shape, github.run_id) }}
+      - nscloud-cache-tag-firebreak-runtime-arm64-darwin
+      - nscloud-cache-allow-commit-from-main
+      - nscloud-cache-allow-commit-from-default
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare-full-sweep-matrices.outputs.arm64_darwin_matrix) }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify Apple Silicon package exports
+        run: |
+          nix --accept-flake-config --extra-experimental-features 'nix-command flakes' eval .#packages.aarch64-darwin.firebreak.name --raw
+          nix --accept-flake-config --extra-experimental-features 'nix-command flakes' eval .#packages.aarch64-darwin.firebreak-codex.name --raw
+          nix --accept-flake-config --extra-experimental-features 'nix-command flakes' eval .#packages.aarch64-darwin.firebreak-claude-code.name --raw
+          nix --accept-flake-config --extra-experimental-features 'nix-command flakes' eval .#checks.aarch64-darwin.firebreak-codex-system.drvPath --raw
+
+      - name: Run arm64-darwin full smoke sweep
+        run: nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#${{ matrix.package }}

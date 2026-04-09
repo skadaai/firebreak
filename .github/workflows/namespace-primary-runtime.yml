@@ -1,0 +1,102 @@
+name: Firebreak Namespace Primary Runtime
+# Run the full paid x86_64-linux runtime matrix only after GitHub fast checks pass.
+# Policy source: guides/ci-multi-arch-testing.md
+
+on:
+  workflow_run:
+    workflows: ["Firebreak GitHub Fast Checks"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number (e.g. 42) — leave empty to use current branch"
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: namespace-primary-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prepare-primary-runtime-matrix:
+    name: Prepare Primary Runtime Matrix
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.render.outputs.matrix }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Checkout PR head if pr_number provided
+        if: ${{ inputs.pr_number != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr checkout ${{ inputs.pr_number }}
+
+      - name: Render primary runtime matrix
+        id: render
+        run: echo "matrix=$(sh .github/scripts/render-ci-matrix.sh namespace-primary x86_64-linux)" >> "$GITHUB_OUTPUT"
+
+  namespace-primary-runtime:
+    name: ${{ matrix.package }} (${{ matrix.shape }})
+    needs: prepare-primary-runtime-matrix
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on:
+      - ${{ format('nscloud-ubuntu-24.04-amd64-{0}-with-cache;github.run-id={1};job.priority=1', matrix.shape, github.run_id) }}
+      - nscloud-cache-tag-firebreak-runtime-amd64-linux
+      - nscloud-cache-allow-commit-from-main
+      - nscloud-cache-allow-commit-from-default
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare-primary-runtime-matrix.outputs.matrix) }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Checkout PR head if pr_number provided
+        if: ${{ inputs.pr_number != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr checkout ${{ inputs.pr_number }}
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          enable_kvm: true
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            system-features = nixos-test benchmark big-parallel kvm
+
+      - name: Run primary runtime smoke test
+        run: nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#${{ matrix.package }}
+
+      - name: Upload primary runtime artifacts on failure
+        if: failure()
+        uses: namespace-actions/upload-artifact@v1
+        with:
+          name: namespace-primary-${{ matrix.package }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /home/runner/.cache/firebreak/
+            /home/runner/.cache/firebreak-test/
+            /cache/firebreak/
+            /tmp/firebreak/
+            !/home/runner/.cache/firebreak/**/*.socket
+            !/home/runner/.cache/firebreak-test/**/*.socket
+            !/cache/firebreak/**/*.socket
+            !/tmp/firebreak/**/*.socket
+          if-no-files-found: ignore
+          compression-level: 0

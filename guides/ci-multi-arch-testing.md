@@ -2,7 +2,7 @@
 
 This guide records the Firebreak CI policy for architecture coverage and Namespace runner sizing. Keep the workflows aligned with this document.
 
-The source of truth for smoke-package membership and per-system shape overrides is [`.github/ci/smoke-tests.json`](../.github/ci/smoke-tests.json). The workflow files must render their matrices from that catalog through [`.github/scripts/render-ci-matrix.sh`](../.github/scripts/render-ci-matrix.sh) rather than carrying their own hand-maintained package lists.
+The source of truth for smoke-package capabilities, supported systems, and per-system shape overrides is [`.github/ci/smoke-tests.json`](../.github/ci/smoke-tests.json). The workflow files must render their matrices from that catalog through [`.github/scripts/render-ci-matrix.sh`](../.github/scripts/render-ci-matrix.sh) rather than carrying their own hand-maintained package lists.
 
 ## Goals
 
@@ -170,7 +170,7 @@ The catalog entry should define:
 
 - the smoke package name
 - the supported host systems for that smoke in CI
-- which CI suites consume it
+- the test features that determine where it belongs, such as whether it requires virtualization or is a representative secondary-arch check
 - any per-system shape override beyond the documented defaults
 
 ## When Updating CI

@@ -14,12 +14,24 @@ repo_root=$(CDPATH= cd -- "$script_dir/../.." && pwd)
 catalog="$repo_root/.github/ci/smoke-tests.json"
 
 jq -c --arg suite "$suite" --arg system "$system" '
+  def in_suite:
+    if $suite == "github-fast" then
+      (.features.virtualization | not)
+    elif $suite == "namespace-primary" then
+      .features.virtualization
+    elif $suite == "namespace-secondary" then
+      (.features.secondaryArchRepresentative // false)
+    elif $suite == "namespace-full" then
+      true
+    else
+      error("unknown ci suite: " + $suite)
+    end;
   . as $catalog
   | {
       include: [
         .tests[]
-        | select(.suites | index($suite))
-        | select(.systems | index($system))
+        | select(.supportedSystems | index($system))
+        | select(in_suite)
         | {
             package: .package,
             shape: (.shapeBySystem[$system] // $catalog.defaults.shapeBySystem[$system])

@@ -79,6 +79,7 @@ Examples:
 - dynamic path mount: run from a chosen host directory and confirm the same path exists in the guest
 - boot flow: confirm `nix run .#firebreak-codex` enters `codex`, and `FIREBREAK_LAUNCH_MODE=shell nix run .#firebreak-codex` reaches the `dev` shell
 - CI runner note: the VM smoke workflow is gated by the repository variable `ENABLE_SELF_HOSTED_VM_SMOKE=1` so repositories without a KVM runner do not queue indefinitely.
+- CI catalog note: whenever a smoke test package is added, removed, renamed, or resized, update [`.github/ci/smoke-tests.json`](./.github/ci/smoke-tests.json) in the same change.
 
 ## Commit & Pull Request Guidelines
 
@@ -95,6 +96,8 @@ Pull requests should include:
 Prefer `mcp__deepwiki__ask_question` early when behavior is unclear, especially for `microvm.nix` option semantics, runner behavior, or systemd interactions. Use it as a default aid before guessing from memory.
 
 Check [`UPSTREAM_REPOS.md`](./UPSTREAM_REPOS.md) first when choosing which upstream repository to query with `ask_question`.
+
+When running repository tooling inside this sandbox, remember that some standard host tools may be missing from `PATH` even when the skill or helper expects them. For remote Namespace execution specifically, ensure `gnutar` and `gzip` are available locally before running the helper scripts. In this sandbox, the allowed way to provide them is `need inject tar` and `need inject gzip`.
 
 When a change requires manual setup outside the repository, such as configuring GitHub, registering self-hosted runners, adding secrets or variables, or any other human intervention, add or update a detailed step-by-step guide under [`guides/`](./guides) in the same change.
 

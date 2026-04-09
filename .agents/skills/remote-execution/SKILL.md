@@ -70,7 +70,7 @@ phase fails.
 ## Rules
 
 - Always use ephemeral instances. Never use Devboxes for test execution.
-- Start with the smallest available machine that is likely to work. Only increase machine size after concrete evidence of resource pressure such as OOMs, CPU starvation, timeouts attributable to undersizing, or an explicit user request.
+- Start with `2x2`, the smallest available machine shape. Only increase machine size after concrete evidence of resource pressure such as OOMs, CPU starvation, timeouts attributable to undersizing, or an explicit user request.
 - Never modify `NSC_DURATION` beyond 60m without explicit user instruction.
 - The warm-cache step is optional and idempotent; when in doubt, run it.
 - Treat a non-zero exit from the test script as a test failure, not a tool error.

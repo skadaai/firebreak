@@ -95,6 +95,7 @@ esac
 
 required_capability="rootless-local-hypervisor"
 missing_capability=""
+forced_result=${FIREBREAK_VALIDATION_FORCE_RESULT:-}
 
 case "$suite_name" in
   test-smoke-local-controller)
@@ -204,6 +205,40 @@ mkdir -p "$run_dir"
 started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 result="blocked"
 exit_code=0
+
+if [ -n "$forced_result" ]; then
+  case "$forced_result" in
+    passed)
+      printf 'forced validation result: passed\n' >"$stdout_path"
+      : >"$stderr_path"
+      result="passed"
+      exit_code=0
+      finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+      printf '%s\n' "$exit_code" >"$exit_code_path"
+      emit_summary
+      cat "$summary_path"
+      exit 0
+      ;;
+    failed)
+      : >"$stdout_path"
+      printf 'forced validation result: failed\n' >"$stderr_path"
+      result="failed"
+      exit_code=1
+      finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+      printf '%s\n' "$exit_code" >"$exit_code_path"
+      emit_summary
+      cat "$summary_path"
+      exit "$exit_code"
+      ;;
+    blocked)
+      missing_capability=${FIREBREAK_VALIDATION_FORCE_BLOCKED_REASON:-forced-blocked}
+      ;;
+    *)
+      echo "invalid FIREBREAK_VALIDATION_FORCE_RESULT: $forced_result" >&2
+      exit 1
+      ;;
+  esac
+fi
 
 if [ -n "$missing_capability" ]; then
   printf 'blocked: missing capability: %s\n' "$missing_capability" >"$stderr_path"

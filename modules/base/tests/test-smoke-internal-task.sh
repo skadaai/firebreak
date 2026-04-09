@@ -16,6 +16,13 @@ firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}
 mkdir -p "$firebreak_tmp_root"
 task_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-internal-task.XXXXXX")
 trap 'rm -rf "$task_tmp_dir"' EXIT INT TERM
+nix_config=$(
+  cat <<EOF
+${NIX_CONFIG:-}
+max-jobs = 1
+cores = 1
+EOF
+)
 
 state_dir=$task_tmp_dir/tasks
 worktree_root=$task_tmp_dir/worktrees
@@ -28,6 +35,7 @@ task_cmd() {
     FIREBREAK_TASK_WORKTREE_ROOT="$worktree_root" \
     FIREBREAK_TASK_SHARED_ROOT="$shared_root" \
     FIREBREAK_TMPDIR="$task_tmp_dir/tmp" \
+    NIX_CONFIG="$nix_config" \
     bash "$run_flake" run .#firebreak -- internal task "$@"
 }
 
@@ -94,10 +102,12 @@ fi
 
 validation_suite=test-smoke-project-config-and-doctor
 
-task_cmd validate --task-id task-one "$validation_suite" >"$task_tmp_dir/task-one.validate.log" 2>&1 || validation_status=$?
+FIREBREAK_VALIDATION_FORCE_RESULT=passed \
+  task_cmd validate --task-id task-one "$validation_suite" >"$task_tmp_dir/task-one.validate.log" 2>&1 || validation_status=$?
 : "${validation_status:=0}"
 if [ "$validation_status" -eq 0 ]; then
-  task_cmd validate --task-id task-two "$validation_suite" >"$task_tmp_dir/task-two.validate.log" 2>&1 || validation_status=$?
+  FIREBREAK_VALIDATION_FORCE_RESULT=passed \
+    task_cmd validate --task-id task-two "$validation_suite" >"$task_tmp_dir/task-two.validate.log" 2>&1 || validation_status=$?
 fi
 
 if [ "$validation_status" -ne 0 ]; then

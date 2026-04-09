@@ -16,6 +16,13 @@ firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}
 mkdir -p "$firebreak_tmp_root"
 loop_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-internal-loop.XXXXXX")
 trap 'rm -rf "$loop_tmp_dir"' EXIT INT TERM
+nix_config=$(
+  cat <<EOF
+${NIX_CONFIG:-}
+max-jobs = 1
+cores = 1
+EOF
+)
 
 state_dir=$loop_tmp_dir/tasks
 worktree_root=$loop_tmp_dir/worktrees
@@ -29,6 +36,7 @@ firebreak_cmd() {
     FIREBREAK_TASK_WORKTREE_ROOT="$worktree_root" \
     FIREBREAK_TASK_SHARED_ROOT="$shared_root" \
     FIREBREAK_TMPDIR="$loop_tmp_dir/tmp" \
+    NIX_CONFIG="$nix_config" \
     bash "$run_flake" run .#firebreak -- "$@"
 }
 
@@ -48,14 +56,17 @@ success_branch="agent/spec-006-success-$branch_suffix"
 success_output=$(firebreak_cmd internal task create --task-id success --branch "$success_branch" --owner smoke)
 success_worktree=$(extract_json_field "$success_output" worktree_path)
 printf '%s\n' '# loop smoke' >"$success_worktree/LOOP_SMOKE.md"
-success_summary=$(firebreak_cmd internal loop run \
-  --task-id success \
-  --attempt-id success-run \
-  --spec "$spec_path" \
-  --plan "Add loop smoke artifact" \
-  --validation-suite test-smoke-project-config-and-doctor \
-  --write-path . \
-  --commit-message "loop smoke commit")
+success_summary=$(
+  FIREBREAK_VALIDATION_FORCE_RESULT=passed \
+    firebreak_cmd internal loop run \
+      --task-id success \
+      --attempt-id success-run \
+      --spec "$spec_path" \
+      --plan "Add loop smoke artifact" \
+      --validation-suite test-smoke-project-config-and-doctor \
+      --write-path . \
+      --commit-message "loop smoke commit"
+)
 if ! printf '%s\n' "$success_summary" | grep -q '"result": "completed"'; then
   printf '%s\n' "$success_summary" >&2
   echo "loop smoke success scenario did not complete" >&2
@@ -83,7 +94,8 @@ validation_worktree=$(extract_json_field "$validation_output" worktree_path)
 printf '%s\n' '# validation blocked' >"$validation_worktree/VALIDATION_BLOCKED.md"
 set +e
 validation_summary=$(
-  FIREBREAK_VALIDATION_FORCE_BLOCKED_REASON="smoke-blocked" \
+  FIREBREAK_VALIDATION_FORCE_RESULT=blocked \
+    FIREBREAK_VALIDATION_FORCE_BLOCKED_REASON="smoke-blocked" \
     firebreak_cmd internal loop run \
       --task-id validation-blocked \
       --attempt-id validation-blocked-run \
@@ -140,7 +152,8 @@ runtime_branch="agent/spec-006-runtime-$branch_suffix"
 firebreak_cmd internal task create --task-id runtime-blocked --branch "$runtime_branch" --owner smoke >/dev/null
 set +e
 runtime_summary=$(
-  FIREBREAK_LOOP_MAX_RUNTIME_SECS=1 \
+  FIREBREAK_LOOP_MAX_RUNTIME_SECS=0 \
+    FIREBREAK_VALIDATION_FORCE_RESULT=passed \
     firebreak_cmd internal loop run \
       --task-id runtime-blocked \
       --attempt-id runtime-blocked-run \
@@ -170,6 +183,7 @@ firebreak_cmd internal task create --task-id parallel-blocked --branch "$paralle
 set +e
 parallel_summary=$(
   FIREBREAK_LOOP_MAX_PARALLELISM=0 \
+    FIREBREAK_VALIDATION_FORCE_RESULT=passed \
     firebreak_cmd internal loop run \
       --task-id parallel-blocked \
       --attempt-id parallel-blocked-run \

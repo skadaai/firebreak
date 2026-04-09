@@ -181,6 +181,12 @@ is_managed_shared_path() {
     .direnv|.direnv/*)
       managed_root=$worktree_shared_root/.direnv
       ;;
+    .codex|.codex/*)
+      managed_root=$worktree_shared_root/.codex
+      ;;
+    .claude|.claude/*)
+      managed_root=$worktree_shared_root/.claude
+      ;;
     *)
       return 1
       ;;

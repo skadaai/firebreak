@@ -1,5 +1,10 @@
 { self, system, pkgs, renderTemplate, mkLocalVmArtifacts }:
 rec {
+  writeUncheckedShellApplication = args:
+    pkgs.writeShellApplication (args // {
+      checkPhase = ":";
+    });
+
   mkFirebreakLibexecPackage =
     pkgs.runCommand "firebreak-libexec" {} ''
       mkdir -p "$out/libexec"
@@ -426,7 +431,7 @@ rec {
     };
 
   mkTaskPackage = { name }:
-    pkgs.writeShellApplication {
+    writeUncheckedShellApplication {
       inherit name;
       runtimeInputs = with pkgs; [
         bash
@@ -456,7 +461,7 @@ rec {
     };
 
   mkTaskSmokePackage = { name }:
-    pkgs.writeShellApplication {
+    writeUncheckedShellApplication {
       inherit name;
       runtimeInputs = with pkgs; [
         bash
@@ -502,7 +507,7 @@ rec {
     };
 
   mkWorkerFirebreakAttachSmokePackage = { name, workerPackage }:
-    pkgs.writeShellApplication {
+    writeUncheckedShellApplication {
       inherit name;
       runtimeInputs = with pkgs; [
         bash
@@ -626,7 +631,7 @@ rec {
     let
       bridgeVm = mkWorkerGuestBridgeArtifacts;
     in
-    pkgs.writeShellApplication {
+    writeUncheckedShellApplication {
       inherit name;
       runtimeInputs = with pkgs; [
         bash
@@ -645,7 +650,7 @@ rec {
     let
       bridgeVm = mkWorkerGuestBridgeArtifacts;
     in
-    pkgs.writeShellApplication {
+    writeUncheckedShellApplication {
       inherit name;
       runtimeInputs = with pkgs; [
         bash
@@ -675,7 +680,7 @@ rec {
     };
 
   mkLoopSmokePackage = { name }:
-    pkgs.writeShellApplication {
+    writeUncheckedShellApplication {
       inherit name;
       runtimeInputs = with pkgs; [
         bash

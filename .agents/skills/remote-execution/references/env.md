@@ -50,3 +50,7 @@ export NSC_HEARTBEAT_SECONDS="30"
   inline only on failure or when `NSC_DEBUG=1`.
 - Long quiet executions emit a keepalive line on the terminal after
   `NSC_HEARTBEAT_SECONDS` of silence so agents do not assume the run stalled.
+- The run directory is printed at startup. `summary.txt` is live-updated while
+  the run is in progress, so it can be inspected mid-run.
+- Default logging is parallel-safe because each run uses a fresh temp directory.
+  If you set `NSC_LOG_DIR`, use a unique path per concurrent run.

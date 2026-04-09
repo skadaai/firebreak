@@ -21,6 +21,14 @@ bash .agents/skills/remote-execution/scripts/run-remote-command.sh \
   'pwd && nix --version'
 ```
 
+## Running a local script file
+
+Prefer this when quoting a complex shell snippet would be annoying or fragile.
+
+```bash
+bash .agents/skills/remote-execution/scripts/run-remote-script.sh ./scripts/smoke.sh
+```
+
 ## Via Nix flake apps
 
 These are example wrapper app names only. Not every repository exposes them.
@@ -44,6 +52,23 @@ Each helper writes:
 - `execution.txt`: streamed stdout/stderr from the main remote execution
 - `infra.log`: instance creation, bootstrap, upload, and teardown logs
 - `summary.txt`: final status, phase, exit code, and saved log paths
+
+The run directory is printed immediately when the helper starts, and
+`summary.txt` updates while the run is still active.
+
+## Parallel runs
+
+Parallel runs are safe by default because each helper allocates a fresh temp
+directory for logs and artifacts.
+
+If you want a stable location:
+
+```bash
+NSC_LOG_DIR=/tmp/remote-run-$(date +%s)-$$ \
+  bash .agents/skills/remote-execution/scripts/run-remote-command.sh 'pwd'
+```
+
+Do not point multiple concurrent runs at the same `NSC_LOG_DIR`.
 
 ## Test attribute naming convention
 

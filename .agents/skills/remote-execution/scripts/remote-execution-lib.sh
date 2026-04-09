@@ -2,6 +2,10 @@
 
 set -euo pipefail
 
+remote_execution_now_iso() {
+  date -u +%Y-%m-%dT%H:%M:%SZ
+}
+
 remote_execution_init() {
   NSC_MACHINE=${NSC_MACHINE:-"4x8"}
   NSC_DURATION=${NSC_DURATION:-"30m"}
@@ -24,13 +28,22 @@ remote_execution_init() {
   ARCHIVE_FILE="$RUN_DIR/workspace.tar.gz"
   REMOTE_ARCHIVE_PATH="/tmp/remote-execution-workspace.tar.gz"
   REMOTE_EXECUTION_SCRIPT_FILE="$RUN_DIR/remote-execution.sh"
+  HEARTBEAT_MARKER_FILE="$RUN_DIR/heartbeat-seen"
 
   : >"$INFRA_LOG"
   : >"$EXECUTION_LOG"
   : >"$SUMMARY_FILE"
+  rm -f "$HEARTBEAT_MARKER_FILE"
 
   INSTANCE_ID=""
   REMOTE_EXECUTION_PHASE="init"
+  REMOTE_EXECUTION_LAST_SUCCESSFUL_PHASE=""
+  REMOTE_EXECUTION_STATUS="running"
+  REMOTE_EXECUTION_STARTED_AT=$(remote_execution_now_iso)
+  REMOTE_EXECUTION_STARTED_AT_EPOCH=$(date -u +%s)
+  REMOTE_EXECUTION_FINISHED_AT=""
+  REMOTE_EXECUTION_FINISHED_AT_EPOCH=""
+  remote_execution_refresh_summary
 }
 
 remote_execution_note() {
@@ -54,34 +67,149 @@ remote_execution_record_command() {
   printf '\n' >>"$INFRA_LOG"
 }
 
+remote_execution_phase_start() {
+  REMOTE_EXECUTION_PHASE=$1
+  remote_execution_refresh_summary
+}
+
+remote_execution_phase_complete() {
+  REMOTE_EXECUTION_LAST_SUCCESSFUL_PHASE=$1
+  remote_execution_refresh_summary
+}
+
+remote_execution_refresh_summary() {
+  local duration_seconds=""
+  local heartbeat_seen=0
+
+  if [[ -f "$HEARTBEAT_MARKER_FILE" ]]; then
+    heartbeat_seen=1
+  fi
+
+  if [[ -n "${REMOTE_EXECUTION_FINISHED_AT_EPOCH:-}" ]]; then
+    duration_seconds=$((REMOTE_EXECUTION_FINISHED_AT_EPOCH - REMOTE_EXECUTION_STARTED_AT_EPOCH))
+  else
+    duration_seconds=$(( $(date -u +%s) - REMOTE_EXECUTION_STARTED_AT_EPOCH ))
+  fi
+
+  cat >"$SUMMARY_FILE" <<EOF
+status=$REMOTE_EXECUTION_STATUS
+phase=$REMOTE_EXECUTION_PHASE
+last_successful_phase=${REMOTE_EXECUTION_LAST_SUCCESSFUL_PHASE:-}
+heartbeat_seen=$heartbeat_seen
+started_at=$REMOTE_EXECUTION_STARTED_AT
+finished_at=${REMOTE_EXECUTION_FINISHED_AT:-}
+duration_seconds=$duration_seconds
+run_dir=$RUN_DIR
+instance_id=${INSTANCE_ID:-}
+infra_log=$INFRA_LOG
+execution_log=$EXECUTION_LOG
+execution_script=$REMOTE_EXECUTION_SCRIPT_FILE
+EOF
+}
+
+remote_execution_announce_run_dir() {
+  printf 'Run directory: %s\n' "$RUN_DIR"
+  printf 'Summary: %s\n' "$SUMMARY_FILE"
+}
+
+remote_execution_start_quiet_heartbeat() {
+  local phase=$1
+  local watched_file=$2
+  local target_pid=$3
+
+  (
+    local last_size=0
+    local current_size=0
+    local quiet_for=0
+
+    last_size=$(wc -c <"$watched_file" 2>/dev/null || echo 0)
+
+    while kill -0 "$target_pid" 2>/dev/null; do
+      sleep "$NSC_HEARTBEAT_SECONDS"
+
+      if ! kill -0 "$target_pid" 2>/dev/null; then
+        break
+      fi
+
+      current_size=$(wc -c <"$watched_file" 2>/dev/null || echo 0)
+
+      if [[ "$current_size" -eq "$last_size" ]]; then
+        quiet_for=$((quiet_for + NSC_HEARTBEAT_SECONDS))
+        : >"$HEARTBEAT_MARKER_FILE"
+        remote_execution_refresh_summary
+        printf '[%s] still running (%ss without output)\n' "$phase" "$quiet_for"
+        printf '[%s-heartbeat] still running (%ss without output)\n' "$phase" "$quiet_for" >>"$INFRA_LOG"
+      else
+        last_size=$current_size
+        quiet_for=0
+      fi
+    done
+  ) &
+  REMOTE_EXECUTION_HEARTBEAT_PID=$!
+}
+
 remote_execution_run_infra() {
   local phase=$1
   shift
+  local output_pid
+  local heartbeat_pid
+  local status
 
   remote_execution_record_command "$phase" "$@"
 
   if remote_execution_debug_enabled; then
-    "$@" 2>&1 | remote_execution_filter_nsc_noise | tee -a "$INFRA_LOG"
-    return "${PIPESTATUS[0]}"
+    (
+      "$@" 2>&1 | remote_execution_filter_nsc_noise | tee -a "$INFRA_LOG"
+      exit "${PIPESTATUS[0]}"
+    ) &
+  else
+    (
+      "$@" 2>&1 | remote_execution_filter_nsc_noise >>"$INFRA_LOG"
+      exit "${PIPESTATUS[0]}"
+    ) &
   fi
+  output_pid=$!
 
-  "$@" 2>&1 | remote_execution_filter_nsc_noise >>"$INFRA_LOG"
-  return "${PIPESTATUS[0]}"
+  remote_execution_start_quiet_heartbeat "$phase" "$INFRA_LOG" "$output_pid"
+  heartbeat_pid=$REMOTE_EXECUTION_HEARTBEAT_PID
+
+  wait "$output_pid"
+  status=$?
+  kill "$heartbeat_pid" 2>/dev/null || true
+  wait "$heartbeat_pid" 2>/dev/null || true
+  return "$status"
 }
 
 remote_execution_run_remote_infra() {
   local phase=$1
   local script=$2
+  local output_pid
+  local heartbeat_pid
+  local status
 
   printf '\n[%s] remote script\n%s\n' "$phase" "$script" >>"$INFRA_LOG"
 
   if remote_execution_debug_enabled; then
-    { printf '%s\n' "$script"; } | nsc ssh --disable-pty "$INSTANCE_ID" -- bash -s -- 2>&1 | remote_execution_filter_nsc_noise | tee -a "$INFRA_LOG"
-    return "${PIPESTATUS[1]}"
+    (
+      { printf '%s\n' "$script"; } | nsc ssh --disable-pty "$INSTANCE_ID" -- bash -s -- 2>&1 | remote_execution_filter_nsc_noise | tee -a "$INFRA_LOG"
+      exit "${PIPESTATUS[1]}"
+    ) &
+  else
+    (
+      { printf '%s\n' "$script"; } | nsc ssh --disable-pty "$INSTANCE_ID" -- bash -s -- 2>&1 | remote_execution_filter_nsc_noise >>"$INFRA_LOG"
+      exit "${PIPESTATUS[1]}"
+    ) &
   fi
+  output_pid=$!
 
-  { printf '%s\n' "$script"; } | nsc ssh --disable-pty "$INSTANCE_ID" -- bash -s -- 2>&1 | remote_execution_filter_nsc_noise >>"$INFRA_LOG"
-  return "${PIPESTATUS[1]}"
+  remote_execution_start_quiet_heartbeat "$phase" "$INFRA_LOG" "$output_pid"
+  heartbeat_pid=$REMOTE_EXECUTION_HEARTBEAT_PID
+
+  wait "$output_pid"
+  status=$?
+  kill "$heartbeat_pid" 2>/dev/null || true
+  wait "$heartbeat_pid" 2>/dev/null || true
+  return "$status"
 }
 
 remote_execution_run_remote_stream() {
@@ -94,6 +222,7 @@ remote_execution_run_remote_stream() {
   REMOTE_EXECUTION_PHASE=$phase
   printf '%s\n' "$script" >"$REMOTE_EXECUTION_SCRIPT_FILE"
   printf '\n[%s] execution script saved to %s\n' "$phase" "$REMOTE_EXECUTION_SCRIPT_FILE" >>"$INFRA_LOG"
+  remote_execution_refresh_summary
 
   : >"$EXECUTION_LOG"
 
@@ -103,31 +232,8 @@ remote_execution_run_remote_stream() {
   ) &
   output_pid=$!
 
-  (
-    local last_size=0
-    local current_size=0
-    local quiet_for=0
-
-    while kill -0 "$output_pid" 2>/dev/null; do
-      sleep "$NSC_HEARTBEAT_SECONDS"
-
-      if ! kill -0 "$output_pid" 2>/dev/null; then
-        break
-      fi
-
-      current_size=$(wc -c <"$EXECUTION_LOG" 2>/dev/null || echo 0)
-
-      if [[ "$current_size" -eq "$last_size" ]]; then
-        quiet_for=$((quiet_for + NSC_HEARTBEAT_SECONDS))
-        printf '[execution] still running (%ss without output)\n' "$quiet_for"
-        printf '[execution-heartbeat] still running (%ss without output)\n' "$quiet_for" >>"$INFRA_LOG"
-      else
-        last_size=$current_size
-        quiet_for=0
-      fi
-    done
-  ) &
-  heartbeat_pid=$!
+  remote_execution_start_quiet_heartbeat "$phase" "$EXECUTION_LOG" "$output_pid"
+  heartbeat_pid=$REMOTE_EXECUTION_HEARTBEAT_PID
 
   wait "$output_pid"
   status=$?
@@ -169,29 +275,16 @@ remote_execution_require_modern_cli() {
   fi
 }
 
-remote_execution_write_summary() {
-  local status=$1
-  local phase=$2
-  local exit_code=$3
-
-  cat >"$SUMMARY_FILE" <<EOF
-status=$status
-phase=$phase
-exit_code=$exit_code
-run_dir=$RUN_DIR
-instance_id=${INSTANCE_ID:-}
-infra_log=$INFRA_LOG
-execution_log=$EXECUTION_LOG
-execution_script=$REMOTE_EXECUTION_SCRIPT_FILE
-EOF
-}
-
 remote_execution_fail() {
   local phase=$1
   local exit_code=${2:-1}
 
   REMOTE_EXECUTION_PHASE=$phase
-  remote_execution_write_summary "failed" "$phase" "$exit_code"
+  REMOTE_EXECUTION_STATUS="failed"
+  REMOTE_EXECUTION_FINISHED_AT=$(remote_execution_now_iso)
+  REMOTE_EXECUTION_FINISHED_AT_EPOCH=$(date -u +%s)
+  remote_execution_refresh_summary
+  printf 'exit_code=%s\n' "$exit_code" >>"$SUMMARY_FILE"
 
   printf 'Remote execution failed during phase: %s\n' "$phase" >&2
   printf 'Run directory: %s\n' "$RUN_DIR" >&2
@@ -213,7 +306,11 @@ remote_execution_fail() {
 }
 
 remote_execution_success() {
-  remote_execution_write_summary "ok" "${REMOTE_EXECUTION_PHASE:-execution}" 0
+  REMOTE_EXECUTION_STATUS="ok"
+  REMOTE_EXECUTION_FINISHED_AT=$(remote_execution_now_iso)
+  REMOTE_EXECUTION_FINISHED_AT_EPOCH=$(date -u +%s)
+  remote_execution_refresh_summary
+  printf 'exit_code=0\n' >>"$SUMMARY_FILE"
 
   printf 'Execution succeeded.\n'
   printf 'Run directory: %s\n' "$RUN_DIR"
@@ -260,7 +357,7 @@ remote_execution_wait_for_shell() {
 }
 
 remote_execution_create_instance() {
-  REMOTE_EXECUTION_PHASE="instance-create"
+  remote_execution_phase_start "instance-create"
   remote_execution_note "→ Creating ephemeral instance (shape: $NSC_MACHINE, duration: $NSC_DURATION)..."
 
   if remote_execution_run_infra \
@@ -279,11 +376,13 @@ remote_execution_create_instance() {
   fi
 
   INSTANCE_ID=$(cat "$INSTANCE_ID_FILE")
+  remote_execution_refresh_summary
   remote_execution_note "→ Instance: $INSTANCE_ID"
+  remote_execution_phase_complete "instance-create"
 }
 
 remote_execution_wait_until_ready() {
-  REMOTE_EXECUTION_PHASE="ssh-ready"
+  remote_execution_phase_start "ssh-ready"
   remote_execution_note "→ Waiting for remote shell..."
 
   if remote_execution_wait_for_shell; then
@@ -292,10 +391,11 @@ remote_execution_wait_until_ready() {
     local status=$?
     remote_execution_fail "ssh-ready" "$status"
   fi
+  remote_execution_phase_complete "ssh-ready"
 }
 
 remote_execution_ensure_nix() {
-  REMOTE_EXECUTION_PHASE="nix-bootstrap"
+  remote_execution_phase_start "nix-bootstrap"
   remote_execution_note "→ Ensuring Nix is installed..."
 
   if remote_execution_run_remote_infra "nix-bootstrap" "
@@ -314,10 +414,11 @@ fi
     local status=$?
     remote_execution_fail "nix-bootstrap" "$status"
   fi
+  remote_execution_phase_complete "nix-bootstrap"
 }
 
 remote_execution_pack_workspace() {
-  REMOTE_EXECUTION_PHASE="archive"
+  remote_execution_phase_start "archive"
   remote_execution_note "→ Creating workspace archive..."
 
   if remote_execution_run_infra \
@@ -333,20 +434,29 @@ remote_execution_pack_workspace() {
     local status=$?
     remote_execution_fail "archive" "$status"
   fi
+  remote_execution_phase_complete "archive"
 }
 
-remote_execution_upload_workspace() {
-  REMOTE_EXECUTION_PHASE="upload"
-  remote_execution_note "→ Uploading workspace..."
+remote_execution_upload_file() {
+  local phase=$1
+  local local_path=$2
+  local remote_path=$3
 
   if remote_execution_run_infra \
-    "upload" \
-    nsc instance upload "$INSTANCE_ID" "$ARCHIVE_FILE" "$REMOTE_ARCHIVE_PATH"; then
+    "$phase" \
+    nsc instance upload "$INSTANCE_ID" "$local_path" "$remote_path"; then
     :
   else
     local status=$?
-    remote_execution_fail "upload" "$status"
+    remote_execution_fail "$phase" "$status"
   fi
+}
+
+remote_execution_upload_workspace() {
+  remote_execution_phase_start "upload"
+  remote_execution_note "→ Uploading workspace..."
+
+  remote_execution_upload_file "upload" "$ARCHIVE_FILE" "$REMOTE_ARCHIVE_PATH"
 
   if remote_execution_run_remote_infra "upload-unpack" "
 set -euo pipefail
@@ -360,12 +470,30 @@ rm -f \"$REMOTE_ARCHIVE_PATH\"
     local status=$?
     remote_execution_fail "upload-unpack" "$status"
   fi
+  remote_execution_phase_complete "upload-unpack"
+}
+
+remote_execution_upload_and_run_local_script() {
+  local local_script_path=$1
+  local remote_script_path="/tmp/remote-execution-input.sh"
+
+  remote_execution_phase_start "upload-script"
+  remote_execution_note "→ Uploading script..."
+  remote_execution_upload_file "upload-script" "$local_script_path" "$remote_script_path"
+  remote_execution_phase_complete "upload-script"
+
+  remote_execution_run_workspace_script "
+set -euo pipefail
+export PATH=\"/nix/var/nix/profiles/default/bin:\$PATH\"
+cd /workspace
+bash \"$remote_script_path\"
+"
 }
 
 remote_execution_run_workspace_script() {
   local script=$1
 
-  REMOTE_EXECUTION_PHASE="execution"
+  remote_execution_phase_start "execution"
   remote_execution_note "→ Running remote execution..."
 
   if remote_execution_run_remote_stream "execution" "$script"; then
@@ -374,4 +502,5 @@ remote_execution_run_workspace_script() {
     local status=$?
     remote_execution_fail "execution" "$status"
   fi
+  remote_execution_phase_complete "execution"
 }

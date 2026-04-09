@@ -10,6 +10,7 @@ source "$SCRIPT_DIR/remote-execution-lib.sh"
 NSC_DURATION=${NSC_DURATION:-"15m"}
 
 remote_execution_init
+remote_execution_announce_run_dir
 trap remote_execution_cleanup EXIT INT TERM
 
 remote_execution_require_prereqs

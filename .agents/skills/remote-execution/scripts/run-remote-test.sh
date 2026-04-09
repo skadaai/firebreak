@@ -14,6 +14,7 @@ if [[ $# -ne 1 || -z "$TEST_ATTR" ]]; then
 fi
 
 remote_execution_init
+remote_execution_announce_run_dir
 trap remote_execution_cleanup EXIT INT TERM
 
 remote_execution_require_prereqs

@@ -55,6 +55,7 @@ phase fails.
    run `scripts/ensure-nix-cache.sh` first.
 4. Choose the helper that matches the task:
    - `scripts/run-remote-command.sh '<shell-command>'` for arbitrary execution
+   - `scripts/run-remote-script.sh <local-script-path>` for a local shell script file
    - `scripts/run-remote-test.sh <test-attr>` for flake check builds
 5. Report the execution output, exit code, and saved log paths to the user.
 6. Never leave instances running after the script exits.
@@ -75,4 +76,15 @@ phase fails.
   - full remote execution output is streamed live and saved to `execution.txt`
   - infra/setup logs are saved to `infra.log`
   - only surface infra detail inline when debug is enabled or a phase fails
-  - if execution goes quiet, emit periodic keepalive lines so agents can tell the run is still alive
+  - if setup or execution goes quiet, emit periodic keepalive lines so agents can tell the run is still alive
+
+## Troubleshooting
+
+- If the terminal looks quiet, wait for the keepalive lines before assuming the run is stuck.
+  Quiet setup and execution phases emit `[phase] still running ...` after the configured silence interval.
+- The run directory is printed immediately at startup. Inspect `summary.txt`, `infra.log`, and `execution.txt` there while the run is still active if needed.
+- `summary.txt` is live-updated during the run, not just at the end. It records the current phase, last successful phase, timing, and log paths.
+- Parallel runs are safe by default because each helper uses a fresh temp run directory.
+  Only set `NSC_LOG_DIR` when you need a stable location, and use a unique directory per concurrent run.
+- If a command line is awkward to quote safely, prefer `run-remote-script.sh` over `run-remote-command.sh`.
+- Use `NSC_DEBUG=1` when platform/bootstrap output matters more than a clean success path.

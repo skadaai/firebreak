@@ -80,7 +80,7 @@ jobs:
 
   # Keep secondary architectures representative rather than cloning the full amd64 matrix.
   arm64-linux-representative-smoke-tests:
-    name: arm64-linux representative hosted smokes (1x2)
+    name: arm64-linux representative runtime smokes (1x2)
     runs-on: nscloud-ubuntu-24.04-arm64-1x2
     timeout-minutes: 45
 
@@ -93,11 +93,10 @@ jobs:
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run representative arm64-linux hosted coverage
+      - name: Run representative arm64-linux runtime coverage
         run: |
-          nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-test-smoke-project-config-and-doctor
+          nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-test-smoke-codex-version
           nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-test-smoke-npx-launcher
-          nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-test-smoke-firebreak-cli-surface
 
       - name: Upload arm64-linux artifacts on failure
         if: failure()
@@ -115,7 +114,7 @@ jobs:
           compression-level: 0
 
   arm64-darwin-representative-checks:
-    name: arm64-darwin representative checks (6x14)
+    name: arm64-darwin representative vfkit checks (6x14)
     runs-on: nscloud-macos-sequoia-arm64-6x14
     timeout-minutes: 45
 
@@ -128,11 +127,11 @@ jobs:
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run representative arm64-darwin coverage
+      - name: Run representative arm64-darwin vfkit coverage
         run: |
           nix --accept-flake-config --extra-experimental-features 'nix-command flakes' eval .#packages.aarch64-darwin.firebreak.name --raw
           nix --accept-flake-config --extra-experimental-features 'nix-command flakes' eval .#packages.aarch64-darwin.firebreak-codex.name --raw
           nix --accept-flake-config --extra-experimental-features 'nix-command flakes' eval .#packages.aarch64-darwin.firebreak-claude-code.name --raw
           nix --accept-flake-config --extra-experimental-features 'nix-command flakes' eval .#checks.aarch64-darwin.firebreak-codex-system.drvPath --raw
-          nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-test-smoke-project-config-and-doctor
+          nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-test-smoke-codex-version
           nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-test-smoke-npx-launcher

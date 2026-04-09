@@ -25,8 +25,8 @@ Both workflows assume the repository can schedule Namespace GitHub Actions runne
 2. Confirm `Firebreak Hosted Checks` starts automatically.
 3. Confirm the hosted workflow fans out into:
    - primary `x86_64-linux` hosted checks
-   - representative `aarch64-linux` hosted checks
-   - representative `aarch64-darwin` checks
+   - representative `aarch64-linux` runtime checks
+   - representative `aarch64-darwin` `vfkit` checks
 4. Confirm `Firebreak KVM Smoke Tests` starts automatically after the hosted workflow finishes successfully.
 5. If needed, trigger `Firebreak KVM Smoke Tests` manually from the `Actions` tab with `Run workflow`.
 

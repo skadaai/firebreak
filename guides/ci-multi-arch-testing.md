@@ -37,11 +37,13 @@ This is the only architecture that should pay the cost of the complete runtime m
 Secondary architectures run representative coverage, not the full matrix.
 
 - `aarch64-linux`
-  - run hosted representative smokes that exercise launcher, doctor, and CLI surface behavior
+  - run a minimal VM-backed smoke to prove the local MicroVM path boots end to end
+  - keep one narrow host-surface smoke alongside it
   - do not duplicate the full KVM matrix until we have stable dedicated ARM KVM evidence and capacity
 - `aarch64-darwin`
-  - run a narrow host-surface subset plus output evaluation
-  - do not pretend there is parity with the Linux KVM runtime path
+  - run a minimal `vfkit`-backed smoke to prove the Apple Silicon local runtime path boots end to end
+  - keep narrow output evaluation alongside it
+  - do not pretend there is parity with the full Linux KVM matrix
 
 ### Escalation Rule
 
@@ -90,9 +92,9 @@ If a smaller shape is later proven, lower the workflow entry and update this lis
   - `nix flake check`
   - full hosted smoke matrix
 - `aarch64-linux`
-  - representative hosted subset
+  - representative runtime subset
 - `aarch64-darwin`
-  - representative host-surface subset plus evaluation checks
+  - representative `vfkit` subset plus evaluation checks
 
 ### `Firebreak KVM Smoke Tests`
 

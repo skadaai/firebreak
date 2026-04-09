@@ -13,7 +13,7 @@
 
 | Variable            | Default      | Description                                                                 |
 |---------------------|--------------|-----------------------------------------------------------------------------|
-| `NSC_MACHINE`       | `4x8`        | Instance shape: `<vcpu>x<ram_gb>`. Use `8x16` for heavy or parallel tests. |
+| `NSC_MACHINE`       | `4x8`        | Instance shape: `<vcpu>x<ram_gb>`. Start here by default and only increase after evidence that more resources are required. |
 | `NSC_DURATION`      | `30m`        | Hard TTL. Instance is auto-destroyed after this regardless of outcome.      |
 | `NSC_NIX_CACHE_TAG` | `nix-store`  | Tag for the cache volume backing `/nix`. Change per project to isolate stores. |
 | `NSC_NIX_CACHE_SCOPE` | auto       | Optional warm-marker scope. Defaults to a repo-specific key derived from `flake.lock` or `flake.nix`. |
@@ -41,6 +41,8 @@ export NSC_HEARTBEAT_SECONDS="30"
 - `NSC_DURATION` is a safety net, not the expected runtime. The instance is
   destroyed immediately by the EXIT trap when the test finishes. Set it
   generously to cover slow first-run cache population.
+- Be conservative with machine size. Start with `4x8` unless the user explicitly
+  asks for more or prior failures show the workload is resource-bound.
 - `NSC_NIX_CACHE_TAG` scopes the `/nix` cache volume. Two projects sharing the
   same tag share the same Nix store, saving disk and speeding up installs.
   Use distinct tags only if you need hermetic store isolation between projects.

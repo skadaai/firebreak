@@ -2,60 +2,42 @@
 
 This guide covers the manual steps required to make the workflows in [`.github/workflows/`](../.github/workflows) fully operational.
 
+For the enforced CI architecture and Namespace shape policy, see [CI Multi-Arch Testing](./ci-multi-arch-testing.md).
+
 ## What You Are Configuring
 
 This repository has two workflows:
 
-- [`ci.yml`](../.github/workflows/ci.yml): runs hosted `nix flake check`
-- [`vm-smoke.yml`](../.github/workflows/vm-smoke.yml): runs `nix run .#firebreak-test-smoke-codex` on a self-hosted KVM runner
+- [`hosted-checks.yml`](../.github/workflows/hosted-checks.yml): runs hosted checks on the primary Linux architecture plus representative hosted coverage on the secondary supported architectures
+- [`kvm-smoke-tests.yml`](../.github/workflows/kvm-smoke-tests.yml): runs the full KVM-backed smoke matrix on the primary Linux architecture after hosted checks pass
 
-The hosted workflow works immediately. The VM smoke workflow requires a self-hosted runner and one repository variable.
+Both workflows assume the repository can schedule Namespace GitHub Actions runners for the labels used in those workflow files.
 
-## 1. Register A Self-Hosted KVM Runner
+## 1. Enable Namespace GitHub Actions Runners
 
-1. Open the repository on GitHub.
-2. Go to `Settings` > `Actions` > `Runners`.
-3. Click `New self-hosted runner`.
-4. Choose:
-   - Operating system: Linux
-   - Architecture: the Linux host architecture you are registering, such as `x64` or `ARM64`
-5. Prepare a Linux machine that has:
-   - Nix installed
-   - KVM available
-   - `git` installed
-   - permission to access `/dev/kvm`
-6. Follow GitHub’s generated runner installation commands on that machine.
-7. When configuring labels, make sure the runner has:
-   - `self-hosted`
-   - `linux`
-   - `kvm`
-8. Start the runner service and confirm it appears as `Idle` in the GitHub runners page.
+1. Confirm the repository or organization is connected to Namespace GitHub Actions runners.
+2. Confirm jobs can schedule the `nscloud-*` runner labels used by the workflows.
+3. Confirm the Linux runners used by the KVM workflow support the Firebreak Nix workflow with `enable_kvm: true`.
 
-## 2. Enable The VM Smoke Workflow
-
-1. In the repository, go to `Settings` > `Secrets and variables` > `Actions`.
-2. Open the `Variables` tab.
-3. Create a new repository variable:
-   - Name: `ENABLE_SELF_HOSTED_VM_SMOKE`
-   - Value: `1`
-4. Save the variable.
-
-This enables automatic execution of [`vm-smoke.yml`](../.github/workflows/vm-smoke.yml) on pushes and pull requests. Without this variable, the workflow only runs from `workflow_dispatch`.
-
-## 3. Verify The Setup
+## 2. Verify The Workflow Topology
 
 1. Push a branch or open a pull request.
-2. Confirm `CI / Nix Checks` starts on a GitHub-hosted runner.
-3. Confirm `Firebreak Smoke / firebreak-codex smoke` starts on the self-hosted runner.
-4. If needed, trigger `VM Smoke` manually from the `Actions` tab with `Run workflow`.
+2. Confirm `Firebreak Hosted Checks` starts automatically.
+3. Confirm the hosted workflow fans out into:
+   - primary `x86_64-linux` hosted checks
+   - representative `aarch64-linux` hosted checks
+   - representative `aarch64-darwin` checks
+4. Confirm `Firebreak KVM Smoke Tests` starts automatically after the hosted workflow finishes successfully.
+5. If needed, trigger `Firebreak KVM Smoke Tests` manually from the `Actions` tab with `Run workflow`.
 
-## 4. Common Failure Checks
+## 3. Common Failure Checks
 
-- Runner never picks up the job:
-  - verify the runner has `self-hosted`, `linux`, and `kvm`
-  - verify the runner is online
-- VM smoke job is skipped:
-  - verify `ENABLE_SELF_HOSTED_VM_SMOKE=1`
+- Namespace job never starts:
+  - verify Namespace runner integration is active for the repository
+  - verify the exact `nscloud-*` labels in the workflow are valid in your Namespace setup
+- KVM workflow never starts automatically:
+  - verify `Firebreak Hosted Checks` completed successfully
+  - verify the workflow name in [`kvm-smoke-tests.yml`](../.github/workflows/kvm-smoke-tests.yml) still matches `Firebreak Hosted Checks`
 - VM boot fails immediately:
-  - verify the runner machine has working KVM access
+  - verify the Namespace Linux runner can execute KVM-backed Nix workloads
   - verify the runner user can execute `nix run .#firebreak-test-smoke-codex`

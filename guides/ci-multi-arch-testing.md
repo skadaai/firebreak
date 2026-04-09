@@ -1,0 +1,115 @@
+# CI Multi-Arch Testing
+
+This guide records the Firebreak CI policy for architecture coverage and Namespace runner sizing. Keep the workflows aligned with this document.
+
+## Goals
+
+- keep one merge-blocking architecture with full confidence
+- add representative automated coverage on the other supported host architectures
+- avoid the full `architectures x tests` cross-product
+- spend the smallest Namespace shape that has actually been proven to work
+
+## Supported Host Architectures
+
+Firebreak currently exports public host surfaces for:
+
+- `x86_64-linux`
+- `aarch64-linux`
+- `aarch64-darwin`
+
+The guest/runtime story is not identical on all of them, so CI should not pretend otherwise.
+
+## CI Policy
+
+### Primary Gate
+
+`x86_64-linux` is the primary merge gate.
+
+It runs:
+
+- the full hosted check surface
+- the full KVM-backed smoke surface
+
+This is the only architecture that should pay the cost of the complete runtime matrix on every change.
+
+### Secondary Coverage
+
+Secondary architectures run representative coverage, not the full matrix.
+
+- `aarch64-linux`
+  - run hosted representative smokes that exercise launcher, doctor, and CLI surface behavior
+  - do not duplicate the full KVM matrix until we have stable dedicated ARM KVM evidence and capacity
+- `aarch64-darwin`
+  - run a narrow host-surface subset plus output evaluation
+  - do not pretend there is parity with the Linux KVM runtime path
+
+### Escalation Rule
+
+If a change directly touches architecture-sensitive logic, expand only the affected secondary-architecture coverage. Examples:
+
+- launcher and host capability detection
+- host packaging and flake output assembly
+- Darwin-specific runtime wiring
+- ARM-specific host/runtime assumptions
+
+Do not expand all architectures by default.
+
+## Namespace Shape Policy
+
+### Default Rule
+
+Use the smallest available shape first.
+
+- Linux default for single-purpose CI jobs: `1x2`
+- macOS default: the smallest available platform-native shape, currently `6x14`
+
+Increase the shape only after a job has shown a concrete need for more resources. When that happens:
+
+1. bump to the smallest shape that is known to pass
+2. record the exception in this guide
+3. encode the exception directly in the workflow matrix
+
+### Current Linux Exceptions
+
+These are the currently documented exceptions to the `1x2` Linux default:
+
+- hosted aggregate `nix flake check`: `2x4`
+  - reason: this job evaluates and builds a broad aggregate surface rather than one smoke package
+- `firebreak-test-smoke-worker-firebreak-attach`: `2x2`
+  - reason: validated on `2x2`; this is the smallest currently proven passing shape
+- `firebreak-test-smoke-internal-task`: `2x2`
+  - reason: validated on `2x2`; smaller shape is not yet proven
+- `firebreak-test-smoke-internal-loop`: `2x2`
+  - reason: validated on `2x2`; smaller shape is not yet proven
+- `firebreak-test-smoke-worker-guest-bridge-interactive`: `4x8`
+  - reason: this smoke previously showed real resource pressure; `4x8` is the currently proven passing shape
+
+If a smaller shape is later proven, lower the workflow entry and update this list in the same change.
+
+## Workflow Mapping
+
+### `Firebreak Hosted Checks`
+
+- `x86_64-linux`
+  - `nix flake check`
+  - full hosted smoke matrix
+- `aarch64-linux`
+  - representative hosted subset
+- `aarch64-darwin`
+  - representative host-surface subset plus evaluation checks
+
+### `Firebreak KVM Smoke Tests`
+
+- `x86_64-linux` only
+- default runner shape per smoke: `1x2`
+- exceptions are declared inline in the matrix and mirrored in this guide
+
+## When Updating CI
+
+When adding or changing a workflow job:
+
+- start from `1x2` on Linux unless there is existing evidence against it
+- keep full-matrix runtime coverage on `x86_64-linux`
+- add only representative coverage on the secondary architectures
+- prefer one narrow secondary-arch job over cloning the full primary matrix
+- update this guide whenever you add or remove a shape exception

@@ -18,6 +18,7 @@
 | `NSC_NIX_CACHE_TAG` | `nix-store`  | Tag for the cache volume backing `/nix`. Change per project to isolate stores. |
 | `NSC_DEBUG`         | `0`          | When set to `1`, stream infra/bootstrap logs live instead of keeping them mostly in `infra.log`. |
 | `NSC_LOG_DIR`       | unset        | If set, write `infra.log`, `execution.txt`, and `summary.txt` into this directory instead of a temp dir. |
+| `NSC_HEARTBEAT_SECONDS` | `30`     | Print a keepalive line when the main remote execution stays silent for this many seconds. |
 
 ## Recommended `.envrc` block
 
@@ -26,6 +27,7 @@ export NSC_MACHINE="4x8"
 export NSC_DURATION="30m"
 export NSC_NIX_CACHE_TAG="nix-store"
 export NSC_DEBUG="0"
+export NSC_HEARTBEAT_SECONDS="30"
 ```
 
 ## Notes
@@ -46,3 +48,5 @@ export NSC_DEBUG="0"
 - Successful runs should mostly show the remote execution output itself.
   Bootstrap and transport details are captured in `infra.log` and printed
   inline only on failure or when `NSC_DEBUG=1`.
+- Long quiet executions emit a keepalive line on the terminal after
+  `NSC_HEARTBEAT_SECONDS` of silence so agents do not assume the run stalled.

@@ -75,3 +75,4 @@ phase fails.
   - full remote execution output is streamed live and saved to `execution.txt`
   - infra/setup logs are saved to `infra.log`
   - only surface infra detail inline when debug is enabled or a phase fails
+  - if execution goes quiet, emit periodic keepalive lines so agents can tell the run is still alive

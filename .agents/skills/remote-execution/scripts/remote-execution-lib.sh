@@ -8,6 +8,7 @@ remote_execution_init() {
   NSC_NIX_CACHE_TAG=${NSC_NIX_CACHE_TAG:-"nix-store"}
   NSC_DEBUG=${NSC_DEBUG:-"0"}
   NSC_LOG_DIR=${NSC_LOG_DIR:-""}
+  NSC_HEARTBEAT_SECONDS=${NSC_HEARTBEAT_SECONDS:-"30"}
 
   if [[ -n "$NSC_LOG_DIR" ]]; then
     RUN_DIR=$NSC_LOG_DIR
@@ -86,6 +87,9 @@ remote_execution_run_remote_infra() {
 remote_execution_run_remote_stream() {
   local phase=$1
   local script=$2
+  local output_pid
+  local heartbeat_pid
+  local status
 
   REMOTE_EXECUTION_PHASE=$phase
   printf '%s\n' "$script" >"$REMOTE_EXECUTION_SCRIPT_FILE"
@@ -93,8 +97,43 @@ remote_execution_run_remote_stream() {
 
   : >"$EXECUTION_LOG"
 
-  { printf '%s\n' "$script"; } | nsc ssh --disable-pty "$INSTANCE_ID" -- bash -s -- 2>&1 | remote_execution_filter_nsc_noise | tee -a "$EXECUTION_LOG"
-  return "${PIPESTATUS[1]}"
+  (
+    { printf '%s\n' "$script"; } | nsc ssh --disable-pty "$INSTANCE_ID" -- bash -s -- 2>&1 | remote_execution_filter_nsc_noise | tee -a "$EXECUTION_LOG"
+    exit "${PIPESTATUS[1]}"
+  ) &
+  output_pid=$!
+
+  (
+    local last_size=0
+    local current_size=0
+    local quiet_for=0
+
+    while kill -0 "$output_pid" 2>/dev/null; do
+      sleep "$NSC_HEARTBEAT_SECONDS"
+
+      if ! kill -0 "$output_pid" 2>/dev/null; then
+        break
+      fi
+
+      current_size=$(wc -c <"$EXECUTION_LOG" 2>/dev/null || echo 0)
+
+      if [[ "$current_size" -eq "$last_size" ]]; then
+        quiet_for=$((quiet_for + NSC_HEARTBEAT_SECONDS))
+        printf '[execution] still running (%ss without output)\n' "$quiet_for"
+        printf '[execution-heartbeat] still running (%ss without output)\n' "$quiet_for" >>"$INFRA_LOG"
+      else
+        last_size=$current_size
+        quiet_for=0
+      fi
+    done
+  ) &
+  heartbeat_pid=$!
+
+  wait "$output_pid"
+  status=$?
+  kill "$heartbeat_pid" 2>/dev/null || true
+  wait "$heartbeat_pid" 2>/dev/null || true
+  return "$status"
 }
 
 remote_execution_require_prereqs() {

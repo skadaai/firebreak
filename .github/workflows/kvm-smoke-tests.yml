@@ -52,11 +52,11 @@ jobs:
             shape: 1x2
           # Proven resource exceptions. Keep these mirrored in guides/ci-multi-arch-testing.md.
           - package: firebreak-test-smoke-internal-task
-            shape: 2x2
+            shape: 2x4
           - package: firebreak-test-smoke-internal-loop
-            shape: 2x2
+            shape: 1x2
           - package: firebreak-test-smoke-worker-firebreak-attach
-            shape: 2x2
+            shape: 1x2
           - package: firebreak-test-smoke-worker-claude-version
             shape: 1x2
           - package: firebreak-test-smoke-worker-interactive-claude-direct
@@ -68,7 +68,7 @@ jobs:
           - package: firebreak-test-smoke-worker-guest-bridge
             shape: 1x2
           - package: firebreak-test-smoke-worker-guest-bridge-interactive
-            shape: 4x8
+            shape: 2x4
           # Parked while the dormant cloud/QEMU profile is out of the active CI surface.
           # - firebreak-test-smoke-cloud-job
 

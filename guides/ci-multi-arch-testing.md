@@ -75,14 +75,10 @@ These are the currently documented exceptions to the `1x2` Linux default:
 
 - hosted aggregate `nix flake check`: `2x4`
   - reason: this job evaluates and builds a broad aggregate surface rather than one smoke package
-- `firebreak-test-smoke-worker-firebreak-attach`: `2x2`
-  - reason: validated on `2x2`; this is the smallest currently proven passing shape
-- `firebreak-test-smoke-internal-task`: `2x2`
-  - reason: validated on `2x2`; smaller shape is not yet proven
-- `firebreak-test-smoke-internal-loop`: `2x2`
-  - reason: validated on `2x2`; smaller shape is not yet proven
-- `firebreak-test-smoke-worker-guest-bridge-interactive`: `4x8`
-  - reason: this smoke previously showed real resource pressure; `4x8` is the currently proven passing shape
+- `firebreak-test-smoke-internal-task`: `2x4`
+  - reason: this smoke is the remaining OOM-sensitive case, so CI keeps it on the first standard step above `1x2`
+- `firebreak-test-smoke-worker-guest-bridge-interactive`: `2x4`
+  - reason: revalidated on `2x4`; the earlier `4x8` exception was oversized
 
 If a smaller shape is later proven, lower the workflow entry and update this list in the same change.
 

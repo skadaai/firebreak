@@ -673,6 +673,8 @@ mkdir -p "$host_meta_dir"
 mkdir -p "$host_exec_output_dir"
 mkdir -p "$host_agent_tools_dir"
 mkdir -p "$worker_bridge_dir/requests"
+chmod 0777 "$host_exec_output_dir"
+chmod 0777 "$worker_bridge_dir" "$worker_bridge_dir/requests"
 ln -snf "$host_exec_output_dir" "$host_runtime_dir/o"
 if [ "$host_agent_tools_dir" != "$default_host_agent_tools_dir" ] \
   && ! [ -e "$host_agent_tools_dir/bootstrap-ready" ] \

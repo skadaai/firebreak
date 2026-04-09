@@ -27,5 +27,6 @@ write_command_state() {
 EOF
   if [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
     cp "$command_state_local" "$command_state_shared" 2>/dev/null || true
+    chmod 0666 "$command_state_shared" 2>/dev/null || true
   fi
 }

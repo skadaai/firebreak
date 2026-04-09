@@ -83,6 +83,17 @@ mkdir -p "$fake_out/bin"
 cat >"$fake_out/bin/$package_name" <<SCRIPT
 #!/usr/bin/env bash
 set -eu
+instance_dir=\${FIREBREAK_INSTANCE_DIR:-}
+if [ -n "\$instance_dir" ]; then
+  mkdir -p "\$instance_dir"
+  runner_stdout_log="\$instance_dir/runner.out"
+  printf '%s\n' 'codex-cli 0.114.0' >"\$runner_stdout_log"
+  cat >"\$instance_dir/.firebreak-runtime.json" <<JSON
+{
+  "runner_stdout_log": "\$runner_stdout_log"
+}
+JSON
+fi
 printf '%s\n' 'codex-cli 0.114.0'
 SCRIPT
 chmod +x "$fake_out/bin/$package_name"

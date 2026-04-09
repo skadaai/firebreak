@@ -50,13 +50,14 @@ sync_guest_state_files() {
   rm -f @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
   printf '%s\n' '{}' > @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json
   printf '%s\n' '{}' > @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
-  chmod 0644 @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
+  chmod 0666 @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
   if [ -f "$bootstrap_state_local" ]; then
     cp "$bootstrap_state_local" @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json
   fi
   if [ -f "$command_state_local" ]; then
     cp "$command_state_local" @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
   fi
+  chmod 0666 @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
 }
 
 if ! [ -d @WORKSPACE_MOUNT@ ]; then
@@ -109,6 +110,7 @@ if [ "$session_mode" = "agent-exec" ] || [ "$session_mode" = "agent-attach-exec"
   sync_guest_state_files
   if [ "$session_mode" != "agent-service" ]; then
     printf '%s\n' "prepare-agent-session-mounted-exec-output" > @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
+    chmod 0666 @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
   fi
 fi
 
@@ -185,6 +187,7 @@ if [ "$request_command_present" = "1" ]; then
   sync_guest_state_files
   if [ "$session_mode" = "agent-attach-exec" ]; then
     printf '%s\n' "prepare-agent-session-command-ready" > @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
+    chmod 0666 @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
   fi
   log_phase prepare-agent-session-command-request-done
 elif [ -r "$session_command_file" ]; then
@@ -194,6 +197,7 @@ elif [ -r "$session_command_file" ]; then
   sync_guest_state_files
   if [ "$session_mode" = "agent-attach-exec" ]; then
     printf '%s\n' "prepare-agent-session-command-ready" > @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
+    chmod 0666 @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
   fi
   log_phase prepare-agent-session-command-file-done
 fi

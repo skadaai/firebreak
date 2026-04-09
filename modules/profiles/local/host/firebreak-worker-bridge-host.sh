@@ -313,7 +313,7 @@ try:
         terminal_columns = request_columns if request_columns is not None else 80
         terminal_state = {"row": 1, "column": 1}
         terminal_query_buffer = bytearray()
-        command_start_marker_state = {"seen": False}
+        command_start_marker_state = {"seen": False, "logged": False}
         stdin_input_gate = {"open": False, "release_at": None, "saw_terminal_reply": False}
         trace_scan_state = {"offset": 0}
         focus_state = {"enabled": False, "sent": False}
@@ -728,9 +728,9 @@ try:
             try:
                 trace("attach-stdin-stream-opened")
                 while True:
-                    if command_start_marker_state["seen"] and stdin_input_gate["release_at"] is not None:
+                    if command_start_marker_state["seen"] and not command_start_marker_state["logged"]:
                         trace(f"attach-stdin-command-start:pending={len(pending_input)}")
-                        stdin_input_gate["release_at"] = None
+                        command_start_marker_state["logged"] = True
                     if command_start_marker_state["seen"] and not stdin_input_gate["open"]:
                         note_nested_terminal_replies()
                     if (

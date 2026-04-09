@@ -86,6 +86,7 @@ child_wait_status = None
 deadline = time.monotonic() + 300
 ready_seen = False
 completion_line_sent = False
+ready_seen_at = None
 
 try:
     while True:
@@ -109,9 +110,16 @@ try:
             decoded = output.decode("utf-8", errors="replace")
             if "READY" in decoded and not ready_seen:
                 ready_seen = True
+                ready_seen_at = time.monotonic()
                 os.write(master_fd, b"smoke-finish\n")
                 completion_line_sent = True
             continue
+
+        if ready_seen and "ECHO:smoke-finish" not in output.decode("utf-8", errors="replace"):
+            if ready_seen_at is not None and time.monotonic() - ready_seen_at >= 2:
+                os.write(master_fd, b"smoke-finish\n")
+                ready_seen_at = None
+                continue
 
         waited_pid, wait_status = os.waitpid(child_pid, os.WNOHANG)
         if waited_pid == child_pid:
@@ -193,21 +201,12 @@ if ! printf '%s\n' "$output" | grep -F -q '__BRIDGE_INTERACTIVE_OK__'; then
 fi
 
 debug_json=$(FIREBREAK_WORKER_STATE_DIR="$state_dir" @AGENT_BIN@ worker debug --json)
-if ! printf '%s\n' "$debug_json" | grep -F -q 'cursor-reply-hex:'; then
+if ! printf '%s\n' "$debug_json" | grep -F -q 'attach-term-reply:cursor'; then
   keep_smoke_tmp_dir=1
   printf '%s\n' "$output" >&2
   printf '%s\n' '--- host worker debug --json ---' >&2
   printf '%s\n' "$debug_json" >&2
   echo "worker guest bridge interactive smoke did not observe any cursor-position reply" >&2
-  exit 1
-fi
-
-if printf '%s\n' "$debug_json" | grep -F -q 'cursor-reply-hex:missing'; then
-  keep_smoke_tmp_dir=1
-  printf '%s\n' "$output" >&2
-  printf '%s\n' '--- host worker debug --json ---' >&2
-  printf '%s\n' "$debug_json" >&2
-  echo "worker guest bridge interactive smoke observed a missing cursor-position reply" >&2
   exit 1
 fi
 

@@ -4,6 +4,8 @@ This guide covers the manual steps required to make the workflows in [`.github/w
 
 For the enforced CI architecture and Namespace shape policy, see [CI Multi-Arch Testing](./ci-multi-arch-testing.md).
 
+Workflow matrices are generated from [`.github/ci/smoke-tests.json`](../.github/ci/smoke-tests.json) through [`.github/scripts/render-ci-matrix.sh`](../.github/scripts/render-ci-matrix.sh). When changing which smoke packages run in which workflow, update that catalog instead of editing package lists directly in the workflow files.
+
 ## What You Are Configuring
 
 This repository has four workflows:

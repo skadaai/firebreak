@@ -17,6 +17,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  prepare-hosted-smoke-matrix:
+    name: Prepare Hosted Smoke Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.render.outputs.matrix }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Render hosted smoke matrix
+        id: render
+        run: echo "matrix=$(sh .github/scripts/render-ci-matrix.sh github-fast x86_64-linux)" >> "$GITHUB_OUTPUT"
+
   nix-checks:
     name: Nix Checks
     runs-on: ubuntu-latest
@@ -36,20 +50,12 @@ jobs:
 
   hosted-smoke-tests:
     name: amd64 / ${{ matrix.package }}
+    needs: prepare-hosted-smoke-matrix
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
       fail-fast: false
-      matrix:
-        package:
-          - firebreak-test-smoke-project-config-and-doctor
-          - firebreak-test-smoke-npx-launcher
-          - firebreak-test-smoke-firebreak-cli-surface
-          - firebreak-test-smoke-worker-proxy-script
-          - firebreak-test-smoke-local-controller
-          - firebreak-test-smoke-cloud-hypervisor-egress-proxy
-          - firebreak-test-smoke-cloud-hypervisor-port-publish
-          - firebreak-test-smoke-worker
+      matrix: ${{ fromJSON(needs.prepare-hosted-smoke-matrix.outputs.matrix) }}
 
     steps:
       - name: Check out repository

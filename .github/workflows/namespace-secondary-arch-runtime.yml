@@ -20,19 +20,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  arm64-linux-runtime:
-    name: arm64-linux / ${{ matrix.package }} (1x2)
+  prepare-secondary-runtime-matrices:
+    name: Prepare Secondary Runtime Matrices
     if: >
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
-    runs-on: nscloud-ubuntu-24.04-arm64-1x2
+    runs-on: ubuntu-latest
+    outputs:
+      arm64_linux_matrix: ${{ steps.render.outputs.arm64_linux_matrix }}
+      arm64_darwin_matrix: ${{ steps.render.outputs.arm64_darwin_matrix }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Checkout PR head if pr_number provided
+        if: ${{ inputs.pr_number != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr checkout ${{ inputs.pr_number }}
+
+      - name: Render secondary runtime matrices
+        id: render
+        run: |
+          echo "arm64_linux_matrix=$(sh .github/scripts/render-ci-matrix.sh namespace-secondary aarch64-linux)" >> "$GITHUB_OUTPUT"
+          echo "arm64_darwin_matrix=$(sh .github/scripts/render-ci-matrix.sh namespace-secondary aarch64-darwin)" >> "$GITHUB_OUTPUT"
+
+  arm64-linux-runtime:
+    name: arm64-linux / ${{ matrix.package }} (${{ matrix.shape }})
+    needs: prepare-secondary-runtime-matrices
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ${{ format('nscloud-ubuntu-24.04-arm64-{0}', matrix.shape) }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
-      matrix:
-        package:
-          - firebreak-test-smoke-codex-version
-          - firebreak-test-smoke-npx-launcher
+      matrix: ${{ fromJSON(needs.prepare-secondary-runtime-matrices.outputs.arm64_linux_matrix) }}
 
     steps:
       - name: Check out repository
@@ -70,18 +96,16 @@ jobs:
           compression-level: 0
 
   arm64-darwin-runtime:
-    name: arm64-darwin / ${{ matrix.package }} (6x14)
+    name: arm64-darwin / ${{ matrix.package }} (${{ matrix.shape }})
+    needs: prepare-secondary-runtime-matrices
     if: >
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
-    runs-on: nscloud-macos-sequoia-arm64-6x14
+    runs-on: ${{ format('nscloud-macos-sequoia-arm64-{0}', matrix.shape) }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
-      matrix:
-        package:
-          - firebreak-test-smoke-codex-version
-          - firebreak-test-smoke-npx-launcher
+      matrix: ${{ fromJSON(needs.prepare-secondary-runtime-matrices.outputs.arm64_darwin_matrix) }}
 
     steps:
       - name: Check out repository

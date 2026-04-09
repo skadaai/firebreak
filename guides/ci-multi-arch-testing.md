@@ -2,6 +2,8 @@
 
 This guide records the Firebreak CI policy for architecture coverage and Namespace runner sizing. Keep the workflows aligned with this document.
 
+The source of truth for smoke-package membership and per-system shape overrides is [`.github/ci/smoke-tests.json`](../.github/ci/smoke-tests.json). The workflow files must render their matrices from that catalog through [`.github/scripts/render-ci-matrix.sh`](../.github/scripts/render-ci-matrix.sh) rather than carrying their own hand-maintained package lists.
+
 ## Goals
 
 - keep one merge-blocking architecture with full confidence
@@ -156,6 +158,21 @@ If a smaller shape is later proven, lower the workflow entry and update this lis
   - all practical Darwin/VFKit smoke packages plus Apple Silicon export evaluation
   - excludes explicitly Linux-backend-specific `cloud-hypervisor-*` smoke packages
 
+## CI Catalog Maintenance
+
+When a smoke package is added, removed, or resized:
+
+1. update [`.github/ci/smoke-tests.json`](../.github/ci/smoke-tests.json)
+2. update this guide only if policy or a documented shape exception changed
+3. do not hand-edit package lists inside workflow files
+
+The catalog entry should define:
+
+- the smoke package name
+- the supported host systems for that smoke in CI
+- which CI suites consume it
+- any per-system shape override beyond the documented defaults
+
 ## When Updating CI
 
 When adding or changing a workflow job:
@@ -166,4 +183,5 @@ When adding or changing a workflow job:
 - add only representative coverage on the secondary architectures
 - keep secondary-arch Namespace runtime behind primary-runtime success
 - keep the scheduled full sweep separate from merge-time CI
+- edit the centralized smoke catalog instead of duplicating package lists in workflow YAML
 - update this guide whenever you add or remove a shape exception

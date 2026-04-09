@@ -8,6 +8,7 @@ This guide records the Firebreak CI policy for architecture coverage and Namespa
 - add representative automated coverage on the other supported host architectures
 - avoid the full `architectures x tests` cross-product
 - spend the smallest Namespace shape that has actually been proven to work
+- keep free GitHub checks ahead of paid Namespace runtime jobs
 
 ## Supported Host Architectures
 
@@ -21,18 +22,36 @@ The guest/runtime story is not identical on all of them, so CI should not preten
 
 ## CI Policy
 
-### Primary Gate
+### GitHub Fast Gate
 
-`x86_64-linux` is the primary merge gate.
+`Firebreak GitHub Fast Checks` is the first merge gate.
 
 It runs:
 
-- the full hosted check surface
-- the full KVM-backed smoke surface
+- only GitHub-hosted checks
+- cheap fail-fast validation before any paid runtime job starts
 
-This is the only architecture that should pay the cost of the complete runtime matrix on every change.
+### Primary Paid Runtime Gate
 
-### Secondary Coverage
+`Firebreak Namespace Primary Runtime` is the main paid runtime gate.
+
+It runs:
+
+- the full `x86_64-linux` runtime matrix
+- only after the GitHub fast gate passes
+
+### Secondary Paid Runtime Gate
+
+`Firebreak Namespace Secondary Arch Runtime` runs only after the primary paid runtime gate passes.
+
+It runs:
+
+- representative `aarch64-linux` runtime coverage
+- representative `aarch64-darwin` `vfkit` coverage
+
+This keeps the most expensive secondary-arch jobs behind both the cheap GitHub gate and the primary runtime gate.
+
+## Secondary Coverage Rules
 
 Secondary architectures run representative coverage, not the full matrix.
 
@@ -86,28 +105,37 @@ If a smaller shape is later proven, lower the workflow entry and update this lis
 
 ## Workflow Mapping
 
-### `Firebreak Hosted Checks`
+### `Firebreak GitHub Fast Checks`
 
 - `x86_64-linux`
   - `nix flake check`
   - full hosted smoke matrix
-- `aarch64-linux`
-  - representative runtime subset
-- `aarch64-darwin`
-  - representative `vfkit` subset plus evaluation checks
+- no Namespace runner usage
 
-### `Firebreak KVM Smoke Tests`
+### `Firebreak Namespace Primary Runtime`
 
 - `x86_64-linux` only
 - default runner shape per smoke: `1x2`
 - exceptions are declared inline in the matrix and mirrored in this guide
+
+### `Firebreak Namespace Secondary Arch Runtime`
+
+- runs only after `Firebreak Namespace Primary Runtime` succeeds
+- `aarch64-linux`
+  - `firebreak-test-smoke-codex-version`
+  - `firebreak-test-smoke-npx-launcher`
+- `aarch64-darwin`
+  - package/check evaluation for Apple Silicon exports
+  - `firebreak-test-smoke-codex-version`
+  - `firebreak-test-smoke-npx-launcher`
 
 ## When Updating CI
 
 When adding or changing a workflow job:
 
 - start from `1x2` on Linux unless there is existing evidence against it
+- keep GitHub-only checks separate from Namespace-paid runtime checks
 - keep full-matrix runtime coverage on `x86_64-linux`
 - add only representative coverage on the secondary architectures
-- prefer one narrow secondary-arch job over cloning the full primary matrix
+- keep secondary-arch Namespace runtime behind primary-runtime success
 - update this guide whenever you add or remove a shape exception

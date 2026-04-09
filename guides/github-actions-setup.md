@@ -6,38 +6,39 @@ For the enforced CI architecture and Namespace shape policy, see [CI Multi-Arch 
 
 ## What You Are Configuring
 
-This repository has two workflows:
+This repository has three workflows:
 
-- [`hosted-checks.yml`](../.github/workflows/hosted-checks.yml): runs hosted checks on the primary Linux architecture plus representative hosted coverage on the secondary supported architectures
-- [`kvm-smoke-tests.yml`](../.github/workflows/kvm-smoke-tests.yml): runs the full KVM-backed smoke matrix on the primary Linux architecture after hosted checks pass
+- [`github-fast-checks.yml`](../.github/workflows/github-fast-checks.yml): runs only cheap GitHub-hosted checks
+- [`namespace-primary-runtime.yml`](../.github/workflows/namespace-primary-runtime.yml): runs the full paid `x86_64-linux` runtime matrix after the GitHub fast checks pass
+- [`namespace-secondary-arch-runtime.yml`](../.github/workflows/namespace-secondary-arch-runtime.yml): runs representative paid secondary-arch runtime checks only after the primary paid runtime gate passes
 
-Both workflows assume the repository can schedule Namespace GitHub Actions runners for the labels used in those workflow files.
+The first workflow uses only GitHub-hosted runners. The two Namespace workflows assume the repository can schedule Namespace GitHub Actions runners for the labels used in those workflow files.
 
 ## 1. Enable Namespace GitHub Actions Runners
 
 1. Confirm the repository or organization is connected to Namespace GitHub Actions runners.
 2. Confirm jobs can schedule the `nscloud-*` runner labels used by the workflows.
-3. Confirm the Linux runners used by the KVM workflow support the Firebreak Nix workflow with `enable_kvm: true`.
+3. Confirm the Linux runners used by the Namespace runtime workflows support the Firebreak Nix workflow with `enable_kvm: true`.
 
 ## 2. Verify The Workflow Topology
 
 1. Push a branch or open a pull request.
-2. Confirm `Firebreak Hosted Checks` starts automatically.
-3. Confirm the hosted workflow fans out into:
-   - primary `x86_64-linux` hosted checks
-   - representative `aarch64-linux` runtime checks
-   - representative `aarch64-darwin` `vfkit` checks
-4. Confirm `Firebreak KVM Smoke Tests` starts automatically after the hosted workflow finishes successfully.
-5. If needed, trigger `Firebreak KVM Smoke Tests` manually from the `Actions` tab with `Run workflow`.
+2. Confirm `Firebreak GitHub Fast Checks` starts automatically.
+3. Confirm `Firebreak Namespace Primary Runtime` starts automatically only after the GitHub fast checks finish successfully.
+4. Confirm `Firebreak Namespace Secondary Arch Runtime` starts automatically only after the primary Namespace runtime workflow finishes successfully.
+5. If needed, trigger either Namespace workflow manually from the `Actions` tab with `Run workflow`.
 
 ## 3. Common Failure Checks
 
 - Namespace job never starts:
   - verify Namespace runner integration is active for the repository
   - verify the exact `nscloud-*` labels in the workflow are valid in your Namespace setup
-- KVM workflow never starts automatically:
-  - verify `Firebreak Hosted Checks` completed successfully
-  - verify the workflow name in [`kvm-smoke-tests.yml`](../.github/workflows/kvm-smoke-tests.yml) still matches `Firebreak Hosted Checks`
+- Namespace primary runtime never starts automatically:
+  - verify `Firebreak GitHub Fast Checks` completed successfully
+  - verify the workflow name in [`namespace-primary-runtime.yml`](../.github/workflows/namespace-primary-runtime.yml) still matches `Firebreak GitHub Fast Checks`
+- Namespace secondary-arch runtime never starts automatically:
+  - verify `Firebreak Namespace Primary Runtime` completed successfully
+  - verify the workflow name in [`namespace-secondary-arch-runtime.yml`](../.github/workflows/namespace-secondary-arch-runtime.yml) still matches `Firebreak Namespace Primary Runtime`
 - VM boot fails immediately:
   - verify the Namespace Linux runner can execute KVM-backed Nix workloads
   - verify the runner user can execute `nix run .#firebreak-test-smoke-codex`

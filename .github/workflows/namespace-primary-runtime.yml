@@ -1,10 +1,10 @@
-name: Firebreak KVM Smoke Tests
-# Run KVM-backed Firebreak smoke tests after hosted checks pass.
+name: Firebreak Namespace Primary Runtime
+# Run the full paid x86_64-linux runtime matrix only after GitHub fast checks pass.
 # Policy source: guides/ci-multi-arch-testing.md
 
 on:
   workflow_run:
-    workflows: ["Firebreak Hosted Checks"]
+    workflows: ["Firebreak GitHub Fast Checks"]
     types: [completed]
   workflow_dispatch:
     inputs:
@@ -16,11 +16,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: vm-smoke-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref }}
+  group: namespace-primary-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  vm-smoke-tests:
+  namespace-primary-runtime:
     name: ${{ matrix.package }} (${{ matrix.shape }})
     if: >
       github.event_name == 'workflow_dispatch' ||
@@ -92,14 +92,14 @@ jobs:
           extra_nix_config: |
             system-features = nixos-test benchmark big-parallel kvm
 
-      - name: Run KVM smoke test
+      - name: Run primary runtime smoke test
         run: nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#${{ matrix.package }}
 
-      - name: Upload KVM smoke artifacts on failure
+      - name: Upload primary runtime artifacts on failure
         if: failure()
         uses: namespace-actions/upload-artifact@v1
         with:
-          name: kvm-smoke-${{ matrix.package }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: namespace-primary-${{ matrix.package }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             /home/runner/.cache/firebreak/
             /home/runner/.cache/firebreak-test/

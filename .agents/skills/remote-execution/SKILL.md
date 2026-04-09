@@ -40,6 +40,10 @@ Ensure `gnutar` and `gzip` are available locally before running the test helper.
 Skill-local script paths such as `scripts/run-remote-test.sh` are resolved
 relative to this skill directory, not relative to the repository root.
 
+Successful runs should prioritize the remote execution output itself.
+Infra/bootstrap output belongs in saved logs unless debug mode is enabled or a
+phase fails.
+
 ## Workflow
 
 1. Read `references/env.md` and verify the required variables and CLI
@@ -49,8 +53,10 @@ relative to this skill directory, not relative to the repository root.
    current repository defines matching outputs.
 3. If the Nix cache volume may be cold (first use or after a long gap),
    run `scripts/ensure-nix-cache.sh` first.
-4. Run `scripts/run-remote-test.sh <test-attr>` to execute the test.
-5. Report the full output and exit code to the user.
+4. Choose the helper that matches the task:
+   - `scripts/run-remote-command.sh '<shell-command>'` for arbitrary execution
+   - `scripts/run-remote-test.sh <test-attr>` for flake check builds
+5. Report the execution output, exit code, and saved log paths to the user.
 6. Never leave instances running after the script exits.
    The scripts create an ephemeral instance, connect through `nsc ssh`, and
    destroy it automatically via EXIT trap.
@@ -64,3 +70,8 @@ relative to this skill directory, not relative to the repository root.
 - Never modify `NSC_DURATION` beyond 60m without explicit user instruction.
 - The warm-cache step is optional and idempotent; when in doubt, run it.
 - Treat a non-zero exit from the test script as a test failure, not a tool error.
+- `run-remote-command.sh` expects a single shell snippet argument. Quote it.
+- Default output policy:
+  - full remote execution output is streamed live and saved to `execution.txt`
+  - infra/setup logs are saved to `infra.log`
+  - only surface infra detail inline when debug is enabled or a phase fails

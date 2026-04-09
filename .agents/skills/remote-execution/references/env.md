@@ -16,6 +16,8 @@
 | `NSC_MACHINE`       | `4x8`        | Instance shape: `<vcpu>x<ram_gb>`. Use `8x16` for heavy or parallel tests. |
 | `NSC_DURATION`      | `30m`        | Hard TTL. Instance is auto-destroyed after this regardless of outcome.      |
 | `NSC_NIX_CACHE_TAG` | `nix-store`  | Tag for the cache volume backing `/nix`. Change per project to isolate stores. |
+| `NSC_DEBUG`         | `0`          | When set to `1`, stream infra/bootstrap logs live instead of keeping them mostly in `infra.log`. |
+| `NSC_LOG_DIR`       | unset        | If set, write `infra.log`, `execution.txt`, and `summary.txt` into this directory instead of a temp dir. |
 
 ## Recommended `.envrc` block
 
@@ -23,6 +25,7 @@
 export NSC_MACHINE="4x8"
 export NSC_DURATION="30m"
 export NSC_NIX_CACHE_TAG="nix-store"
+export NSC_DEBUG="0"
 ```
 
 ## Notes
@@ -35,6 +38,11 @@ export NSC_NIX_CACHE_TAG="nix-store"
   Use distinct tags only if you need hermetic store isolation between projects.
 - The helper scripts use `nsc ssh` for command execution and file transfer, so
   they do not require a separate SSH endpoint or manual key injection.
+- This skill requires a modern `nsc` build that supports `nsc instance upload`.
+  Older CLI builds are rejected during preflight instead of using a legacy fallback.
 - Bare Namespace instances may not expose a `nixbld` group even after Nix is
   installed. The helper scripts force single-user Nix for remote commands by
   passing `--option build-users-group ""`.
+- Successful runs should mostly show the remote execution output itself.
+  Bootstrap and transport details are captured in `infra.log` and printed
+  inline only on failure or when `NSC_DEBUG=1`.

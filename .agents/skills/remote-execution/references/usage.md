@@ -11,6 +11,14 @@ the full skill-relative path when invoking them manually from the repository roo
 ```bash
 # Generic specific Nix check attribute example
 bash .agents/skills/remote-execution/scripts/run-remote-test.sh checks.x86_64-linux.some-vm-test
+
+## Running an arbitrary command
+
+Pass a single shell snippet. Quote it so it reaches the helper as one argument.
+
+```bash
+bash .agents/skills/remote-execution/scripts/run-remote-command.sh \
+  'pwd && nix --version'
 ```
 
 ## Via Nix flake apps
@@ -31,6 +39,11 @@ All subsequent runs detect the cached Nix binary and skip the install (<5s).
 ```bash
 bash .agents/skills/remote-execution/scripts/ensure-nix-cache.sh
 ```
+
+Each helper writes:
+- `execution.txt`: streamed stdout/stderr from the main remote execution
+- `infra.log`: instance creation, bootstrap, upload, and teardown logs
+- `summary.txt`: final status, phase, exit code, and saved log paths
 
 ## Test attribute naming convention
 

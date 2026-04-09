@@ -5,11 +5,11 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=./remote-execution-lib.sh
 source "$SCRIPT_DIR/remote-execution-lib.sh"
 
-TEST_ATTR=${1:-}
+REMOTE_COMMAND=${1:-}
 
-if [[ $# -ne 1 || -z "$TEST_ATTR" ]]; then
-  echo "usage: $0 <test-attr>" >&2
-  echo "pass an explicit flake check attribute, e.g. checks.x86_64-linux.some-vm-test" >&2
+if [[ $# -ne 1 || -z "$REMOTE_COMMAND" ]]; then
+  echo "usage: $0 '<shell-command>'" >&2
+  echo "pass a single remote shell snippet, e.g. $0 'pwd && ls -la'" >&2
   exit 64
 fi
 
@@ -26,14 +26,8 @@ remote_execution_pack_workspace
 remote_execution_upload_workspace
 remote_execution_run_workspace_script "
 set -euo pipefail
-NIX_BIN=/nix/var/nix/profiles/default/bin/nix
-if [[ ! -x \$NIX_BIN ]]; then
-  echo \"nix is missing after install step\" >&2
-  exit 1
-fi
+export PATH=\"/nix/var/nix/profiles/default/bin:\$PATH\"
 cd /workspace
-\$NIX_BIN --option build-users-group \"\" \
-  --accept-flake-config --extra-experimental-features \"nix-command flakes\" \
-  build -L \".#${TEST_ATTR}\"
+$REMOTE_COMMAND
 "
 remote_execution_success

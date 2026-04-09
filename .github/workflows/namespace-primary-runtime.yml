@@ -51,7 +51,11 @@ jobs:
     if: >
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
-    runs-on: ${{ format('nscloud-ubuntu-24.04-amd64-{0}', matrix.shape) }}
+    runs-on:
+      - ${{ format('nscloud-ubuntu-24.04-amd64-{0}-with-cache;github.run-id={1};job.priority=1', matrix.shape, github.run_id) }}
+      - nscloud-cache-tag-firebreak-runtime-amd64-linux
+      - nscloud-cache-allow-commit-from-main
+      - nscloud-cache-allow-commit-from-default
     timeout-minutes: 60
     strategy:
       fail-fast: false

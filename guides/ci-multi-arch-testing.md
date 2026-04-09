@@ -107,6 +107,22 @@ Increase the shape only after a job has shown a concrete need for more resources
 2. record the exception in this guide
 3. encode the exception directly in the workflow matrix
 
+## Namespace Runner Label Policy
+
+Namespace-backed workflows should use runner-label features to reduce cost and queue waste:
+
+- use exactly one `nscloud-*` machine label per job
+- add deterministic assignment with `github.run-id` on Namespace jobs
+- give merge-path runtime jobs higher priority than the weekly full sweep
+- attach branch-protected cache volumes shared per architecture
+
+Current cache policy:
+
+- `x86_64-linux` Namespace jobs share `firebreak-runtime-amd64-linux`
+- `aarch64-linux` Namespace jobs share `firebreak-runtime-arm64-linux`
+- `aarch64-darwin` Namespace jobs share `firebreak-runtime-arm64-darwin`
+- only `main` and the repository default branch may persist cache updates
+
 ### Current Linux Exceptions
 
 These are the currently documented exceptions to the `1x2` Linux default:

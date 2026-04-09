@@ -17,6 +17,12 @@ This repository has four workflows:
 
 The first workflow uses only GitHub-hosted runners. The three Namespace workflows assume the repository can schedule Namespace GitHub Actions runners for the labels used in those workflow files.
 
+The Namespace workflows also use runner-label optimizations:
+
+- branch-protected cache volumes shared per architecture
+- deterministic runner assignment via `github.run-id`
+- lower scheduling priority for the weekly full-arch sweep than for merge-path runtime jobs
+
 ## 1. Enable Namespace GitHub Actions Runners
 
 1. Confirm the repository or organization is connected to Namespace GitHub Actions runners.

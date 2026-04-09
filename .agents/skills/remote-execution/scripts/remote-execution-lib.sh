@@ -7,7 +7,7 @@ remote_execution_now_iso() {
 }
 
 remote_execution_init() {
-  NSC_MACHINE=${NSC_MACHINE:-"2x2"}
+  NSC_MACHINE=${NSC_MACHINE:-"1x2"}
   NSC_DURATION=${NSC_DURATION:-"30m"}
   NSC_NIX_CACHE_TAG=${NSC_NIX_CACHE_TAG:-"nix-store"}
   NSC_DEBUG=${NSC_DEBUG:-"0"}

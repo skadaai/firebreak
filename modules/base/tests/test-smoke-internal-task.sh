@@ -100,14 +100,12 @@ if [ -z "$task_two_runtime_root" ] || [ "$task_one_runtime_root" = "$task_two_ru
   exit 1
 fi
 
-validation_suite=test-smoke-project-config-and-doctor
+validation_suite=test-fixture-validation-pass
 
-FIREBREAK_VALIDATION_FORCE_RESULT=passed \
-  task_cmd validate --task-id task-one "$validation_suite" >"$task_tmp_dir/task-one.validate.log" 2>&1 || validation_status=$?
+task_cmd validate --task-id task-one "$validation_suite" >"$task_tmp_dir/task-one.validate.log" 2>&1 || validation_status=$?
 : "${validation_status:=0}"
 if [ "$validation_status" -eq 0 ]; then
-  FIREBREAK_VALIDATION_FORCE_RESULT=passed \
-    task_cmd validate --task-id task-two "$validation_suite" >"$task_tmp_dir/task-two.validate.log" 2>&1 || validation_status=$?
+  task_cmd validate --task-id task-two "$validation_suite" >"$task_tmp_dir/task-two.validate.log" 2>&1 || validation_status=$?
 fi
 
 if [ "$validation_status" -ne 0 ]; then

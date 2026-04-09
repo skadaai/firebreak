@@ -375,6 +375,21 @@ rec {
       } ../../modules/base/host/firebreak-validate.sh;
     };
 
+  mkValidationFixturePackage = {
+    name,
+    message ? name,
+    exitCode ? 0,
+  }:
+    writeUncheckedShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [ coreutils ];
+      text = ''
+        set -eu
+        printf '%s\n' ${builtins.toJSON message}
+        exit ${toString exitCode}
+      '';
+    };
+
   mkWorkloadVersionSmokePackage = {
     name,
     agentPackage,

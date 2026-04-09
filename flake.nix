@@ -93,6 +93,7 @@
             mkSmokePackage
             mkTaskPackage
             mkTaskSmokePackage
+            mkValidationFixturePackage
             mkValidationPackage
             mkValidationSmokePackage
             mkWorkerFirebreakAttachSmokePackage

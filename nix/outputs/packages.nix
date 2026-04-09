@@ -27,6 +27,7 @@
   mkSmokePackage,
   mkTaskPackage,
   mkTaskSmokePackage,
+  mkValidationFixturePackage,
   mkValidationPackage,
   mkValidationSmokePackage,
   mkWorkerFirebreakAttachSmokePackage,
@@ -158,6 +159,11 @@
   firebreak-test-smoke-port-publish-runtime = mkPortPublishRuntimeSmokePackage {
     name = "firebreak-test-smoke-port-publish-runtime";
     fixturePackage = "firebreak-port-publish-fixture";
+  };
+
+  firebreak-validation-fixture-pass = mkValidationFixturePackage {
+    name = "firebreak-validation-fixture-pass";
+    message = "validation fixture passed";
   };
 
   firebreak-internal-validate = mkValidationPackage {

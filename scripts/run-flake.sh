@@ -29,7 +29,7 @@ mkdir -p "$src_dir"
   git ls-files --cached --modified --others --exclude-standard -z |
     while IFS= read -r -d '' path; do
       case "$path" in
-        .codex|.codex/*|.claude|.claude/*|.direnv|.direnv/*|.agent-sandbox.env|result|result/*|*.img|*.socket)
+        .codex|.codex/*|.claude|.claude/*|.direnv|.direnv/*|.agent-sandbox.env|.agent-sandbox-codex-ssh|.agent-sandbox-codex-ssh/*|result|result/*|*.img|*.socket)
           continue
           ;;
       esac

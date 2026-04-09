@@ -56,17 +56,15 @@ success_branch="agent/spec-006-success-$branch_suffix"
 success_output=$(firebreak_cmd internal task create --task-id success --branch "$success_branch" --owner smoke)
 success_worktree=$(extract_json_field "$success_output" worktree_path)
 printf '%s\n' '# loop smoke' >"$success_worktree/LOOP_SMOKE.md"
-success_summary=$(
-  FIREBREAK_VALIDATION_FORCE_RESULT=passed \
-    firebreak_cmd internal loop run \
-      --task-id success \
-      --attempt-id success-run \
-      --spec "$spec_path" \
-      --plan "Add loop smoke artifact" \
-      --validation-suite test-smoke-project-config-and-doctor \
-      --write-path . \
-      --commit-message "loop smoke commit"
-)
+success_validation_suite=test-fixture-validation-pass
+success_summary=$(firebreak_cmd internal loop run \
+  --task-id success \
+  --attempt-id success-run \
+  --spec "$spec_path" \
+  --plan "Add loop smoke artifact" \
+  --validation-suite "$success_validation_suite" \
+  --write-path . \
+  --commit-message "loop smoke commit")
 if ! printf '%s\n' "$success_summary" | grep -q '"result": "completed"'; then
   printf '%s\n' "$success_summary" >&2
   echo "loop smoke success scenario did not complete" >&2
@@ -81,7 +79,7 @@ fi
 success_audit_root=$(extract_json_field "$success_summary" audit_root)
 success_plan_path=$(extract_json_field "$success_summary" plan_path)
 success_review_path=$(extract_json_field "$success_summary" review_path)
-if ! [ -f "$success_plan_path" ] || ! [ -f "$success_review_path" ] || ! [ -f "$success_audit_root/policy.log" ] || ! [ -f "$success_audit_root/validation/test-smoke-project-config-and-doctor.json" ]; then
+if ! [ -f "$success_plan_path" ] || ! [ -f "$success_review_path" ] || ! [ -f "$success_audit_root/policy.log" ] || ! [ -f "$success_audit_root/validation/$success_validation_suite.json" ]; then
   printf '%s\n' "$success_summary" >&2
   echo "loop smoke success scenario did not preserve the expected audit trail" >&2
   exit 1
@@ -92,18 +90,15 @@ validation_branch="agent/spec-006-validation-$branch_suffix"
 validation_output=$(firebreak_cmd internal task create --task-id validation-blocked --branch "$validation_branch" --owner smoke)
 validation_worktree=$(extract_json_field "$validation_output" worktree_path)
 printf '%s\n' '# validation blocked' >"$validation_worktree/VALIDATION_BLOCKED.md"
+blocked_validation_suite=test-fixture-validation-blocked
 set +e
-validation_summary=$(
-  FIREBREAK_VALIDATION_FORCE_RESULT=blocked \
-    FIREBREAK_VALIDATION_FORCE_BLOCKED_REASON="smoke-blocked" \
-    firebreak_cmd internal loop run \
-      --task-id validation-blocked \
-      --attempt-id validation-blocked-run \
-      --spec "$spec_path" \
-      --plan "Exercise blocked validation path" \
-      --validation-suite test-smoke-project-config-and-doctor \
-      --write-path .
-)
+validation_summary=$(firebreak_cmd internal loop run \
+  --task-id validation-blocked \
+  --attempt-id validation-blocked-run \
+  --spec "$spec_path" \
+  --plan "Exercise blocked validation path" \
+  --validation-suite "$blocked_validation_suite" \
+  --write-path .)
 validation_status=$?
 set -e
 if [ "$validation_status" -eq 0 ] || ! printf '%s\n' "$validation_summary" | grep -q '"blocked_reason": "validation-blocked"'; then
@@ -113,7 +108,7 @@ if [ "$validation_status" -eq 0 ] || ! printf '%s\n' "$validation_summary" | gre
 fi
 validation_audit_root=$(extract_json_field "$validation_summary" audit_root)
 validation_plan_path=$(extract_json_field "$validation_summary" plan_path)
-if ! [ -f "$validation_plan_path" ] || ! [ -f "$validation_audit_root/validation/test-smoke-project-config-and-doctor.json" ]; then
+if ! [ -f "$validation_plan_path" ] || ! [ -f "$validation_audit_root/validation/$blocked_validation_suite.json" ]; then
   printf '%s\n' "$validation_summary" >&2
   echo "loop smoke validation-blocked scenario did not preserve validation evidence" >&2
   exit 1
@@ -129,7 +124,7 @@ policy_summary=$(
     --attempt-id policy-blocked-run \
     --spec "$spec_path" \
     --plan "Exercise blocked policy path" \
-    --validation-suite test-smoke-project-config-and-doctor \
+    --validation-suite "$success_validation_suite" \
     --write-path ../escape.txt
 )
 policy_status=$?
@@ -153,13 +148,12 @@ firebreak_cmd internal task create --task-id runtime-blocked --branch "$runtime_
 set +e
 runtime_summary=$(
   FIREBREAK_LOOP_MAX_RUNTIME_SECS=0 \
-    FIREBREAK_VALIDATION_FORCE_RESULT=passed \
     firebreak_cmd internal loop run \
       --task-id runtime-blocked \
       --attempt-id runtime-blocked-run \
       --spec "$spec_path" \
       --plan "Exercise runtime limit path" \
-      --validation-suite test-smoke-project-config-and-doctor \
+      --validation-suite "$success_validation_suite" \
       --write-path .
 )
 runtime_status=$?
@@ -183,13 +177,12 @@ firebreak_cmd internal task create --task-id parallel-blocked --branch "$paralle
 set +e
 parallel_summary=$(
   FIREBREAK_LOOP_MAX_PARALLELISM=0 \
-    FIREBREAK_VALIDATION_FORCE_RESULT=passed \
     firebreak_cmd internal loop run \
       --task-id parallel-blocked \
       --attempt-id parallel-blocked-run \
       --spec "$spec_path" \
       --plan "Exercise parallelism limit path" \
-      --validation-suite test-smoke-project-config-and-doctor \
+      --validation-suite "$success_validation_suite" \
       --write-path .
 )
 parallel_status=$?

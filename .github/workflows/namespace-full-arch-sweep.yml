@@ -1,0 +1,255 @@
+name: Firebreak Namespace Full Arch Sweep
+# Run the broadest practical smoke surface across every supported host arch.
+# This is intentionally scheduled outside the pull-request gate.
+# Policy source: guides/ci-multi-arch-testing.md
+
+on:
+  schedule:
+    - cron: '0 5 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: namespace-full-sweep-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  amd64-linux-full:
+    name: amd64-linux / ${{ matrix.package }} (${{ matrix.shape }})
+    runs-on: ${{ format('nscloud-ubuntu-24.04-amd64-{0}', matrix.shape) }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: firebreak-test-smoke-codex
+            shape: 1x2
+          - package: firebreak-test-smoke-codex-version
+            shape: 1x2
+          - package: firebreak-test-smoke-codex-warm-reuse
+            shape: 1x2
+          - package: firebreak-test-smoke-claude-code
+            shape: 1x2
+          - package: firebreak-test-smoke-credential-slots
+            shape: 1x2
+          - package: firebreak-test-smoke-codex-credential-slots
+            shape: 1x2
+          - package: firebreak-test-smoke-claude-code-credential-slots
+            shape: 1x2
+          - package: firebreak-test-smoke-project-config-and-doctor
+            shape: 1x2
+          - package: firebreak-test-smoke-npx-launcher
+            shape: 1x2
+          - package: firebreak-test-smoke-firebreak-cli-surface
+            shape: 1x2
+          - package: firebreak-test-smoke-worker-proxy-script
+            shape: 1x2
+          - package: firebreak-test-smoke-local-controller
+            shape: 1x2
+          - package: firebreak-test-smoke-cloud-hypervisor-egress-proxy
+            shape: 1x2
+          - package: firebreak-test-smoke-cloud-hypervisor-port-publish
+            shape: 1x2
+          - package: firebreak-test-smoke-port-publish-runtime
+            shape: 1x2
+          - package: firebreak-test-smoke-internal-validate
+            shape: 1x2
+          - package: firebreak-test-smoke-internal-task
+            shape: 2x4
+          - package: firebreak-test-smoke-worker
+            shape: 1x2
+          - package: firebreak-test-smoke-worker-firebreak-attach
+            shape: 1x2
+          - package: firebreak-test-smoke-worker-claude-version
+            shape: 1x2
+          - package: firebreak-test-smoke-worker-interactive-claude-direct
+            shape: 1x2
+          - package: firebreak-test-smoke-worker-interactive-claude-exit-direct
+            shape: 1x2
+          - package: firebreak-test-smoke-worker-interactive-codex-direct
+            shape: 1x2
+          - package: firebreak-test-smoke-worker-guest-bridge
+            shape: 1x2
+          - package: firebreak-test-smoke-worker-guest-bridge-interactive
+            shape: 2x4
+          - package: firebreak-test-smoke-internal-loop
+            shape: 1x2
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          enable_kvm: true
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            system-features = nixos-test benchmark big-parallel kvm
+
+      - name: Run amd64-linux full smoke sweep
+        run: nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#${{ matrix.package }}
+
+      - name: Upload amd64-linux sweep artifacts on failure
+        if: failure()
+        uses: namespace-actions/upload-artifact@v1
+        with:
+          name: namespace-full-amd64-linux-${{ matrix.package }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /home/runner/.cache/firebreak/
+            /home/runner/.cache/firebreak-test/
+            /cache/firebreak/
+            /tmp/firebreak/
+            !/home/runner/.cache/firebreak/**/*.socket
+            !/home/runner/.cache/firebreak-test/**/*.socket
+            !/cache/firebreak/**/*.socket
+            !/tmp/firebreak/**/*.socket
+          if-no-files-found: ignore
+          compression-level: 0
+
+  arm64-linux-full:
+    name: arm64-linux / ${{ matrix.package }} (${{ matrix.shape }})
+    runs-on: ${{ format('nscloud-ubuntu-24.04-arm64-{0}', matrix.shape) }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: firebreak-test-smoke-codex
+            shape: 1x2
+          - package: firebreak-test-smoke-codex-version
+            shape: 1x2
+          - package: firebreak-test-smoke-codex-warm-reuse
+            shape: 1x2
+          - package: firebreak-test-smoke-claude-code
+            shape: 1x2
+          - package: firebreak-test-smoke-credential-slots
+            shape: 1x2
+          - package: firebreak-test-smoke-codex-credential-slots
+            shape: 1x2
+          - package: firebreak-test-smoke-claude-code-credential-slots
+            shape: 1x2
+          - package: firebreak-test-smoke-project-config-and-doctor
+            shape: 1x2
+          - package: firebreak-test-smoke-npx-launcher
+            shape: 1x2
+          - package: firebreak-test-smoke-firebreak-cli-surface
+            shape: 1x2
+          - package: firebreak-test-smoke-worker-proxy-script
+            shape: 1x2
+          - package: firebreak-test-smoke-local-controller
+            shape: 1x2
+          - package: firebreak-test-smoke-cloud-hypervisor-egress-proxy
+            shape: 1x2
+          - package: firebreak-test-smoke-cloud-hypervisor-port-publish
+            shape: 1x2
+          - package: firebreak-test-smoke-port-publish-runtime
+            shape: 1x2
+          - package: firebreak-test-smoke-internal-validate
+            shape: 1x2
+          - package: firebreak-test-smoke-internal-task
+            shape: 2x4
+          - package: firebreak-test-smoke-worker
+            shape: 1x2
+          - package: firebreak-test-smoke-worker-firebreak-attach
+            shape: 1x2
+          - package: firebreak-test-smoke-worker-claude-version
+            shape: 1x2
+          - package: firebreak-test-smoke-worker-interactive-claude-direct
+            shape: 1x2
+          - package: firebreak-test-smoke-worker-interactive-claude-exit-direct
+            shape: 1x2
+          - package: firebreak-test-smoke-worker-interactive-codex-direct
+            shape: 1x2
+          - package: firebreak-test-smoke-worker-guest-bridge
+            shape: 1x2
+          - package: firebreak-test-smoke-worker-guest-bridge-interactive
+            shape: 2x4
+          - package: firebreak-test-smoke-internal-loop
+            shape: 1x2
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          enable_kvm: true
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            system-features = nixos-test benchmark big-parallel kvm
+
+      - name: Run arm64-linux full smoke sweep
+        run: nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#${{ matrix.package }}
+
+      - name: Upload arm64-linux sweep artifacts on failure
+        if: failure()
+        uses: namespace-actions/upload-artifact@v1
+        with:
+          name: namespace-full-arm64-linux-${{ matrix.package }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /home/runner/.cache/firebreak/
+            /home/runner/.cache/firebreak-test/
+            /cache/firebreak/
+            /tmp/firebreak/
+            !/home/runner/.cache/firebreak/**/*.socket
+            !/home/runner/.cache/firebreak-test/**/*.socket
+            !/cache/firebreak/**/*.socket
+            !/tmp/firebreak/**/*.socket
+          if-no-files-found: ignore
+          compression-level: 0
+
+  arm64-darwin-full:
+    name: arm64-darwin / ${{ matrix.package }} (6x14)
+    runs-on: nscloud-macos-sequoia-arm64-6x14
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - firebreak-test-smoke-codex
+          - firebreak-test-smoke-codex-version
+          - firebreak-test-smoke-codex-warm-reuse
+          - firebreak-test-smoke-claude-code
+          - firebreak-test-smoke-credential-slots
+          - firebreak-test-smoke-codex-credential-slots
+          - firebreak-test-smoke-claude-code-credential-slots
+          - firebreak-test-smoke-project-config-and-doctor
+          - firebreak-test-smoke-npx-launcher
+          - firebreak-test-smoke-firebreak-cli-surface
+          - firebreak-test-smoke-worker-proxy-script
+          - firebreak-test-smoke-local-controller
+          - firebreak-test-smoke-port-publish-runtime
+          - firebreak-test-smoke-internal-validate
+          - firebreak-test-smoke-internal-task
+          - firebreak-test-smoke-worker
+          - firebreak-test-smoke-worker-firebreak-attach
+          - firebreak-test-smoke-worker-claude-version
+          - firebreak-test-smoke-worker-interactive-claude-direct
+          - firebreak-test-smoke-worker-interactive-claude-exit-direct
+          - firebreak-test-smoke-worker-interactive-codex-direct
+          - firebreak-test-smoke-worker-guest-bridge
+          - firebreak-test-smoke-worker-guest-bridge-interactive
+          - firebreak-test-smoke-internal-loop
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify Apple Silicon package exports
+        run: |
+          nix --accept-flake-config --extra-experimental-features 'nix-command flakes' eval .#packages.aarch64-darwin.firebreak.name --raw
+          nix --accept-flake-config --extra-experimental-features 'nix-command flakes' eval .#packages.aarch64-darwin.firebreak-codex.name --raw
+          nix --accept-flake-config --extra-experimental-features 'nix-command flakes' eval .#packages.aarch64-darwin.firebreak-claude-code.name --raw
+          nix --accept-flake-config --extra-experimental-features 'nix-command flakes' eval .#checks.aarch64-darwin.firebreak-codex-system.drvPath --raw
+
+      - name: Run arm64-darwin full smoke sweep
+        run: nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#${{ matrix.package }}

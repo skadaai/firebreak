@@ -7,10 +7,6 @@ on:
   push:
     branches:
       - main
-  schedule:
-    # Weekly full CI chain kickoff on main. This fans out into the Namespace
-    # primary and secondary runtime workflows via workflow_run.
-    - cron: '0 5 * * 0'
   workflow_dispatch:
 
 permissions:

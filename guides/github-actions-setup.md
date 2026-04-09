@@ -6,13 +6,14 @@ For the enforced CI architecture and Namespace shape policy, see [CI Multi-Arch 
 
 ## What You Are Configuring
 
-This repository has three workflows:
+This repository has four workflows:
 
 - [`github-fast-checks.yml`](../.github/workflows/github-fast-checks.yml): runs only cheap GitHub-hosted checks
 - [`namespace-primary-runtime.yml`](../.github/workflows/namespace-primary-runtime.yml): runs the full paid `x86_64-linux` runtime matrix after the GitHub fast checks pass
 - [`namespace-secondary-arch-runtime.yml`](../.github/workflows/namespace-secondary-arch-runtime.yml): runs representative paid secondary-arch runtime checks only after the primary paid runtime gate passes
+- [`namespace-full-arch-sweep.yml`](../.github/workflows/namespace-full-arch-sweep.yml): runs the weekly broad multi-arch smoke sweep outside the pull-request gate
 
-The first workflow uses only GitHub-hosted runners. The two Namespace workflows assume the repository can schedule Namespace GitHub Actions runners for the labels used in those workflow files.
+The first workflow uses only GitHub-hosted runners. The three Namespace workflows assume the repository can schedule Namespace GitHub Actions runners for the labels used in those workflow files.
 
 ## 1. Enable Namespace GitHub Actions Runners
 
@@ -26,8 +27,8 @@ The first workflow uses only GitHub-hosted runners. The two Namespace workflows 
 2. Confirm `Firebreak GitHub Fast Checks` starts automatically.
 3. Confirm `Firebreak Namespace Primary Runtime` starts automatically only after the GitHub fast checks finish successfully.
 4. Confirm `Firebreak Namespace Secondary Arch Runtime` starts automatically only after the primary Namespace runtime workflow finishes successfully.
-5. If needed, trigger either Namespace workflow manually from the `Actions` tab with `Run workflow`.
-6. Confirm the weekly scheduled `main` run starts from `Firebreak GitHub Fast Checks` and fans out through the same workflow chain.
+5. If needed, trigger any Namespace workflow manually from the `Actions` tab with `Run workflow`.
+6. Confirm the weekly scheduled `main` run starts `Firebreak Namespace Full Arch Sweep`.
 
 ## 3. Common Failure Checks
 
@@ -40,6 +41,9 @@ The first workflow uses only GitHub-hosted runners. The two Namespace workflows 
 - Namespace secondary-arch runtime never starts automatically:
   - verify `Firebreak Namespace Primary Runtime` completed successfully
   - verify the workflow name in [`namespace-secondary-arch-runtime.yml`](../.github/workflows/namespace-secondary-arch-runtime.yml) still matches `Firebreak Namespace Primary Runtime`
+- Weekly full-arch sweep never starts automatically:
+  - verify the cron trigger in [`namespace-full-arch-sweep.yml`](../.github/workflows/namespace-full-arch-sweep.yml) is still present
+  - verify scheduled workflows are enabled for the repository
 - VM boot fails immediately:
   - verify the Namespace Linux runner can execute KVM-backed Nix workloads
   - verify the runner user can execute `nix run .#firebreak-test-smoke-codex`

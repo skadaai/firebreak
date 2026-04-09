@@ -9,6 +9,7 @@ This guide records the Firebreak CI policy for architecture coverage and Namespa
 - avoid the full `architectures x tests` cross-product
 - spend the smallest Namespace shape that has actually been proven to work
 - keep free GitHub checks ahead of paid Namespace runtime jobs
+- keep broad all-arch sweeps out of the pull-request gate
 
 ## Supported Host Architectures
 
@@ -30,10 +31,6 @@ It runs:
 
 - only GitHub-hosted checks
 - cheap fail-fast validation before any paid runtime job starts
-
-It also runs:
-
-- weekly on `main` to kick off the full enforced CI chain
 
 ### Primary Paid Runtime Gate
 
@@ -59,15 +56,15 @@ This keeps the most expensive secondary-arch jobs behind both the cheap GitHub g
 
 The enforced scheduled policy is:
 
-- weekly full CI chain from `main`
+- weekly full-arch smoke sweep from `main`
 
 Implementation:
 
-- `Firebreak GitHub Fast Checks` has the only cron trigger
-- `Firebreak Namespace Primary Runtime` runs from `workflow_run` after the GitHub gate succeeds
-- `Firebreak Namespace Secondary Arch Runtime` runs from `workflow_run` after the primary runtime gate succeeds
+- `Firebreak Namespace Full Arch Sweep` owns the cron trigger
+- the scheduled sweep is separate from the pull-request gate
+- it runs the broadest practical smoke surface on every supported host architecture
 
-This keeps the schedule simple, prevents duplicate paid runs, and preserves the same cost ordering as the pull-request path.
+This keeps merge-time CI cost-aware while still giving us a recurring “run everything available” signal outside the PR path.
 
 ## Secondary Coverage Rules
 
@@ -129,7 +126,6 @@ If a smaller shape is later proven, lower the workflow entry and update this lis
   - `nix flake check`
   - full hosted smoke matrix
 - no Namespace runner usage
-- weekly scheduled kickoff for the full CI chain
 
 ### `Firebreak Namespace Primary Runtime`
 
@@ -148,6 +144,18 @@ If a smaller shape is later proven, lower the workflow entry and update this lis
   - `firebreak-test-smoke-codex-version`
   - `firebreak-test-smoke-npx-launcher`
 
+### `Firebreak Namespace Full Arch Sweep`
+
+- scheduled weekly on `main`
+- broad smoke sweep outside the pull-request gate
+- `x86_64-linux`
+  - all practical smoke packages, with the same documented Linux shape exceptions
+- `aarch64-linux`
+  - all practical smoke packages, with the same documented Linux shape exceptions
+- `aarch64-darwin`
+  - all practical Darwin/VFKit smoke packages plus Apple Silicon export evaluation
+  - excludes explicitly Linux-backend-specific `cloud-hypervisor-*` smoke packages
+
 ## When Updating CI
 
 When adding or changing a workflow job:
@@ -157,4 +165,5 @@ When adding or changing a workflow job:
 - keep full-matrix runtime coverage on `x86_64-linux`
 - add only representative coverage on the secondary architectures
 - keep secondary-arch Namespace runtime behind primary-runtime success
+- keep the scheduled full sweep separate from merge-time CI
 - update this guide whenever you add or remove a shape exception

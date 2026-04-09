@@ -48,10 +48,13 @@ All subsequent runs detect the cached Nix binary and skip the install (<5s).
 bash .agents/skills/remote-execution/scripts/ensure-nix-cache.sh
 ```
 
+If the same cache volume is reused later with the same warm scope, the helper
+skips the expensive prefetch work and reports that the cache was already warm.
+
 Each helper writes:
-- `execution.txt`: streamed stdout/stderr from the main remote execution
+- `execution.txt`: streamed remote stdout/stderr from the main execution phase; it may be empty on a successful silent run
 - `infra.log`: instance creation, bootstrap, upload, and teardown logs
-- `summary.txt`: final status, phase, exit code, and saved log paths
+- `summary.txt`: final status, phase, exit code, saved log paths, and execution metadata
 
 The run directory is printed immediately when the helper starts, and
 `summary.txt` updates while the run is still active.

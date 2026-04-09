@@ -16,7 +16,10 @@
 | `NSC_MACHINE`       | `4x8`        | Instance shape: `<vcpu>x<ram_gb>`. Use `8x16` for heavy or parallel tests. |
 | `NSC_DURATION`      | `30m`        | Hard TTL. Instance is auto-destroyed after this regardless of outcome.      |
 | `NSC_NIX_CACHE_TAG` | `nix-store`  | Tag for the cache volume backing `/nix`. Change per project to isolate stores. |
+| `NSC_NIX_CACHE_SCOPE` | auto       | Optional warm-marker scope. Defaults to a repo-specific key derived from `flake.lock` or `flake.nix`. |
+| `NSC_NIX_CACHE_FORCE` | `0`        | When set to `1`, ignore the existing warm marker and force the expensive warm step again. |
 | `NSC_DEBUG`         | `0`          | When set to `1`, stream infra/bootstrap logs live instead of keeping them mostly in `infra.log`. |
+| `NSC_TRACE`         | `0`          | When set to `1`, prepend `set -x` to the remote execution script for shell-level tracing. |
 | `NSC_LOG_DIR`       | unset        | If set, write `infra.log`, `execution.txt`, and `summary.txt` into this directory instead of a temp dir. |
 | `NSC_HEARTBEAT_SECONDS` | `30`     | Print a keepalive line when the main remote execution stays silent for this many seconds. |
 
@@ -26,7 +29,10 @@
 export NSC_MACHINE="4x8"
 export NSC_DURATION="30m"
 export NSC_NIX_CACHE_TAG="nix-store"
+export NSC_NIX_CACHE_SCOPE=""
+export NSC_NIX_CACHE_FORCE="0"
 export NSC_DEBUG="0"
+export NSC_TRACE="0"
 export NSC_HEARTBEAT_SECONDS="30"
 ```
 
@@ -42,15 +48,23 @@ export NSC_HEARTBEAT_SECONDS="30"
   they do not require a separate SSH endpoint or manual key injection.
 - This skill requires a modern `nsc` build that supports `nsc instance upload`.
   Older CLI builds are rejected during preflight instead of using a legacy fallback.
+- Recommended preflight:
+  `nsc auth check-login && nsc instance upload --help`
 - Bare Namespace instances may not expose a `nixbld` group even after Nix is
   installed. The helper scripts force single-user Nix for remote commands by
   passing `--option build-users-group ""`.
 - Successful runs should mostly show the remote execution output itself.
   Bootstrap and transport details are captured in `infra.log` and printed
   inline only on failure or when `NSC_DEBUG=1`.
+- `execution.txt` contains only remote stdout/stderr. A successful silent run
+  can legitimately leave it empty; use `summary.txt` to confirm that execution
+  started, finished, and exited successfully.
 - Long quiet executions emit a keepalive line on the terminal after
   `NSC_HEARTBEAT_SECONDS` of silence so agents do not assume the run stalled.
 - The run directory is printed at startup. `summary.txt` is live-updated while
   the run is in progress, so it can be inspected mid-run.
 - Default logging is parallel-safe because each run uses a fresh temp directory.
   If you set `NSC_LOG_DIR`, use a unique path per concurrent run.
+- `ensure-nix-cache.sh` only avoids the expensive warm step when the same
+  `NSC_NIX_CACHE_TAG` resolves to the same underlying Namespace cache volume.
+  Within a reused volume, the warm marker is keyed by `NSC_NIX_CACHE_SCOPE`.

@@ -36,6 +36,8 @@ Ensure the Namespace CLI `nsc` is available in the agent environment before
 running the scripts. In Nix environments, install the `namespace-cli` package.
 If the CLI is not authenticated yet, run `nsc auth login` first.
 Ensure `gnutar` and `gzip` are available locally before running the test helper.
+Preferred preflight for this skill:
+`nsc auth check-login && nsc instance upload --help`.
 
 Skill-local script paths such as `scripts/run-remote-test.sh` are resolved
 relative to this skill directory, not relative to the repository root.
@@ -73,8 +75,9 @@ phase fails.
 - Treat a non-zero exit from the test script as a test failure, not a tool error.
 - `run-remote-command.sh` expects a single shell snippet argument. Quote it.
 - Default output policy:
-  - full remote execution output is streamed live and saved to `execution.txt`
+  - full remote execution stdout/stderr is streamed live and saved to `execution.txt`
   - infra/setup logs are saved to `infra.log`
+  - `execution.txt` may be empty on a successful silent run; `summary.txt` is the authoritative execution-status record
   - only surface infra detail inline when debug is enabled or a phase fails
   - if setup or execution goes quiet, emit periodic keepalive lines so agents can tell the run is still alive
 
@@ -83,8 +86,9 @@ phase fails.
 - If the terminal looks quiet, wait for the keepalive lines before assuming the run is stuck.
   Quiet setup and execution phases emit `[phase] still running ...` after the configured silence interval.
 - The run directory is printed immediately at startup. Inspect `summary.txt`, `infra.log`, and `execution.txt` there while the run is still active if needed.
-- `summary.txt` is live-updated during the run, not just at the end. It records the current phase, last successful phase, timing, and log paths.
+- `summary.txt` is live-updated during the run, not just at the end. It records the current phase, last successful phase, timing, log paths, and execution metadata such as start/finish state and whether `execution.txt` is empty.
 - Parallel runs are safe by default because each helper uses a fresh temp run directory.
   Only set `NSC_LOG_DIR` when you need a stable location, and use a unique directory per concurrent run.
 - If a command line is awkward to quote safely, prefer `run-remote-script.sh` over `run-remote-command.sh`.
 - Use `NSC_DEBUG=1` when platform/bootstrap output matters more than a clean success path.
+- Use `NSC_TRACE=1` when you want shell-level tracing from the remote script itself.

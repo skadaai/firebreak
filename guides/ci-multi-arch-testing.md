@@ -31,6 +31,10 @@ It runs:
 - only GitHub-hosted checks
 - cheap fail-fast validation before any paid runtime job starts
 
+It also runs:
+
+- weekly on `main` to kick off the full enforced CI chain
+
 ### Primary Paid Runtime Gate
 
 `Firebreak Namespace Primary Runtime` is the main paid runtime gate.
@@ -50,6 +54,20 @@ It runs:
 - representative `aarch64-darwin` `vfkit` coverage
 
 This keeps the most expensive secondary-arch jobs behind both the cheap GitHub gate and the primary runtime gate.
+
+## Scheduled Runs
+
+The enforced scheduled policy is:
+
+- weekly full CI chain from `main`
+
+Implementation:
+
+- `Firebreak GitHub Fast Checks` has the only cron trigger
+- `Firebreak Namespace Primary Runtime` runs from `workflow_run` after the GitHub gate succeeds
+- `Firebreak Namespace Secondary Arch Runtime` runs from `workflow_run` after the primary runtime gate succeeds
+
+This keeps the schedule simple, prevents duplicate paid runs, and preserves the same cost ordering as the pull-request path.
 
 ## Secondary Coverage Rules
 
@@ -111,6 +129,7 @@ If a smaller shape is later proven, lower the workflow entry and update this lis
   - `nix flake check`
   - full hosted smoke matrix
 - no Namespace runner usage
+- weekly scheduled kickoff for the full CI chain
 
 ### `Firebreak Namespace Primary Runtime`
 

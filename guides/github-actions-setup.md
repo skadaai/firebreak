@@ -27,6 +27,7 @@ The first workflow uses only GitHub-hosted runners. The two Namespace workflows 
 3. Confirm `Firebreak Namespace Primary Runtime` starts automatically only after the GitHub fast checks finish successfully.
 4. Confirm `Firebreak Namespace Secondary Arch Runtime` starts automatically only after the primary Namespace runtime workflow finishes successfully.
 5. If needed, trigger either Namespace workflow manually from the `Actions` tab with `Run workflow`.
+6. Confirm the weekly scheduled `main` run starts from `Firebreak GitHub Fast Checks` and fans out through the same workflow chain.
 
 ## 3. Common Failure Checks
 

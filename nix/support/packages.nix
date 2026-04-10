@@ -128,7 +128,6 @@ rec {
         bash
         coreutils
         gnugrep
-        nodejs_20
         python3
       ];
       text = renderTemplate {

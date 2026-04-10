@@ -18,7 +18,12 @@ nix_args_path=$smoke_tmp_dir/nix.args
 nix_cwd_path=$smoke_tmp_dir/nix.cwd
 mkdir -p "$fake_bin_dir" "$empty_bin_dir"
 : >"$fake_kvm_path"
-node_bin=$(command -v node)
+node_bin=$(command -v node || true)
+
+if [ -z "$node_bin" ]; then
+  echo "launcher smoke requires \`node\` on PATH" >&2
+  exit 1
+fi
 
 assert_no_nix_invocation() {
   context=$1

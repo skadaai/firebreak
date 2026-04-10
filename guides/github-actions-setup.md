@@ -20,13 +20,15 @@ The first workflow uses only GitHub-hosted runners. The three Namespace workflow
 The Namespace workflows also use runner-label optimizations:
 
 - branch-protected cache volumes shared per architecture
+- GitHub tool caches on Namespace runners for `actions/setup-node`, which keeps launcher coverage from rebuilding Node through Nix on every run
 
 ## 1. Enable Namespace GitHub Actions Runners
 
 1. Confirm the repository or organization is connected to Namespace GitHub Actions runners.
 2. Confirm jobs can schedule the `nscloud-*` runner labels used by the workflows.
 3. Confirm the Linux runners used by the Namespace runtime workflows support the Firebreak Nix workflow with `enable_kvm: true`.
-4. Treat `aarch64-darwin` as host-entry coverage plus Apple Silicon export evaluation only for now. Current CI does not provide a Linux guest-builder path for Darwin jobs, so Linux-guest local runtime smokes are intentionally excluded there.
+4. Confirm the `aarch64-linux` Namespace jobs can use the combined feature-capable cache runner label form (`nscloud-...-with-cache-with-features`) plus the requested runner feature labels for `container.privileged=true` and `container.host-pid-namespace=true`. Those jobs now request deeper host access because they are meant to exercise the real local Cloud Hypervisor path.
+5. Treat `aarch64-darwin` as host-entry coverage plus Apple Silicon export evaluation only for now. Current CI does not provide a Linux guest-builder path for Darwin jobs, so Linux-guest local runtime smokes are intentionally excluded there.
 
 ## 2. Verify The Workflow Topology
 

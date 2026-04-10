@@ -55,10 +55,12 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
     runs-on:
-      - ${{ format('nscloud-ubuntu-24.04-arm64-{0}-with-cache', matrix.shape) }}
+      - ${{ format('nscloud-ubuntu-24.04-arm64-{0}-with-cache-with-features', matrix.shape) }}
       - nscloud-cache-tag-firebreak-runtime-arm64-linux
+      - nscloud-runner-tool-cache-20gb
       - nscloud-cache-allow-commit-from-main
       - nscloud-cache-allow-commit-from-default
+      - namespace-features:container.privileged=true;container.host-pid-namespace=true
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -83,6 +85,12 @@ jobs:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
           extra_nix_config: |
             system-features = nixos-test benchmark big-parallel kvm
+
+      - name: Set up Node for launcher smoke
+        if: matrix.package == 'firebreak-test-smoke-npx-launcher'
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
 
       - name: Run arm64-linux representative runtime coverage
         run: nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#${{ matrix.package }}
@@ -111,6 +119,7 @@ jobs:
     runs-on:
       - ${{ format('nscloud-macos-sequoia-arm64-{0}-with-cache', matrix.shape) }}
       - nscloud-cache-tag-firebreak-runtime-arm64-darwin
+      - nscloud-runner-tool-cache-20gb
       - nscloud-cache-allow-commit-from-main
       - nscloud-cache-allow-commit-from-default
     timeout-minutes: 45
@@ -141,6 +150,12 @@ jobs:
           nix --accept-flake-config --extra-experimental-features 'nix-command flakes' eval .#packages.aarch64-darwin.firebreak-codex.name --raw
           nix --accept-flake-config --extra-experimental-features 'nix-command flakes' eval .#packages.aarch64-darwin.firebreak-claude-code.name --raw
           nix --accept-flake-config --extra-experimental-features 'nix-command flakes' eval .#checks.aarch64-darwin.firebreak-codex-system.drvPath --raw
+
+      - name: Set up Node for launcher smoke
+        if: matrix.package == 'firebreak-test-smoke-npx-launcher'
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
 
       - name: Run arm64-darwin representative vfkit coverage
         run: nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#${{ matrix.package }}

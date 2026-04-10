@@ -151,8 +151,8 @@ jobs:
           if-no-files-found: ignore
           compression-level: 0
 
-  arm64-linux-runtime-blocked:
-    name: arm64-linux runtime blocked
+  arm64-linux-runtime-kvm-regression:
+    name: arm64-linux runtime runner regression
     needs: arm64-linux-kvm-probe
     if: >
       (github.event_name == 'workflow_dispatch' ||
@@ -160,10 +160,12 @@ jobs:
       needs.arm64-linux-kvm-probe.outputs.kvm_available != 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Explain missing KVM capability
+      - name: Fail on missing runner KVM
         run: |
-          echo "Skipping arm64-linux Cloud Hypervisor runtime coverage because /dev/kvm is unavailable on the Namespace runner."
+          echo "arm64-linux Namespace runner is missing /dev/kvm."
           echo "Detected state: ${{ needs.arm64-linux-kvm-probe.outputs.kvm_state }}"
+          echo "This is a runner capability regression or misconfiguration, not a Firebreak arm64 Cloud Hypervisor limitation."
+          exit 1
 
   arm64-darwin-runtime:
     name: arm64-darwin / ${{ matrix.package }} (${{ matrix.shape }})

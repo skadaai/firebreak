@@ -29,7 +29,7 @@ The Namespace workflows also use runner-label optimizations:
 3. Confirm the Linux runners used by the Namespace runtime workflows support the Firebreak Nix workflow with `enable_kvm: true`.
 4. Confirm the `aarch64-linux` Namespace jobs can use the combined feature-capable cache runner label form (`nscloud-...-with-cache-with-features`) plus the requested runner feature labels for `container.privileged=true` and `container.host-pid-namespace=true`. Those jobs now request deeper host access because they are meant to exercise the real local Cloud Hypervisor path.
 5. Treat `aarch64-darwin` as host-entry coverage plus Apple Silicon export evaluation only for now. Current CI does not provide a Linux guest-builder path for Darwin jobs, so Linux-guest local runtime smokes are intentionally excluded there.
-6. The arm64 Linux Namespace workflows now probe `/dev/kvm` before scheduling Cloud Hypervisor smokes. If the provider does not expose KVM on that runner class, the workflows report the runtime sweep as blocked instead of failing inside the guest launcher.
+6. The arm64 Linux Namespace workflows now probe `/dev/kvm` before scheduling Cloud Hypervisor smokes. If a Namespace arm64 runner is missing KVM, the workflows fail with an explicit runner-regression message instead of failing inside the guest launcher.
 
 ## 2. Verify The Workflow Topology
 

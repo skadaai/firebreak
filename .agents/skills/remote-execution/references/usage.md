@@ -21,6 +21,19 @@ bash .agents/skills/remote-execution/scripts/run-remote-command.sh \
   'pwd && nix --version'
 ```
 
+To force a bare Linux ARM64 instance for a probe or test, set `NSC_MACHINE`
+with the `os/arch:` prefix before invoking the helper:
+
+```bash
+NSC_MACHINE=linux/arm64:1x2 \
+  bash .agents/skills/remote-execution/scripts/run-remote-command.sh \
+  'uname -m && ls -l /dev/kvm || true'
+```
+
+Do not use `nsc create --selectors arch=arm64,...` for Linux arch selection.
+That selector path is documented for macOS base-image selection, not bare Linux
+machine architecture.
+
 ## Running a local script file
 
 Prefer this when quoting a complex shell snippet would be annoying or fragile.

@@ -13,7 +13,7 @@
 
 | Variable            | Default      | Description                                                                 |
 |---------------------|--------------|-----------------------------------------------------------------------------|
-| `NSC_MACHINE`       | `1x2`        | Instance shape: `<vcpu>x<ram_gb>`. This is the smallest available option and the default starting point. Increase only after evidence that more resources are required. |
+| `NSC_MACHINE`       | `1x2`        | Instance shape: `[os/arch:]<vcpu>x<ram_gb>`. Examples: `1x2` for the default Linux/amd64 path, `linux/arm64:1x2` for a bare Linux ARM64 instance. Increase only after evidence that more resources are required. |
 | `NSC_DURATION`      | `30m`        | Hard TTL. Instance is auto-destroyed after this regardless of outcome.      |
 | `NSC_NIX_CACHE_TAG` | `nix-store`  | Tag for the cache volume backing `/nix`. Change per project to isolate stores. |
 | `NSC_NIX_CACHE_SCOPE` | auto       | Optional warm-marker scope. Defaults to a repo-specific key derived from `flake.lock` or `flake.nix`. |
@@ -43,6 +43,10 @@ export NSC_HEARTBEAT_SECONDS="30"
   generously to cover slow first-run cache population.
 - Be conservative with machine size. Start with `1x2`, the smallest available
   machine shape.
+- For bare Linux instances, architecture selection belongs in `NSC_MACHINE`
+  via the optional `os/arch:` prefix, for example `linux/arm64:2x4`.
+  Do not rely on `nsc create --selectors` for Linux arch selection; that path
+  is documented for macOS base-image selection instead.
 - Scale up one step at a time using the standard ladder:
   `1x2` → `2x4` → `4x8` → `8x16` → `16x32` → `32x64`.
 - Prefer those standard shapes by default. They match the normal 1 vCPU : 2 GB

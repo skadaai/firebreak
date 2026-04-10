@@ -36,6 +36,10 @@ Read the local `nsc` command reference under `references/nsc/` before making
 assumptions about CLI flags, selectors, features, or instance-creation
 behavior. Prefer those checked-in docs over memory when investigating
 Namespace CLI behavior.
+For multi-architecture bare Linux probes, do not use `--selectors` to choose
+the architecture. The `nsc create` docs reserve `--selectors` for macOS base
+image selection. Use the optional `os/arch:` prefix on `--machine_type`
+instead, for example `linux/arm64:1x2`.
 Ensure the Namespace CLI `nsc` is available in the agent environment before
 running the scripts. In Nix environments, install the `namespace-cli` package.
 If the CLI is not authenticated yet, run `nsc auth login` first.

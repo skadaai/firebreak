@@ -11,6 +11,7 @@ the full skill-relative path when invoking them manually from the repository roo
 ```bash
 # Generic specific Nix check attribute example
 bash .agents/skills/remote-execution/scripts/run-remote-test.sh checks.x86_64-linux.some-vm-test
+```
 
 ## Running an arbitrary command
 
@@ -33,6 +34,47 @@ NSC_MACHINE=linux/arm64:1x2 \
 Do not use `nsc create --selectors arch=arm64,...` for Linux arch selection.
 That selector path is documented for macOS base-image selection, not bare Linux
 machine architecture.
+
+## Running the exact GitHub Actions runner path
+
+Use this when the failure depends on workflow orchestration, runner labels,
+checkout behavior, cache layout, artifact upload, or the hosted CI environment
+rather than on a generic remote Linux instance.
+
+Dispatch a workflow on a branch:
+
+```bash
+gh workflow run 'Workflow Name' --ref my-branch
+```
+
+List the newest matching run:
+
+```bash
+gh run list --branch my-branch --workflow 'Workflow Name' --limit 1
+```
+
+Watch the run:
+
+```bash
+gh run watch <run-id>
+```
+
+Fetch structured metadata:
+
+```bash
+gh run view <run-id> --json status,conclusion,jobs
+```
+
+If a job is still running and the normal log command refuses to stream it yet,
+use the per-job logs endpoint:
+
+```bash
+gh api repos/<owner>/<repo>/actions/jobs/<job-id>/logs > job.log
+```
+
+Important:
+- `workflow_dispatch` only works for workflows that GitHub already knows on the default branch.
+- Dispatching a workflow with `--ref <branch>` runs the workflow against that branch ref, but the workflow file itself still needs to exist on the default branch first.
 
 ## Running a local script file
 

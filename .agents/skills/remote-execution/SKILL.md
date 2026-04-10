@@ -5,6 +5,8 @@ description: >
   Use this skill when a test requires /dev/kvm, firecracker, nested virtualization,
   or any NixOS VM-level isolation. Handles full instance lifecycle transparently:
   provision → upload workspace → run → stream logs → destroy.
+  Also use it when the only trustworthy reproduction path is the exact GitHub
+  Actions runner product rather than a bare Namespace instance.
   Do NOT use for tests that can run locally without KVM. Do NOT create Devboxes.
 ---
 
@@ -19,6 +21,7 @@ description: >
 - The local environment is too slow or unstable for the test, and a remote instance would be more reliable.
 - The local environment has insufficient resources (CPU, RAM) to run the test effectively, and a remote instance would provide better performance.
 - The local environment is overloaded with other tasks, and running the test remotely would free up resources and reduce interference.
+- The failure appears only on the hosted CI runner product, and a bare remote instance would not be an exact enough reproduction.
 
 ## When NOT to use
 
@@ -32,6 +35,8 @@ description: >
 ## Required environment variables
 
 Read `references/env.md` before invoking any script.
+Read `references/usage.md` before choosing between bare Namespace helpers and
+GitHub Actions replay.
 Read the local `nsc` command reference under `references/nsc/` before making
 assumptions about CLI flags, selectors, features, or instance-creation
 behavior. Prefer those checked-in docs over memory when investigating
@@ -43,6 +48,9 @@ instead, for example `linux/arm64:1x2`.
 Ensure the Namespace CLI `nsc` is available in the agent environment before
 running the scripts. In Nix environments, install the `namespace-cli` package.
 If the CLI is not authenticated yet, run `nsc auth login` first.
+When using the GitHub Actions path, ensure `gh` is installed and authenticated,
+or that `GH_TOKEN` is exported with permission to dispatch workflows and read
+run metadata.
 Ensure `gnutar` and `gzip` are available locally before running the test helper.
 Preferred preflight for this skill:
 `nsc auth check-login && nsc instance upload --help`.
@@ -63,15 +71,24 @@ phase fails.
    current repository defines matching outputs.
 3. If the Nix cache volume may be cold (first use or after a long gap),
    run `scripts/ensure-nix-cache.sh` first.
-4. Choose the helper that matches the task:
+4. Choose the reproduction path that matches the failure:
+   - bare Namespace helper for generic remote Linux execution
+   - GitHub Actions workflow dispatch when the exact runner product, workflow
+     gating, runner labels, or artifact behavior matters
+5. For bare Namespace execution, choose the helper that matches the task:
    - `scripts/run-remote-command.sh '<shell-command>'` for arbitrary execution
    - `scripts/run-remote-script.sh <local-script-path>` for a local shell script file
    - `scripts/run-remote-test.sh <test-attr>` for flake check builds
-5. Report the execution output, exit code, and saved log paths to the user.
-6. Never leave instances running after the script exits.
-   The scripts create an ephemeral instance, connect through `nsc ssh`, and
-   destroy it automatically via EXIT trap.
-7. On bare Namespace instances, expect Nix to run in single-user mode unless
+6. For GitHub Actions reproduction:
+   - dispatch a workflow with `gh workflow run ... --ref <branch>`
+   - inspect status with `gh run list`, `gh run view`, or `gh run watch`
+   - if a job is still running and `gh run view --log` is not available yet,
+     fetch the per-job log stream via `gh api repos/<owner>/<repo>/actions/jobs/<job-id>/logs`
+7. Report the execution output, exit code, run URL, and saved log paths to the user.
+8. Never leave instances running after the script exits.
+   The bare-instance scripts create an ephemeral instance, connect through
+   `nsc ssh`, and destroy it automatically via EXIT trap.
+9. On bare Namespace instances, expect Nix to run in single-user mode unless
    the remote image explicitly provides the `nixbld` group. The helper scripts
    handle that by passing `--option build-users-group ""` to remote Nix calls.
 
@@ -85,6 +102,13 @@ phase fails.
 - The warm-cache step is optional and idempotent; when in doubt, run it.
 - Treat a non-zero exit from the test script as a test failure, not a tool error.
 - `run-remote-command.sh` expects a single shell snippet argument. Quote it.
+- Prefer the GitHub Actions path over bare instances when the bug could depend
+  on workflow orchestration, runner labels, checkout semantics, hosted caches,
+  or CI-specific environment layout.
+- `workflow_dispatch` can only target workflows that GitHub already knows on
+  the default branch. A workflow file that exists only on a feature branch
+  may be runnable after merge or after landing on the default branch, but not
+  before.
 - Default output policy:
   - full remote execution stdout/stderr is streamed live and saved to `execution.txt`
   - infra/setup logs are saved to `infra.log`
@@ -103,3 +127,5 @@ phase fails.
 - If a command line is awkward to quote safely, prefer `run-remote-script.sh` over `run-remote-command.sh`.
 - Use `NSC_DEBUG=1` when platform/bootstrap output matters more than a clean success path.
 - Use `NSC_TRACE=1` when you want shell-level tracing from the remote script itself.
+- If `gh run view --job ... --log` refuses to show logs before a run completes,
+  use `gh api` against the Actions jobs endpoint for live job-specific logs.

@@ -6,6 +6,9 @@
   In Nix environments, install the `namespace-cli` package.
 - The CLI must already be authenticated for the target workspace.
   Run `nsc auth login` if needed.
+- For GitHub Actions reproduction, the GitHub CLI `gh` must be available and
+  authenticated, or `GH_TOKEN` must be set with permission to dispatch
+  workflows and inspect runs.
 - `gnutar` and `gzip` must be available locally because the test helper packs
   and streams the workspace archive from the local environment.
 
@@ -58,10 +61,14 @@ export NSC_HEARTBEAT_SECONDS="30"
   Use distinct tags only if you need hermetic store isolation between projects.
 - The helper scripts use `nsc ssh` for command execution and file transfer, so
   they do not require a separate SSH endpoint or manual key injection.
+- The GitHub Actions path has a separate auth boundary from `nsc`.
+  Being logged into Namespace does not imply `gh` can dispatch workflows.
 - This skill requires a modern `nsc` build that supports `nsc instance upload`.
   Older CLI builds are rejected during preflight instead of using a legacy fallback.
 - Recommended preflight:
   `nsc auth check-login && nsc instance upload --help`
+- Recommended GitHub preflight:
+  `gh auth status`
 - Bare Namespace instances may not expose a `nixbld` group even after Nix is
   installed. The helper scripts force single-user Nix for remote commands by
   passing `--option build-users-group ""`.

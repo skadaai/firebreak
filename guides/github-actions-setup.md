@@ -45,6 +45,7 @@ The Namespace workflows also use runner-label optimizations:
 - Namespace job never starts:
   - verify Namespace runner integration is active for the repository
   - verify the exact `nscloud-*` labels in the workflow are valid in your Namespace setup
+  - verify `job.priority`, `github.run-id`, and similar scheduling controls are separate labels rather than being appended to the `nscloud-*` machine label string
 - Namespace primary runtime never starts automatically:
   - verify `Firebreak GitHub Fast Checks` completed successfully
   - verify the workflow name in [`namespace-primary-runtime.yml`](../.github/workflows/namespace-primary-runtime.yml) still matches `Firebreak GitHub Fast Checks`
@@ -57,3 +58,11 @@ The Namespace workflows also use runner-label optimizations:
 - VM boot fails immediately:
   - verify the Namespace Linux runner can execute KVM-backed Nix workloads
   - verify the runner user can execute `nix run .#firebreak-test-smoke-codex`
+- arm64 Linux runtime probe reports missing `/dev/kvm`:
+  - treat that as a Namespace runner regression or misconfiguration
+  - do not use a bare `nsc create` result as proof that the GitHub runner product lacks KVM
+- Launcher smoke unexpectedly asks for `FIREBREAK_WORKLOAD_REGISTRY`:
+  - verify the smoke is running from the Firebreak repository root
+  - verify the workflow provides `node` on `PATH`, currently through `actions/setup-node`
+- Artifact upload fails with `ENXIO` on a socket path:
+  - verify the workflow excludes live `*.socket` files from uploaded artifact paths

@@ -23,6 +23,12 @@ Firebreak currently exports public host surfaces for:
 
 The guest/runtime story is not identical on all of them, so CI should not pretend otherwise.
 
+## Assumptions
+
+- Namespace GitHub Actions runner guarantees are about the runner product, not about bare instances created through `nsc create`.
+- Bare-instance probes are still useful for local debugging, but they are not authoritative evidence about what the GitHub runner scheduler path should expose.
+- For `aarch64-linux`, missing `/dev/kvm` on a Namespace runner is treated as a runner regression or misconfiguration, not as a permanent Firebreak platform limitation.
+
 ## CI Policy
 
 ### GitHub Fast Gate
@@ -227,3 +233,9 @@ When adding or changing a workflow job:
 - keep the scheduled full sweep separate from merge-time CI
 - edit the centralized smoke catalog instead of duplicating package lists in workflow YAML
 - update this guide whenever you add or remove a shape exception
+
+## Pitfalls
+
+- Do not append `github.run-id` or `job.priority` inline to the `nscloud-*` machine label. Those are separate runner labels; putting them into the machine label string makes the label invalid.
+- Keep Unix domain sockets out of uploaded CI artifact paths. Upload actions may fail with `ENXIO` when they try to archive live `*.socket` files.
+- `firebreak-test-smoke-npx-launcher` is intentionally a host-entry smoke. It expects `node` on `PATH` from the workflow environment and should not pull `nodejs` through Nix just to run the smoke.

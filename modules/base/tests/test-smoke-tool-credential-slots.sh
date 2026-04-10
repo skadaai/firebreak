@@ -21,6 +21,7 @@ mkdir -p \
   "$credential_root/default/@STATE_SUBDIR@" \
   "$credential_root/alternate/@STATE_SUBDIR@" \
   "$workspace_dir"
+auth_file_format='@AUTH_FILE_FORMAT@'
 
 require_pattern() {
   haystack=$1
@@ -75,7 +76,7 @@ state_sha256() {
   exit 1
 }
 
-case '@AUTH_FILE_FORMAT@' in
+case "$auth_file_format" in
   json)
     cat >"$credential_root/default/@STATE_SUBDIR@/@AUTH_FILE@" <<'EOF'
 "default-auth"
@@ -90,7 +91,7 @@ esac
 cat >"$credential_root/default/@STATE_SUBDIR@/@API_KEY_FILE@" <<'EOF'
 default-api-key
 EOF
-case '@AUTH_FILE_FORMAT@' in
+case "$auth_file_format" in
   json)
     cat >"$credential_root/alternate/@STATE_SUBDIR@/@AUTH_FILE@" <<'EOF'
 "alternate-auth"
@@ -155,7 +156,7 @@ if is_login_command "$@"; then
   token_position=$(( ${#login_args[@]} + 1 ))
   token=${!token_position:-smoke-login-token}
   mkdir -p "$config_root"
-  case '@AUTH_FILE_FORMAT@' in
+  case "$auth_file_format" in
     json)
       @PYTHON3@ - "$config_root/@AUTH_FILE@" "$token" <<'PY'
 import json
@@ -177,7 +178,7 @@ fi
 
 printf 'CONFIG_ROOT=%s\n' "$config_root"
 if [ -r "$config_root/@AUTH_FILE@" ]; then
-  case '@AUTH_FILE_FORMAT@' in
+  case "$auth_file_format" in
     json)
       auth_value=$(@PYTHON3@ - "$config_root/@AUTH_FILE@" <<'PY'
 import json

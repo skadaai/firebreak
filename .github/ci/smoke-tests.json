@@ -13,6 +13,10 @@
       "features": {
         "virtualization": true,
         "secondaryArchRepresentative": false
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
       }
     },
     {
@@ -21,6 +25,10 @@
       "features": {
         "virtualization": true,
         "secondaryArchRepresentative": true
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
       }
     },
     {
@@ -29,6 +37,10 @@
       "features": {
         "virtualization": true,
         "secondaryArchRepresentative": false
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
       }
     },
     {
@@ -37,6 +49,10 @@
       "features": {
         "virtualization": true,
         "secondaryArchRepresentative": false
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
       }
     },
     {
@@ -45,6 +61,10 @@
       "features": {
         "virtualization": true,
         "secondaryArchRepresentative": false
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
       }
     },
     {
@@ -53,6 +73,10 @@
       "features": {
         "virtualization": true,
         "secondaryArchRepresentative": false
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
       }
     },
     {
@@ -61,6 +85,10 @@
       "features": {
         "virtualization": true,
         "secondaryArchRepresentative": false
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
       }
     },
     {
@@ -125,6 +153,10 @@
       "features": {
         "virtualization": true,
         "secondaryArchRepresentative": false
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
       }
     },
     {
@@ -169,6 +201,10 @@
       "features": {
         "virtualization": true,
         "secondaryArchRepresentative": false
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
       }
     },
     {
@@ -177,6 +213,10 @@
       "features": {
         "virtualization": true,
         "secondaryArchRepresentative": false
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
       }
     },
     {
@@ -185,6 +225,10 @@
       "features": {
         "virtualization": true,
         "secondaryArchRepresentative": false
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
       }
     },
     {
@@ -193,6 +237,10 @@
       "features": {
         "virtualization": true,
         "secondaryArchRepresentative": false
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
       }
     },
     {
@@ -201,6 +249,10 @@
       "features": {
         "virtualization": true,
         "secondaryArchRepresentative": false
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
       }
     },
     {

@@ -129,8 +129,34 @@ These are the currently documented exceptions to the `1x2` Linux default:
 
 - hosted aggregate `nix flake check`: `2x4`
   - reason: this job evaluates and builds a broad aggregate surface rather than one smoke package
+- `firebreak-test-smoke-codex`: `2x4`
+  - reason: the full agent cold-boot path regressed below `2x4` in CI; keep it on the first standard step above `1x2`
+- `firebreak-test-smoke-codex-version`: `2x4`
+  - reason: repeated `1x2` runs were OOM-sensitive in CI
+- `firebreak-test-smoke-codex-warm-reuse`: `2x4`
+  - reason: repeated `1x2` runs were OOM-sensitive in CI
+- `firebreak-test-smoke-claude-code`: `2x4`
+  - reason: repeated `1x2` runs were OOM-sensitive in CI
+- `firebreak-test-smoke-credential-slots`: `2x4`
+  - reason: repeated `1x2` runs were OOM-sensitive in CI
+- `firebreak-test-smoke-codex-credential-slots`: `2x4`
+  - reason: repeated `1x2` runs were unstable in CI and regressed before completing the workspace-state checks
+- `firebreak-test-smoke-claude-code-credential-slots`: `2x4`
+  - reason: repeated `1x2` runs were unstable in CI and regressed before completing the workspace-state checks
 - `firebreak-test-smoke-internal-task`: `2x4`
   - reason: this smoke is the remaining OOM-sensitive case, so CI keeps it on the first standard step above `1x2`
+- `firebreak-test-smoke-port-publish-runtime`: `2x4`
+  - reason: repeated `1x2` runs were OOM-sensitive in CI
+- `firebreak-test-smoke-worker-claude-version`: `2x4`
+  - reason: nested firebreak-backed package resolution was not stable on `1x2`
+- `firebreak-test-smoke-worker-guest-bridge`: `2x4`
+  - reason: repeated `1x2` runs were OOM-sensitive in CI
+- `firebreak-test-smoke-worker-interactive-claude-direct`: `2x4`
+  - reason: nested firebreak-backed interactive worker resolution was not stable on `1x2`
+- `firebreak-test-smoke-worker-interactive-claude-exit-direct`: `2x4`
+  - reason: nested firebreak-backed interactive worker resolution was not stable on `1x2`
+- `firebreak-test-smoke-worker-interactive-codex-direct`: `2x4`
+  - reason: nested firebreak-backed interactive worker resolution was not stable on `1x2`
 - `firebreak-test-smoke-worker-guest-bridge-interactive`: `2x4`
   - reason: revalidated on `2x4`; the earlier `4x8` exception was oversized
 

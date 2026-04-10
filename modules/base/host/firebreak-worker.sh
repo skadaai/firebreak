@@ -798,7 +798,10 @@ write_firebreak_launch_script() {
   quoted_child_pid=$(quote_arg "$worker_root/child-pid")
   quoted_instance_dir=$(quote_arg "$worker_root/instance")
   quoted_launch_mode=$(quote_arg "$launch_mode")
-  resolved_exec=$(resolve_firebreak_worker_exec "$FIREBREAK_FLAKE_REF#$package_name" "$package_name")
+  if ! resolved_exec=$(resolve_firebreak_worker_exec "$FIREBREAK_FLAKE_REF#$package_name" "$package_name"); then
+    echo "failed to resolve worker package output for $FIREBREAK_FLAKE_REF#$package_name" >&2
+    exit 1
+  fi
   quoted_resolved_exec=$(quote_arg "$resolved_exec")
 
   quoted_unset_env_args=""

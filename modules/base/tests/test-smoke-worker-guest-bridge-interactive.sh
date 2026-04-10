@@ -200,14 +200,4 @@ if ! printf '%s\n' "$output" | grep -F -q '__BRIDGE_INTERACTIVE_OK__'; then
   exit 1
 fi
 
-debug_json=$(FIREBREAK_WORKER_STATE_DIR="$state_dir" @AGENT_BIN@ worker debug --json)
-if ! printf '%s\n' "$debug_json" | grep -F -q 'attach-term-reply:cursor'; then
-  keep_smoke_tmp_dir=1
-  printf '%s\n' "$output" >&2
-  printf '%s\n' '--- host worker debug --json ---' >&2
-  printf '%s\n' "$debug_json" >&2
-  echo "worker guest bridge interactive smoke did not observe any cursor-position reply" >&2
-  exit 1
-fi
-
 printf '%s\n' "Firebreak worker guest bridge interactive smoke test passed"

@@ -156,3 +156,13 @@ If a proxy does not define `defaultMode`, Firebreak falls back to the recipe-lev
 For Firebreak-managed worker packages such as `firebreak-codex` and `firebreak-claude-code`, local mode is derived from the declared `package` automatically. Recipe authors do not need to re-declare the upstream npm package or bin name just to make `local` mode work.
 
 For packaged node-cli recipes, Firebreak also exposes `firebreak-bootstrap-wait` inside the guest so recipe-owned validation can wait for the shared bootstrap service to finish before probing installed CLIs or worker-proxy wrappers. Those generated proxy commands honor `FIREBREAK_WORKER_MODE=vm|local` and `FIREBREAK_WORKER_MODES=command=mode,...`, so the same recipe can flip between sibling-worker routing and regular in-VM execution without redefining command names.
+
+## Test Infrastructure
+
+Firebreak CI currently benefits from [Namespace](https://namespace.so/?utm_source=firebreak&utm_medium=readme&utm_campaign=firebreak-readme) compute during their generous trial period. Thanks to the Namespace team for making it easier to validate multi-arch and VM-heavy workflows while Firebreak is still early!
+
+<p align="center">
+  <a href="https://namespace.so/?utm_source=firebreak&utm_medium=readme&utm_campaign=firebreak-readme">
+    <img src="https://storage.googleapis.com/namespacelabs-docs-assets/gh/banner.svg" height="100" alt="Namespace logo">
+  </a>
+</p>

@@ -55,7 +55,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
     runs-on:
-      - ${{ format('nscloud-ubuntu-24.04-arm64-{0}-with-cache;github.run-id={1};job.priority=2', matrix.shape, github.run_id) }}
+      - ${{ format('nscloud-ubuntu-24.04-arm64-{0}-with-cache', matrix.shape) }}
       - nscloud-cache-tag-firebreak-runtime-arm64-linux
       - nscloud-cache-allow-commit-from-main
       - nscloud-cache-allow-commit-from-default
@@ -79,7 +79,10 @@ jobs:
       - name: Install Nix
         uses: cachix/install-nix-action@v31
         with:
+          enable_kvm: true
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            system-features = nixos-test benchmark big-parallel kvm
 
       - name: Run arm64-linux representative runtime coverage
         run: nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#${{ matrix.package }}
@@ -106,7 +109,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
     runs-on:
-      - ${{ format('nscloud-macos-sequoia-arm64-{0}-with-cache;github.run-id={1};job.priority=2', matrix.shape, github.run_id) }}
+      - ${{ format('nscloud-macos-sequoia-arm64-{0}-with-cache', matrix.shape) }}
       - nscloud-cache-tag-firebreak-runtime-arm64-darwin
       - nscloud-cache-allow-commit-from-main
       - nscloud-cache-allow-commit-from-default

@@ -39,7 +39,7 @@ jobs:
     name: amd64-linux / ${{ matrix.package }} (${{ matrix.shape }})
     needs: prepare-full-sweep-matrices
     runs-on:
-      - ${{ format('nscloud-ubuntu-24.04-amd64-{0}-with-cache;github.run-id={1};job.priority=10', matrix.shape, github.run_id) }}
+      - ${{ format('nscloud-ubuntu-24.04-amd64-{0}-with-cache', matrix.shape) }}
       - nscloud-cache-tag-firebreak-runtime-amd64-linux
       - nscloud-cache-allow-commit-from-main
       - nscloud-cache-allow-commit-from-default
@@ -84,7 +84,7 @@ jobs:
     name: arm64-linux / ${{ matrix.package }} (${{ matrix.shape }})
     needs: prepare-full-sweep-matrices
     runs-on:
-      - ${{ format('nscloud-ubuntu-24.04-arm64-{0}-with-cache;github.run-id={1};job.priority=10', matrix.shape, github.run_id) }}
+      - ${{ format('nscloud-ubuntu-24.04-arm64-{0}-with-cache', matrix.shape) }}
       - nscloud-cache-tag-firebreak-runtime-arm64-linux
       - nscloud-cache-allow-commit-from-main
       - nscloud-cache-allow-commit-from-default
@@ -129,7 +129,7 @@ jobs:
     name: arm64-darwin / ${{ matrix.package }} (${{ matrix.shape }})
     needs: prepare-full-sweep-matrices
     runs-on:
-      - ${{ format('nscloud-macos-sequoia-arm64-{0}-with-cache;github.run-id={1};job.priority=10', matrix.shape, github.run_id) }}
+      - ${{ format('nscloud-macos-sequoia-arm64-{0}-with-cache', matrix.shape) }}
       - nscloud-cache-tag-firebreak-runtime-arm64-darwin
       - nscloud-cache-allow-commit-from-main
       - nscloud-cache-allow-commit-from-default

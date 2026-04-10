@@ -20,14 +20,13 @@ The first workflow uses only GitHub-hosted runners. The three Namespace workflow
 The Namespace workflows also use runner-label optimizations:
 
 - branch-protected cache volumes shared per architecture
-- deterministic runner assignment via `github.run-id`
-- lower scheduling priority for the weekly full-arch sweep than for merge-path runtime jobs
 
 ## 1. Enable Namespace GitHub Actions Runners
 
 1. Confirm the repository or organization is connected to Namespace GitHub Actions runners.
 2. Confirm jobs can schedule the `nscloud-*` runner labels used by the workflows.
 3. Confirm the Linux runners used by the Namespace runtime workflows support the Firebreak Nix workflow with `enable_kvm: true`.
+4. Treat `aarch64-darwin` as host-entry coverage plus Apple Silicon export evaluation only for now. Current CI does not provide a Linux guest-builder path for Darwin jobs, so Linux-guest local runtime smokes are intentionally excluded there.
 
 ## 2. Verify The Workflow Topology
 

@@ -50,7 +50,7 @@ It runs:
 It runs:
 
 - representative `aarch64-linux` runtime coverage
-- representative `aarch64-darwin` `vfkit` coverage
+- representative `aarch64-darwin` host-entry coverage plus Apple Silicon export evaluation
 
 This keeps the most expensive secondary-arch jobs behind both the cheap GitHub gate and the primary runtime gate.
 
@@ -77,8 +77,8 @@ Secondary architectures run representative coverage, not the full matrix.
   - keep one narrow host-surface smoke alongside it
   - do not duplicate the full KVM matrix until we have stable dedicated ARM KVM evidence and capacity
 - `aarch64-darwin`
-  - run a minimal `vfkit`-backed smoke to prove the Apple Silicon local runtime path boots end to end
-  - keep narrow output evaluation alongside it
+  - run host-entry checks plus Apple Silicon export evaluation
+  - do not schedule Linux-guest local runtime smokes on Darwin CI until a compatible Linux guest builder path exists
   - do not pretend there is parity with the full Linux KVM matrix
 
 ### Escalation Rule
@@ -112,8 +112,6 @@ Increase the shape only after a job has shown a concrete need for more resources
 Namespace-backed workflows should use runner-label features to reduce cost and queue waste:
 
 - use exactly one `nscloud-*` machine label per job
-- add deterministic assignment with `github.run-id` on Namespace jobs
-- give merge-path runtime jobs higher priority than the weekly full sweep
 - attach branch-protected cache volumes shared per architecture
 
 Current cache policy:
@@ -185,7 +183,6 @@ If a smaller shape is later proven, lower the workflow entry and update this lis
   - `firebreak-test-smoke-npx-launcher`
 - `aarch64-darwin`
   - package/check evaluation for Apple Silicon exports
-  - `firebreak-test-smoke-codex-version`
   - `firebreak-test-smoke-npx-launcher`
 
 ### `Firebreak Namespace Full Arch Sweep`
@@ -197,8 +194,8 @@ If a smaller shape is later proven, lower the workflow entry and update this lis
 - `aarch64-linux`
   - all practical smoke packages, with the same documented Linux shape exceptions
 - `aarch64-darwin`
-  - all practical Darwin/VFKit smoke packages plus Apple Silicon export evaluation
-  - excludes explicitly Linux-backend-specific `cloud-hypervisor-*` smoke packages
+  - all practical Darwin host-entry smoke packages plus Apple Silicon export evaluation
+  - excludes Linux-guest runtime smokes until a compatible Linux guest builder path exists
 
 ## CI Catalog Maintenance
 

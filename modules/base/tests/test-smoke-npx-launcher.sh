@@ -162,6 +162,7 @@ assert_no_nix_invocation "the Intel Mac rejection path"
 rm -f "$nix_args_path" "$nix_cwd_path"
 
 darwin_validate_output=$(
+  cd "$repo_root"
   PATH="$fake_bin_dir:$PATH" \
     FIREBREAK_LAUNCHER_TEST_PLATFORM=darwin \
     FIREBREAK_LAUNCHER_TEST_ARCH=arm64 \
@@ -183,6 +184,7 @@ fi
 rm -f "$nix_args_path" "$nix_cwd_path"
 
 linux_validate_output=$(
+  cd "$repo_root"
   PATH="$fake_bin_dir:$PATH" \
     node "$repo_root/bin/firebreak.js" internal validate run test-smoke-codex 2>&1
 )

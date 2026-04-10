@@ -129,6 +129,7 @@ rec {
         coreutils
         gnugrep
         nodejs_20
+        python3
       ];
       text = renderTemplate {
         "@REPO_ROOT@" = builtins.toString ../../.;

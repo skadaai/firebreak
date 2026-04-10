@@ -54,35 +54,35 @@
 
   firebreak-test-smoke-codex = mkSmokePackage {
     name = "firebreak-test-smoke-codex";
-    agentPackage = "firebreak-codex";
-    agentBin = "codex";
-    agentDisplayName = "Codex";
-    agentConfigSubdir = "codex";
-    defaultAgentConfigHostDir = "$HOME/.firebreak";
+    workloadPackage = "firebreak-codex";
+    toolBin = "codex";
+    toolDisplayName = "Codex";
+    toolStateSubdir = "codex";
+    defaultToolStateHostDir = "$HOME/.firebreak";
     workspaceBootstrapConfigHostDir = "$HOME/.codex";
   };
 
   firebreak-test-smoke-codex-version = mkWorkloadVersionSmokePackage {
     name = "firebreak-test-smoke-codex-version";
-    agentPackage = "firebreak-codex";
-    agentDisplayName = "Codex";
+    workloadPackage = "firebreak-codex";
+    toolDisplayName = "Codex";
   };
 
   firebreak-test-smoke-codex-warm-reuse = mkWorkloadWarmReuseSmokePackage {
     name = "firebreak-test-smoke-codex-warm-reuse";
-    agentPackage = "firebreak-codex";
-    agentDisplayName = "Codex";
+    workloadPackage = "firebreak-codex";
+    toolDisplayName = "Codex";
   };
 
   firebreak-claude-code = localVmArtifacts.firebreak-claude-code.package;
 
   firebreak-test-smoke-claude-code = mkSmokePackage {
     name = "firebreak-test-smoke-claude-code";
-    agentPackage = "firebreak-claude-code";
-    agentBin = "claude";
-    agentDisplayName = "Claude Code";
-    agentConfigSubdir = "claude";
-    defaultAgentConfigHostDir = "$HOME/.firebreak";
+    workloadPackage = "firebreak-claude-code";
+    toolBin = "claude";
+    toolDisplayName = "Claude Code";
+    toolStateSubdir = "claude";
+    defaultToolStateHostDir = "$HOME/.firebreak";
     workspaceBootstrapConfigHostDir = "$HOME/.claude";
   };
 
@@ -98,14 +98,14 @@
 
   firebreak-test-smoke-codex-credential-slots = mkToolCredentialSlotSmokePackage {
     name = "firebreak-test-smoke-codex-credential-slots";
-    agentPackage = "firebreak-codex";
-    agentBin = "codex";
-    agentDisplayName = "Codex";
-    agentConfigSubdir = "codex";
+    workloadPackage = "firebreak-codex";
+    toolBin = "codex";
+    toolDisplayName = "Codex";
+    toolStateSubdir = "codex";
     authFile = "auth.json";
     apiKeyFile = "OPENAI_API_KEY";
     apiKeyEnv = "OPENAI_API_KEY";
-    configRootEnv = "CODEX_HOME";
+    toolStateEnv = "CODEX_HOME";
     credentialSlotSpecificVar = "CODEX_CREDENTIAL_SLOT";
     loginCommand = "login";
     loginCommandArgs = [ "login" ];
@@ -113,14 +113,14 @@
 
   firebreak-test-smoke-claude-code-credential-slots = mkToolCredentialSlotSmokePackage {
     name = "firebreak-test-smoke-claude-code-credential-slots";
-    agentPackage = "firebreak-claude-code";
-    agentBin = "claude";
-    agentDisplayName = "Claude Code";
-    agentConfigSubdir = "claude";
+    workloadPackage = "firebreak-claude-code";
+    toolBin = "claude";
+    toolDisplayName = "Claude Code";
+    toolStateSubdir = "claude";
     authFile = ".credentials.json";
     apiKeyFile = "ANTHROPIC_API_KEY";
     apiKeyEnv = "ANTHROPIC_API_KEY";
-    configRootEnv = "CLAUDE_CONFIG_DIR";
+    toolStateEnv = "CLAUDE_CONFIG_DIR";
     credentialSlotSpecificVar = "CLAUDE_CREDENTIAL_SLOT";
     loginCommand = "auth login";
     loginCommandArgs = [ "auth" "login" ];

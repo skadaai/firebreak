@@ -28,7 +28,7 @@ resolve_selected_credential_slot_root() {
 
   mounted_flag=${FIREBREAK_SHARED_CREDENTIAL_SLOTS_MOUNTED_FLAG:-/run/firebreak-shared-credential-slots-mounted}
   if ! [ -e "$mounted_flag" ]; then
-    printf '%s\n' "Firebreak credential slots are not mounted; select a different state mode or inspect prepare-agent-session logs for the credential-slot mount failure." >&2
+    printf '%s\n' "Firebreak credential slots are not mounted; select a different state mode or inspect prepare-worker-session logs for the credential-slot mount failure." >&2
     exit 1
   fi
 

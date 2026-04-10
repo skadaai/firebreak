@@ -47,8 +47,8 @@ Snapshotting a booted VM is only useful once Firebreak can inject commands into 
 
 ### Guest side
 
-- introduce a dedicated local command-agent service inside the guest
-- the command agent owns command execution, status files, attach streams, and exit-code materialization
+- introduce a dedicated local command-service inside the guest
+- the command service owns command execution, status files, attach streams, and exit-code materialization
 - boot-time guest preparation becomes "bring the guest to ready state", not "run exactly one command and exit"
 
 ### Host side
@@ -74,11 +74,11 @@ Snapshotting a booted VM is only useful once Firebreak can inject commands into 
 - a local Linux Firebreak workload can execute multiple host-dispatched commands against one VM lifetime
 - the host wrapper can distinguish "start instance" from "dispatch command"
 - warm local command dispatch preserves current output and attach behavior
-- Cloud Hypervisor snapshot integration can target a ready command-agent state rather than the old boot-coupled session path
+- Cloud Hypervisor snapshot integration can target a ready command-service state rather than the old boot-coupled session path
 
 ## Risks
 
-- command-agent design could accidentally duplicate existing worker bridge and exec-output logic instead of consolidating it
+- command-service design could accidentally duplicate existing worker bridge and exec-output logic instead of consolidating it
 - detached instance ownership could become unclear if multiple host processes compete for the same instance directory
 - stale lease takeover needs a conservative detect-stale path so one host process does not trample another healthy controller
 - snapshot restore could paper over a weak command-channel design instead of simplifying it

@@ -130,10 +130,10 @@ def resolve_runtime_metadata():
             runtime_metadata_cache = json.load(handle)
     except (OSError, json.JSONDecodeError):
         return None
-    agent_exec_output_dir = runtime_metadata_cache.get("agent_exec_output_dir")
-    if isinstance(agent_exec_output_dir, str) and agent_exec_output_dir:
-        attach_stage_path_cache = os.path.join(agent_exec_output_dir, "attach_stage")
-        command_signal_stream_path_cache = os.path.join(agent_exec_output_dir, "command-signals.stream")
+    command_output_dir = runtime_metadata_cache.get("command_output_dir")
+    if isinstance(command_output_dir, str) and command_output_dir:
+        attach_stage_path_cache = os.path.join(command_output_dir, "attach_stage")
+        command_signal_stream_path_cache = os.path.join(command_output_dir, "command-signals.stream")
     return runtime_metadata_cache
 
 

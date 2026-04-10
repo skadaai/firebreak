@@ -224,7 +224,7 @@ if ! output=$(
   keep_smoke_tmp_dir=1
   printf '%s\n' "$output" >&2
   printf '%s\n' '--- host worker debug --json ---' >&2
-  FIREBREAK_WORKER_STATE_DIR="$state_dir" @AGENT_BIN@ worker debug --json >&2 || true
+  FIREBREAK_WORKER_STATE_DIR="$state_dir" @TOOL_BIN@ worker debug --json >&2 || true
   echo "worker guest bridge smoke VM run failed" >&2
   exit 1
 fi
@@ -235,7 +235,7 @@ if ! printf '%s\n' "$output" | grep -F -q '__BRIDGE_OK__'; then
   keep_smoke_tmp_dir=1
   printf '%s\n' "$output" >&2
   printf '%s\n' '--- host worker debug --json ---' >&2
-  FIREBREAK_WORKER_STATE_DIR="$state_dir" @AGENT_BIN@ worker debug --json >&2 || true
+  FIREBREAK_WORKER_STATE_DIR="$state_dir" @TOOL_BIN@ worker debug --json >&2 || true
   echo "worker guest bridge smoke did not complete successfully" >&2
   exit 1
 fi

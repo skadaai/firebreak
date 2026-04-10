@@ -96,7 +96,7 @@ What fixed it:
 - publish `bootstrap-state.json`
 - publish `command-state.json`
 - surface both through `firebreak worker debug`
-- make `prepare-agent-session` and `dev-bootstrap` ordering explicit
+- make `prepare-worker-session` and `dev-bootstrap` ordering explicit
 
 ### 3. Wrong focus on transport after transport was already good
 

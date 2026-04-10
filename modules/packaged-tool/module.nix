@@ -26,7 +26,7 @@ let
     "@STATE_ENV_EXPORTS@" = configExports;
     "@STATE_MODE_SELECTOR_VAR@" = "${configSelectorPrefix}_STATE_MODE";
     "@STATE_SUBDIR@" = configSubdir;
-    "@AGENT_DISPLAY_NAME@" = displayName;
+    "@TOOL_DISPLAY_NAME@" = displayName;
   };
 in {
   config = {

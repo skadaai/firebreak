@@ -18,15 +18,15 @@ rec {
 
   mkSmokePackage = {
     name,
-    agentPackage,
-    agentBin,
-    agentDisplayName,
-    agentConfigSubdir,
-    defaultAgentConfigHostDir,
+    workloadPackage,
+    toolBin,
+    toolDisplayName,
+    toolStateSubdir,
+    defaultToolStateHostDir,
     workspaceBootstrapConfigHostDir,
   }:
     let
-      agentConfigDirName = ".firebreak/${agentConfigSubdir}";
+      toolStateDirName = ".firebreak/${toolStateSubdir}";
     in
     pkgs.writeShellApplication {
       inherit name;
@@ -38,15 +38,15 @@ rec {
         gnutar
       ];
       text = renderTemplate {
-        "@AGENT_BIN@" = agentBin;
-        "@STATE_DIR_NAME@" = agentConfigDirName;
-        "@STATE_SUBDIR@" = agentConfigSubdir;
+        "@TOOL_BIN@" = toolBin;
+        "@STATE_DIR_NAME@" = toolStateDirName;
+        "@STATE_SUBDIR@" = toolStateSubdir;
         "@VM_STATE_ROOT@" = "/home/dev";
-        "@AGENT_DISPLAY_NAME@" = agentDisplayName;
-        "@AGENT_PACKAGE@" = agentPackage;
-        "@DEFAULT_STATE_ROOT@" = defaultAgentConfigHostDir;
+        "@TOOL_DISPLAY_NAME@" = toolDisplayName;
+        "@WORKLOAD_PACKAGE@" = workloadPackage;
+        "@DEFAULT_STATE_ROOT@" = defaultToolStateHostDir;
         "@WORKSPACE_BOOTSTRAP_CONFIG_HOST_DIR@" = workspaceBootstrapConfigHostDir;
-      } ../../modules/base/tests/agent-smoke.sh;
+      } ../../modules/base/tests/tool-smoke.sh;
     };
 
   mkProjectConfigSmokePackage = { name }:
@@ -82,14 +82,14 @@ rec {
 
   mkToolCredentialSlotSmokePackage = {
     name,
-    agentPackage,
-    agentBin,
-    agentDisplayName,
-    agentConfigSubdir,
+    workloadPackage,
+    toolBin,
+    toolDisplayName,
+    toolStateSubdir,
     authFile,
     apiKeyFile,
     apiKeyEnv,
-    configRootEnv,
+    toolStateEnv,
     credentialSlotSpecificVar,
     loginCommand,
     loginCommandArgs,
@@ -107,14 +107,14 @@ rec {
         gnugrep
       ];
       text = renderTemplate {
-        "@AGENT_PACKAGE@" = agentPackage;
-        "@AGENT_BIN@" = agentBin;
-        "@AGENT_DISPLAY_NAME@" = agentDisplayName;
-        "@STATE_SUBDIR@" = agentConfigSubdir;
+        "@WORKLOAD_PACKAGE@" = workloadPackage;
+        "@TOOL_BIN@" = toolBin;
+        "@TOOL_DISPLAY_NAME@" = toolDisplayName;
+        "@STATE_SUBDIR@" = toolStateSubdir;
         "@AUTH_FILE@" = authFile;
         "@API_KEY_FILE@" = apiKeyFile;
         "@API_KEY_ENV@" = apiKeyEnv;
-        "@CONFIG_ROOT_ENV@" = configRootEnv;
+        "@CONFIG_ROOT_ENV@" = toolStateEnv;
         "@CREDENTIAL_SLOT_SPECIFIC_VAR@" = credentialSlotSpecificVar;
         "@LOGIN_COMMAND@" = loginCommand;
         "@LOGIN_COMMAND_ARGS@" = renderShellArray loginCommandArgs;
@@ -486,8 +486,8 @@ EOF
 
   mkWorkloadVersionSmokePackage = {
     name,
-    agentPackage,
-    agentDisplayName,
+    workloadPackage,
+    toolDisplayName,
   }:
     pkgs.writeShellApplication {
       inherit name;
@@ -499,17 +499,17 @@ EOF
         python3
       ];
       text = renderTemplate {
-        "@AGENT_PACKAGE_BIN@" = "${self.packages.${system}.${agentPackage}}/bin/${agentPackage}";
-        "@AGENT_DISPLAY_NAME@" = agentDisplayName;
+        "@WORKLOAD_PACKAGE_BIN@" = "${self.packages.${system}.${workloadPackage}}/bin/${workloadPackage}";
+        "@TOOL_DISPLAY_NAME@" = toolDisplayName;
         "@PROFILE_SUMMARY_SCRIPT@" = builtins.toString ../../modules/profiles/local/host/profile-summary.py;
         "@PYTHON3@" = "${pkgs.python3}/bin/python3";
-      } ../../modules/base/tests/agent-version-smoke.sh;
+      } ../../modules/base/tests/tool-version-smoke.sh;
     };
 
   mkWorkloadWarmReuseSmokePackage = {
     name,
-    agentPackage,
-    agentDisplayName,
+    workloadPackage,
+    toolDisplayName,
   }:
     pkgs.writeShellApplication {
       inherit name;
@@ -522,9 +522,9 @@ EOF
         python3
       ];
       text = renderTemplate {
-        "@AGENT_PACKAGE_BIN@" = "${self.packages.${system}.${agentPackage}}/bin/${agentPackage}";
-        "@AGENT_DISPLAY_NAME@" = agentDisplayName;
-      } ../../modules/base/tests/agent-warm-reuse-smoke.sh;
+        "@WORKLOAD_PACKAGE_BIN@" = "${self.packages.${system}.${workloadPackage}}/bin/${workloadPackage}";
+        "@TOOL_DISPLAY_NAME@" = toolDisplayName;
+      } ../../modules/base/tests/tool-warm-reuse-smoke.sh;
     };
 
   mkValidationSmokePackage = { name, validatePackage }:
@@ -611,7 +611,7 @@ EOF
         gnused
       ];
       text = renderTemplate {
-        "@AGENT_BIN@" = "${smokeWorkerBin}/bin/${name}-worker-bin";
+        "@TOOL_BIN@" = "${smokeWorkerBin}/bin/${name}-worker-bin";
         "@REPO_ROOT@" = builtins.toString ../../.;
       } ../../modules/base/tests/test-smoke-worker.sh;
     };
@@ -628,7 +628,7 @@ EOF
         python3
       ];
       text = renderTemplate {
-        "@AGENT_BIN@" = "${self.packages.${system}.${workerPackage}}/bin/${workerPackage}";
+        "@TOOL_BIN@" = "${self.packages.${system}.${workerPackage}}/bin/${workerPackage}";
         "@REPO_ROOT@" = builtins.toString ../../.;
       } ../../modules/base/tests/test-smoke-worker-firebreak-attach.sh;
     };
@@ -644,7 +644,7 @@ EOF
         gnused
       ];
       text = renderTemplate {
-        "@AGENT_BIN@" = "${self.packages.${system}.${firebreakPackage}}/bin/${firebreakPackage}";
+        "@TOOL_BIN@" = "${self.packages.${system}.${firebreakPackage}}/bin/${firebreakPackage}";
         "@REPO_ROOT@" = builtins.toString ../../.;
       } ../../modules/base/tests/test-smoke-worker-claude-version.sh;
     };
@@ -695,7 +695,7 @@ EOF
     let
       bridgeVm = mkLocalVmArtifacts {
         name = "firebreak-worker-guest-bridge-smoke-vm";
-        defaultAgentCommand = "bash";
+        defaultToolCommand = "bash";
         workerBridgeEnabled = true;
         workerKinds = {
           bridge-process = {
@@ -749,7 +749,7 @@ EOF
         gnugrep
       ];
       text = renderTemplate {
-        "@AGENT_BIN@" = "${self.packages.${system}.firebreak}/bin/firebreak";
+        "@TOOL_BIN@" = "${self.packages.${system}.firebreak}/bin/firebreak";
         "@BRIDGE_VM_BIN@" = "${bridgeVm.package}/bin/firebreak-worker-guest-bridge-smoke-vm";
         "@REPO_ROOT@" = builtins.toString ../../.;
         "@WORKER_LOCAL_STATE_DIR@" = "/home/dev/.local/state/firebreak/worker-local";
@@ -769,7 +769,7 @@ EOF
         self.packages.${system}.firebreak-interactive-echo
       ];
       text = renderTemplate {
-        "@AGENT_BIN@" = "${self.packages.${system}.firebreak}/bin/firebreak";
+        "@TOOL_BIN@" = "${self.packages.${system}.firebreak}/bin/firebreak";
         "@BRIDGE_VM_BIN@" = "${bridgeVm.package}/bin/firebreak-worker-guest-bridge-smoke-vm";
         "@REPO_ROOT@" = builtins.toString ../../.;
       } ../../modules/base/tests/test-smoke-worker-guest-bridge-interactive.sh;

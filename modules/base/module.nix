@@ -377,7 +377,7 @@ in {
     promptCommand = mkOption {
       type = types.nullOr types.str;
       default = null;
-      description = "Shell command used to start a non-interactive worker session from FIREBREAK_AGENT_PROMPT.";
+      description = "Shell command used to start a non-interactive tool session from FIREBREAK_TOOL_PROMPT.";
     };
 
     promptFile = mkOption {

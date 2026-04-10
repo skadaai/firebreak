@@ -37,7 +37,7 @@ extract_json_field() {
   printf '%s\n' "$output" | sed -n "s/.*\"$field\": \"\\([^\"]*\\)\".*/\\1/p" | head -n 1
 }
 
-workspace_one_output=$(workspace_cmd create --workspace-id spec-005-main --branch "agent/spec-005-main-$branch_suffix" --owner smoke)
+workspace_one_output=$(workspace_cmd create --workspace-id spec-005-main --branch "dev-flow/spec-005-main-$branch_suffix" --owner smoke)
 workspace_one_root=$(extract_json_field "$workspace_one_output" workspace_state_root)
 workspace_one_path=$(extract_json_field "$workspace_one_output" workspace_path)
 workspace_one_runtime_root=$(extract_json_field "$workspace_one_output" runtime_root)
@@ -60,7 +60,7 @@ if ! [ -f "$workspace_one_root/metadata.json" ] || ! [ -d "$workspace_one_root/a
 fi
 
 set +e
-workspace_cmd create --workspace-id spec-005-main --branch "agent/spec-005-main-$branch_suffix" --owner smoke >/dev/null 2>&1
+workspace_cmd create --workspace-id spec-005-main --branch "dev-flow/spec-005-main-$branch_suffix" --owner smoke >/dev/null 2>&1
 duplicate_status=$?
 set -e
 
@@ -69,7 +69,7 @@ if [ "$duplicate_status" -eq 0 ]; then
   exit 1
 fi
 
-resume_output=$(workspace_cmd create --workspace-id spec-005-main --branch "agent/spec-005-main-$branch_suffix" --owner smoke --resume)
+resume_output=$(workspace_cmd create --workspace-id spec-005-main --branch "dev-flow/spec-005-main-$branch_suffix" --owner smoke --resume)
 resume_root=$(extract_json_field "$resume_output" workspace_state_root)
 if [ "$resume_root" != "$workspace_one_root" ]; then
   printf '%s\n' "$resume_output" >&2
@@ -77,7 +77,7 @@ if [ "$resume_root" != "$workspace_one_root" ]; then
   exit 1
 fi
 
-workspace_two_output=$(workspace_cmd create --workspace-id spec-006-main --branch "agent/spec-006-main-$branch_suffix" --owner smoke)
+workspace_two_output=$(workspace_cmd create --workspace-id spec-006-main --branch "dev-flow/spec-006-main-$branch_suffix" --owner smoke)
 workspace_two_root=$(extract_json_field "$workspace_two_output" workspace_state_root)
 workspace_two_path=$(extract_json_field "$workspace_two_output" workspace_path)
 workspace_two_runtime_root=$(extract_json_field "$workspace_two_output" runtime_root)

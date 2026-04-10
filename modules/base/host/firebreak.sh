@@ -431,7 +431,7 @@ Available commands:
   run         Launch a public Firebreak VM workload
   worker      Manage host-brokered Firebreak workers
 
-Agent workflow commands live in the separate `dev-flow` CLI.
+Development workflow commands live in the separate `dev-flow` CLI.
 Other human-facing commands remain reserved until they have clear user value and intuitive UX.
 EOF
 }

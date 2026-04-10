@@ -1,6 +1,6 @@
 guest_state_dir=/run/firebreak-worker
 command_state_local=$guest_state_dir/command-state.json
-command_state_shared=@AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
+command_state_shared=@COMMAND_OUTPUT_MOUNT@/command-state.json
 
 json_escape() {
   printf '%s' "$1" | @PYTHON3@ -c 'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'
@@ -16,16 +16,16 @@ write_command_state() {
   cat >"$command_state_local" <<EOF
 {
   "source": "guest-command",
-  "request_id": "$(json_escape "${FIREBREAK_AGENT_REQUEST_ID:-}")",
+  "request_id": "$(json_escape "${FIREBREAK_COMMAND_REQUEST_ID:-}")",
   "phase": "$(json_escape "$command_phase")",
   "status": "$(json_escape "$command_status")",
   "detail": "$(json_escape "$command_detail")",
-  "command": "$(json_escape "${FIREBREAK_AGENT_COMMAND:-}")",
+  "command": "$(json_escape "${FIREBREAK_TOOL_COMMAND:-}")",
   "exit_code": $command_exit_code,
   "updated_at": "$updated_at"
 }
 EOF
-  if [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
+  if [ -d @COMMAND_OUTPUT_MOUNT@ ]; then
     if ! cp "$command_state_local" "$command_state_shared"; then
       echo "failed to sync command state from $command_state_local to $command_state_shared" >&2
       exit 1

@@ -14,8 +14,8 @@ Executing the warm local command-channel slices.
 - the problem is now explicitly scoped as "separate VM lifetime from command lifetime" rather than "add snapshots first"
 - non-interactive local command requests now use an explicit `request.json` contract in the shared exec-output directory
 - guest command state now records the request id so host-side dispatch can match responses to requests
-- local Linux guests now support an internal `agent-service` mode with a long-lived command agent ready for repeated `agent-exec` requests
-- local Linux `agent-exec` requests now route through a backend-private warm instance controller rooted in the stable instance directory
+- local Linux guests now support an internal `command-service` mode with a long-lived command agent ready for repeated `command-exec` requests
+- local Linux `command-exec` requests now route through a backend-private warm instance controller rooted in the stable instance directory
 - warm controller dispatch is now serialized per stable instance so concurrent requests do not clobber shared request/response files
 - warm controller reuse is now build-aware; stale daemons from older Firebreak builds are stopped instead of being silently reused
 - warm controller lifecycle now emits explicit wrapper trace events for spawn, readiness, dispatch, locking, and stale-build replacement
@@ -25,8 +25,8 @@ Executing the warm local command-channel slices.
 ## What remains open
 
 - execution of the new warm-reuse smoke on a prepared Linux host with Cloud Hypervisor networking permissions
-- attached warm command dispatch; `agent-attach-exec` still follows the older one-shot path
-- snapshot prepare/restore against a ready command-agent state
+- attached warm command dispatch; `command-attach-exec` still follows the older one-shot path
+- snapshot prepare/restore against a ready command-service state
 
 ## Current sources of truth
 

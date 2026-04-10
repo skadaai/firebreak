@@ -17,12 +17,12 @@ FIREBREAK_SESSION_RE = re.compile(
 RUNNER_MARKERS = {
     "Finished NixOS Activation": "nixos_activation_done_ms",
     "Finished Align guest development user with the host user identity": "adopt_host_identity_done_ms",
-    "Finished Prepare the workspace and agent session paths": "prepare_agent_session_done_ms",
+    "Finished Prepare the workspace and worker session paths": "prepare_worker_session_done_ms",
     "Finished Configure runtime network": "configure_runtime_network_done_ms",
     "Started Expose rootless guest egress": "guest_egress_proxy_started_ms",
     "Started Expose localhost TCP services through the Cloud Hypervisor vsock mux": "guest_port_publish_started_ms",
     "Started Interactive dev shell on ttyS0": "dev_console_started_ms",
-    "Started Warm local command agent": "local_command_agent_started_ms",
+    "Started Warm local command worker": "local_command_worker_started_ms",
 }
 
 

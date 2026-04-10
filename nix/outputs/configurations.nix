@@ -41,12 +41,12 @@
     extraModules = [ {
       workloadVm = {
         promptCommand = ''
-          case "$FIREBREAK_AGENT_PROMPT" in
+          case "$FIREBREAK_TOOL_PROMPT" in
             "Run the timeout validation fixture")
               ./timeout-fixture.sh
               ;;
             *)
-              printf '%s\n' "$FIREBREAK_AGENT_PROMPT"
+              printf '%s\n' "$FIREBREAK_TOOL_PROMPT"
               ;;
           esac
         '';

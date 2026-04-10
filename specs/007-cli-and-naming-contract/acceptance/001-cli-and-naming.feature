@@ -1,7 +1,7 @@
 @spec-007
 Feature: CLI and naming contract
 
-  Scenario: Agent workflow commands live in the separate dev-flow CLI
+  Scenario: Development workflow commands live in the separate dev-flow CLI
     Given the Firebreak CLI is installed
     When an operator asks for command help
     Then the top-level command list should expose only the human-facing Firebreak surface

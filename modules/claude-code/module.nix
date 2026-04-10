@@ -1,10 +1,10 @@
 moduleArgs@{ pkgs, ... }:
-(import ../packaged-agent/module.nix moduleArgs) {
+(import ../packaged-tool/module.nix moduleArgs) {
   vmName = "firebreak-claude-code";
   displayName = "Claude Code";
   binName = "claude";
   package = pkgs.claude-code;
-  promptCommand = ''claude -p "$FIREBREAK_AGENT_PROMPT"'';
+  promptCommand = ''claude -p "$FIREBREAK_TOOL_PROMPT"'';
   configSelectorPrefix = "CLAUDE";
   configSubdir = "claude";
   configExports = ''

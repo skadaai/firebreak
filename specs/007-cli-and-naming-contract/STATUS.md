@@ -30,4 +30,4 @@ Implementation in progress.
 ## History
 
 - 2026-03-23: Spec created to govern the human/internal CLI split, the `task` rename, and the package/test naming migration.
-- 2026-04-02: Revised the spec to separate attempts from workspaces and to move agent workflow commands into the separate `dev-flow` CLI.
+- 2026-04-02: Revised the spec to separate attempts from workspaces and to move development workflow commands into the separate `dev-flow` CLI.

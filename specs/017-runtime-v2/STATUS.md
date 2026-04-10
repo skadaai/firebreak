@@ -23,7 +23,7 @@ Executing the Linux local runtime replacement and cold-boot reduction slices, wi
 - local `virtiofsd` startup is now parallelized rather than serialized
 - shared state-root and credential-slot mounts now fail fast instead of silently downgrading
 - local non-interactive command requests now have an explicit request/response contract instead of boot-time metadata smearing
-- Linux local now has a private warm instance controller and guest command-agent mode for repeated `agent-exec` reuse
+- Linux local now has a private warm instance controller and guest command-service mode for repeated `command-exec` reuse
 - warm local controller requests are now serialized per instance, stale warm daemons are invalidated on build changes, and controller lifecycle tracing exists in the wrapper logs
 - the runtime now has a cheap host-side warm-controller smoke suite that can be run through flake checks and internal validation without booting a VM
 - the runtime now also exposes a real `test-smoke-codex-warm-reuse` suite for repeated stable local commands against one controller-owned VM lifetime
@@ -37,8 +37,8 @@ Executing the Linux local runtime replacement and cold-boot reduction slices, wi
 
 ## What remains open
 
-- execution and hardening of the new warm local `agent-exec` reuse smoke on a prepared Linux host
-- warm attached command dispatch for `agent-attach-exec`
+- execution and hardening of the new warm local `command-exec` reuse smoke on a prepared Linux host
+- warm attached command dispatch for `command-attach-exec`
 - snapshot preparation and restore on the local Cloud Hypervisor backend
 - deletion of remaining stale runtime assumptions and warnings that no longer fit the accepted backend contract
 - future cloud backend selection and implementation
@@ -54,4 +54,4 @@ Executing the Linux local runtime replacement and cold-boot reduction slices, wi
 ## History
 
 - 2026-04-05: created Runtime v2 as a new design-definition changeset centered on aggressive replacement rather than compatibility-preserving migration
-- 2026-04-05: landed backend capability checks, Linux local Cloud Hypervisor cutover, local networking/port publishing, hot-path bootstrap reduction, runtime-share consolidation, fail-fast share semantics, explicit command requests, a guest warm command-agent mode, a private local warm instance controller, controller serialization and stale-build invalidation, and a cheap host-side warm-controller smoke suite
+- 2026-04-05: landed backend capability checks, Linux local Cloud Hypervisor cutover, local networking/port publishing, hot-path bootstrap reduction, runtime-share consolidation, fail-fast share semantics, explicit command requests, a guest warm command-service mode, a private local warm instance controller, controller serialization and stale-build invalidation, and a cheap host-side warm-controller smoke suite

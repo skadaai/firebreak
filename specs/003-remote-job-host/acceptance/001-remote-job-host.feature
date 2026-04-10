@@ -4,7 +4,7 @@ Feature: Remote single-host Firebreak job runner
   Scenario: Run a prepared job on a remote Firebreak host
     Given the remote Firebreak host has available job capacity
     And a prepared workspace directory exists for job "job-123"
-    And a prepared agent config directory exists for job "job-123"
+    And a prepared tool state directory exists for job "job-123"
     And an output directory exists for job "job-123"
     And the selected agent runtime supports non-interactive prompt-driven execution
     When the orchestrator starts job "job-123" with initial prompt "Inspect the repository and print a short architecture summary to standard output"
@@ -30,7 +30,7 @@ Feature: Remote single-host Firebreak job runner
   Scenario: Terminate a job when it exceeds the configured runtime limit
     Given the remote Firebreak host has available job capacity
     And a prepared workspace directory exists for job "job-124"
-    And a prepared agent config directory exists for job "job-124"
+    And a prepared tool state directory exists for job "job-124"
     And an output directory exists for job "job-124"
     And the selected agent runtime supports non-interactive prompt-driven execution
     And the job runtime limit is configured for the host

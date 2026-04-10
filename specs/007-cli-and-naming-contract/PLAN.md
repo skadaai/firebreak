@@ -8,7 +8,7 @@ last_updated: 2026-04-02
 ## Implementation slices
 
 1. Define the CLI and naming contract in this spec and acceptance file.
-2. Move agent workflow commands out of `firebreak` and into the dedicated `dev-flow` CLI.
+2. Move development workflow commands out of `firebreak` and into the dedicated `dev-flow` CLI.
 3. Rename the host-side isolated checkout concept from `task` to `workspace`, while keeping `attempt` as the bounded loop unit.
 4. Rename workflow packages, smoke packages, and checks to the `dev-flow-*` and `*-test-smoke-*` grammar where appropriate.
 5. Update validation suite names, smoke harnesses, and launcher paths to the new interface.

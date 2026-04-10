@@ -91,12 +91,12 @@ if [ -n "''${MICROVM_VFKIT_SHARED_CREDENTIAL_SLOTS_DIR:-}" ]; then
   firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_SHARED_CREDENTIAL_SLOTS_DIR},mountTag=hostcredentialslots")
 fi
 
-if [ -n "''${MICROVM_VFKIT_AGENT_EXEC_OUTPUT_DIR:-}" ]; then
-  firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_AGENT_EXEC_OUTPUT_DIR},mountTag=hostexecoutput")
+if [ -n "''${MICROVM_VFKIT_COMMAND_OUTPUT_DIR:-}" ]; then
+  firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_COMMAND_OUTPUT_DIR},mountTag=hostexecoutput")
 fi
 
-if [ -n "''${MICROVM_VFKIT_AGENT_TOOLS_DIR:-}" ]; then
-  firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_AGENT_TOOLS_DIR},mountTag=hostagenttools")
+if [ -n "''${MICROVM_VFKIT_TOOL_RUNTIMES_DIR:-}" ]; then
+  firebreak_extra_args+=(--device "virtio-fs,sharedDir=''${MICROVM_VFKIT_TOOL_RUNTIMES_DIR},mountTag=hosttoolruntimes")
 fi
 
 if [ -n "''${MICROVM_VFKIT_WORKER_BRIDGE_DIR:-}" ]; then
@@ -164,13 +164,13 @@ EOF
     varVolumeEnabled ? true,
     varVolumeImage,
     varVolumeSeedImage,
-    defaultAgentCommand ? "",
-    agentConfigSubdir ? "agent",
-    defaultAgentConfigHostDir,
+    defaultToolCommand ? "",
+    toolStateSubdir ? "tool",
+    defaultToolStateHostDir,
     defaultCredentialSlotsHostDir ? "$HOME/.firebreak/credentials",
     workspaceBootstrapConfigHostDir ? "",
     hostConfigAdoptionEnabled ? false,
-    agentEnvPrefix ? "AGENT",
+    toolEnvPrefix ? "TOOL",
     sharedStateRoots ? { },
     sharedCredentialSlots ? { },
     workerBridgeEnabled ? false,
@@ -200,15 +200,15 @@ EOF
         "@VAR_VOLUME_ENABLED@" = if varVolumeEnabled then "1" else "0";
         "@VAR_VOLUME_IMAGE@" = varVolumeImage;
         "@VAR_VOLUME_SEED_IMAGE@" = varVolumeSeedImage;
-        "@DEFAULT_AGENT_COMMAND@" = defaultAgentCommand;
+        "@DEFAULT_TOOL_COMMAND@" = defaultToolCommand;
         "@PACKAGE_NAME@" = name;
         "@RUNNER@" = "${runnerWrapper}";
-        "@STATE_SUBDIR@" = agentConfigSubdir;
-        "@DEFAULT_STATE_ROOT@" = defaultAgentConfigHostDir;
+        "@STATE_SUBDIR@" = toolStateSubdir;
+        "@DEFAULT_STATE_ROOT@" = defaultToolStateHostDir;
         "@DEFAULT_CREDENTIAL_SLOTS_HOST_DIR@" = defaultCredentialSlotsHostDir;
         "@WORKSPACE_BOOTSTRAP_CONFIG_HOST_DIR@" = workspaceBootstrapConfigHostDir;
         "@HOST_CONFIG_ADOPTION_ENABLED@" = if hostConfigAdoptionEnabled then "1" else "0";
-        "@AGENT_ENV_PREFIX@" = agentEnvPrefix;
+        "@TOOL_ENV_PREFIX@" = toolEnvPrefix;
         "@SHARED_STATE_ROOT_ENABLED@" = if (sharedStateRoots.enable or false) then "1" else "0";
         "@SHARED_CREDENTIAL_SLOTS_ENABLED@" = if (sharedCredentialSlots.enable or false) then "1" else "0";
         "@LOCAL_PUBLISHED_HOST_PORTS_JSON@" = localPublishedHostPortsJson;
@@ -283,13 +283,13 @@ EOF
     varVolumeEnabled ? true,
     varVolumeImage,
     varVolumeSeedImage,
-    defaultAgentCommand ? "",
-    agentConfigSubdir ? "agent",
-    defaultAgentConfigHostDir ? "$HOME/.firebreak",
+    defaultToolCommand ? "",
+    toolStateSubdir ? "tool",
+    defaultToolStateHostDir ? "$HOME/.firebreak",
     defaultCredentialSlotsHostDir ? "$HOME/.firebreak/credentials",
     workspaceBootstrapConfigHostDir ? "",
     hostConfigAdoptionEnabled ? false,
-    agentEnvPrefix ? "AGENT",
+    toolEnvPrefix ? "TOOL",
     sharedStateRoots ? { },
     sharedCredentialSlots ? { },
     workerBridgeEnabled ? false,
@@ -314,13 +314,13 @@ EOF
         varVolumeEnabled
         varVolumeImage
         varVolumeSeedImage
-        defaultAgentCommand
-        agentConfigSubdir
-        defaultAgentConfigHostDir
+        defaultToolCommand
+        toolStateSubdir
+        defaultToolStateHostDir
         defaultCredentialSlotsHostDir
         workspaceBootstrapConfigHostDir
         hostConfigAdoptionEnabled
-        agentEnvPrefix
+        toolEnvPrefix
         sharedStateRoots
         sharedCredentialSlots
         workerBridgeEnabled
@@ -344,13 +344,13 @@ EOF
     profileModules ? [ self.nixosModules.firebreak-local-profile ],
     runtimeBackend ? null,
     controlSocketName ? name,
-    defaultAgentCommand ? "",
-    agentConfigSubdir ? "agent",
-    defaultAgentConfigHostDir ? "$HOME/.firebreak",
+    defaultToolCommand ? "",
+    toolStateSubdir ? "tool",
+    defaultToolStateHostDir ? "$HOME/.firebreak",
     defaultCredentialSlotsHostDir ? "$HOME/.firebreak/credentials",
     workspaceBootstrapConfigHostDir ? "",
     hostConfigAdoptionEnabled ? false,
-    agentEnvPrefix ? "AGENT",
+    toolEnvPrefix ? "TOOL",
     sharedStateRoots ? { },
     sharedCredentialSlots ? { },
     workerBridgeEnabled ? false,
@@ -383,13 +383,13 @@ EOF
           name
           runnerPackage
           controlSocketName
-          defaultAgentCommand
-          agentConfigSubdir
-          defaultAgentConfigHostDir
+          defaultToolCommand
+          toolStateSubdir
+          defaultToolStateHostDir
           defaultCredentialSlotsHostDir
           workspaceBootstrapConfigHostDir
           hostConfigAdoptionEnabled
-          agentEnvPrefix
+          toolEnvPrefix
           sharedStateRoots
           sharedCredentialSlots
           workerBridgeEnabled;

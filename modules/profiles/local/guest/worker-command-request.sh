@@ -1,4 +1,4 @@
-command_request_dir=@AGENT_EXEC_OUTPUT_MOUNT@
+command_request_dir=@COMMAND_OUTPUT_MOUNT@
 command_request_file=$command_request_dir/request.json
 export command_request_loaded=0
 export command_request_id=""
@@ -37,7 +37,7 @@ def as_text(name: str) -> str:
     return str(value)
 
 session_mode = as_text("session_mode")
-if session_mode not in {"agent-exec", "agent-attach-exec"}:
+if session_mode not in {"command-exec", "command-attach-exec"}:
     print(
         f"invalid command request session_mode in {path}: {session_mode or '<empty>'}",
         file=sys.stderr,
@@ -88,5 +88,5 @@ ensure_command_request_loaded() {
     command_request_columns \
     command_request_lines \
     command_request_capture_systemd_profile
-  export FIREBREAK_AGENT_REQUEST_ID=${command_request_id:-}
+  export FIREBREAK_COMMAND_REQUEST_ID=${command_request_id:-}
 }

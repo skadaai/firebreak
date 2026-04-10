@@ -92,7 +92,7 @@ else
   git -C "$wt" switch -c "$branch" >/dev/null
 fi
 
-# Shared dirs live above the worktree root so tasks can reuse agent state.
+# Shared dirs live above the worktree root so tasks can reuse tool state.
 for d in ".direnv" ".codex" ".claude"; do
   shared_path="$shared_root/$d"
   if [[ ! -e "$shared_path" && ! -L "$shared_path" ]]; then

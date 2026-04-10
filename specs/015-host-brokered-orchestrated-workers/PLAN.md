@@ -97,7 +97,7 @@ last_updated: 2026-04-03
 ## Dependencies
 
 - worker state isolation from [spec 005](../005-isolated-work-tasks/SPEC.md)
-- local worker package contract from [spec 008](../008-single-agent-package-mode/SPEC.md)
+- local worker package contract from [spec 008](../008-single-local-package-mode/SPEC.md)
 - config-resolution contract from [spec 009](../009-project-config-and-doctor/SPEC.md)
 - current local runtime wrapper in [modules/profiles/local/host/run-wrapper.sh](../../modules/profiles/local/host/run-wrapper.sh)
 - external project recipe helpers in [nix/support/projects.nix](../../nix/support/projects.nix)

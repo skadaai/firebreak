@@ -114,7 +114,7 @@ run_attach_version() {
     FIREBREAK_FLAKE_REF="path:@REPO_ROOT@" \
     FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG=1 \
     FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
-    @AGENT_BIN@ run --attach --backend firebreak --kind smoke-firebreak-attach --workspace "$workspace_dir" --package firebreak-codex -- --version
+    @TOOL_BIN@ run --attach --backend firebreak --kind smoke-firebreak-attach --workspace "$workspace_dir" --package firebreak-codex -- --version
 }
 
 attach_output=$(run_attach_version)
@@ -171,7 +171,7 @@ fi
 
 inspect_output=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ inspect "$(basename "$latest_worker_root")"
+    @TOOL_BIN@ inspect "$(basename "$latest_worker_root")"
 )
 
 if ! printf '%s\n' "$inspect_output" | grep -F -q '"status": "exited"'; then
@@ -188,7 +188,7 @@ fi
 
 debug_output=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ debug --json
+    @TOOL_BIN@ debug --json
 )
 
 if ! printf '%s\n' "$debug_output" | grep -F -q '"last_trace_event": "command-exit:0"'; then

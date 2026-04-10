@@ -134,7 +134,7 @@ multi_tool_output=$(
   cd "$workspace_dir"
   run_fixture \
     PEER_CREDENTIAL_SLOT=alternate \
-    AGENT_VM_COMMAND='credential-fixture status && credential-fixture-peer status' \
+    WORKLOAD_VM_COMMAND='credential-fixture status && credential-fixture-peer status' \
     FIREBREAK_LAUNCH_MODE=shell \
     @FIXTURE_PACKAGE_BIN@
 )

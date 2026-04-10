@@ -64,7 +64,7 @@ EOF
   run_with_clean_firebreak_env \
     FIREBREAK_INSTANCE_EPHEMERAL=1 \
     FIREBREAK_LAUNCH_MODE=shell \
-    AGENT_VM_COMMAND='sleep 300' \
+    WORKLOAD_VM_COMMAND='sleep 300' \
     timeout --foreground "$timeout_seconds" \
     @FIXTURE_PACKAGE_BIN@
 ) >"$vm_log" 2>&1 &

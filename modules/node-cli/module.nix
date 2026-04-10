@@ -497,9 +497,9 @@ PY
     exit 0
   '';
   scriptVars = {
-    "@AGENT_EXEC_OUTPUT_MOUNT@" = cfg.workerExecOutputMount;
+    "@COMMAND_OUTPUT_MOUNT@" = cfg.workerExecOutputMount;
     "@BIN_NAME@" = binName;
-    "@AGENT_TOOLS_MOUNT@" = toolsMount;
+    "@TOOL_RUNTIMES_MOUNT@" = toolsMount;
     "@BOOTSTRAP_READY_MARKER@" = bootstrapReadyMarker;
     "@DEV_HOME@" = devHome;
     "@DEV_USER@" = cfg.devUser;

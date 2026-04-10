@@ -95,7 +95,7 @@ The intended landing shape is:
 - [AGENTS.md](../../AGENTS.md)
 - [spec 009](../009-project-config-and-doctor/SPEC.md)
 - current packaged Node CLI layer in [modules/node-cli/module.nix](../../modules/node-cli/module.nix)
-- current single-agent local wrapper contract in [modules/profiles/local/host/run-wrapper.sh](../../modules/profiles/local/host/run-wrapper.sh)
+- current single-workload local wrapper contract in [modules/profiles/local/host/run-wrapper.sh](../../modules/profiles/local/host/run-wrapper.sh)
 
 ### Risks
 

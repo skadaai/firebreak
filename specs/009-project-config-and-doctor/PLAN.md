@@ -29,9 +29,9 @@ last_updated: 2026-03-25
 
 - local wrapper resolution in [modules/profiles/local/host/run-wrapper.sh](../../modules/profiles/local/host/run-wrapper.sh)
 - top-level CLI assembly in [modules/base/host/firebreak.sh](../../modules/base/host/firebreak.sh)
-- current local smoke harness in [modules/base/tests/agent-smoke.sh](../../modules/base/tests/agent-smoke.sh)
+- current local smoke harness in [modules/base/tests/tool-smoke.sh](../../modules/base/tests/tool-smoke.sh)
 - current CLI and naming contract in [spec 007](../007-cli-and-naming-contract/SPEC.md)
-- current single-package local mode contract in [spec 008](../008-single-agent-package-mode/SPEC.md)
+- current single-package local mode contract in [spec 008](../008-single-local-package-mode/SPEC.md)
 
 ## Current status
 

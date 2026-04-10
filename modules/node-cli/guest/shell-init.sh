@@ -1,7 +1,7 @@
 export FIREBREAK_EXTERNAL_PROJECT="@NAME@"
 tool_home="@DEV_HOME@"
-if [ -d "@AGENT_TOOLS_MOUNT@" ]; then
-  tool_home="@AGENT_TOOLS_MOUNT@"
+if [ -d "@TOOL_RUNTIMES_MOUNT@" ]; then
+  tool_home="@TOOL_RUNTIMES_MOUNT@"
 fi
 export LOCAL_BIN="$tool_home/.local/bin"
 export XDG_CONFIG_HOME="$tool_home/.config"

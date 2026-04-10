@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -eu
 
-@FIREBREAK_AGENT_COMMAND_REQUEST_LIB@
+@FIREBREAK_WORKER_COMMAND_REQUEST_LIB@
 @FIREBREAK_PROFILE_LIB@
 
-agent_tools_enabled=@AGENT_TOOLS_ENABLED@
-agent_tools_mount=@AGENT_TOOLS_MOUNT@
+tool_runtimes_enabled=@TOOL_RUNTIMES_ENABLED@
+tool_runtimes_mount=@TOOL_RUNTIMES_MOUNT@
 start_dir=@WORKSPACE_MOUNT@
 guest_state_dir=/run/firebreak-worker
 bootstrap_state_local=$guest_state_dir/bootstrap-state.json
@@ -21,7 +21,7 @@ log_phase() {
   phase=$1
   timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   printf '%s %s\n' "[firebreak-session]" "$timestamp $phase"
-  firebreak_profile_guest_mark prepare-cold-agent-exec "$phase"
+  firebreak_profile_guest_mark prepare-cold-command-exec "$phase"
 }
 
 sync_guest_state_files() {
@@ -30,21 +30,21 @@ sync_guest_state_files() {
   printf '%s\n' '{}' > "$command_state_local"
   chmod 0644 "$bootstrap_state_local" "$command_state_local"
   @CHOWN@ @DEV_USER@:@DEV_USER@ "$guest_state_dir" "$bootstrap_state_local" "$command_state_local"
-  rm -f @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
-  cp "$bootstrap_state_local" @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json
-  cp "$command_state_local" @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
-  chmod 0666 @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
+  rm -f @COMMAND_OUTPUT_MOUNT@/bootstrap-state.json @COMMAND_OUTPUT_MOUNT@/command-state.json
+  cp "$bootstrap_state_local" @COMMAND_OUTPUT_MOUNT@/bootstrap-state.json
+  cp "$command_state_local" @COMMAND_OUTPUT_MOUNT@/command-state.json
+  chmod 0666 @COMMAND_OUTPUT_MOUNT@/bootstrap-state.json @COMMAND_OUTPUT_MOUNT@/command-state.json
 }
 
 sync_guest_session_request_files() {
-  printf '%s\n' "$command_request_session_mode" > @AGENT_SESSION_MODE_FILE@
-  chmod 0644 @AGENT_SESSION_MODE_FILE@
+  printf '%s\n' "$command_request_session_mode" > @SESSION_MODE_FILE@
+  chmod 0644 @SESSION_MODE_FILE@
 
   if [ -n "$command_request_command" ]; then
-    printf '%s\n' "$command_request_command" > @AGENT_COMMAND_FILE@
-    chmod 0644 @AGENT_COMMAND_FILE@
+    printf '%s\n' "$command_request_command" > @COMMAND_FILE@
+    chmod 0644 @COMMAND_FILE@
   else
-    rm -f @AGENT_COMMAND_FILE@
+    rm -f @COMMAND_FILE@
   fi
 
   printf '%s\n' "$start_dir" > @START_DIR_FILE@
@@ -56,15 +56,15 @@ if ! [ -d @WORKSPACE_MOUNT@ ]; then
   exit 1
 fi
 
-if ! [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
-  echo "agent exec output share is unavailable at @AGENT_EXEC_OUTPUT_MOUNT@" >&2
+if ! [ -d @COMMAND_OUTPUT_MOUNT@ ]; then
+  echo "command output share is unavailable at @COMMAND_OUTPUT_MOUNT@" >&2
   exit 1
 fi
 
 ensure_command_request_loaded
 
-if [ "$command_request_session_mode" != "agent-exec" ]; then
-  echo "prepare-cold-agent-exec requires an agent-exec request, got: $command_request_session_mode" >&2
+if [ "$command_request_session_mode" != "command-exec" ]; then
+  echo "prepare-cold-command-exec requires an command-exec request, got: $command_request_session_mode" >&2
   exit 1
 fi
 
@@ -72,15 +72,15 @@ if [ -n "$command_request_start_dir" ]; then
   start_dir=$command_request_start_dir
 fi
 
-log_phase prepare-cold-agent-exec-start
-log_phase prepare-cold-agent-exec-adopt-host-identity-start
+log_phase prepare-cold-command-exec-start
+log_phase prepare-cold-command-exec-adopt-host-identity-start
 @ADOPT_HOST_IDENTITY_SCRIPT@
-log_phase prepare-cold-agent-exec-adopt-host-identity-done
+log_phase prepare-cold-command-exec-adopt-host-identity-done
 sync_guest_state_files
 sync_guest_session_request_files
 
 if [ "$start_dir" != "@WORKSPACE_MOUNT@" ]; then
-  log_phase prepare-cold-agent-exec-bind-workspace-start
+  log_phase prepare-cold-command-exec-bind-workspace-start
   if [ -L "$start_dir" ]; then
     rm -f "$start_dir"
   fi
@@ -105,19 +105,19 @@ if [ "$start_dir" != "@WORKSPACE_MOUNT@" ]; then
 
     ln -s @WORKSPACE_MOUNT@ "$start_dir"
   fi
-  log_phase prepare-cold-agent-exec-bind-workspace-done
+  log_phase prepare-cold-command-exec-bind-workspace-done
 fi
 
-if [ "$agent_tools_enabled" = "1" ]; then
-  log_phase prepare-cold-agent-exec-mount-agent-tools-start
-  mkdir -p "$agent_tools_mount"
-  if ! mountpoint -q "$agent_tools_mount"; then
-    if ! mount -t virtiofs -o exec hostagenttools "$agent_tools_mount"; then
-      echo "failed to mount host agent tools share" >&2
+if [ "$tool_runtimes_enabled" = "1" ]; then
+  log_phase prepare-cold-command-exec-mount-tool-runtimes-start
+  mkdir -p "$tool_runtimes_mount"
+  if ! mountpoint -q "$tool_runtimes_mount"; then
+    if ! mount -t virtiofs -o exec hosttoolruntimes "$tool_runtimes_mount"; then
+      echo "failed to mount host tool runtimes share" >&2
       exit 1
     fi
   fi
-  log_phase prepare-cold-agent-exec-mount-agent-tools-done
+  log_phase prepare-cold-command-exec-mount-tool-runtimes-done
 fi
 
 if [ "@SHARED_STATE_ROOT_ENABLED@" = "1" ]; then
@@ -149,4 +149,4 @@ if [ "@SHARED_CREDENTIAL_SLOTS_ENABLED@" = "1" ]; then
   fi
 fi
 
-log_phase prepare-cold-agent-exec-done
+log_phase prepare-cold-command-exec-done

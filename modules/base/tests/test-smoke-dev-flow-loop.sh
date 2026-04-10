@@ -52,7 +52,7 @@ close_workspace() {
   dev_flow_cmd workspace close --workspace-id "$workspace_id" --disposition "$disposition" --cleanup-workspace >/dev/null
 }
 
-success_branch="agent/spec-006-success-$branch_suffix"
+success_branch="dev-flow/spec-006-success-$branch_suffix"
 success_validation_suite=test-fixture-validation-pass
 success_output=$(dev_flow_cmd workspace create --workspace-id spec-006-success --branch "$success_branch" --owner smoke)
 success_workspace=$(extract_json_field "$success_output" workspace_path)
@@ -86,7 +86,7 @@ if ! [ -f "$success_plan_path" ] || ! [ -f "$success_review_path" ] || ! [ -f "$
 fi
 close_workspace spec-006-success committed
 
-validation_branch="agent/spec-006-validation-$branch_suffix"
+validation_branch="dev-flow/spec-006-validation-$branch_suffix"
 blocked_validation_suite=test-fixture-validation-blocked
 validation_output=$(dev_flow_cmd workspace create --workspace-id spec-006-validation --branch "$validation_branch" --owner smoke)
 validation_workspace=$(extract_json_field "$validation_output" workspace_path)
@@ -115,7 +115,7 @@ if ! [ -f "$validation_plan_path" ] || ! [ -f "$validation_audit_root/validation
 fi
 close_workspace spec-006-validation blocked
 
-policy_branch="agent/spec-006-policy-$branch_suffix"
+policy_branch="dev-flow/spec-006-policy-$branch_suffix"
 dev_flow_cmd workspace create --workspace-id spec-006-policy --branch "$policy_branch" --owner smoke >/dev/null
 set +e
 policy_summary=$(
@@ -143,7 +143,7 @@ if ! [ -f "$policy_plan_path" ] || ! [ -f "$policy_audit_root/policy.log" ]; the
 fi
 close_workspace spec-006-policy blocked
 
-shared_escape_branch="agent/spec-006-shared-escape-$branch_suffix"
+shared_escape_branch="dev-flow/spec-006-shared-escape-$branch_suffix"
 shared_escape_output=$(dev_flow_cmd workspace create --workspace-id spec-006-shared-escape --branch "$shared_escape_branch" --owner smoke)
 shared_escape_workspace=$(extract_json_field "$shared_escape_output" workspace_path)
 shared_escape_root=$loop_tmp_dir/shared-escape-root
@@ -176,7 +176,7 @@ if ! [ -f "$shared_escape_plan_path" ] || ! [ -f "$shared_escape_audit_root/revi
   exit 1
 fi
 close_workspace spec-006-shared-escape blocked
-runtime_branch="agent/spec-006-runtime-$branch_suffix"
+runtime_branch="dev-flow/spec-006-runtime-$branch_suffix"
 dev_flow_cmd workspace create --workspace-id spec-006-runtime --branch "$runtime_branch" --owner smoke >/dev/null
 set +e
 runtime_summary=$(
@@ -205,7 +205,7 @@ if ! [ -f "$runtime_plan_path" ] || ! [ -f "$runtime_audit_root/summary.json" ];
 fi
 close_workspace spec-006-runtime blocked
 
-parallel_branch="agent/spec-006-parallel-$branch_suffix"
+parallel_branch="dev-flow/spec-006-parallel-$branch_suffix"
 dev_flow_cmd workspace create --workspace-id spec-006-parallel --branch "$parallel_branch" --owner smoke >/dev/null
 set +e
 parallel_summary=$(

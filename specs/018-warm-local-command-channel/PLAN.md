@@ -11,9 +11,9 @@ Warm non-interactive local command reuse is partially landed. Remaining work is 
 
 ## Implementation slices
 
-### Slice 1: command-agent contract
+### Slice 1: command-service contract
 
-- define the guest-local command-agent interface and request/response file layout
+- define the guest-local command-service interface and request/response file layout
 - align it with current stdout, stderr, attach, and exit-code semantics
 - delete overlapping boot-coupled command materialization where possible
 
@@ -31,7 +31,7 @@ Warm non-interactive local command reuse is partially landed. Remaining work is 
 
 ### Slice 4: snapshot preparation and restore
 
-- add snapshot prepare/restore for the ready local command-agent state
+- add snapshot prepare/restore for the ready local command-service state
 - measure repeated command startup against cold boot
 - keep the snapshot path backend-private to Linux local Cloud Hypervisor
 

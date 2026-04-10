@@ -44,7 +44,7 @@ Without an explicit orchestration layer, Firebreak cannot give external orchestr
 - making guest-launched nested MicroVMs part of the Firebreak product contract
 - distributed scheduling across multiple physical hosts
 - unbounded autoscaling without operator-configured limits
-- redesigning existing single-agent packages such as `firebreak-codex` or `firebreak-claude-code`
+- redesigning existing single-workload packages such as `firebreak-codex` or `firebreak-claude-code`
 - defining every possible external orchestrator integration in the first changeset
 - treating repeated boot-time package installation as the steady-state product contract for attached interactive workers
 
@@ -97,7 +97,7 @@ The intended landing shape is:
 - The system shall validate at least one meaningful post-input state transition for focused interactive packaged-cli acceptance, rather than treating process start plus first output as sufficient proof of usability.
 - The system shall define how orchestrated workers resolve workspace access so the worker can act on the intended project state.
 - The system shall define how orchestrated workers resolve Firebreak config modes and agent-specific config where those differ from the orchestrator VM.
-- The system shall allow existing Firebreak single-agent packages to remain usable outside the orchestration layer.
+- The system shall allow existing Firebreak single-workload packages to remain usable outside the orchestration layer.
 
 ## Recorded decisions
 
@@ -132,7 +132,7 @@ The intended landing shape is:
 - Attached `firebreak` workers expose reviewable machine-readable guest lifecycle state that identifies the last bootstrap and command phases reached.
 - External packaged-cli recipes have a defined bootstrap-readiness contract and can install recipe-owned worker-proxy wrappers without modifying Firebreak core.
 - Worker identity, lifecycle state, and host-owned runtime paths are explicit and reviewable.
-- The first integration path can target an external orchestrator recipe such as [external/agent-orchestrator/flake.nix](../../external/agent-orchestrator/flake.nix) without changing the public names of existing single-agent packages.
+- The first integration path can target an external orchestrator recipe such as [external/agent-orchestrator/flake.nix](../../external/agent-orchestrator/flake.nix) without changing the public names of existing single-workload packages.
 - At least one attached packaged CLI can prove a meaningful post-input interactive state transition through the external orchestrator recipe path, so the system demonstrates usable TUI behavior instead of only startup visibility.
 - The product-layer orchestrator VMs in scope shall keep interactive `codex` working as a protected regression path while shared lifecycle changes continue underneath them.
 - The recipe-authoring UX for exposing sibling-worker commands should use a single higher-level declaration in the common packaged-cli case rather than permanently requiring recipe authors to configure both worker-kind registration and shell-facing proxy installation by hand.
@@ -146,7 +146,7 @@ The intended landing shape is:
 - [ARCHITECTURE.md](../../ARCHITECTURE.md)
 - [AGENTS.md](../../AGENTS.md)
 - [spec 005](../005-isolated-work-tasks/SPEC.md)
-- [spec 008](../008-single-agent-package-mode/SPEC.md)
+- [spec 008](../008-single-local-package-mode/SPEC.md)
 - [spec 009](../009-project-config-and-doctor/SPEC.md)
 - current [modules/profiles/local/host/run-wrapper.sh](../../modules/profiles/local/host/run-wrapper.sh)
 - current [nix/support/projects.nix](../../nix/support/projects.nix)

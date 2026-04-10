@@ -8,14 +8,14 @@ let
   hostRuntimeShareSocket = "hostruntime.sock";
   sharedStateRootShareSocket = "hoststateroot.sock";
   sharedCredentialSlotsShareSocket = "hostcredentialslots.sock";
-  agentToolsShareSocket = "hostagenttools.sock";
+  toolRuntimesShareSocket = "hosttoolruntimes.sock";
   hostMetaMount = "${runtimeHostMount}/meta";
   workerExecOutputMount = "${runtimeHostMount}/exec-output";
   workerBridgeMount = "${runtimeHostMount}/worker-bridge";
   hostMetaFsType = backendSpec.localHostMetaFsType;
 
   baseScriptVars = {
-    "@AGENT_VM_NAME@" = cfg.name;
+    "@WORKLOAD_VM_NAME@" = cfg.name;
     "@BASH@" = "${pkgs.bashInteractive}/bin/bash";
     "@BRANDING_NAME@" = cfg.brandingName;
     "@BRANDING_TAGLINE@" = cfg.brandingTagline;
@@ -25,12 +25,12 @@ let
     "@COLD_EXEC_BOOTSTRAP_WAIT_ENABLED@" = if cfg.coldExecBootstrapWaitEnable then "1" else "0";
     "@DEV_HOME@" = devHome;
     "@DEV_USER@" = cfg.devUser;
-    "@AGENT_COMMAND@" = if cfg.defaultCommand == null then "" else cfg.defaultCommand;
-    "@AGENT_COMMAND_FILE@" = cfg.workerCommandFile;
-    "@AGENT_EXEC_OUTPUT_MOUNT@" = cfg.workerExecOutputMount;
-    "@AGENT_TOOLS_ENABLED@" = if cfg.toolRuntimesEnabled then "1" else "0";
-    "@AGENT_TOOLS_MOUNT@" = cfg.toolRuntimesMount;
-    "@AGENT_SESSION_MODE_FILE@" = cfg.workerSessionModeFile;
+    "@TOOL_COMMAND@" = if cfg.defaultCommand == null then "" else cfg.defaultCommand;
+    "@COMMAND_FILE@" = cfg.workerCommandFile;
+    "@COMMAND_OUTPUT_MOUNT@" = cfg.workerExecOutputMount;
+    "@TOOL_RUNTIMES_ENABLED@" = if cfg.toolRuntimesEnabled then "1" else "0";
+    "@TOOL_RUNTIMES_MOUNT@" = cfg.toolRuntimesMount;
+    "@SESSION_MODE_FILE@" = cfg.workerSessionModeFile;
     "@HOST_META_MOUNT@" = cfg.hostMetaMount;
     "@ID@" = "${pkgs.coreutils}/bin/id";
     "@GROUPMOD@" = "${pkgs.shadow}/bin/groupmod";
@@ -48,7 +48,7 @@ let
     "@RUNUSER@" = "${pkgs.util-linux}/bin/runuser";
     "@SETPRIV@" = "${pkgs.util-linux}/bin/setpriv";
     "@RUNTIME_BACKEND@" = cfg.runtimeBackend;
-    "@SHARED_AGENT_WRAPPER_BIN_DIR@" = cfg.sharedToolWrapperBinDir;
+    "@SHARED_TOOL_WRAPPER_BIN_DIR@" = cfg.sharedToolWrapperBinDir;
     "@USERMOD@" = "${pkgs.shadow}/bin/usermod";
     "@WORKER_BRIDGE_ENABLED@" = if cfg.workerBridgeEnabled then "1" else "0";
     "@WORKER_BRIDGE_MOUNT@" = cfg.workerBridgeMount;
@@ -58,13 +58,13 @@ let
     "@WORKSPACE_MOUNT@" = cfg.workspaceMount;
     "@NETWORK_MAC@" = cfg.macAddress;
   };
-  renderedAgentCommandRequestLib = renderTemplate baseScriptVars ./guest/agent-command-request.sh;
-  renderedAgentCommandStateLib = renderTemplate baseScriptVars ./guest/agent-command-state.sh;
+  renderedWorkerCommandRequestLib = renderTemplate baseScriptVars ./guest/worker-command-request.sh;
+  renderedWorkerCommandStateLib = renderTemplate baseScriptVars ./guest/worker-command-state.sh;
   renderedProfileLib = renderTemplate baseScriptVars ./guest/profile.sh;
   scriptVars = baseScriptVars // {
     "@ADOPT_HOST_IDENTITY_SCRIPT@" = "${adoptHostIdentityScript}";
-    "@FIREBREAK_AGENT_COMMAND_REQUEST_LIB@" = renderedAgentCommandRequestLib;
-    "@FIREBREAK_AGENT_COMMAND_STATE_LIB@" = renderedAgentCommandStateLib;
+    "@FIREBREAK_WORKER_COMMAND_REQUEST_LIB@" = renderedWorkerCommandRequestLib;
+    "@FIREBREAK_WORKER_COMMAND_STATE_LIB@" = renderedWorkerCommandStateLib;
     "@FIREBREAK_PROFILE_LIB@" = renderedProfileLib;
   };
 
@@ -75,10 +75,10 @@ let
       ${renderTemplate scriptVars ./host/runtime-extra-args.sh}
       ${cfg.runtimeExtraArgs}
     '';
-  prepareAgentSessionScript = pkgs.writeShellScript "prepare-agent-session"
-    (renderTemplate scriptVars ./guest/prepare-agent-session.sh);
-  prepareColdAgentExecScript = pkgs.writeShellScript "prepare-cold-agent-exec"
-    (renderTemplate scriptVars ./guest/prepare-cold-agent-exec.sh);
+  prepareWorkerSessionScript = pkgs.writeShellScript "prepare-worker-session"
+    (renderTemplate scriptVars ./guest/prepare-worker-session.sh);
+  prepareColdCommandExecScript = pkgs.writeShellScript "prepare-cold-command-exec"
+    (renderTemplate scriptVars ./guest/prepare-cold-command-exec.sh);
   configureRuntimeNetworkScript = pkgs.writeShellScript "configure-runtime-network"
     (renderTemplate scriptVars ./guest/configure-runtime-network.sh);
   guestEgressRelayProgram = pkgs.writeText "firebreak-cloud-hypervisor-egress-relay.py"
@@ -159,22 +159,22 @@ let
     ];
     text = renderTemplate scriptVars ./guest/firebreak-worker-cli.sh;
   };
-  runAgentExecScript = pkgs.writeShellApplication {
-    name = "firebreak-run-agent-exec";
+  runCommandExecScript = pkgs.writeShellApplication {
+    name = "firebreak-run-command-exec";
     runtimeInputs = with pkgs; [
       bash
       coreutils
       systemd
     ];
-    text = renderTemplate scriptVars ./guest/run-agent-exec.sh;
+    text = renderTemplate scriptVars ./guest/run-command-exec.sh;
   };
-  localCommandAgentScript = pkgs.writeShellScript "firebreak-local-command-agent"
+  localCommandWorkerScript = pkgs.writeShellScript "firebreak-local-command-worker"
     (renderTemplate (scriptVars // {
-      "@RUN_AGENT_EXEC_SCRIPT@" = "${runAgentExecScript}/bin/firebreak-run-agent-exec";
-    }) ./guest/local-command-agent.sh);
+      "@RUN_COMMAND_EXEC_SCRIPT@" = "${runCommandExecScript}/bin/firebreak-run-command-exec";
+    }) ./guest/local-command-worker.sh);
   devConsoleStartScript = pkgs.writeShellScript "dev-console-start"
     (renderTemplate (scriptVars // {
-      "@RUN_AGENT_EXEC_SCRIPT@" = "${runAgentExecScript}/bin/firebreak-run-agent-exec";
+      "@RUN_COMMAND_EXEC_SCRIPT@" = "${runCommandExecScript}/bin/firebreak-run-command-exec";
     }) ./guest/dev-console-start.sh);
   devConsoleConditionScript = pkgs.writeShellScript "firebreak-dev-console-condition" ''
     set -eu
@@ -182,7 +182,7 @@ let
     if [ -r ${lib.escapeShellArg cfg.workerSessionModeFile} ]; then
       session_mode=$(cat ${lib.escapeShellArg cfg.workerSessionModeFile})
     fi
-    [ "$session_mode" != "agent-service" ] && [ "$session_mode" != "agent-exec" ]
+    [ "$session_mode" != "command-service" ] && [ "$session_mode" != "command-exec" ]
   '';
   coldCommandExecConditionScript = pkgs.writeShellScript "firebreak-cold-command-exec-condition" ''
     set -eu
@@ -190,15 +190,15 @@ let
     if [ -r ${lib.escapeShellArg cfg.workerSessionModeFile} ]; then
       session_mode=$(cat ${lib.escapeShellArg cfg.workerSessionModeFile})
     fi
-    [ "$session_mode" = "agent-exec" ]
+    [ "$session_mode" = "command-exec" ]
   '';
-  localCommandAgentConditionScript = pkgs.writeShellScript "firebreak-local-command-agent-condition" ''
+  localCommandWorkerConditionScript = pkgs.writeShellScript "firebreak-local-command-worker-condition" ''
     set -eu
     session_mode=""
     if [ -r ${lib.escapeShellArg cfg.workerSessionModeFile} ]; then
       session_mode=$(cat ${lib.escapeShellArg cfg.workerSessionModeFile})
     fi
-    [ "$session_mode" = "agent-service" ]
+    [ "$session_mode" = "command-service" ]
   '';
   bootstrapEnabled = cfg.bootstrapScript != null;
 in {
@@ -300,7 +300,7 @@ in {
       ];
     };
     fileSystems.${cfg.toolRuntimesMount} = lib.mkIf (cfg.runtimeBackend == "cloud-hypervisor" && cfg.toolRuntimesEnabled) {
-      device = "hostagenttools";
+      device = "hosttoolruntimes";
       fsType = "virtiofs";
       options = [
         "defaults"
@@ -308,13 +308,13 @@ in {
         "x-systemd.after=systemd-modules-load.service"
       ];
     };
-    systemd.services.prepare-agent-session = {
-      description = "Prepare the workspace and agent session paths";
+    systemd.services.prepare-worker-session = {
+      description = "Prepare the workspace and worker session paths";
       wantedBy = [ "firebreak-interactive.target" ];
       before = [
         "dev-bootstrap.service"
         "dev-console.service"
-        "local-command-agent.service"
+        "local-command-worker.service"
       ];
       after = [ "local-fs.target" ];
 
@@ -325,7 +325,7 @@ in {
       ];
 
       serviceConfig = {
-        ExecStart = prepareAgentSessionScript;
+        ExecStart = prepareWorkerSessionScript;
         Type = "oneshot";
         RemainAfterExit = true;
         StandardOutput = "journal+console";
@@ -333,7 +333,7 @@ in {
       };
     };
 
-    systemd.services.prepare-cold-agent-exec = {
+    systemd.services.prepare-cold-command-exec = {
       description = "Prepare minimal guest state for cold non-interactive command execution";
       wantedBy = [ "firebreak-cold-exec.target" ];
       before = [ "cold-command-exec.service" ];
@@ -345,7 +345,7 @@ in {
       ];
 
       serviceConfig = {
-        ExecStart = prepareColdAgentExecScript;
+        ExecStart = prepareColdCommandExecScript;
         Type = "oneshot";
         RemainAfterExit = true;
         StandardOutput = "journal+console";
@@ -411,18 +411,18 @@ in {
     systemd.services.cold-command-exec = {
       description = "Cold non-interactive command execution";
       wantedBy = [ "firebreak-cold-exec.target" ];
-      after = [ "prepare-cold-agent-exec.service" ]
+      after = [ "prepare-cold-command-exec.service" ]
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && needsFullGuestNetwork) "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service";
-      requires = [ "prepare-cold-agent-exec.service" ]
+      requires = [ "prepare-cold-command-exec.service" ]
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && needsFullGuestNetwork) "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service";
 
       serviceConfig = {
         ExecCondition = coldCommandExecConditionScript;
-        ExecStart = "${runAgentExecScript}/bin/firebreak-run-agent-exec";
+        ExecStart = "${runCommandExecScript}/bin/firebreak-run-command-exec";
         Type = "simple";
         WorkingDirectory = devHome;
         StandardOutput = "journal+console";
@@ -449,10 +449,10 @@ in {
 
     systemd.services.dev-bootstrap = lib.mkIf bootstrapEnabled {
       wantedBy = lib.mkForce [ "firebreak-interactive.target" ];
-      after = [ "prepare-agent-session.service" ]
+      after = [ "prepare-worker-session.service" ]
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && needsFullGuestNetwork) "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service";
-      requires = [ "prepare-agent-session.service" ]
+      requires = [ "prepare-worker-session.service" ]
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && needsFullGuestNetwork) "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service";
     };
@@ -467,17 +467,17 @@ in {
         firebreakWorkerLocalHelper
       ]
       ++ [
-        runAgentExecScript
+        runCommandExecScript
       ];
 
     systemd.services.dev-console = {
       description = "Interactive dev shell on ttyS0";
       wantedBy = [ "firebreak-interactive.target" ];
-      after = [ "prepare-agent-session.service" ]
+      after = [ "prepare-worker-session.service" ]
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && needsFullGuestNetwork) "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service";
-      requires = [ "prepare-agent-session.service" ]
+      requires = [ "prepare-worker-session.service" ]
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && needsFullGuestNetwork) "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service";
@@ -502,23 +502,23 @@ in {
       };
     };
 
-    systemd.services.local-command-agent = {
-      description = "Warm local command agent";
+    systemd.services.local-command-worker = {
+      description = "Warm local command worker";
       wantedBy = [ "firebreak-interactive.target" ];
-      after = [ "prepare-agent-session.service" ]
+      after = [ "prepare-worker-session.service" ]
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && needsFullGuestNetwork) "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service"
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
-      requires = [ "prepare-agent-session.service" ]
+      requires = [ "prepare-worker-session.service" ]
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && needsFullGuestNetwork) "configure-runtime-network.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && cfg.guestEgress.enable) "guest-egress-proxy.service"
         ++ lib.optional (cfg.runtimeBackend == "cloud-hypervisor" && guestPublishedTcpPorts != [ ]) "guest-port-publish-relay.service"
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
 
       serviceConfig = {
-        ExecCondition = localCommandAgentConditionScript;
-        ExecStart = localCommandAgentScript;
+        ExecCondition = localCommandWorkerConditionScript;
+        ExecStart = localCommandWorkerScript;
         Restart = "always";
         RestartSec = 1;
         Type = "simple";
@@ -568,9 +568,9 @@ in {
       ++ lib.optionals (cfg.runtimeBackend == "cloud-hypervisor" && cfg.toolRuntimesEnabled) [
         {
           proto = "virtiofs";
-          tag = "hostagenttools";
-          socket = agentToolsShareSocket;
-          source = "/run/firebreak/hostagenttools";
+          tag = "hosttoolruntimes";
+          socket = toolRuntimesShareSocket;
+          source = "/run/firebreak/hosttoolruntimes";
           mountPoint = cfg.toolRuntimesMount;
         }
       ]

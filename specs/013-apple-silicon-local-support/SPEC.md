@@ -68,7 +68,7 @@ The intended landing shape is:
 - The system shall preserve the existing Linux local public contract while adding a separate Apple Silicon local runtime path.
 - When Firebreak runs on Apple Silicon, the system shall use host-readiness checks that match the macOS local runtime instead of Linux `/dev/kvm` checks.
 - The system shall use share semantics for Apple Silicon local support that are compatible with `vfkit`.
-- The system shall provide a minimum viable first launch path that supports interactive local launch, shell mode, workspace sharing, agent config sharing, and one-shot agent command execution on Apple Silicon.
+- The system shall provide a minimum viable first launch path that supports interactive local launch, shell mode, workspace sharing, tool state sharing, and one-shot tool command execution on Apple Silicon.
 - If Firebreak is launched on `x86_64-darwin`, then the system shall fail clearly because Intel Mac support is out of scope.
 - If Firebreak is launched on macOS for cloud execution paths, then the system shall fail clearly because cloud macOS support is out of scope.
 - The system shall keep cloud workload packages and cloud validation Linux-only.
@@ -79,7 +79,7 @@ The intended landing shape is:
 - on an Apple Silicon Mac, `nix run .#firebreak-codex` reaches the local agent entry path through a `vfkit`-based runtime.
 - on an Apple Silicon Mac, `FIREBREAK_LAUNCH_MODE=shell nix run .#firebreak-codex` reaches the maintenance shell.
 - on an Apple Silicon Mac, the local workspace path is shared into the guest and remains usable for interactive work.
-- on an Apple Silicon Mac, the local agent config path is shared into the guest when the selected config mode requires it.
+- on an Apple Silicon Mac, the local tool state path is shared into the guest when the selected state mode requires it.
 - on an Apple Silicon Mac, one-shot agent command execution still works for a simple command such as `--version`.
 - launcher and diagnostics behavior distinguish Apple Silicon local readiness from Linux KVM readiness.
 - Linux local documentation and behavior continue to describe one QEMU-backed Linux local path rather than a generalized runtime-selection surface.

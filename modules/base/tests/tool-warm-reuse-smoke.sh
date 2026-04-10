@@ -12,7 +12,7 @@ fi
 
 firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
 mkdir -p "$firebreak_tmp_root"
-smoke_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-agent-warm-reuse.XXXXXX")
+smoke_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-tool-warm-reuse.XXXXXX")
 workspace_dir=$smoke_tmp_dir/workspace
 state_root=$smoke_tmp_dir/state
 firebreak_state_dir=$state_root
@@ -30,9 +30,9 @@ cleanup() {
   if [ "$status" -eq 0 ]; then
     rm -rf "$smoke_tmp_dir"
   else
-    echo "@AGENT_DISPLAY_NAME@ warm reuse smoke preserved artifacts under: $smoke_tmp_dir" >&2
+    echo "@TOOL_DISPLAY_NAME@ warm reuse smoke preserved artifacts under: $smoke_tmp_dir" >&2
     if [ -n "$instance_dir" ] && [ -d "$instance_dir" ]; then
-      echo "@AGENT_DISPLAY_NAME@ warm reuse smoke preserved instance dir: $instance_dir" >&2
+      echo "@TOOL_DISPLAY_NAME@ warm reuse smoke preserved instance dir: $instance_dir" >&2
     fi
   fi
 
@@ -72,7 +72,7 @@ require_version_output() {
       ;;
     *)
       printf '%s\n' "$output" >&2
-      echo "@AGENT_DISPLAY_NAME@ warm reuse smoke did not print a recognizable version string" >&2
+      echo "@TOOL_DISPLAY_NAME@ warm reuse smoke did not print a recognizable version string" >&2
       exit 1
       ;;
   esac
@@ -85,7 +85,7 @@ run_version_command() {
       FIREBREAK_STATE_ROOT="$state_root" \
       FIREBREAK_STATE_DIR="$firebreak_state_dir" \
       FIREBREAK_DEBUG_KEEP_RUNTIME=0 \
-      @AGENT_PACKAGE_BIN@ --version 2>&1
+      @WORKLOAD_PACKAGE_BIN@ --version 2>&1
   )
 }
 
@@ -112,7 +112,7 @@ require_version_output "$first_output"
 instance_dir=$(find "$state_root/instances" -mindepth 1 -maxdepth 1 -type d | head -n 1)
 if [ -z "$instance_dir" ] || ! [ -d "$instance_dir" ]; then
   find "$state_root" -maxdepth 3 -print >&2 || true
-  echo "@AGENT_DISPLAY_NAME@ warm reuse smoke did not create a stable instance dir" >&2
+  echo "@TOOL_DISPLAY_NAME@ warm reuse smoke did not create a stable instance dir" >&2
   exit 1
 fi
 
@@ -122,27 +122,27 @@ controller_runtime_dir_file=$controller_state_dir/runtime-dir
 
 if ! [ -r "$controller_pid_file" ] || ! [ -r "$controller_runtime_dir_file" ]; then
   find "$instance_dir" -maxdepth 3 -print >&2 || true
-  echo "@AGENT_DISPLAY_NAME@ warm reuse smoke did not record controller state" >&2
+  echo "@TOOL_DISPLAY_NAME@ warm reuse smoke did not record controller state" >&2
   exit 1
 fi
 
 controller_pid=$(cat "$controller_pid_file")
 runtime_dir_first=$(cat "$controller_runtime_dir_file")
 if ! kill -0 "$controller_pid" 2>/dev/null; then
-  echo "@AGENT_DISPLAY_NAME@ warm reuse smoke found a dead controller pid after the first run" >&2
+  echo "@TOOL_DISPLAY_NAME@ warm reuse smoke found a dead controller pid after the first run" >&2
   exit 1
 fi
 
-if ! [ -d "$runtime_dir_first/o" ] || ! [ -f "$runtime_dir_first/o/command-agent-ready" ]; then
+if ! [ -d "$runtime_dir_first/o" ] || ! [ -f "$runtime_dir_first/o/command-service-ready" ]; then
   find "$runtime_dir_first" -maxdepth 3 -print >&2 || true
-  echo "@AGENT_DISPLAY_NAME@ warm reuse smoke did not preserve a ready command-agent runtime" >&2
+  echo "@TOOL_DISPLAY_NAME@ warm reuse smoke did not preserve a ready command-service runtime" >&2
   exit 1
 fi
 
 request_id_first=$(read_json_field "$runtime_dir_first/o/request.json" "request_id")
 if [ -z "$request_id_first" ]; then
   cat "$runtime_dir_first/o/request.json" >&2 || true
-  echo "@AGENT_DISPLAY_NAME@ warm reuse smoke did not capture the first request id" >&2
+  echo "@TOOL_DISPLAY_NAME@ warm reuse smoke did not capture the first request id" >&2
   exit 1
 fi
 
@@ -152,24 +152,24 @@ require_version_output "$second_output"
 controller_pid_second=$(cat "$controller_pid_file")
 runtime_dir_second=$(cat "$controller_runtime_dir_file")
 if [ "$controller_pid_second" != "$controller_pid" ]; then
-  echo "@AGENT_DISPLAY_NAME@ warm reuse smoke respawned the controller instead of reusing it" >&2
+  echo "@TOOL_DISPLAY_NAME@ warm reuse smoke respawned the controller instead of reusing it" >&2
   exit 1
 fi
 
 if [ "$runtime_dir_second" != "$runtime_dir_first" ]; then
-  echo "@AGENT_DISPLAY_NAME@ warm reuse smoke replaced the controller runtime instead of reusing it" >&2
+  echo "@TOOL_DISPLAY_NAME@ warm reuse smoke replaced the controller runtime instead of reusing it" >&2
   exit 1
 fi
 
 if ! kill -0 "$controller_pid_second" 2>/dev/null; then
-  echo "@AGENT_DISPLAY_NAME@ warm reuse smoke found a dead controller pid after the second run" >&2
+  echo "@TOOL_DISPLAY_NAME@ warm reuse smoke found a dead controller pid after the second run" >&2
   exit 1
 fi
 
 request_id_second=$(read_json_field "$runtime_dir_second/o/request.json" "request_id")
 if [ -z "$request_id_second" ] || [ "$request_id_second" = "$request_id_first" ]; then
   cat "$runtime_dir_second/o/request.json" >&2 || true
-  echo "@AGENT_DISPLAY_NAME@ warm reuse smoke did not record a distinct second request id" >&2
+  echo "@TOOL_DISPLAY_NAME@ warm reuse smoke did not record a distinct second request id" >&2
   exit 1
 fi
 
@@ -177,10 +177,10 @@ command_state_path=$runtime_dir_second/o/command-state.json
 command_state_request_id=$(read_json_field "$command_state_path" "request_id" 2>/dev/null || true)
 if ! [ -f "$command_state_path" ] || [ "$command_state_request_id" != "$request_id_second" ]; then
   cat "$command_state_path" >&2 || true
-  echo "@AGENT_DISPLAY_NAME@ warm reuse smoke did not persist the second command state" >&2
+  echo "@TOOL_DISPLAY_NAME@ warm reuse smoke did not persist the second command state" >&2
   exit 1
 fi
 
 printf '%s\n' "first-run: $first_output"
 printf '%s\n' "second-run: $second_output"
-printf '%s\n' "@AGENT_DISPLAY_NAME@ warm reuse smoke test passed"
+printf '%s\n' "@TOOL_DISPLAY_NAME@ warm reuse smoke test passed"

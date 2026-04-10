@@ -56,7 +56,7 @@ wait_for_status() {
   for _ in $(seq 1 600); do
     inspect_output=$(
       FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-        @AGENT_BIN@ worker inspect "$worker_id" || true
+        @TOOL_BIN@ worker inspect "$worker_id" || true
     )
     if printf '%s\n' "$inspect_output" | grep -F -q "$status_pattern"; then
       printf '%s' "$inspect_output"
@@ -77,7 +77,7 @@ run_version() {
     FIREBREAK_FLAKE_REF="path:@REPO_ROOT@" \
     FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG=1 \
     FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
-    @AGENT_BIN@ worker run --backend firebreak --kind smoke-firebreak-claude-version --workspace "$workspace_dir" --package firebreak-claude-code --json -- --version
+    @TOOL_BIN@ worker run --backend firebreak --kind smoke-firebreak-claude-version --workspace "$workspace_dir" --package firebreak-claude-code --json -- --version
 }
 
 assert_version_worker() {
@@ -111,7 +111,7 @@ assert_version_worker() {
 
   logs_output=$(
     FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-      @AGENT_BIN@ worker logs "$worker_id"
+      @TOOL_BIN@ worker logs "$worker_id"
   )
 
   if ! printf '%s\n' "$logs_output" | grep -F -q 'Claude Code'; then
@@ -135,7 +135,7 @@ assert_version_worker "$second_run_output"
 
 debug_output=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ worker debug --json
+    @TOOL_BIN@ worker debug --json
 )
 
 if ! printf '%s\n' "$debug_output" | grep -F -q '"last_trace_event": "command-exit:0"'; then

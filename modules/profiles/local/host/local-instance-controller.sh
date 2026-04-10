@@ -1,6 +1,6 @@
 # This file is meant to be sourced, not executed.
 # Callers are expected to provide runner_workdir, runtime_backend, control_socket,
-# agent_session_mode, instance_ephemeral, and related wrapper state before using
+# session_mode, instance_ephemeral, and related wrapper state before using
 # local_controller_mode and local_controller_trace helpers.
 
 local_controller_mode=${FIREBREAK_LOCAL_CONTROLLER_MODE:-client}
@@ -68,7 +68,7 @@ local_controller_matches_build_id() {
 local_controller_should_dispatch() {
   [ "$local_controller_mode" = "client" ] || return 1
   [ "$runtime_backend" = "cloud-hypervisor" ] || return 1
-  [ "$agent_session_mode" = "agent-exec" ] || return 1
+  [ "$session_mode" = "command-exec" ] || return 1
   [ "$instance_ephemeral" != "1" ] || return 1
 }
 
@@ -86,7 +86,7 @@ local_controller_wait_for_ready() {
 
     controller_runtime_dir=$(local_controller_runtime_dir 2>/dev/null || true)
     if [ -n "$controller_runtime_dir" ] \
-      && [ -r "$controller_runtime_dir/o/command-agent-ready" ] \
+      && [ -r "$controller_runtime_dir/o/command-service-ready" ] \
       && [ -S "$control_socket" ]; then
       local_controller_trace "warm-controller-ready:$controller_runtime_dir"
       return 0
@@ -143,7 +143,7 @@ local_controller_ensure_running() {
   local_controller_trace "warm-controller-spawn"
   setsid env \
     FIREBREAK_INSTANCE_DIR="$runner_workdir" \
-    FIREBREAK_AGENT_SESSION_MODE_OVERRIDE=agent-service \
+    FIREBREAK_SESSION_MODE_OVERRIDE=command-service \
     FIREBREAK_LOCAL_CONTROLLER_MODE=daemon \
     FIREBREAK_DEBUG_KEEP_RUNTIME=1 \
     "$0" >"$local_controller_spawn_log" 2>&1 < /dev/null &
@@ -219,12 +219,12 @@ local_controller_write_request() {
   capture_systemd_profile=${FIREBREAK_CAPTURE_SYSTEMD_PROFILE:-${FIREBREAK_PRINT_PROFILE:-0}}
   firebreak_write_command_request \
     "$controller_exec_output_dir" \
-    "agent-exec" \
-    "$agent_command_override" \
+    "command-exec" \
+    "$command_override" \
     "$host_cwd" \
-    "$agent_term" \
-    "$agent_columns" \
-    "$agent_lines" \
+    "$session_term" \
+    "$session_columns" \
+    "$session_lines" \
     "$capture_systemd_profile"
   controller_request_id=$command_request_id
 }

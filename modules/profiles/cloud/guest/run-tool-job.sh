@@ -1,32 +1,32 @@
 set -eu
 
-prompt_file=@AGENT_PROMPT_FILE@
-stdout_path=@AGENT_EXEC_OUTPUT_MOUNT@/stdout
-stderr_path=@AGENT_EXEC_OUTPUT_MOUNT@/stderr
-exit_code_path=@AGENT_EXEC_OUTPUT_MOUNT@/exit_code
+prompt_file=@TOOL_PROMPT_FILE@
+stdout_path=@COMMAND_OUTPUT_MOUNT@/stdout
+stderr_path=@COMMAND_OUTPUT_MOUNT@/stderr
+exit_code_path=@COMMAND_OUTPUT_MOUNT@/exit_code
 command_file=$(mktemp)
 trap 'rm -f "$command_file"' EXIT INT TERM
 
 cat >"$command_file" <<'EOF'
-@AGENT_PROMPT_COMMAND@
+@TOOL_PROMPT_COMMAND@
 EOF
 
 if ! [ -s "$command_file" ]; then
-  echo "agent prompt execution is not configured for this VM" >&2
+  echo "tool prompt execution is not configured for this VM" >&2
   exit 1
 fi
 
 if ! [ -r "$prompt_file" ]; then
-  echo "agent prompt file is missing: $prompt_file" >&2
+  echo "tool prompt file is missing: $prompt_file" >&2
   exit 1
 fi
 
-FIREBREAK_AGENT_PROMPT=$(@CAT@ "$prompt_file")
-if [ -z "$FIREBREAK_AGENT_PROMPT" ]; then
-  echo "agent prompt is empty" >&2
+FIREBREAK_TOOL_PROMPT=$(@CAT@ "$prompt_file")
+if [ -z "$FIREBREAK_TOOL_PROMPT" ]; then
+  echo "tool prompt is empty" >&2
   exit 1
 fi
-export FIREBREAK_AGENT_PROMPT
+export FIREBREAK_TOOL_PROMPT
 
 rm -f "$stdout_path" "$stderr_path" "$exit_code_path"
 

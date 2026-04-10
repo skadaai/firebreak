@@ -277,9 +277,9 @@ set +e
 # shellcheck disable=SC2016
 setsid env \
   MICROVM_WORKSPACE_SOCKET="$workspace_socket" \
-  MICROVM_AGENT_JOB_INPUT_DIR="$input_dir" \
+  MICROVM_TOOL_JOB_INPUT_DIR="$input_dir" \
   MICROVM_SHARED_STATE_ROOT_SOCKET="$config_socket" \
-  MICROVM_AGENT_EXEC_OUTPUT_SOCKET="$output_socket" \
+  MICROVM_COMMAND_OUTPUT_SOCKET="$output_socket" \
   sh -c 'cd "$1" && exec "$2"' sh "$runner_workdir" @RUNNER@ >"$job_state_dir/runner.stdout" 2>"$runner_stderr_log" &
 runner_pid=$!
 set -e

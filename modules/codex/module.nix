@@ -1,10 +1,10 @@
 moduleArgs@{ pkgs, ... }:
-(import ../packaged-agent/module.nix moduleArgs) {
+(import ../packaged-tool/module.nix moduleArgs) {
   vmName = "firebreak-codex";
   displayName = "Codex";
   binName = "codex";
   package = pkgs.codex;
-  promptCommand = ''codex exec "$FIREBREAK_AGENT_PROMPT"'';
+  promptCommand = ''codex exec "$FIREBREAK_TOOL_PROMPT"'';
   configSelectorPrefix = "CODEX";
   configSubdir = "codex";
   configExports = ''

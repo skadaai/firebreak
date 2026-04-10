@@ -1,5 +1,5 @@
 # shellcheck shell=sh
-profile_guest_events_file=@AGENT_EXEC_OUTPUT_MOUNT@/profile-guest.tsv
+profile_guest_events_file=@COMMAND_OUTPUT_MOUNT@/profile-guest.tsv
 
 firebreak_profile_now_ms() {
   date -u +%s%3N
@@ -15,7 +15,7 @@ firebreak_profile_guest_mark() {
   profile_phase=$2
   profile_detail=${3:-}
 
-  if ! [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
+  if ! [ -d @COMMAND_OUTPUT_MOUNT@ ]; then
     return 0
   fi
 

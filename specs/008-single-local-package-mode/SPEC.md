@@ -7,12 +7,12 @@ last_updated: 2026-03-23
 
 ## Problem
 
-Firebreak currently ships two public local-launch packages per agent:
+Firebreak currently ships two public local-launch packages per workload:
 
 - a regular package such as `firebreak-codex`
 - a shell package such as `firebreak-codex-shell`
 
-Those packages boot the same VM and differ only in the default agent session mode passed into the local wrapper.
+Those packages boot the same VM and differ only in the default tool session mode passed into the local wrapper.
 
 That makes the public surface larger than the product behavior actually is, and it teaches users to think in package variants instead of one VM package with explicit launch modes.
 
@@ -26,7 +26,7 @@ That makes the public surface larger than the product behavior actually is, and 
 
 - ship one public local-launch package per workload
 - keep shell mode available behind an explicit semantic override
-- preserve the default regular agent launch behavior
+- preserve the default regular tool launch behavior
 - update smoke coverage and docs to validate the single-package model
 
 ## Non-goals

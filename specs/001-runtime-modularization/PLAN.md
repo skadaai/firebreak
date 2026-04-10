@@ -21,7 +21,7 @@ last_updated: 2026-03-19
 
 ## Dependencies
 
-- existing local smoke coverage in [agent-smoke.sh](./modules/base/tests/agent-smoke.sh)
+- existing local smoke coverage in [tool-smoke.sh](./modules/base/tests/tool-smoke.sh)
 - the current assembly model in [flake.nix](./flake.nix)
 
 ## Current status

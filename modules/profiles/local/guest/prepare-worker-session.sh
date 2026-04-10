@@ -1,10 +1,10 @@
 set -eu
 
-@FIREBREAK_AGENT_COMMAND_REQUEST_LIB@
+@FIREBREAK_WORKER_COMMAND_REQUEST_LIB@
 @FIREBREAK_PROFILE_LIB@
 
 metadata=@HOST_META_MOUNT@/mount-path
-session_mode=agent
+session_mode=tool
 session_command_file=@HOST_META_MOUNT@/worker-command
 session_mode_file=@HOST_META_MOUNT@/worker-session-mode
 session_term_file=@HOST_META_MOUNT@/worker-term
@@ -12,8 +12,8 @@ session_columns_file=@HOST_META_MOUNT@/worker-columns
 session_lines_file=@HOST_META_MOUNT@/worker-lines
 worker_mode_file=@HOST_META_MOUNT@/worker-mode
 worker_modes_file=@HOST_META_MOUNT@/worker-modes
-agent_tools_enabled=@AGENT_TOOLS_ENABLED@
-agent_tools_mount=@AGENT_TOOLS_MOUNT@
+tool_runtimes_enabled=@TOOL_RUNTIMES_ENABLED@
+tool_runtimes_mount=@TOOL_RUNTIMES_MOUNT@
 start_dir=@WORKSPACE_MOUNT@
 worker_bridge_enabled=@WORKER_BRIDGE_ENABLED@
 guest_state_dir=/run/firebreak-worker
@@ -36,21 +36,21 @@ log_phase() {
   phase=$1
   timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   printf '%s %s\n' "[firebreak-session]" "$timestamp $phase"
-  firebreak_profile_guest_mark prepare-agent-session "$phase"
+  firebreak_profile_guest_mark prepare-worker-session "$phase"
 }
 
 sync_guest_state_files() {
-  if ! [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
+  if ! [ -d @COMMAND_OUTPUT_MOUNT@ ]; then
     return 0
   fi
   mkdir -p "$guest_state_dir"
   printf '%s\n' '{}' > "$bootstrap_state_local"
   printf '%s\n' '{}' > "$command_state_local"
   chmod 0644 "$bootstrap_state_local" "$command_state_local"
-  rm -f @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
-  cp "$bootstrap_state_local" @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json
-  cp "$command_state_local" @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
-  chmod 0666 @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
+  rm -f @COMMAND_OUTPUT_MOUNT@/bootstrap-state.json @COMMAND_OUTPUT_MOUNT@/command-state.json
+  cp "$bootstrap_state_local" @COMMAND_OUTPUT_MOUNT@/bootstrap-state.json
+  cp "$command_state_local" @COMMAND_OUTPUT_MOUNT@/command-state.json
+  chmod 0666 @COMMAND_OUTPUT_MOUNT@/bootstrap-state.json @COMMAND_OUTPUT_MOUNT@/command-state.json
 }
 
 if ! [ -d @WORKSPACE_MOUNT@ ]; then
@@ -63,11 +63,11 @@ if ! [ -r "$metadata" ]; then
   exit 1
 fi
 
-log_phase prepare-agent-session-start
-log_phase prepare-agent-session-adopt-host-identity-start
+log_phase prepare-worker-session-start
+log_phase prepare-worker-session-adopt-host-identity-start
 @ADOPT_HOST_IDENTITY_SCRIPT@
-log_phase prepare-agent-session-adopt-host-identity-done
-log_phase prepare-agent-session-metadata-ready
+log_phase prepare-worker-session-adopt-host-identity-done
+log_phase prepare-worker-session-metadata-ready
 candidate=$(cat "$metadata")
 if [ -z "$candidate" ]; then
   echo "host cwd metadata file is empty: $metadata" >&2
@@ -79,7 +79,7 @@ if [ -r "$session_mode_file" ]; then
   session_mode=$(cat "$session_mode_file")
 fi
 
-if [ "$session_mode" = "agent-exec" ] || [ "$session_mode" = "agent-attach-exec" ]; then
+if [ "$session_mode" = "command-exec" ] || [ "$session_mode" = "command-attach-exec" ]; then
   ensure_command_request_loaded
   request_command_present=1
   session_mode=$command_request_session_mode
@@ -91,23 +91,23 @@ fi
 printf '%s\n' "$start_dir" > @START_DIR_FILE@
 chmod 0644 @START_DIR_FILE@
 
-printf '%s\n' "$session_mode" > @AGENT_SESSION_MODE_FILE@
-chmod 0644 @AGENT_SESSION_MODE_FILE@
+printf '%s\n' "$session_mode" > @SESSION_MODE_FILE@
+chmod 0644 @SESSION_MODE_FILE@
 
-if [ "$session_mode" = "agent-exec" ] || [ "$session_mode" = "agent-attach-exec" ] || [ "$session_mode" = "agent-service" ]; then
-  log_phase prepare-agent-session-exec-output-ready-check
-  if ! [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
-    echo "agent exec output share is unavailable at @AGENT_EXEC_OUTPUT_MOUNT@" >&2
+if [ "$session_mode" = "command-exec" ] || [ "$session_mode" = "command-attach-exec" ] || [ "$session_mode" = "command-service" ]; then
+  log_phase prepare-worker-session-exec-output-ready-check
+  if ! [ -d @COMMAND_OUTPUT_MOUNT@ ]; then
+    echo "command output share is unavailable at @COMMAND_OUTPUT_MOUNT@" >&2
     exit 1
   fi
   sync_guest_state_files
-  if [ "$session_mode" != "agent-service" ]; then
-    printf '%s\n' "prepare-agent-session-mounted-exec-output" > @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
-    chmod 0666 @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
+  if [ "$session_mode" != "command-service" ]; then
+    printf '%s\n' "prepare-worker-session-mounted-exec-output" > @COMMAND_OUTPUT_MOUNT@/attach_stage
+    chmod 0666 @COMMAND_OUTPUT_MOUNT@/attach_stage
   fi
 fi
 
-log_phase prepare-agent-session-state-dir-start
+log_phase prepare-worker-session-state-dir-start
 mkdir -p "$guest_state_dir"
 @CHOWN@ @DEV_USER@:@DEV_USER@ "$guest_state_dir"
 if [ -e "$bootstrap_state_local" ]; then
@@ -122,7 +122,7 @@ rm -f \
   "$session_lines_state_file" \
   "$worker_mode_state_file" \
   "$worker_modes_state_file"
-log_phase prepare-agent-session-state-dir-done
+log_phase prepare-worker-session-state-dir-done
 if [ "$request_command_present" = "1" ] && [ -n "${command_request_term:-}" ]; then
   printf '%s\n' "$command_request_term" > "$session_term_state_file"
   chmod 0644 "$session_term_state_file"
@@ -153,20 +153,20 @@ if [ -r "$worker_modes_file" ]; then
   chmod 0644 "$worker_modes_state_file"
 fi
 
-if [ "$agent_tools_enabled" = "1" ]; then
-  log_phase prepare-agent-session-mount-agent-tools-start
-  mkdir -p "$agent_tools_mount"
-  if ! mountpoint -q "$agent_tools_mount"; then
-    if ! mount -t virtiofs -o exec hostagenttools "$agent_tools_mount"; then
-      echo "failed to mount host agent tools share" >&2
+if [ "$tool_runtimes_enabled" = "1" ]; then
+  log_phase prepare-worker-session-mount-tool-runtimes-start
+  mkdir -p "$tool_runtimes_mount"
+  if ! mountpoint -q "$tool_runtimes_mount"; then
+    if ! mount -t virtiofs -o exec hosttoolruntimes "$tool_runtimes_mount"; then
+      echo "failed to mount host tool runtimes share" >&2
       exit 1
     fi
   fi
-  log_phase prepare-agent-session-mount-agent-tools-done
+  log_phase prepare-worker-session-mount-tool-runtimes-done
 fi
 
 if [ "$worker_bridge_enabled" = "1" ]; then
-  log_phase prepare-agent-session-worker-bridge-ready-check
+  log_phase prepare-worker-session-worker-bridge-ready-check
   if ! [ -d @WORKER_BRIDGE_MOUNT@ ]; then
     echo "Firebreak worker bridge share is unavailable at @WORKER_BRIDGE_MOUNT@" >&2
     exit 1
@@ -174,29 +174,29 @@ if [ "$worker_bridge_enabled" = "1" ]; then
 fi
 
 if [ "$request_command_present" = "1" ]; then
-  log_phase prepare-agent-session-command-request-start
-  printf '%s\n' "$command_request_command" > @AGENT_COMMAND_FILE@
-  chmod 0644 @AGENT_COMMAND_FILE@
+  log_phase prepare-worker-session-command-request-start
+  printf '%s\n' "$command_request_command" > @COMMAND_FILE@
+  chmod 0644 @COMMAND_FILE@
   sync_guest_state_files
-  if [ "$session_mode" = "agent-attach-exec" ]; then
-    printf '%s\n' "prepare-agent-session-command-ready" > @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
-    chmod 0666 @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
+  if [ "$session_mode" = "command-attach-exec" ]; then
+    printf '%s\n' "prepare-worker-session-command-ready" > @COMMAND_OUTPUT_MOUNT@/attach_stage
+    chmod 0666 @COMMAND_OUTPUT_MOUNT@/attach_stage
   fi
-  log_phase prepare-agent-session-command-request-done
+  log_phase prepare-worker-session-command-request-done
 elif [ -r "$session_command_file" ]; then
-  log_phase prepare-agent-session-command-file-start
-  cat "$session_command_file" > @AGENT_COMMAND_FILE@
-  chmod 0644 @AGENT_COMMAND_FILE@
+  log_phase prepare-worker-session-command-file-start
+  cat "$session_command_file" > @COMMAND_FILE@
+  chmod 0644 @COMMAND_FILE@
   sync_guest_state_files
-  if [ "$session_mode" = "agent-attach-exec" ]; then
-    printf '%s\n' "prepare-agent-session-command-ready" > @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
-    chmod 0666 @AGENT_EXEC_OUTPUT_MOUNT@/attach_stage
+  if [ "$session_mode" = "command-attach-exec" ]; then
+    printf '%s\n' "prepare-worker-session-command-ready" > @COMMAND_OUTPUT_MOUNT@/attach_stage
+    chmod 0666 @COMMAND_OUTPUT_MOUNT@/attach_stage
   fi
-  log_phase prepare-agent-session-command-file-done
+  log_phase prepare-worker-session-command-file-done
 fi
 
 if [ "$start_dir" != "@WORKSPACE_MOUNT@" ]; then
-  log_phase prepare-agent-session-bind-workspace-start
+  log_phase prepare-worker-session-bind-workspace-start
   if [ -L "$start_dir" ]; then
     rm -f "$start_dir"
   fi
@@ -221,7 +221,7 @@ if [ "$start_dir" != "@WORKSPACE_MOUNT@" ]; then
 
     ln -s @WORKSPACE_MOUNT@ "$start_dir"
   fi
-  log_phase prepare-agent-session-bind-workspace-done
+  log_phase prepare-worker-session-bind-workspace-done
 fi
 
 if [ "@SHARED_STATE_ROOT_ENABLED@" = "1" ]; then
@@ -252,4 +252,4 @@ if [ "@SHARED_CREDENTIAL_SLOTS_ENABLED@" = "1" ]; then
     exit 1
   fi
 fi
-log_phase prepare-agent-session-done
+log_phase prepare-worker-session-done

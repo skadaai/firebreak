@@ -4,8 +4,8 @@ set -eu
 dev_home=@DEV_HOME@
 dev_user=@DEV_USER@
 tool_home=$dev_home
-if [ -d @AGENT_TOOLS_MOUNT@ ]; then
-  tool_home=@AGENT_TOOLS_MOUNT@
+if [ -d @TOOL_RUNTIMES_MOUNT@ ]; then
+  tool_home=@TOOL_RUNTIMES_MOUNT@
 fi
 
 local_bin="$tool_home/.local/bin"
@@ -25,7 +25,7 @@ bootstrap_lock_path="$tool_home/.firebreak-bootstrap.lock"
 bootstrap_lock_acquired=0
 bootstrap_state_dir=/run/firebreak-worker
 bootstrap_state_path="$bootstrap_state_dir/bootstrap-state.json"
-shared_bootstrap_state_path="@AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json"
+shared_bootstrap_state_path="@COMMAND_OUTPUT_MOUNT@/bootstrap-state.json"
 shared_tool_home=0
 if [ "$tool_home" != "$dev_home" ]; then
   shared_tool_home=1
@@ -50,13 +50,13 @@ write_bootstrap_state() {
   "phase": "$(json_escape "$bootstrap_phase")",
   "status": "$(json_escape "$bootstrap_status")",
   "detail": "$(json_escape "$bootstrap_detail")",
-  "agent_bin": "@BIN_NAME@",
+  "tool_bin": "@BIN_NAME@",
   "package_spec": "$(json_escape "$package_spec")",
   "install_state_id": "$(json_escape "$install_state_id")",
   "updated_at": "$updated_at"
 }
 EOF
-  if [ -d "@AGENT_EXEC_OUTPUT_MOUNT@" ]; then
+  if [ -d "@COMMAND_OUTPUT_MOUNT@" ]; then
     cp "$bootstrap_state_path" "$shared_bootstrap_state_path" 2>/dev/null || true
   fi
 }

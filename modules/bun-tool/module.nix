@@ -75,14 +75,14 @@ let
   scriptVars = {
     "@DEV_HOME@" = devHome;
     "@DEV_USER@" = cfg.devUser;
-    "@AGENT_BIN@" = binName;
-    "@AGENT_PACKAGE_SPEC@" = packageSpec;
+    "@TOOL_BIN@" = binName;
+    "@TOOL_PACKAGE_SPEC@" = packageSpec;
     "@STATE_ENV_EXPORTS@" = configExports;
     "@STATE_MODE_SELECTOR_VAR@" = "${configSelectorPrefix}_STATE_MODE";
     "@STATE_SUBDIR@" = configSubdir;
-    "@AGENT_DISPLAY_NAME@" = displayName;
-    "@AGENT_EXEC_OUTPUT_MOUNT@" = cfg.workerExecOutputMount;
-    "@AGENT_TOOLS_MOUNT@" = toolsMount;
+    "@TOOL_DISPLAY_NAME@" = displayName;
+    "@COMMAND_OUTPUT_MOUNT@" = cfg.workerExecOutputMount;
+    "@TOOL_RUNTIMES_MOUNT@" = toolsMount;
     "@BOOTSTRAP_READY_MARKER@" = bootstrapReadyMarker;
   };
 in {

@@ -13,7 +13,7 @@ firebreak_render_project_config_template() {
 # Real environment variables override values in this file.
 
 # Shared runtime-state mode for local workload VMs.
-# Native project config such as .codex/ or .claude/ still comes from the workspace:
+# Native tool state such as .codex/ or .claude/ still comes from the workspace:
 FIREBREAK_STATE_MODE=host
 
 # Public local launch selector:
@@ -216,7 +216,7 @@ firebreak_init_collect_interactive_answers() {
     firebreak_init_prompt_choice \
       "Select the default local launch mode" \
       "1" \
-      "run|run: launch the agent by default" \
+      "run|run: launch the tool by default" \
       "shell|shell: enter the maintenance shell by default"
   )
 

@@ -26,7 +26,7 @@ last_updated: 2026-03-23
 
 - current local wrapper in [modules/profiles/local/host/run-wrapper.sh](../../modules/profiles/local/host/run-wrapper.sh)
 - local guest launch script in [modules/profiles/local/guest/dev-console-start.sh](../../modules/profiles/local/guest/dev-console-start.sh)
-- smoke harness in [modules/base/tests/agent-smoke.sh](../../modules/base/tests/agent-smoke.sh)
+- smoke harness in [modules/base/tests/tool-smoke.sh](../../modules/base/tests/tool-smoke.sh)
 - flake package wiring in [flake.nix](../../flake.nix)
 
 ## Current status

@@ -12,7 +12,7 @@ fi
 
 firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
 mkdir -p "$firebreak_tmp_root"
-smoke_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-agent-version.XXXXXX")
+smoke_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-tool-version.XXXXXX")
 runtime_root=$smoke_tmp_dir/runtime
 runtime_dir=""
 
@@ -22,9 +22,9 @@ cleanup() {
   if [ "$status" -eq 0 ]; then
     rm -rf "$smoke_tmp_dir"
   else
-    echo "@AGENT_DISPLAY_NAME@ version smoke preserved artifacts under: $smoke_tmp_dir" >&2
+    echo "@TOOL_DISPLAY_NAME@ version smoke preserved artifacts under: $smoke_tmp_dir" >&2
     if [ -n "$runtime_dir" ] && [ -d "$runtime_dir" ]; then
-      echo "@AGENT_DISPLAY_NAME@ version smoke preserved runtime dir: $runtime_dir" >&2
+      echo "@TOOL_DISPLAY_NAME@ version smoke preserved runtime dir: $runtime_dir" >&2
     fi
   fi
   exit "$status"
@@ -62,14 +62,14 @@ output=$(
     FIREBREAK_DEBUG_KEEP_RUNTIME=1 \
     FIREBREAK_INSTANCE_EPHEMERAL=1 \
     FIREBREAK_TMPDIR="$runtime_root" \
-    @AGENT_PACKAGE_BIN@ --version 2>&1
+    @WORKLOAD_PACKAGE_BIN@ --version 2>&1
 )
 command_status=$?
 set -e
 
 if [ "$command_status" -ne 0 ]; then
   printf '%s\n' "$output" >&2
-  echo "@AGENT_DISPLAY_NAME@ version smoke command failed" >&2
+  echo "@TOOL_DISPLAY_NAME@ version smoke command failed" >&2
   exit "$command_status"
 fi
 
@@ -78,7 +78,7 @@ case "$output" in
     ;;
   *)
     printf '%s\n' "$output" >&2
-    echo "@AGENT_DISPLAY_NAME@ version smoke did not print a recognizable version string" >&2
+    echo "@TOOL_DISPLAY_NAME@ version smoke did not print a recognizable version string" >&2
     exit 1
     ;;
 esac
@@ -86,28 +86,28 @@ esac
 runtime_dir=$(printf '%s\n' "$output" | sed -n 's/^keeping Firebreak runtime directory: //p' | tail -n 1)
 if [ -z "$runtime_dir" ] || ! [ -d "$runtime_dir" ]; then
   printf '%s\n' "$output" >&2
-  echo "@AGENT_DISPLAY_NAME@ version smoke did not preserve a reviewable runtime dir" >&2
+  echo "@TOOL_DISPLAY_NAME@ version smoke did not preserve a reviewable runtime dir" >&2
   exit 1
 fi
 
 bootstrap_state_path=$runtime_dir/o/bootstrap-state.json
 if ! [ -f "$bootstrap_state_path" ]; then
   find "$runtime_dir" -maxdepth 2 -type f -print >&2 || true
-  echo "@AGENT_DISPLAY_NAME@ version smoke did not expose bootstrap-state.json" >&2
+  echo "@TOOL_DISPLAY_NAME@ version smoke did not expose bootstrap-state.json" >&2
   exit 1
 fi
 
 command_state_path=$runtime_dir/o/command-state.json
 if ! [ -f "$command_state_path" ]; then
   find "$runtime_dir" -maxdepth 2 -type f -print >&2 || true
-  echo "@AGENT_DISPLAY_NAME@ version smoke did not expose command-state.json" >&2
+  echo "@TOOL_DISPLAY_NAME@ version smoke did not expose command-state.json" >&2
   exit 1
 fi
 
 command_request_path=$runtime_dir/o/request.json
 if ! [ -f "$command_request_path" ]; then
   find "$runtime_dir" -maxdepth 2 -type f -print >&2 || true
-  echo "@AGENT_DISPLAY_NAME@ version smoke did not expose request.json" >&2
+  echo "@TOOL_DISPLAY_NAME@ version smoke did not expose request.json" >&2
   exit 1
 fi
 
@@ -124,7 +124,7 @@ PY
 
 if ! grep -F -q '"phase": "command-exit"' "$command_state_path"; then
   cat "$command_state_path" >&2
-  echo "@AGENT_DISPLAY_NAME@ version smoke did not report command-exit command state" >&2
+  echo "@TOOL_DISPLAY_NAME@ version smoke did not report command-exit command state" >&2
   exit 1
 fi
 
@@ -144,7 +144,7 @@ PY
 if [ "${FIREBREAK_PRINT_PROFILE:-0}" = "1" ]; then
   profile_summary_path=$runtime_dir/profile-summary.json
   if [ -f "$profile_summary_path" ]; then
-    printf '\n%s\n' "@AGENT_DISPLAY_NAME@ cold-boot profile:"
+    printf '\n%s\n' "@TOOL_DISPLAY_NAME@ cold-boot profile:"
     cat "$profile_summary_path"
   else
     @PYTHON3@ @PROFILE_SUMMARY_SCRIPT@ "$runtime_dir"

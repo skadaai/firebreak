@@ -133,7 +133,7 @@ The intended landing shape is:
 - [ARCHITECTURE.md](../../ARCHITECTURE.md)
 - [AGENTS.md](../../AGENTS.md)
 - [spec 009](../009-project-config-and-doctor/SPEC.md)
-- [spec 014](../014-multi-agent-host-config-share/SPEC.md)
+- [spec 014](../014-shared-state-root/SPEC.md)
 - current [modules/profiles/local/host/run-wrapper.sh](../../modules/profiles/local/host/run-wrapper.sh)
 - current [modules/base/guest/resolve-state-root.sh](../../modules/base/guest/resolve-state-root.sh)
 

@@ -76,7 +76,7 @@ The harness belongs above the VM runtime boundary. It should consume Firebreak r
 - [spec 001](../001-runtime-modularization/SPEC.md)
 - [spec 002](../002-cloud-execution-profile/SPEC.md)
 - [spec 003](../003-remote-job-host/SPEC.md)
-- [agent-smoke.sh](../../modules/base/tests/agent-smoke.sh)
+- [tool-smoke.sh](../../modules/base/tests/tool-smoke.sh)
 - [test-smoke-cloud-job.sh](../../modules/profiles/cloud/tests/test-smoke-cloud-job.sh)
 - [vm-smoke workflow](../../.github/workflows/vm-smoke.yml)
 

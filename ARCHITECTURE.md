@@ -50,9 +50,9 @@ Do not use `config` when the concept is really persistent runtime state.
   - [`module.nix`](./modules/profiles/cloud/module.nix): cloud guest behavior layered over the shared runtime.
   - [`host/`](./modules/profiles/cloud/host): cloud host-side runtime argument helpers.
   - [`guest/`](./modules/profiles/cloud/guest): cloud guest-side task preparation and job execution helpers.
-- [`modules/packaged-agent/`](./modules/packaged-agent): legacy path name for shared implementation of image-baked tool CLIs.
-  - [`module.nix`](./modules/packaged-agent/module.nix): common overlay logic for those packaged tools.
-  - [`guest/`](./modules/packaged-agent/guest): guest shell-init templates for packaged tools.
+- [`modules/packaged-tool/`](./modules/packaged-tool): shared implementation of image-baked tool CLIs.
+  - [`module.nix`](./modules/packaged-tool/module.nix): common overlay logic for those packaged tools.
+  - [`guest/`](./modules/packaged-tool/guest): guest shell-init templates for packaged tools.
 - [`modules/node-cli/`](./modules/node-cli): shared implementation for npm-installed Node CLI sandboxes.
   - [`module.nix`](./modules/node-cli/module.nix): common Node CLI overlay logic.
   - [`guest/`](./modules/node-cli/guest): guest bootstrap and shell-init templates for packaged Node CLIs.
@@ -69,7 +69,7 @@ Do not use `config` when the concept is really persistent runtime state.
 - `modules/base` owns the shared guest runtime, common VM settings, reusable shell behavior, and generic smoke validation.
 - `modules/profiles/local` owns local-only launch behavior such as dynamic host cwd sharing, host identity adoption, task preparation, and the interactive console.
 - `modules/profiles/cloud` owns cloud-only guest behavior such as fixed workspace semantics, prompt-driven tool execution, and non-interactive job completion.
-- `modules/packaged-agent` owns the shared contract for tools baked into the VM image, including state-root resolution and tool-specific environment exports.
+- `modules/packaged-tool` owns the shared contract for tools baked into the VM image, including state-root resolution and tool-specific environment exports.
 - `modules/node-cli` owns the shared contract for npm-installed packaged CLIs, including bootstrap, persistent install state, and project launch helpers.
 - `modules/node-cli` also owns the generic packaged-node bootstrap readiness contract (`firebreak-bootstrap-wait`) and declarative extra wrapper installation for recipe-owned CLI aliases such as worker proxies.
 - on the local Cloud Hypervisor path, packaged Node CLI delivery should prefer host-seeded shared tool runtimes over guest-time installation on the interactive shell critical path.
@@ -89,7 +89,7 @@ External recipes should stay declarative and thin.
 
 ## Adding A New Tool Workload
 
-1. Decide whether the workload fits an existing shared family such as [`modules/packaged-agent/`](./modules/packaged-agent).
+1. Decide whether the workload fits an existing shared family such as [`modules/packaged-tool/`](./modules/packaged-tool).
 2. Add a new module directory, for example `modules/my-tool/`.
 3. Create `modules/my-tool/module.nix` as a thin overlay over the shared family module.
 4. Add flake wiring for:

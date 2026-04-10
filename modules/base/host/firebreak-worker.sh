@@ -930,7 +930,7 @@ if [ "\$attach_mode" = "1" ]; then
       \${forwarded_lines:+LINES="\$forwarded_lines"} \
       FIREBREAK_INSTANCE_DIR="\$instance_dir" \
       FIREBREAK_LAUNCH_MODE="\$launch_mode" \
-      FIREBREAK_AGENT_SESSION_MODE_OVERRIDE="agent-attach-exec" \
+      FIREBREAK_SESSION_MODE_OVERRIDE="command-attach-exec" \
       bash -c '
       child_pid_path=\$1
       shift
@@ -946,7 +946,7 @@ if [ "\$attach_mode" = "1" ]; then
       \${forwarded_lines:+LINES="\$forwarded_lines"} \
       FIREBREAK_INSTANCE_DIR="\$instance_dir" \
       FIREBREAK_LAUNCH_MODE="\$launch_mode" \
-      FIREBREAK_AGENT_SESSION_MODE_OVERRIDE="agent-attach-exec" \
+      FIREBREAK_SESSION_MODE_OVERRIDE="command-attach-exec" \
       bash -c '
       child_pid_path=\$1
       shift
@@ -1762,9 +1762,9 @@ def nested_runtime_snapshot(worker_dir: Path):
         "runner_stdout_log",
         "runner_stderr_log",
         "virtiofs_hostcwd_log",
-        "virtiofs_agent_config_log",
-        "virtiofs_agent_exec_log",
-        "virtiofs_agent_tools_log",
+        "virtiofs_runtime_config_log",
+        "virtiofs_command_output_log",
+        "virtiofs_tool_runtimes_log",
         "virtiofs_worker_bridge_log",
         "worker_bridge_server_log",
     ]
@@ -1783,25 +1783,25 @@ def nested_runtime_snapshot(worker_dir: Path):
     snapshot["log_tails"] = log_tails
     snapshot["log_sizes"] = log_sizes
 
-    agent_exec_output_dir = metadata.get("agent_exec_output_dir")
-    if agent_exec_output_dir:
-        agent_exec_dir = Path(agent_exec_output_dir)
-        agent_exec = {}
+    command_output_dir = metadata.get("command_output_dir")
+    if command_output_dir:
+        command_output_root = Path(command_output_dir)
+        command_output = {}
         for name in ["attach_stage", "exit_code", "stdout", "stderr", "command-processes.txt", "command-tty.txt", "interactive-echo.log"]:
-            path = agent_exec_dir / name
+            path = command_output_root / name
             if path.exists():
                 key_name = name.replace("-", "_").replace(".txt", "").replace(".log", "")
-                agent_exec[f"{key_name}_size"] = file_size(str(path))
+                command_output[f"{key_name}_size"] = file_size(str(path))
                 text = tail_text(path, line_count=20)
                 if text:
-                    agent_exec[f"{key_name}_tail"] = text
+                    command_output[f"{key_name}_tail"] = text
         for name in ["bootstrap-state.json", "command-state.json"]:
-            path = agent_exec_dir / name
+            path = command_output_root / name
             value = maybe_load_json(path)
             if value is not None:
-                agent_exec[name.replace("-", "_").replace(".json", "")] = value
-        if agent_exec:
-            snapshot["agent_exec_output"] = agent_exec
+                command_output[name.replace("-", "_").replace(".json", "")] = value
+        if command_output:
+            snapshot["command_output"] = command_output
     return snapshot
 
 
@@ -2142,8 +2142,8 @@ for item in json.loads(os.environ["WORKERS_JSON"]):
             print(f"  {key}:")
             for line in str(tail).splitlines():
                 print(f"    {line}")
-        agent_exec_output = nested_runtime.get("agent_exec_output") or {}
-        for key, value in agent_exec_output.items():
+        command_output = nested_runtime.get("command_output") or {}
+        for key, value in command_output.items():
             if key in {"bootstrap_state", "command_state"} and isinstance(value, dict):
                 phase = value.get("phase")
                 status = value.get("status")
@@ -2166,11 +2166,11 @@ for item in json.loads(os.environ["WORKERS_JSON"]):
                     print(f"  {prefix}_updated_at: {updated_at}")
                 continue
             if key.endswith("_tail"):
-                print(f"  agent_exec_{key}:")
+                print(f"  command_output_{key}:")
                 for line in str(value).splitlines():
                     print(f"    {line}")
             else:
-                print(f"  agent_exec_{key}: {value}")
+                print(f"  command_output_{key}: {value}")
     trace_tail = item.get("trace_tail")
     if trace_tail:
         print("  trace_tail:")

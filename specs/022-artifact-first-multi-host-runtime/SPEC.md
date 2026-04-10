@@ -27,6 +27,7 @@ For Firebreak to become an easier-to-use alternative to Docker and general virtu
 - keep host-specific runtime logic thin and focused on launch, mounts, networking, and UX
 - let `x86_64-linux`, `aarch64-linux`, and `aarch64-darwin` consume the same guest-architecture-specific Linux artifacts where semantics match
 - make Apple Silicon local runtime validation prove real VM boot behavior instead of only host-entry behavior once artifact consumption exists
+- make any temporary CI coverage reductions for missing host or provider capabilities explicitly temporary, with restoration of full supported-runtime coverage required once those capabilities exist
 - preserve Firebreak's fail-fast runtime boundaries and explicit platform contracts
 - keep local source builds and advanced builder wiring available without making them the default product path
 
@@ -179,6 +180,7 @@ It should not default to "try to build Linux guest closures on a non-Linux host 
 - Firebreak shall preserve explicit failure when a host runtime cannot satisfy its backend requirements.
 - Firebreak shall continue to allow advanced source-build workflows, but those workflows shall not define the default product experience.
 - Firebreak shall let CI test host-runtime behavior separately from guest-artifact production where that separation reduces duplicated work without hiding incompatibilities.
+- Firebreak shall treat temporary CI reductions caused by missing provider or host capabilities as implementation gaps to be removed once the required capability becomes available.
 
 ## CI and validation implications
 
@@ -205,6 +207,7 @@ This means:
 - `aarch64-linux` CI should run real KVM-backed Firebreak guest boots
 - `aarch64-darwin` CI should eventually run real `vfkit` boots against prebuilt Linux guest artifacts
 - Darwin CI should stop pretending to validate guest construction locally once artifact consumption is the intended product path
+- if current CI infrastructure cannot yet satisfy one of those host-runtime paths, the reduced coverage must be recorded as temporary and the implementation plan must include restoring the missing end-to-end coverage when the capability is available
 
 ## Proposed implementation shape
 
@@ -235,6 +238,7 @@ This means:
 - Linux CI produces and validates guest artifacts
 - host-specific CI validates consumption paths
 - scheduled sweeps can still run broader host coverage, but against published or prebuilt guest artifacts where appropriate
+- provider or runner capability probes may be used to fail early and diagnose infrastructure regressions, but they shall not redefine the long-term supported-runtime coverage target
 
 ## Acceptance criteria
 
@@ -243,6 +247,7 @@ This means:
 - `aarch64-darwin` can boot and run a Firebreak workload through `vfkit` using a prebuilt `aarch64-linux` guest artifact without requiring local Darwin guest construction.
 - package-specific customization continues to flow through additive environment overlays rather than per-package full guest images.
 - CI can separately validate guest-artifact production and host-runtime consumption without losing end-to-end host confidence.
+- CI and workflow policy make it explicit that reduced host-runtime coverage caused by missing KVM, missing `vfkit` execution, or similar provider limits is temporary and must be restored once the underlying capability is ready.
 - the default product path on a fresh supported host is closer to "fetch and boot" than to "construct a Linux guest from source on this machine".
 
 ## Dependencies and risks

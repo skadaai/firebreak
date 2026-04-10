@@ -35,6 +35,7 @@ Firebreak needs an equivalent package-authoring model, but it should fit Firebre
 - preserve a small number of Firebreak-owned boot bases and guest artifact families
 - allow broad package customization through additive declarations
 - keep package definitions declarative, inspectable, and cache-friendly
+- ensure workload metadata is rich enough for CI to temporarily narrow coverage when infrastructure capabilities are missing and then automatically restore the full supported matrix when those capabilities become available
 
 ## Non-goals
 
@@ -159,6 +160,7 @@ The manifest should declare or point at its validation contract:
 - smoke packages
 - representative coverage class
 - host-system support
+- capability-dependent end-to-end expectations for supported hosts
 
 That makes ecosystem growth easier to reason about in CI and diagnostics.
 
@@ -266,6 +268,7 @@ It should not imply publication of a distinct full guest OS image unless a futur
 - Firebreak shall not require package authors to define bespoke guest images for ordinary workload differentiation.
 - Firebreak shall fail explicitly when a package requests capabilities or runtime combinations that Firebreak cannot satisfy.
 - Firebreak shall preserve room for specialized packages later, but those exceptions shall require an explicit Firebreak-level contract instead of silently expanding the package surface.
+- Firebreak shall expose enough manifest-aligned validation metadata for CI to distinguish between temporary infrastructure capability gaps and the intended long-term supported test matrix.
 
 ## Proposed implementation shape
 
@@ -289,6 +292,7 @@ It should not imply publication of a distinct full guest OS image unless a futur
 
 - let CI selection reason about workload capabilities and support matrices through manifest-aligned metadata
 - keep package growth manageable without hand-maintained workflow lists
+- make it possible to restore broader host and architecture coverage by changing capability availability rather than hand-editing per-workflow package lists
 
 ### 5. Keep exceptions explicit
 
@@ -301,6 +305,7 @@ It should not imply publication of a distinct full guest OS image unless a futur
 - Package authors can define a workload in terms of runtime class, boot base, overlays, and capabilities without forking Firebreak runtime internals.
 - Multiple workloads can reuse the same Firebreak-owned guest artifact family while differing only in overlays, launch command, and capability declarations.
 - Diagnostics and CI can inspect workload-manifest identity rather than reverse-engineering package behavior from ad hoc wrappers.
+- CI can narrow coverage temporarily when a host or provider capability is absent and then expand back to the declared supported matrix once that capability becomes available, without redesigning package metadata.
 - The repository has a clear basis for future ecosystem package helpers that does not special-case `codex` and `claude` as the permanent model.
 
 ## Dependencies and risks

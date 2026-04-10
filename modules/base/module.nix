@@ -39,6 +39,7 @@ let
         (renderTemplate {
           "@FIREBREAK_SHARED_STATE_ROOT_LIB@" = sharedStateRootsLib;
           "@FIREBREAK_SHARED_CREDENTIAL_SLOT_LIB@" = builtins.readFile ./guest/shared-credential-slots.sh;
+          "@PYTHON3@" = "${pkgs.python3}/bin/python3";
           "@WRAPPER_NAME@" = wrapperName;
           "@WRAPPER_DISPLAY_NAME@" = wrapper.displayName;
           "@REAL_BIN_NAME@" = wrapper.realBinName;

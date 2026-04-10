@@ -55,15 +55,24 @@ guest_script=$workspace_dir/guest-bridge-interactive-check.sh
 cat >"$guest_script" <<'EOF'
 set -eu
 
-python3 - <<'PY'
+/run/current-system/sw/bin/python3 - <<'PY'
 import os
 import pty
 import select
 import sys
 import time
 
+firebreak_bin = "/run/current-system/sw/bin/firebreak"
+python3_bin = "/run/current-system/sw/bin/python3"
+
+if not os.access(firebreak_bin, os.X_OK):
+    raise SystemExit(f"interactive guest bridge smoke missing firebreak CLI at {firebreak_bin}")
+
+if not os.access(python3_bin, os.X_OK):
+    raise SystemExit(f"interactive guest bridge smoke missing python3 at {python3_bin}")
+
 command = [
-    "firebreak",
+    firebreak_bin,
     "worker",
     "run",
     "--kind",

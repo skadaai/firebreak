@@ -17,13 +17,13 @@ def pump_bidirectional(left: socket.socket, right: socket.socket) -> None:
     selector.register(right, selectors.EVENT_READ, left)
 
     try:
-      while True:
-        ready = selector.select()
-        if not ready:
-          continue
-        for key, _events in ready:
-          source = key.fileobj
-          target = key.data
+        while True:
+            ready = selector.select()
+            if not ready:
+                continue
+            for key, _events in ready:
+                source = key.fileobj
+                target = key.data
                 try:
                     chunk = source.recv(65536)
                 except OSError:
@@ -35,7 +35,7 @@ def pump_bidirectional(left: socket.socket, right: socket.socket) -> None:
                 except OSError:
                     return
     finally:
-      selector.close()
+        selector.close()
 
 
 class ThreadingTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):

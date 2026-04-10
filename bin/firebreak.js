@@ -159,12 +159,6 @@ const runCommandRequiresNix = () => {
   return true;
 }
 
-const internalCommandRequiresNix = () => (
-  topLevelCommand === "internal" &&
-  !HELP_COMMANDS.has(args[1] || "") &&
-  (args[1] || "") !== ""
-)
-
 const commandRequiresNix = () => {
   if (LOCAL_ONLY_COMMANDS.has(topLevelCommand)) {
     return false
@@ -172,10 +166,6 @@ const commandRequiresNix = () => {
 
   if (topLevelCommand === "run") {
     return runCommandRequiresNix()
-  }
-
-  if (topLevelCommand === "internal") {
-    return internalCommandRequiresNix()
   }
 
   return true

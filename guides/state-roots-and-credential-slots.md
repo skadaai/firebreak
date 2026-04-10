@@ -36,6 +36,12 @@ Firebreak selects this with the state-mode env vars:
 - `CODEX_STATE_MODE`
 - `CLAUDE_STATE_MODE`
 
+Precedence rule:
+
+- tool-specific selectors win over the global selector
+- `CODEX_STATE_MODE` overrides `FIREBREAK_STATE_MODE`
+- `CLAUDE_STATE_MODE` overrides `FIREBREAK_STATE_MODE`
+
 Supported modes:
 
 - `host`: shared host-backed runtime state
@@ -61,6 +67,12 @@ Firebreak selects these with:
 - `CODEX_CREDENTIAL_SLOT`
 - `CLAUDE_CREDENTIAL_SLOT`
 
+Precedence rule:
+
+- tool-specific selectors win over the global selector
+- `CODEX_CREDENTIAL_SLOT` overrides `FIREBREAK_CREDENTIAL_SLOT`
+- `CLAUDE_CREDENTIAL_SLOT` overrides `FIREBREAK_CREDENTIAL_SLOT`
+
 The shared host root defaults to:
 
 - `~/.firebreak/credentials`
@@ -68,6 +80,15 @@ The shared host root defaults to:
 Override it with:
 
 - `FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH`
+
+When you override the host path, replace `~/.firebreak/credentials` in the examples below with `${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH}`.
+
+Each selected slot is just a named subdirectory under that root.
+
+Examples:
+
+- `${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-~/.firebreak/credentials}/default/codex/auth.json`
+- `${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-~/.firebreak/credentials}/backup/claude/.credentials.json`
 
 ## What `workspace` means
 
@@ -124,6 +145,121 @@ Inside that guest:
 codex --version
 claude --version
 ```
+
+## Full login cycle
+
+The important rule is: log into the selected slot directly through Firebreak.
+
+Do not run a login outside Firebreak and then manually copy files into place unless you have to.
+
+### Codex login into a slot
+
+Select a slot and run the native Codex login through Firebreak:
+
+```sh
+FIREBREAK_STATE_MODE=host \
+FIREBREAK_CREDENTIAL_SLOT=default \
+nix run .#firebreak-codex -- login
+```
+
+Or open the VM first and then log in inside it:
+
+```sh
+FIREBREAK_STATE_MODE=host \
+FIREBREAK_CREDENTIAL_SLOT=default \
+FIREBREAK_LAUNCH_MODE=shell \
+nix run .#firebreak-codex
+```
+
+Inside the VM:
+
+```sh
+codex login
+```
+
+Firebreak detects the native login command and temporarily materializes the selected slot as the login target.
+
+After a successful login, the credential file should live at:
+
+```sh
+${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-~/.firebreak/credentials}/default/codex/auth.json
+```
+
+If you override the host credential root, replace `~/.firebreak/credentials` with `${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH}`.
+
+### Claude Code login into a slot
+
+Use the selected slot and run Claude's native login through Firebreak:
+
+```sh
+FIREBREAK_STATE_MODE=host \
+FIREBREAK_CREDENTIAL_SLOT=backup \
+nix run .#firebreak-claude-code -- auth login
+```
+
+Or from an interactive Firebreak shell:
+
+```sh
+FIREBREAK_STATE_MODE=host \
+FIREBREAK_CREDENTIAL_SLOT=backup \
+FIREBREAK_LAUNCH_MODE=shell \
+nix run .#firebreak-claude-code
+```
+
+Inside the VM:
+
+```sh
+claude auth login
+```
+
+After a successful login, the credential file should live at:
+
+```sh
+${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-~/.firebreak/credentials}/backup/claude/.credentials.json
+```
+
+If you override the host credential root, replace `~/.firebreak/credentials` with `${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH}`.
+
+### API-key slot flow
+
+API-key tools do not need a browser login flow.
+Write the key into the selected slot file, then launch the tool with that slot selected.
+
+Examples:
+
+```sh
+mkdir -p "${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-$HOME/.firebreak/credentials}/default/codex"
+printf '%s\n' 'sk-...' > "${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-$HOME/.firebreak/credentials}/default/codex/OPENAI_API_KEY"
+chmod 600 "${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-$HOME/.firebreak/credentials}/default/codex/OPENAI_API_KEY"
+```
+
+If you override the host credential root, use `${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH}` instead of `~/.firebreak/credentials`.
+
+```sh
+mkdir -p "${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-$HOME/.firebreak/credentials}/backup/claude"
+printf '%s\n' 'sk-ant-...' > "${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-$HOME/.firebreak/credentials}/backup/claude/ANTHROPIC_API_KEY"
+chmod 600 "${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-$HOME/.firebreak/credentials}/backup/claude/ANTHROPIC_API_KEY"
+```
+
+If you override the host credential root, use `${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH}` instead of `~/.firebreak/credentials`.
+
+Then launch with the matching slot:
+
+```sh
+CODEX_CREDENTIAL_SLOT=default nix run .#firebreak-codex
+CLAUDE_CREDENTIAL_SLOT=backup nix run .#firebreak-claude-code
+```
+
+### Verify the result
+
+After logging in, you can inspect the selected slot on the host:
+
+```sh
+find "${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-$HOME/.firebreak/credentials}/default" -maxdepth 3 -type f | sort
+find "${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-$HOME/.firebreak/credentials}/backup" -maxdepth 3 -type f | sort
+```
+
+If you override the host credential root, these commands will automatically use `${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH}`.
 
 ## Practical rule
 

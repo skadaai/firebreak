@@ -2,13 +2,13 @@ name: "worker"
 kind: "role"
 selection: "exclusive"
 role_scope: "single-slice"
-description: "Implements one bounded Firebreak slice inside an active task."
-when: "Use as the active role when a bounded slice is ready for code changes."
+description: "Implements one bounded dev-flow slice inside an active workspace."
+when: "Use as the active role only after the owning spec, workspace decision, and expected validation are already explicit. Do not use it to discover the slice or to coordinate multiple unrelated slices."
 inherits:
   - "base"
 requires_runtime_profile: true
 runtime_overlay_group: "runtime"
 skills:
-  - "firebreak-work-task"
-  - "firebreak-change-loop"
-  - "firebreak-validation"
+  - "dev-flow-workspace"
+  - "dev-flow-change-loop"
+  - "dev-flow-validation"

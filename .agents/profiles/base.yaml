@@ -1,7 +1,7 @@
 name: "base"
 kind: "base"
 selection: "implicit"
-description: "Shared Firebreak safety rules that attach to every active role."
-when: "Apply automatically with every active Firebreak role. Do not select it as the only profile."
+description: "Shared dev-flow safety rules that attach to every active role."
+when: "Apply automatically with every active role. Do not select it as the only profile."
 skills:
-  - "firebreak-boundaries"
+  - "dev-flow-boundaries"

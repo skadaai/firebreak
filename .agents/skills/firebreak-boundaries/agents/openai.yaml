@@ -1,6 +1,0 @@
-interface:
-  display_name: "Firebreak Boundaries"
-  short_description: "Enforce explicit write scope, shared-path boundaries, and workspace isolation"
-  default_prompt: "Use $firebreak-boundaries before an autonomous workspace touches files, shared directories, or parallel execution. Declare write scope, verify shared-path resolution, and stop if a boundary or budget would be exceeded."
-policy:
-  allow_implicit_invocation: false

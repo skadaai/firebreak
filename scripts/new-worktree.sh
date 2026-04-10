@@ -32,11 +32,14 @@ fi
 
 root="$(git -C "$script_dir/.." rev-parse --show-toplevel)"
 base_ref="$(resolve_base_ref)"
+if [[ -n "${DEV_FLOW_BASE_REF:-}" ]]; then
+  base_ref="$DEV_FLOW_BASE_REF"
+fi
 if [[ -n "$worktree_name" ]]; then
-  worktree_parent="${FIREBREAK_TASK_WORKTREE_ROOT:-${FIREBREAK_WORKTREE_ROOT:-}}"
+  worktree_parent="${DEV_FLOW_WORKSPACE_ROOT:-}"
 else
   worktree_name="$branch"
-  worktree_parent="${FIREBREAK_TASK_WORKTREE_ROOT:-${FIREBREAK_WORKTREE_ROOT:-}}"
+  worktree_parent="${DEV_FLOW_WORKSPACE_ROOT:-}"
 fi
 
 if [[ -z "$worktree_parent" ]]; then
@@ -44,13 +47,13 @@ if [[ -z "$worktree_parent" ]]; then
   if [[ -w "$sibling_parent" ]]; then
     worktree_parent="$sibling_parent"
   else
-    state_root="${FIREBREAK_TASK_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/firebreak/tasks}"
-    worktree_parent="$state_root/worktrees"
+    state_root="${DEV_FLOW_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/firebreak_dev-flow/workspaces}"
+    worktree_parent="$state_root/checkouts"
   fi
 fi
 
 mkdir -p "$worktree_parent"
-shared_root="${FIREBREAK_TASK_SHARED_ROOT:-${FIREBREAK_WORKTREE_SHARED_ROOT:-$worktree_parent}}"
+shared_root="${DEV_FLOW_SHARED_ROOT:-$worktree_parent}"
 
 log "Repo root: $root"
 log "Worktree parent: $worktree_parent"

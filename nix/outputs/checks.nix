@@ -8,6 +8,10 @@
 {
   firebreak-internal-runner-codex = self.packages.${system}.firebreak-internal-runner-codex;
   firebreak-codex-system = localVmArtifacts.firebreak-codex.nixosConfiguration.config.system.build.toplevel;
+  dev-flow-test-smoke-cli-surface = self.packages.${system}.dev-flow-test-smoke-cli-surface;
+  dev-flow-test-smoke-loop = self.packages.${system}.dev-flow-test-smoke-loop;
+  dev-flow-test-smoke-validate = self.packages.${system}.dev-flow-test-smoke-validate;
+  dev-flow-test-smoke-workspace = self.packages.${system}.dev-flow-test-smoke-workspace;
   firebreak-test-smoke-codex = self.packages.${system}.firebreak-test-smoke-codex;
   firebreak-test-smoke-codex-version = self.packages.${system}.firebreak-test-smoke-codex-version;
   firebreak-test-smoke-codex-warm-reuse = self.packages.${system}.firebreak-test-smoke-codex-warm-reuse;
@@ -22,9 +26,6 @@
   firebreak-test-smoke-port-publish-runtime = self.packages.${system}.firebreak-test-smoke-port-publish-runtime;
   firebreak-test-smoke-npx-launcher = self.packages.${system}.firebreak-test-smoke-npx-launcher;
   firebreak-test-smoke-project-config-and-doctor = self.packages.${system}.firebreak-test-smoke-project-config-and-doctor;
-  firebreak-test-smoke-internal-loop = self.packages.${system}.firebreak-test-smoke-internal-loop;
-  firebreak-test-smoke-internal-task = self.packages.${system}.firebreak-test-smoke-internal-task;
-  firebreak-test-smoke-internal-validate = self.packages.${system}.firebreak-test-smoke-internal-validate;
   firebreak-test-smoke-worker = self.packages.${system}.firebreak-test-smoke-worker;
   firebreak-test-smoke-worker-firebreak-attach = self.packages.${system}.firebreak-test-smoke-worker-firebreak-attach;
   firebreak-test-smoke-worker-claude-version = self.packages.${system}.firebreak-test-smoke-worker-claude-version;

@@ -21,7 +21,34 @@ firebreak run codex --worker-mode codex=vm --worker-mode claude=local
 firebreak run claude-code -- --help
 ```
 
-`firebreak vms` lists the public VM workloads. `firebreak run <vm>` launches one of them through the existing Firebreak VM packages.
+`firebreak vms` lists the public VM workloads. `firebreak run <vm>` launches one of them through the existing Firebreak VM packages. The public `firebreak` CLI does not expose agent workflow plumbing.
+
+## dev-flow CLI
+
+Use `dev-flow` for agent-oriented development flow commands such as isolated workspace management, validation, and bounded attempts.
+
+```sh
+nix run .#dev-flow -- workspace create --workspace-id spec-005-main --branch agent/spec-005-main
+nix run .#dev-flow -- validate run test-smoke-codex
+nix run .#dev-flow -- loop run --workspace-id spec-005-main --spec specs/005-isolated-work-tasks/SPEC.md --plan "..." --validation-suite test-smoke-codex-version
+```
+
+Use one workspace per spec line. Reuse that workspace for sequential work on the same spec, and start a new workspace when the work moves to a different spec or unrelated maintenance line.
+
+## Agent Workflow
+
+This repository uses a `dev-flow-*` internal skill surface for autonomous work. Start with [dev-flow-autonomous-flow](./.agents/skills/dev-flow-autonomous-flow/SKILL.md), then let it route into the narrower skills for spec selection, workspace choice, boundaries, validation, and review.
+
+The corresponding profile layer under [`.agents/profiles/`](./.agents/profiles) is also aligned to the new names:
+
+- `planner` uses `dev-flow-spec-driving`
+- `worker` uses `dev-flow-workspace`, `dev-flow-change-loop`, and `dev-flow-validation`
+- `reviewer` uses `dev-flow-review`
+- `validator` uses `dev-flow-validation`
+- `local-operator` and `cloud-operator` use `dev-flow-runtime-profile`
+- `orchestrator` uses `dev-flow-autonomous-flow` for multi-slice coordination
+
+For role-selection guidance and profile preconditions, see [ROLE_SELECTION.md](./.agents/profiles/ROLE_SELECTION.md).
 
 For packaged node-cli VMs that expose `workerProxies`, `firebreak run` can also choose whether commands such as `codex` and `claude` launch as sibling Firebreak workers or as regular in-VM processes:
 
@@ -59,6 +86,8 @@ The launcher:
 - uses the local Firebreak checkout automatically when you run it inside a cloned Firebreak repo
 - falls back to `github:skadaai/firebreak` when no local Firebreak checkout is present
 - forwards all arguments to the existing Bash Firebreak CLI through `nix run`
+
+Firebreak also ships a thin `npx dev-flow ...` launcher for the agent workflow CLI.
 
 ## Project Defaults
 

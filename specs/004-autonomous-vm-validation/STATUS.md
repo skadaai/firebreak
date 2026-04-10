@@ -11,7 +11,7 @@ Completed.
 
 ## What has landed
 
-- a host-side `firebreak internal validate run` entrypoint for named VM validation suites
+- a host-side `dev-flow validate run` entrypoint for named VM validation suites
 - capability detection that reports blocked hosts without turning them into false regressions
 - machine-readable summaries with persisted stdout, stderr, and exit-code artifacts
 - a dedicated validation smoke that exercises both runnable and blocked validation flows

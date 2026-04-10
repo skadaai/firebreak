@@ -12,6 +12,7 @@ Feature: Shared state root
 
   Scenario: tool-specific selectors override the generic selector
     Given a Firebreak sandbox that exposes both Codex and Claude Code
+    And the sandbox enables the shared state-root contract
     And the operator sets "FIREBREAK_STATE_MODE=vm"
     And the operator sets "CODEX_STATE_MODE=host"
     When the operator launches the Firebreak Codex wrapper

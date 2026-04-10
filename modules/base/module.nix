@@ -16,7 +16,7 @@ let
   environmentOverlayEnvFile = "${cfg.hostMetaMount}/firebreak-environment.env";
   renderCredentialFileBindings = bindings:
     lib.concatStringsSep "\n" (map
-      (binding: "${binding.slotPath}\t${binding.runtimePath}\t${if binding.required then "1" else "0"}")
+      (binding: "${binding.slotPath}\t${binding.runtimePath}\t${if binding.required then "1" else "0"}\t${binding.format}")
       bindings);
   renderCredentialEnvBindings = bindings:
     lib.concatStringsSep "\n" (map
@@ -431,7 +431,7 @@ in {
                 };
 
                 realBinName = mkOption {
-                  type = types.str;
+                  type = types.strMatching "[A-Za-z0-9][A-Za-z0-9._+-]*";
                   default = name;
                   description = "Real binary name in the per-user local bin directory.";
                 };
@@ -443,12 +443,12 @@ in {
                 };
 
                 selectorPrefix = mkOption {
-                  type = types.str;
+                  type = types.strMatching "[A-Z][A-Z0-9_]*";
                   description = "Prefix for Firebreak selector vars such as CODEX or CLAUDE.";
                 };
 
                 configSubdir = mkOption {
-                  type = types.str;
+                  type = types.strMatching "[A-Za-z0-9][A-Za-z0-9._-]*";
                   description = "Stable subdirectory name inside the resolved shared state root.";
                 };
 
@@ -469,15 +469,16 @@ in {
                       };
 
                       fileBindings = mkOption {
-                        type = types.listOf (types.submodule ({ ... }: {
+                        type = types.listOf (types.submodule ({ config, ... }: {
                           options = {
                             slotPath = mkOption {
-                              type = types.str;
-                              description = "Relative file path inside the selected slot.";
+                              type = types.strMatching "[^\t\n]+";
+                              default = config.runtimePath;
+                              description = "Relative file path inside the selected slot. Defaults to runtimePath.";
                             };
 
                             runtimePath = mkOption {
-                              type = types.str;
+                              type = types.strMatching "[^\t\n]+";
                               description = "Relative file path inside the resolved runtime state root.";
                             };
 
@@ -486,6 +487,12 @@ in {
                               default = false;
                               description = "Whether the binding must exist when a slot is selected.";
                             };
+
+                            format = mkOption {
+                              type = types.enum [ "opaque" "json" ];
+                              default = "opaque";
+                              description = "Optional format hint used for runtime validation.";
+                            };
                           };
                         }));
                         default = [ ];
@@ -493,15 +500,16 @@ in {
                       };
 
                       envBindings = mkOption {
-                        type = types.listOf (types.submodule ({ ... }: {
+                        type = types.listOf (types.submodule ({ config, ... }: {
                           options = {
                             slotPath = mkOption {
-                              type = types.str;
-                              description = "Relative file path inside the selected slot.";
+                              type = types.strMatching "[^\t\n]+";
+                              default = config.envVar;
+                              description = "Relative file path inside the selected slot. Defaults to envVar.";
                             };
 
                             envVar = mkOption {
-                              type = types.str;
+                              type = types.strMatching "[A-Z][A-Z0-9_]*";
                               description = "Env var populated from the slot file content.";
                             };
 
@@ -520,17 +528,17 @@ in {
                         type = types.listOf (types.submodule ({ ... }: {
                           options = {
                             slotPath = mkOption {
-                              type = types.str;
+                              type = types.strMatching "[^\t\n]+";
                               description = "Relative file path inside the selected slot.";
                             };
 
                             helperName = mkOption {
-                              type = types.str;
+                              type = types.strMatching "[A-Za-z0-9][A-Za-z0-9._+-]*";
                               description = "Generated helper script name.";
                             };
 
                             envVar = mkOption {
-                              type = types.str;
+                              type = types.strMatching "[A-Z][A-Z0-9_]*";
                               description = "Env var pointing at the generated helper script.";
                             };
 

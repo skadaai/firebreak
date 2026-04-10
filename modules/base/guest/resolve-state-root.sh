@@ -53,6 +53,9 @@ if [ -L "$state_dir" ]; then
     printf '%s\n' "Firebreak resolved $display_name state path is a broken symlink: $state_dir" >&2
     exit 1
   fi
+elif [ -e "$state_dir" ] && ! [ -d "$state_dir" ]; then
+  printf '%s\n' "Firebreak resolved $display_name state path exists but is not a directory: $state_dir" >&2
+  exit 1
 elif ! mkdir -p "$state_dir"; then
   printf '%s\n' "failed to create Firebreak state directory: $state_dir" >&2
   exit 1

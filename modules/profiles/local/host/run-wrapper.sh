@@ -111,6 +111,22 @@ resolve_host_dir() {
   fi
 }
 
+resolve_canonical_path() {
+  target_path=$1
+
+  if resolved_path=$(readlink -f "$target_path" 2>/dev/null); then
+    printf '%s\n' "$resolved_path"
+    return 0
+  fi
+
+  if resolved_path=$(realpath "$target_path" 2>/dev/null); then
+    printf '%s\n' "$resolved_path"
+    return 0
+  fi
+
+  @PYTHON3@ -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$target_path" 2>/dev/null || return 1
+}
+
 require_absolute_host_path() {
   path=$1
   description=$2
@@ -167,8 +183,8 @@ ensure_host_state_subdir() {
       return 0
     fi
 
-    resolved_link=$(readlink -f "$current_path" 2>/dev/null || true)
-    resolved_root=$(readlink -f "$root_path" 2>/dev/null || true)
+    resolved_link=$(resolve_canonical_path "$current_path" 2>/dev/null || true)
+    resolved_root=$(resolve_canonical_path "$root_path" 2>/dev/null || true)
     if [ -z "$resolved_link" ] || [ -z "$resolved_root" ]; then
       return 0
     fi
@@ -184,8 +200,8 @@ ensure_host_state_subdir() {
 
   if [ -n "$bootstrap_target" ] && ! [ -e "$host_state_path" ] && ! [ -L "$host_state_path" ] && { [ -e "$bootstrap_target" ] || [ -L "$bootstrap_target" ]; }; then
     reject_whitespace_path "$bootstrap_target" "host state bootstrap target"
-    resolved_target=$(readlink -f "$bootstrap_target" 2>/dev/null || true)
-    resolved_root=$(readlink -f "$host_root" 2>/dev/null || true)
+    resolved_target=$(resolve_canonical_path "$bootstrap_target" 2>/dev/null || true)
+    resolved_root=$(resolve_canonical_path "$host_root" 2>/dev/null || true)
     if [ -n "$resolved_target" ] && [ -n "$resolved_root" ] && path_within_root "$resolved_target" "$resolved_root"; then
       ln -s "$bootstrap_target" "$host_state_path"
       printf '%s\n' "firebreak: adopted existing tool state as $host_state_path -> $bootstrap_target" >&2
@@ -197,6 +213,11 @@ ensure_host_state_subdir() {
   fi
 
   maybe_materialize_external_state "$host_state_path" "$host_root"
+
+  if [ -e "$host_state_path" ] && ! [ -d "$host_state_path" ] && ! [ -L "$host_state_path" ]; then
+    printf '%s\n' "Firebreak host state path exists but is not a directory: $host_state_path" >&2
+    exit 1
+  fi
 
   if ! [ -e "$host_state_path" ] && ! [ -L "$host_state_path" ]; then
     mkdir -p "$host_state_path"
@@ -216,6 +237,8 @@ append_optional_env_default() {
 append_matching_env_defaults() {
   suffix_pattern=$1
 
+  # Suffix-only matching is intentional so new tool-specific selectors can flow
+  # through the shared state env file without changing Firebreak core.
   while IFS= read -r env_entry; do
     env_key=${env_entry%%=*}
     env_value=${env_entry#*=}
@@ -344,12 +367,40 @@ trace_wrapper() {
   printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >>"$wrapper_trace_log" 2>/dev/null || true
 }
 
+print_runner_json_parse_hint() {
+  stderr_log=$1
+
+  if ! [ -s "$stderr_log" ]; then
+    return 0
+  fi
+
+  if grep -F -q "[json.exception.parse_error.101]" "$stderr_log" 2>/dev/null \
+    || grep -F -q "attempting to parse an empty input" "$stderr_log" 2>/dev/null; then
+    cat >&2 <<'EOF'
+firebreak: the VM runner failed while parsing empty JSON from an internal helper.
+
+Likely causes:
+  - the outer Nix launch ignored this flake's config; rerun with:
+      nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run ...
+  - an internal Firebreak helper returned no JSON because an earlier step failed
+
+Inspect the preserved Firebreak runtime logs for the exact failing step.
+EOF
+  fi
+}
+
 require_absolute_host_path "$shared_state_root_host_dir" "FIREBREAK_STATE_ROOT"
 reject_whitespace_path "$shared_state_root_host_dir" "Firebreak host state root"
+if [ "$host_system" = "aarch64-darwin" ]; then
+  reject_comma_path "$shared_state_root_host_dir" "Firebreak host state root"
+fi
 mkdir -p "$shared_state_root_host_dir"
 if [ -n "$shared_credential_slots_host_dir" ]; then
   require_absolute_host_path "$shared_credential_slots_host_dir" "FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH"
   reject_whitespace_path "$shared_credential_slots_host_dir" "Firebreak credential slot root"
+  if [ "$host_system" = "aarch64-darwin" ]; then
+    reject_comma_path "$shared_credential_slots_host_dir" "Firebreak credential slot root"
+  fi
   mkdir -p "$shared_credential_slots_host_dir"
 fi
 
@@ -1003,6 +1054,7 @@ stop_agent_exec_runner() {
 }
 
 runner_status=0
+rm -f "$runner_stderr_log"
 trace_wrapper "runner-start"
 if [ "$agent_session_mode" = "agent-exec" ]; then
   (
@@ -1992,10 +2044,13 @@ EOF
 else
   (
     cd "$runner_launch_dir"
-    run_runner "$@"
+    run_runner "$@" 2> >(tee "$runner_stderr_log" >&2)
   ) || runner_status=$?
 fi
 trace_wrapper "runner-exit:$runner_status"
+if [ "$runner_status" -ne 0 ]; then
+  print_runner_json_parse_hint "$runner_stderr_log"
+fi
 @PYTHON3@ @FIREBREAK_PROFILE_SUMMARY_SCRIPT@ "$host_runtime_dir" "$profile_summary_file" >/dev/null 2>&1 || true
 
 if [ "$agent_session_mode" = "agent-exec" ]; then

@@ -43,8 +43,12 @@ unset FIREBREAK_PROJECT_CONFIG_FILE
 unset FIREBREAK_LAUNCH_MODE
 unset FIREBREAK_WORKER_MODE
 unset FIREBREAK_WORKER_MODES
+unset FIREBREAK_CREDENTIAL_SLOT
+unset FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH
 unset CODEX_STATE_MODE
 unset CLAUDE_STATE_MODE
+unset CODEX_CREDENTIAL_SLOT
+unset CLAUDE_CREDENTIAL_SLOT
 
 firebreak_cmd() {
   (
@@ -99,7 +103,7 @@ require_pattern "$init_template_stdout" "# FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH=
 
 set +e
 interactive_init_output=$(
-  printf '3\n1\n~/.firebreak\nn\nn\ny\n' | firebreak_cmd init 2>&1
+  printf '3\n1\nn\nn\n~/.firebreak\ny\n' | firebreak_cmd init 2>&1
 )
 interactive_init_status=$?
 set -e
@@ -125,7 +129,7 @@ FIREBREAK_STATE_ROOT=~/shared-state-root
 CODEX_STATE_MODE=workspace
 FIREBREAK_CREDENTIAL_SLOT=default
 CODEX_CREDENTIAL_SLOT=backup
-FIREBREAK_TASK_STATE_DIR=/tmp/internal-only
+DEV_FLOW_STATE_DIR=/tmp/internal-only
 EOF
 
 doctor_output=$(FIREBREAK_STATE_MODE=vm firebreak_cmd doctor)
@@ -158,7 +162,7 @@ project_dir = os.environ["PROJECT_DIR"]
 workspace_state_key = os.environ["WORKSPACE_STATE_KEY"]
 
 assert obj["project_config_source"] == "project-default"
-assert "FIREBREAK_TASK_STATE_DIR" in obj["ignored_config_keys"]
+assert "DEV_FLOW_STATE_DIR" in obj["ignored_config_keys"]
 assert obj["tools"]["codex"]["mode"] == "workspace"
 assert obj["tools"]["codex"]["path"] == os.path.expanduser(f"~/shared-state-root/workspaces/{workspace_state_key}/codex")
 assert obj["tools"]["codex"]["credential_slot"] == "backup"
@@ -187,7 +191,7 @@ assert obj["cwd_whitespace"] is False
 assert details["cwd"] == project_dir
 assert details["project_root_source"] == "cwd"
 assert details["git_common_dir"] == "unknown"
-assert "FIREBREAK_TASK_STATE_DIR" in details["ignored_keys"]
+assert "DEV_FLOW_STATE_DIR" in details["ignored_keys"]
 assert details["environment_identity"]
 assert details["environment_cache_dir"]
 PY

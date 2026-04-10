@@ -116,6 +116,14 @@
       }
     },
     {
+      "package": "dev-flow-test-smoke-cli-surface",
+      "supportedSystems": ["x86_64-linux", "aarch64-linux", "aarch64-darwin"],
+      "features": {
+        "virtualization": false,
+        "secondaryArchRepresentative": false
+      }
+    },
+    {
       "package": "firebreak-test-smoke-worker-proxy-script",
       "supportedSystems": ["x86_64-linux", "aarch64-linux", "aarch64-darwin"],
       "features": {
@@ -160,23 +168,19 @@
       }
     },
     {
-      "package": "firebreak-test-smoke-internal-validate",
-      "supportedSystems": ["x86_64-linux", "aarch64-linux"],
+      "package": "dev-flow-test-smoke-validate",
+      "supportedSystems": ["x86_64-linux", "aarch64-linux", "aarch64-darwin"],
       "features": {
-        "virtualization": true,
+        "virtualization": false,
         "secondaryArchRepresentative": false
       }
     },
     {
-      "package": "firebreak-test-smoke-internal-task",
-      "supportedSystems": ["x86_64-linux", "aarch64-linux"],
+      "package": "dev-flow-test-smoke-workspace",
+      "supportedSystems": ["x86_64-linux", "aarch64-linux", "aarch64-darwin"],
       "features": {
-        "virtualization": true,
+        "virtualization": false,
         "secondaryArchRepresentative": false
-      },
-      "shapeBySystem": {
-        "x86_64-linux": "2x4",
-        "aarch64-linux": "2x4"
       }
     },
     {
@@ -268,10 +272,10 @@
       }
     },
     {
-      "package": "firebreak-test-smoke-internal-loop",
-      "supportedSystems": ["x86_64-linux", "aarch64-linux"],
+      "package": "dev-flow-test-smoke-loop",
+      "supportedSystems": ["x86_64-linux", "aarch64-linux", "aarch64-darwin"],
       "features": {
-        "virtualization": true,
+        "virtualization": false,
         "secondaryArchRepresentative": false
       }
     }

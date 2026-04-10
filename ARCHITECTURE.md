@@ -4,11 +4,21 @@ Firebreak uses a module-oriented layout instead of flat `scripts/` and `tests/` 
 
 ## Terminology
 
-- `task`: an isolated host-side work attempt with its own worktree, runtime state, artifacts, and metadata
+- `attempt`: one bounded change attempt with its own plan, validation evidence, review artifacts, and disposition
+- `workspace`: an isolated host-side checkout and state root used for one spec line or other logically related sequence of work
 - `agent session`: an interactive or non-interactive agent process context launched inside a VM
 - `conversation thread`: an agent-specific memory or history object, when the agent exposes one
 
-Do not use bare `session` to mean the host-side work unit.
+Do not use bare `session` to mean either the workspace or the attempt.
+
+## Agent Workflow Surface
+
+- [`.agents/skills/dev-flow-autonomous-flow/`](./.agents/skills/dev-flow-autonomous-flow): top-level orchestration skill for non-trivial autonomous work.
+- [`.agents/skills/dev-flow-spec-driving/`](./.agents/skills/dev-flow-spec-driving): identifies the owning spec and next independent slice.
+- [`.agents/skills/dev-flow-workspace/`](./.agents/skills/dev-flow-workspace): decides whether to reuse the current workspace or create another one.
+- [`.agents/skills/dev-flow-validation/`](./.agents/skills/dev-flow-validation): records machine-readable validation evidence.
+- [`.agents/profiles/`](./.agents/profiles): role and runtime overlays that compose those skills into planner, worker, reviewer, validator, and runtime-specific operating modes.
+- [`.agents/profiles/ROLE_SELECTION.md`](./.agents/profiles/ROLE_SELECTION.md): preconditions and authority boundaries for choosing the right role.
 
 ## Structure
 

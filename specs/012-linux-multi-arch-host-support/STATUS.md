@@ -33,4 +33,4 @@ Implemented in code and validated through flake evaluation plus launcher smoke c
 
 - 2026-03-24: Created this spec in response to the conclusion that Linux multi-arch host support is substantial enough to require its own tracked changeset before implementation.
 - 2026-03-24: Began implementation by refactoring flake output assembly toward per-system VM artifacts and widening the documented Linux host contract to include `aarch64-linux`.
-- 2026-03-24: Validated that `packages.x86_64-linux.firebreak`, `packages.aarch64-linux.firebreak`, `checks.aarch64-linux.firebreak-codex-system`, and the NPX launcher smoke all evaluate or pass in the task worktree.
+- 2026-03-24: Validated that `packages.x86_64-linux.firebreak`, `packages.aarch64-linux.firebreak`, `checks.aarch64-linux.firebreak-codex-system`, and the NPX launcher smoke all evaluate or pass in the workspace checkout.

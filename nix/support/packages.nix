@@ -96,7 +96,7 @@ rec {
   }:
     let
       renderShellArray = values:
-        builtins.concatStringsSep "\n" (map (value: "  ${builtins.toJSON value}") values);
+        builtins.concatStringsSep "\n" (map (value: "  ${pkgs.lib.escapeShellArg value}") values);
     in
     pkgs.writeShellApplication {
       inherit name;
@@ -171,15 +171,6 @@ rec {
             printf '%s\n' "__WORKER_MODE__''${FIREBREAK_WORKER_MODE:-unset}"
             printf '%s\n' "__WORKER_MODES__''${FIREBREAK_WORKER_MODES:-unset}"
             ;;
-          *"#firebreak-internal-validate")
-            printf '%s\n' "__INTERNAL__validate"
-            ;;
-          *"#firebreak-internal-task")
-            printf '%s\n' "__INTERNAL__task"
-            ;;
-          *"#firebreak-internal-loop")
-            printf '%s\n' "__INTERNAL__loop"
-            ;;
           *"#firebreak-worker")
             printf '%s\n' "__WORKER__broker"
             ;;
@@ -191,6 +182,34 @@ rec {
         for arg in "$@"; do
           printf '%s\n' "__ARG__$arg"
         done
+      '';
+      fakeWorkloadRegistry = pkgs.runCommand "firebreak-cli-smoke-workloads" {} ''
+        mkdir -p "$out/bin"
+        cat >"$out/bin/firebreak-codex" <<'EOF'
+#!${pkgs.bash}/bin/bash
+printf '%s\n' "__VM__codex"
+printf '%s\n' "__MODE__''${FIREBREAK_LAUNCH_MODE:-unset}"
+printf '%s\n' "__WORKER_MODE__''${FIREBREAK_WORKER_MODE:-unset}"
+printf '%s\n' "__WORKER_MODES__''${FIREBREAK_WORKER_MODES:-unset}"
+for arg in "$@"; do
+  printf '%s\n' "__ARG__$arg"
+done
+EOF
+        cat >"$out/bin/firebreak-claude-code" <<'EOF'
+#!${pkgs.bash}/bin/bash
+printf '%s\n' "__VM__claude-code"
+printf '%s\n' "__MODE__''${FIREBREAK_LAUNCH_MODE:-unset}"
+printf '%s\n' "__WORKER_MODE__''${FIREBREAK_WORKER_MODE:-unset}"
+printf '%s\n' "__WORKER_MODES__''${FIREBREAK_WORKER_MODES:-unset}"
+for arg in "$@"; do
+  printf '%s\n' "__ARG__$arg"
+done
+EOF
+        chmod 0555 "$out/bin/firebreak-codex" "$out/bin/firebreak-claude-code"
+        cat >"$out/workloads.tsv" <<EOF
+codex	Codex local Firebreak VM	$out/bin/firebreak-codex
+claude-code	Claude Code local Firebreak VM	$out/bin/firebreak-claude-code
+EOF
       '';
       fakeCli = pkgs.writeShellApplication {
         name = "firebreak-cli-smoke-firebreak";
@@ -206,6 +225,7 @@ rec {
         text = ''
           export FIREBREAK_LIBEXEC_DIR='${builtins.toString ../../modules/base/host}'
           export FIREBREAK_FLAKE_REF='path:/firebreak-cli-smoke'
+          export FIREBREAK_WORKLOAD_REGISTRY='${fakeWorkloadRegistry}/workloads.tsv'
           exec bash "$FIREBREAK_LIBEXEC_DIR/firebreak.sh" "$@"
         '';
       };
@@ -221,6 +241,79 @@ rec {
       text = renderTemplate {
         "@FIREBREAK_CLI_BIN@" = "${fakeCli}/bin/firebreak-cli-smoke-firebreak";
       } ../../modules/base/tests/test-smoke-firebreak-cli-surface.sh;
+    };
+
+  mkDevFlowCliSurfaceSmokePackage = { name }:
+    let
+      fakeNix = pkgs.writeShellScriptBin "nix" ''
+        set -eu
+
+        if [ "$#" -gt 0 ] && [ "$1" = "--version" ]; then
+          printf '%s\n' 'nix smoke shim'
+          exit 0
+        fi
+
+        while [ "$#" -gt 0 ] && [ "$1" != "run" ]; do
+          shift
+        done
+
+        [ "$#" -gt 0 ] || exit 1
+        shift
+        installable=''${1:-}
+        shift
+
+        if [ "''${1:-}" = "--" ]; then
+          shift
+        fi
+
+        case "$installable" in
+          *"#dev-flow-validate")
+            printf '%s\n' "__DEV_FLOW__validate"
+            ;;
+          *"#dev-flow-workspace")
+            printf '%s\n' "__DEV_FLOW__workspace"
+            ;;
+          *"#dev-flow-loop")
+            printf '%s\n' "__DEV_FLOW__loop"
+            ;;
+          *)
+            printf '%s\n' "__INSTALLABLE__$installable"
+            ;;
+        esac
+
+        for arg in "$@"; do
+          printf '%s\n' "__ARG__$arg"
+        done
+      '';
+      fakeCli = pkgs.writeShellApplication {
+        name = "dev-flow-cli-smoke";
+        runtimeInputs = with pkgs; [
+          bash
+          coreutils
+          git
+          gnugrep
+          gnused
+          python3
+          fakeNix
+        ];
+        text = ''
+          export DEV_FLOW_LIBEXEC_DIR='${builtins.toString ../../modules/base/host}'
+          export DEV_FLOW_FLAKE_REF='path:/dev-flow-cli-smoke'
+          export DEV_FLOW_NIX_ACCEPT_FLAKE_CONFIG=1
+          export DEV_FLOW_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes'
+          exec bash "$DEV_FLOW_LIBEXEC_DIR/dev-flow.sh" "$@"
+        '';
+      };
+    in
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        coreutils
+        gnugrep
+      ];
+      text = renderTemplate {
+        "@DEV_FLOW_CLI_BIN@" = "${fakeCli}/bin/dev-flow-cli-smoke";
+      } ../../modules/base/tests/test-smoke-dev-flow-cli-surface.sh;
     };
 
   mkWorkerFirebreakBridgeProbePackage = { name }:
@@ -373,7 +466,7 @@ rec {
           else
             "";
         "@CLOUD_SUITE_CASE@" = cloudSuiteCase;
-      } ../../modules/base/host/firebreak-validate.sh;
+      } ../../modules/base/host/dev-flow-validate.sh;
     };
 
   mkValidationFixturePackage = {
@@ -443,19 +536,20 @@ rec {
       ];
       text = renderTemplate {
         "@VALIDATE_BIN@" = "${self.packages.${system}.${validatePackage}}/bin/${validatePackage}";
-      } ../../modules/base/tests/test-smoke-internal-validate.sh;
+      } ../../modules/base/tests/test-smoke-dev-flow-validate.sh;
     };
 
-  mkTaskPackage = { name }:
-    writeUncheckedShellApplication {
+  mkWorkspacePackage = { name }:
+    pkgs.writeShellApplication {
       inherit name;
       runtimeInputs = with pkgs; [
         bash
         coreutils
         git
         gnused
+        nix
       ];
-      text = builtins.readFile ../../modules/base/host/firebreak-task.sh;
+      text = builtins.readFile ../../modules/base/host/dev-flow-workspace.sh;
     };
 
   mkWorkerPackage = { name }:
@@ -476,8 +570,8 @@ rec {
       '';
     };
 
-  mkTaskSmokePackage = { name }:
-    writeUncheckedShellApplication {
+  mkWorkspaceSmokePackage = { name }:
+    pkgs.writeShellApplication {
       inherit name;
       runtimeInputs = with pkgs; [
         bash
@@ -487,7 +581,7 @@ rec {
         gnugrep
         gnused
       ];
-      text = builtins.readFile ../../modules/base/tests/test-smoke-internal-task.sh;
+      text = builtins.readFile ../../modules/base/tests/test-smoke-dev-flow-workspace.sh;
     };
 
   mkWorkerSmokePackage = { name, workerPackage }:
@@ -681,7 +775,7 @@ rec {
       } ../../modules/base/tests/test-smoke-worker-guest-bridge-interactive.sh;
     };
 
-  mkLoopPackage = { name, taskPackage }:
+  mkLoopPackage = { name, workspacePackage }:
     pkgs.writeShellApplication {
       inherit name;
       runtimeInputs = with pkgs; [
@@ -691,8 +785,8 @@ rec {
         gnused
       ];
       text = renderTemplate {
-        "@TASK_BIN@" = "${self.packages.${system}.${taskPackage}}/bin/${taskPackage}";
-      } ../../modules/base/host/firebreak-loop.sh;
+        "@WORKSPACE_BIN@" = "${self.packages.${system}.${workspacePackage}}/bin/${workspacePackage}";
+      } ../../modules/base/host/dev-flow-loop.sh;
     };
 
   mkLoopSmokePackage = { name }:
@@ -705,11 +799,19 @@ rec {
         gnugrep
         gnused
       ];
-      text = builtins.readFile ../../modules/base/tests/test-smoke-internal-loop.sh;
+      text = builtins.readFile ../../modules/base/tests/test-smoke-dev-flow-loop.sh;
     };
 
-  mkFirebreakCliPackage = { name }:
+  mkFirebreakCliPackage = {
+    name,
+    publicWorkloads,
+  }:
     let
+      firebreakWorkloadRegistry = pkgs.writeText "firebreak-workloads.tsv" ''
+${builtins.concatStringsSep "\n" (map (workload:
+          "${workload.name}\t${workload.description}\t${workload.launcher}"
+        ) publicWorkloads)}
+      '';
       firebreakFlakeRef = "path:${builtins.toString ../../.}";
     in
     pkgs.writeShellApplication {
@@ -732,9 +834,38 @@ rec {
         export FIREBREAK_LIBEXEC_DIR='${mkFirebreakLibexecPackage}/libexec'
         export FIREBREAK_FLAKE_REF='${firebreakFlakeRef}'
         export FIREBREAK_NIXPKGS_PATH='${pkgs.path}'
+        export FIREBREAK_WORKLOAD_REGISTRY='${firebreakWorkloadRegistry}'
         export FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG='1'
         export FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes'
         exec bash "$FIREBREAK_LIBEXEC_DIR/firebreak.sh" "$@"
+      '';
+    };
+
+  mkDevFlowCliPackage = { name }:
+    let
+      devFlowLibexec = pkgs.runCommand "dev-flow-libexec" {} ''
+        mkdir -p "$out/libexec"
+        install -m 0555 ${../../modules/base/host/dev-flow.sh} "$out/libexec/dev-flow.sh"
+        install -m 0555 ${../../modules/base/host/firebreak-project-config.sh} "$out/libexec/firebreak-project-config.sh"
+      '';
+      devFlowFlakeRef = "path:${builtins.toString ../../.}";
+    in
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        bash
+        coreutils
+        git
+        gnused
+        nix
+        python3
+      ];
+      text = ''
+        export DEV_FLOW_LIBEXEC_DIR='${devFlowLibexec}/libexec'
+        export DEV_FLOW_FLAKE_REF='${devFlowFlakeRef}'
+        export DEV_FLOW_NIX_ACCEPT_FLAKE_CONFIG=1
+        export DEV_FLOW_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes'
+        exec bash "$DEV_FLOW_LIBEXEC_DIR/dev-flow.sh" "$@"
       '';
     };
 }

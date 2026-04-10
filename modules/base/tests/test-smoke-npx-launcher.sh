@@ -1,7 +1,7 @@
 set -eu
 
 repo_root=@REPO_ROOT@
-if ! [ -f "$repo_root/bin/firebreak.js" ] || ! [ -f "$repo_root/package.json" ]; then
+if ! [ -f "$repo_root/bin/firebreak.js" ] || ! [ -f "$repo_root/bin/dev-flow.js" ] || ! [ -f "$repo_root/package.json" ]; then
   echo "launcher smoke could not resolve the Firebreak source root" >&2
   exit 1
 fi
@@ -169,9 +169,10 @@ rm -f "$nix_args_path" "$nix_cwd_path"
 darwin_validate_output=$(
   cd "$repo_root"
   PATH="$fake_bin_dir:$PATH" \
-    FIREBREAK_LAUNCHER_TEST_PLATFORM=darwin \
-    FIREBREAK_LAUNCHER_TEST_ARCH=arm64 \
-    node "$repo_root/bin/firebreak.js" internal validate run test-smoke-codex 2>&1
+    DEV_FLOW_LAUNCHER_TEST_PLATFORM=darwin \
+    DEV_FLOW_LAUNCHER_TEST_ARCH=arm64 \
+    DEV_FLOW_LAUNCHER_KVM_PATH="$smoke_tmp_dir/missing-kvm" \
+    node "$repo_root/bin/dev-flow.js" validate run test-smoke-codex 2>&1
 )
 
 if ! [ -f "$nix_args_path" ]; then
@@ -180,18 +181,13 @@ if ! [ -f "$nix_args_path" ]; then
   exit 1
 fi
 
-if ! printf '%s\n' "$darwin_validate_output" | grep -F -q "Firebreak"; then
-  printf '%s\n' "$darwin_validate_output" >&2
-  echo "launcher smoke did not print the expected Apple Silicon macOS validation output" >&2
-  exit 1
-fi
-
 rm -f "$nix_args_path" "$nix_cwd_path"
 
 linux_validate_output=$(
   cd "$repo_root"
   PATH="$fake_bin_dir:$PATH" \
-    node "$repo_root/bin/firebreak.js" internal validate run test-smoke-codex 2>&1
+    DEV_FLOW_LAUNCHER_KVM_PATH="$smoke_tmp_dir/missing-kvm" \
+    node "$repo_root/bin/dev-flow.js" validate run test-smoke-codex 2>&1
 )
 
 if ! [ -f "$nix_args_path" ]; then

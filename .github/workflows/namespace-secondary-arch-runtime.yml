@@ -96,7 +96,7 @@ jobs:
       github.event.workflow_run.conclusion == 'success') &&
       needs.arm64-linux-kvm-probe.outputs.kvm_available == 'true'
     runs-on:
-      - ${{ format('nscloud-ubuntu-24.04-arm64-{0}-with-cache-with-features', matrix.shape) }}
+      - ${{ matrix.shape != '' && format('nscloud-ubuntu-24.04-arm64-{0}-with-cache-with-features', matrix.shape) || 'nscloud-ubuntu-24.04-arm64-with-cache-with-features' }}
       - nscloud-cache-tag-firebreak-runtime-arm64-linux
       - nscloud-runner-tool-cache-20gb
       - nscloud-cache-allow-commit-from-main
@@ -174,7 +174,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
     runs-on:
-      - ${{ format('nscloud-macos-sequoia-arm64-{0}-with-cache', matrix.shape) }}
+      - ${{ matrix.shape != '' && format('nscloud-macos-sequoia-arm64-{0}-with-cache', matrix.shape) || 'nscloud-macos-sequoia-arm64-with-cache' }}
       - nscloud-cache-tag-firebreak-runtime-arm64-darwin
       - nscloud-runner-tool-cache-20gb
       - nscloud-cache-allow-commit-from-main

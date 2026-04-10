@@ -6,12 +6,18 @@ Firebreak uses a module-oriented layout instead of flat `scripts/` and `tests/` 
 
 - `attempt`: one bounded change attempt with its own plan, validation evidence, review artifacts, and disposition
 - `workspace`: an isolated host-side checkout and state root used for one spec line or other logically related sequence of work
-- `agent session`: an interactive or non-interactive agent process context launched inside a VM
-- `conversation thread`: an agent-specific memory or history object, when the agent exposes one
+- `tool`: the actual program inside the VM, such as `codex`, `claude`, `aider`, `python`, or `bash`
+- `workload`: the Firebreak package or recipe, such as `firebreak-codex`, `firebreak-claude-code`, or a future third-party package
+- `worker`: a running execution instance managed by the broker
+- `tool session`: an interactive or non-interactive tool process context launched inside a VM when that distinction matters
+- `conversation thread`: a tool-specific memory or history object, when the tool exposes one
 
 Do not use bare `session` to mean either the workspace or the attempt.
+Do not use `agent` as a new generic architectural term in Firebreak core.
+Do not use `worker` to mean `tool` or `workload`.
+Do not use `config` when the concept is really persistent runtime state.
 
-## Agent Workflow Surface
+## Development-Flow Surface
 
 - [`.agents/skills/dev-flow-autonomous-flow/`](./.agents/skills/dev-flow-autonomous-flow): top-level orchestration skill for non-trivial autonomous work.
 - [`.agents/skills/dev-flow-spec-driving/`](./.agents/skills/dev-flow-spec-driving): identifies the owning spec and next independent slice.
@@ -39,9 +45,9 @@ Do not use bare `session` to mean either the workspace or the attempt.
   - [`module.nix`](./modules/profiles/cloud/module.nix): cloud guest behavior layered over the shared runtime.
   - [`host/`](./modules/profiles/cloud/host): cloud host-side runtime argument helpers.
   - [`guest/`](./modules/profiles/cloud/guest): cloud guest-side task preparation and job execution helpers.
-- [`modules/packaged-agent/`](./modules/packaged-agent): shared implementation for image-baked agent CLIs.
-  - [`module.nix`](./modules/packaged-agent/module.nix): common packaged-agent overlay logic.
-  - [`guest/`](./modules/packaged-agent/guest): guest shell-init templates for packaged agents.
+- [`modules/packaged-agent/`](./modules/packaged-agent): legacy path name for shared implementation of image-baked tool CLIs.
+  - [`module.nix`](./modules/packaged-agent/module.nix): common overlay logic for those packaged tools.
+  - [`guest/`](./modules/packaged-agent/guest): guest shell-init templates for packaged tools.
 - [`modules/node-cli/`](./modules/node-cli): shared implementation for npm-installed Node CLI sandboxes.
   - [`module.nix`](./modules/node-cli/module.nix): common Node CLI overlay logic.
   - [`guest/`](./modules/node-cli/guest): guest bootstrap and shell-init templates for packaged Node CLIs.
@@ -57,13 +63,13 @@ Do not use bare `session` to mean either the workspace or the attempt.
 - package or project customization should extend the environment layer, not redefine the Firebreak boot base.
 - `modules/base` owns the shared guest runtime, common VM settings, reusable shell behavior, and generic smoke validation.
 - `modules/profiles/local` owns local-only launch behavior such as dynamic host cwd sharing, host identity adoption, task preparation, and the interactive console.
-- `modules/profiles/cloud` owns cloud-only guest behavior such as fixed workspace semantics, prompt-driven agent execution, and non-interactive job completion.
-- `modules/packaged-agent` owns the shared contract for agents baked into the VM image, including state-root resolution and agent-specific environment exports.
+- `modules/profiles/cloud` owns cloud-only guest behavior such as fixed workspace semantics, prompt-driven tool execution, and non-interactive job completion.
+- `modules/packaged-agent` owns the shared contract for tools baked into the VM image, including state-root resolution and tool-specific environment exports.
 - `modules/node-cli` owns the shared contract for npm-installed packaged CLIs, including bootstrap, persistent install state, and project launch helpers.
 - `modules/node-cli` also owns the generic packaged-node bootstrap readiness contract (`firebreak-bootstrap-wait`) and declarative extra wrapper installation for recipe-owned CLI aliases such as worker proxies.
 - on the local Cloud Hypervisor path, packaged Node CLI delivery should prefer host-seeded shared tool runtimes over guest-time installation on the interactive shell critical path.
 - `firebreak-bootstrap-wait` is a readiness gate, not the installer itself. It validates that the prepared tool runtime is ready and should stay compatible with both host-seeded and guest-fallback bootstrap paths.
-- Agent modules such as `codex` and `claude-code` should stay thin. They should mostly declare package name, binary name, config directory, and any agent-specific packages or environment exports.
+- Tool-specific workload modules such as `codex` and `claude-code` should stay thin. They should mostly declare package name, binary name, state directory, and any tool-specific packages or environment exports.
 
 ## External Orchestrator Recipes
 
@@ -76,17 +82,17 @@ External recipes should stay declarative and thin.
 - Keep orchestrator-specific smoke tests under the external recipe itself rather than adding them to Firebreak core.
 - Treat nested `firebreak worker run ...` paths as potentially long-running even for simple commands like `--version`, because the first response can be delayed by host-side `nix build` or substitution work.
 
-## Adding A New Agent
+## Adding A New Tool Workload
 
-1. Decide whether the agent fits an existing shared family such as [`modules/packaged-agent/`](./modules/packaged-agent).
-2. Add a new module directory, for example `modules/my-agent/`.
-3. Create `modules/my-agent/module.nix` as a thin overlay over the shared family module.
+1. Decide whether the workload fits an existing shared family such as [`modules/packaged-agent/`](./modules/packaged-agent).
+2. Add a new module directory, for example `modules/my-tool/`.
+3. Create `modules/my-tool/module.nix` as a thin overlay over the shared family module.
 4. Add flake wiring for:
-   - `nixosModules.firebreak-my-agent`
-   - `nixosConfigurations.firebreak-my-agent`
-   - `packages.firebreak-my-agent`
-   - `packages.firebreak-test-smoke-my-agent`
-5. Reuse the shared smoke template unless the agent truly needs different validation behavior.
+   - `nixosModules.firebreak-my-tool`
+   - `nixosConfigurations.firebreak-my-tool`
+   - `packages.firebreak-my-tool`
+   - `packages.firebreak-test-smoke-my-tool`
+5. Reuse the shared smoke template unless the workload truly needs different validation behavior.
 
 ## Rules
 

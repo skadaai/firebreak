@@ -10,10 +10,10 @@ This repository is centered on a Nix flake plus reusable VM modules:
 - [`modules/base/`](./modules/base): shared Firebreak VM runtime, with `module.nix`, shared guest-side helpers, and the generic smoke template.
 - [`modules/profiles/local/`](./modules/profiles/local): local-launch profile, including local host-side helpers and local guest task-preparation helpers.
 - [`modules/profiles/cloud/`](./modules/profiles/cloud): cloud execution profile, including cloud host-side helpers and cloud guest job/task helpers.
-- [`modules/packaged-agent/`](./modules/packaged-agent): shared helper layer for image-baked agent CLIs.
+- [`modules/packaged-agent/`](./modules/packaged-agent): legacy path name for the shared helper layer for image-baked tool CLIs. Do not copy `agent` into new public or architectural names from this path name.
 - [`modules/codex/`](./modules/codex): Codex-specific overlay module.
 - [`modules/claude-code/`](./modules/claude-code): Claude Code-specific overlay module.
-- [`ARCHITECTURE.md`](./ARCHITECTURE.md): module-oriented structure and guidance for adding new agents.
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md): module-oriented structure and guidance for adding new tool workloads.
 - [`BRANDING.md`](./BRANDING.md): product naming, tagline, and public naming conventions.
 - [`UPSTREAM_REPOS.md`](./UPSTREAM_REPOS.md): preferred `ask_question` targets for the technologies used in this repository.
 - [`guides/`](./guides): step-by-step instructions for tasks that require manual setup or human intervention.
@@ -39,19 +39,35 @@ There is no separate application `src/` tree yet. Keep shared behavior in the ba
   Builds the underlying declared runner without launching the VM.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-test-smoke-codex`
   Runs the lightweight host-side smoke test against the interactive Codex VM.
-- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-test-smoke-internal-loop`
-  Runs the bounded autonomous change-loop smoke against isolated Firebreak tasks.
+- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#dev-flow-test-smoke-loop`
+  Runs the bounded autonomous change-loop smoke against isolated Firebreak workspaces.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak`
-  Runs the top-level Firebreak CLI with the human-facing surface plus the `internal` subtree.
+  Runs the top-level Firebreak CLI with the human-facing surface.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' flake check`
   Runs flake evaluation checks. Use this before submitting changes.
-- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak -- internal loop run ...`
-  Runs the bounded internal loop against an existing isolated task, recording plan, policy, validation, review, and commit evidence.
+- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#dev-flow -- loop run ...`
+  Runs the bounded development-flow loop against an existing isolated workspace, recording plan, policy, validation, review, and commit evidence.
 - GitHub Actions
-  - `.github/workflows/ci.yml` runs hosted `flake check` on pushes and pull requests.
-  - `.github/workflows/vm-smoke.yml` runs `firebreak-test-smoke-codex` on a self-hosted runner labeled `self-hosted`, `linux`, `x64`, and `kvm`.
+  - `.github/workflows/github-fast-checks.yml` runs the hosted fail-fast checks.
+  - `.github/workflows/namespace-primary-runtime.yml` runs the primary Namespace runtime matrix after the hosted checks succeed.
+  - `.github/workflows/namespace-secondary-arch-runtime.yml` runs representative secondary-architecture runtime coverage after the primary Namespace runtime succeeds.
+  - `.github/workflows/namespace-full-arch-sweep.yml` runs the scheduled broader multi-architecture sweep.
 
 ## Coding Style & Naming Conventions
+
+Use this repository-wide terminology consistently:
+
+- `tool`: the program inside the VM, such as `codex`, `claude`, `aider`, `python`, or `bash`
+- `workload`: the Firebreak package or recipe, such as `firebreak-codex` or `firebreak-claude-code`
+- `worker`: a running execution instance managed by the broker
+- `state`: persistent runtime state, caches, auth material, and related mutable data
+
+Naming rules:
+
+- Do not use `agent` as a new generic noun in Firebreak core. Existing `agent-*` identifiers are migration debt, not precedent.
+- Do not rename everything to `worker`. `worker` is only for running execution instances.
+- Do not use `config` when the thing is really persistent runtime state. Prefer `state` and `state root`.
+- If a legacy directory, file, or template variable still contains `agent`, treat that as an implementation leftover and avoid propagating it into new interfaces, docs, env vars, or options.
 
 Use standard Nix style:
 

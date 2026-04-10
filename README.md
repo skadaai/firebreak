@@ -21,21 +21,21 @@ firebreak run codex --worker-mode codex=vm --worker-mode claude=local
 firebreak run claude-code -- --help
 ```
 
-`firebreak vms` lists the public VM workloads. `firebreak run <vm>` launches one of them through the existing Firebreak VM packages. The public `firebreak` CLI does not expose agent workflow plumbing.
+`firebreak vms` lists the public VM workloads. `firebreak run <vm>` launches one of them through the existing Firebreak VM packages. The public `firebreak` CLI does not expose development-flow plumbing.
 
 ## dev-flow CLI
 
-Use `dev-flow` for agent-oriented development flow commands such as isolated workspace management, validation, and bounded attempts.
+Use `dev-flow` for development-flow commands such as isolated workspace management, validation, and bounded attempts.
 
 ```sh
-nix run .#dev-flow -- workspace create --workspace-id spec-005-main --branch agent/spec-005-main
+nix run .#dev-flow -- workspace create --workspace-id spec-005-main --branch dev-flow/spec-005-main
 nix run .#dev-flow -- validate run test-smoke-codex
 nix run .#dev-flow -- loop run --workspace-id spec-005-main --spec specs/005-isolated-work-tasks/SPEC.md --plan "..." --validation-suite test-smoke-codex-version
 ```
 
 Use one workspace per spec line. Reuse that workspace for sequential work on the same spec, and start a new workspace when the work moves to a different spec or unrelated maintenance line.
 
-## Agent Workflow
+## Development Flow
 
 This repository uses a `dev-flow-*` internal skill surface for autonomous work. Start with [dev-flow-autonomous-flow](./.agents/skills/dev-flow-autonomous-flow/SKILL.md), then let it route into the narrower skills for spec selection, workspace choice, boundaries, validation, and review.
 
@@ -87,7 +87,16 @@ The launcher:
 - falls back to `github:skadaai/firebreak` when no local Firebreak checkout is present
 - forwards all arguments to the existing Bash Firebreak CLI through `nix run`
 
-Firebreak also ships a thin `npx dev-flow ...` launcher for the agent workflow CLI.
+Firebreak also ships a thin `npx dev-flow ...` launcher for the development-flow CLI.
+
+Terminology:
+
+- `tool`: the actual program inside the VM, such as `codex` or `claude`
+- `workload`: the Firebreak package or recipe, such as `firebreak-codex`
+- `worker`: a broker-managed running execution instance
+- `state`: persistent runtime state, caches, auth material, and related mutable data
+
+`agent` is legacy terminology in this repository. Do not use it for new core naming.
 
 ## Project Defaults
 

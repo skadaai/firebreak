@@ -9,81 +9,91 @@
   "tests": [
     {
       "package": "firebreak-test-smoke-codex",
-      "supportedSystems": [
-        "x86_64-linux",
-        "aarch64-linux",
-        "aarch64-darwin"
-      ],
+      "supportedSystems": ["x86_64-linux", "aarch64-linux"],
       "features": {
         "virtualization": true,
         "secondaryArchRepresentative": false
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
       }
     },
     {
       "package": "firebreak-test-smoke-codex-version",
-      "supportedSystems": [
-        "x86_64-linux",
-        "aarch64-linux",
-        "aarch64-darwin"
-      ],
+      "supportedSystems": ["x86_64-linux", "aarch64-linux"],
       "features": {
         "virtualization": true,
         "secondaryArchRepresentative": true
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
+      }
+    },
+    {
+      "package": "firebreak-test-smoke-codex-warm-reuse",
+      "supportedSystems": ["x86_64-linux", "aarch64-linux"],
+      "features": {
+        "virtualization": true,
+        "secondaryArchRepresentative": false
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
       }
     },
     {
       "package": "firebreak-test-smoke-claude-code",
-      "supportedSystems": [
-        "x86_64-linux",
-        "aarch64-linux",
-        "aarch64-darwin"
-      ],
+      "supportedSystems": ["x86_64-linux", "aarch64-linux"],
       "features": {
         "virtualization": true,
         "secondaryArchRepresentative": false
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
       }
     },
     {
       "package": "firebreak-test-smoke-credential-slots",
-      "supportedSystems": [
-        "x86_64-linux",
-        "aarch64-linux",
-        "aarch64-darwin"
-      ],
+      "supportedSystems": ["x86_64-linux", "aarch64-linux"],
       "features": {
         "virtualization": true,
         "secondaryArchRepresentative": false
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
       }
     },
     {
       "package": "firebreak-test-smoke-codex-credential-slots",
-      "supportedSystems": [
-        "x86_64-linux",
-        "aarch64-linux",
-        "aarch64-darwin"
-      ],
+      "supportedSystems": ["x86_64-linux", "aarch64-linux"],
       "features": {
         "virtualization": true,
         "secondaryArchRepresentative": false
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
       }
     },
     {
       "package": "firebreak-test-smoke-claude-code-credential-slots",
-      "supportedSystems": [
-        "x86_64-linux",
-        "aarch64-linux",
-        "aarch64-darwin"
-      ],
+      "supportedSystems": ["x86_64-linux", "aarch64-linux"],
       "features": {
         "virtualization": true,
         "secondaryArchRepresentative": false
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
       }
     },
     {
       "package": "firebreak-test-smoke-project-config-and-doctor",
-      "supportedSystems": [
-        "x86_64-linux"
-      ],
+      "supportedSystems": ["x86_64-linux"],
       "features": {
         "virtualization": false,
         "secondaryArchRepresentative": false
@@ -91,11 +101,7 @@
     },
     {
       "package": "firebreak-test-smoke-npx-launcher",
-      "supportedSystems": [
-        "x86_64-linux",
-        "aarch64-linux",
-        "aarch64-darwin"
-      ],
+      "supportedSystems": ["x86_64-linux", "aarch64-linux", "aarch64-darwin"],
       "features": {
         "virtualization": false,
         "secondaryArchRepresentative": true
@@ -103,11 +109,15 @@
     },
     {
       "package": "firebreak-test-smoke-firebreak-cli-surface",
-      "supportedSystems": [
-        "x86_64-linux",
-        "aarch64-linux",
-        "aarch64-darwin"
-      ],
+      "supportedSystems": ["x86_64-linux", "aarch64-linux", "aarch64-darwin"],
+      "features": {
+        "virtualization": false,
+        "secondaryArchRepresentative": false
+      }
+    },
+    {
+      "package": "dev-flow-test-smoke-cli-surface",
+      "supportedSystems": ["x86_64-linux", "aarch64-linux", "aarch64-darwin"],
       "features": {
         "virtualization": false,
         "secondaryArchRepresentative": false
@@ -115,11 +125,7 @@
     },
     {
       "package": "firebreak-test-smoke-worker-proxy-script",
-      "supportedSystems": [
-        "x86_64-linux",
-        "aarch64-linux",
-        "aarch64-darwin"
-      ],
+      "supportedSystems": ["x86_64-linux", "aarch64-linux", "aarch64-darwin"],
       "features": {
         "virtualization": false,
         "secondaryArchRepresentative": false
@@ -127,11 +133,7 @@
     },
     {
       "package": "firebreak-test-smoke-local-controller",
-      "supportedSystems": [
-        "x86_64-linux",
-        "aarch64-linux",
-        "aarch64-darwin"
-      ],
+      "supportedSystems": ["x86_64-linux", "aarch64-linux", "aarch64-darwin"],
       "features": {
         "virtualization": false,
         "secondaryArchRepresentative": false
@@ -139,10 +141,7 @@
     },
     {
       "package": "firebreak-test-smoke-cloud-hypervisor-egress-proxy",
-      "supportedSystems": [
-        "x86_64-linux",
-        "aarch64-linux"
-      ],
+      "supportedSystems": ["x86_64-linux", "aarch64-linux"],
       "features": {
         "virtualization": false,
         "secondaryArchRepresentative": false
@@ -150,10 +149,7 @@
     },
     {
       "package": "firebreak-test-smoke-cloud-hypervisor-port-publish",
-      "supportedSystems": [
-        "x86_64-linux",
-        "aarch64-linux"
-      ],
+      "supportedSystems": ["x86_64-linux", "aarch64-linux"],
       "features": {
         "virtualization": false,
         "secondaryArchRepresentative": false
@@ -161,35 +157,7 @@
     },
     {
       "package": "firebreak-test-smoke-port-publish-runtime",
-      "supportedSystems": [
-        "x86_64-linux",
-        "aarch64-linux",
-        "aarch64-darwin"
-      ],
-      "features": {
-        "virtualization": true,
-        "secondaryArchRepresentative": false
-      }
-    },
-    {
-      "package": "firebreak-test-smoke-internal-validate",
-      "supportedSystems": [
-        "x86_64-linux",
-        "aarch64-linux",
-        "aarch64-darwin"
-      ],
-      "features": {
-        "virtualization": true,
-        "secondaryArchRepresentative": false
-      }
-    },
-    {
-      "package": "firebreak-test-smoke-internal-task",
-      "supportedSystems": [
-        "x86_64-linux",
-        "aarch64-linux",
-        "aarch64-darwin"
-      ],
+      "supportedSystems": ["x86_64-linux", "aarch64-linux"],
       "features": {
         "virtualization": true,
         "secondaryArchRepresentative": false
@@ -200,12 +168,24 @@
       }
     },
     {
+      "package": "dev-flow-test-smoke-validate",
+      "supportedSystems": ["x86_64-linux", "aarch64-linux", "aarch64-darwin"],
+      "features": {
+        "virtualization": false,
+        "secondaryArchRepresentative": false
+      }
+    },
+    {
+      "package": "dev-flow-test-smoke-workspace",
+      "supportedSystems": ["x86_64-linux", "aarch64-linux", "aarch64-darwin"],
+      "features": {
+        "virtualization": false,
+        "secondaryArchRepresentative": false
+      }
+    },
+    {
       "package": "firebreak-test-smoke-worker",
-      "supportedSystems": [
-        "x86_64-linux",
-        "aarch64-linux",
-        "aarch64-darwin"
-      ],
+      "supportedSystems": ["x86_64-linux", "aarch64-linux", "aarch64-darwin"],
       "features": {
         "virtualization": false,
         "secondaryArchRepresentative": false
@@ -213,11 +193,7 @@
     },
     {
       "package": "firebreak-test-smoke-worker-firebreak-attach",
-      "supportedSystems": [
-        "x86_64-linux",
-        "aarch64-linux",
-        "aarch64-darwin"
-      ],
+      "supportedSystems": ["x86_64-linux", "aarch64-linux"],
       "features": {
         "virtualization": true,
         "secondaryArchRepresentative": false
@@ -225,71 +201,7 @@
     },
     {
       "package": "firebreak-test-smoke-worker-claude-version",
-      "supportedSystems": [
-        "x86_64-linux",
-        "aarch64-linux",
-        "aarch64-darwin"
-      ],
-      "features": {
-        "virtualization": true,
-        "secondaryArchRepresentative": false
-      }
-    },
-    {
-      "package": "firebreak-test-smoke-worker-interactive-claude-direct",
-      "supportedSystems": [
-        "x86_64-linux",
-        "aarch64-linux",
-        "aarch64-darwin"
-      ],
-      "features": {
-        "virtualization": true,
-        "secondaryArchRepresentative": false
-      }
-    },
-    {
-      "package": "firebreak-test-smoke-worker-interactive-claude-exit-direct",
-      "supportedSystems": [
-        "x86_64-linux",
-        "aarch64-linux",
-        "aarch64-darwin"
-      ],
-      "features": {
-        "virtualization": true,
-        "secondaryArchRepresentative": false
-      }
-    },
-    {
-      "package": "firebreak-test-smoke-worker-interactive-codex-direct",
-      "supportedSystems": [
-        "x86_64-linux",
-        "aarch64-linux",
-        "aarch64-darwin"
-      ],
-      "features": {
-        "virtualization": true,
-        "secondaryArchRepresentative": false
-      }
-    },
-    {
-      "package": "firebreak-test-smoke-worker-guest-bridge",
-      "supportedSystems": [
-        "x86_64-linux",
-        "aarch64-linux",
-        "aarch64-darwin"
-      ],
-      "features": {
-        "virtualization": true,
-        "secondaryArchRepresentative": false
-      }
-    },
-    {
-      "package": "firebreak-test-smoke-worker-guest-bridge-interactive",
-      "supportedSystems": [
-        "x86_64-linux",
-        "aarch64-linux",
-        "aarch64-darwin"
-      ],
+      "supportedSystems": ["x86_64-linux", "aarch64-linux"],
       "features": {
         "virtualization": true,
         "secondaryArchRepresentative": false
@@ -300,14 +212,70 @@
       }
     },
     {
-      "package": "firebreak-test-smoke-internal-loop",
-      "supportedSystems": [
-        "x86_64-linux",
-        "aarch64-linux",
-        "aarch64-darwin"
-      ],
+      "package": "firebreak-test-smoke-worker-interactive-claude-direct",
+      "supportedSystems": ["x86_64-linux", "aarch64-linux"],
       "features": {
         "virtualization": true,
+        "secondaryArchRepresentative": false
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
+      }
+    },
+    {
+      "package": "firebreak-test-smoke-worker-interactive-claude-exit-direct",
+      "supportedSystems": ["x86_64-linux", "aarch64-linux"],
+      "features": {
+        "virtualization": true,
+        "secondaryArchRepresentative": false
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
+      }
+    },
+    {
+      "package": "firebreak-test-smoke-worker-interactive-codex-direct",
+      "supportedSystems": ["x86_64-linux", "aarch64-linux"],
+      "features": {
+        "virtualization": true,
+        "secondaryArchRepresentative": false
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
+      }
+    },
+    {
+      "package": "firebreak-test-smoke-worker-guest-bridge",
+      "supportedSystems": ["x86_64-linux", "aarch64-linux"],
+      "features": {
+        "virtualization": true,
+        "secondaryArchRepresentative": false
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
+      }
+    },
+    {
+      "package": "firebreak-test-smoke-worker-guest-bridge-interactive",
+      "supportedSystems": ["x86_64-linux", "aarch64-linux"],
+      "features": {
+        "virtualization": true,
+        "secondaryArchRepresentative": false
+      },
+      "shapeBySystem": {
+        "x86_64-linux": "2x4",
+        "aarch64-linux": "2x4"
+      }
+    },
+    {
+      "package": "dev-flow-test-smoke-loop",
+      "supportedSystems": ["x86_64-linux", "aarch64-linux", "aarch64-darwin"],
+      "features": {
+        "virtualization": false,
         "secondaryArchRepresentative": false
       }
     }

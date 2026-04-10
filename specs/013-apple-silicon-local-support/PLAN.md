@@ -22,7 +22,7 @@ last_updated: 2026-03-24
    - `firebreak-claude-code` local launch
    - shell mode
    - workspace share
-   - agent config share
+   - tool state share
    - one-shot `--version`-style command execution
 7. Add Apple Silicon-specific smoke coverage where practical and document the required real-hardware validation.
 
@@ -51,7 +51,7 @@ This MVP is intentionally narrower than full platform parity. It is the first pr
   - `FIREBREAK_LAUNCH_MODE=shell nix run .#firebreak-codex`
   - one-shot `--version` execution
   - workspace sharing
-  - agent config sharing
+  - tool state sharing
 
 ## Dependencies
 

@@ -38,7 +38,7 @@ This changeset is behavioral.
 It will define a cloud execution profile over the shared guest runtime. The cloud profile will disable local-only assumptions and provide a fixed contract for:
 
 - workspace mounting
-- agent config resolution
+- tool state resolution
 - one-shot prompt-driven agent execution
 - output persistence
 - shutdown behavior
@@ -68,7 +68,7 @@ It will define a cloud execution profile over the shared guest runtime. The clou
 
 - [spec 001](./specs/001-runtime-modularization/SPEC.md)
 - [dev-console-start.sh](./modules/profiles/local/guest/dev-console-start.sh)
-- [prepare-agent-session.sh](./modules/profiles/local/guest/prepare-agent-session.sh)
+- [prepare-worker-session.sh](./modules/profiles/local/guest/prepare-worker-session.sh)
 
 ### Risks
 

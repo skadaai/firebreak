@@ -13,13 +13,17 @@ firebreak_render_project_config_template() {
 # Real environment variables override values in this file.
 
 # Shared runtime-state mode for local workload VMs.
-# Native project config such as .codex/ or .claude/ still comes from the workspace:
+# Native tool state such as .codex/ or .claude/ still comes from the workspace:
 FIREBREAK_STATE_MODE=host
 
 # Public local launch selector:
 # FIREBREAK_LAUNCH_MODE=run
 # FIREBREAK_WORKER_MODE=local
 # FIREBREAK_WORKER_MODES=codex=vm,claude=local
+
+# Optional additive environment overlay selector:
+# FIREBREAK_ENVIRONMENT_MODE=auto
+# FIREBREAK_ENVIRONMENT_INSTALLABLE=.#devShells.x86_64-linux.default
 
 # Optional shared host state root when FIREBREAK_STATE_MODE=host or workspace.
 # Firebreak resolves per-tool and per-workspace subdirectories under this root:
@@ -212,7 +216,7 @@ firebreak_init_collect_interactive_answers() {
     firebreak_init_prompt_choice \
       "Select the default local launch mode" \
       "1" \
-      "run|run: launch the agent by default" \
+      "run|run: launch the tool by default" \
       "shell|shell: enter the maintenance shell by default"
   )
 

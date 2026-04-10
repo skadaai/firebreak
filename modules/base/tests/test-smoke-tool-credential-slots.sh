@@ -12,7 +12,7 @@ fi
 
 firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
 mkdir -p "$firebreak_tmp_root"
-smoke_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-@AGENT_BIN@-credential-slots.XXXXXX")
+smoke_tmp_dir=$(mktemp -d "$firebreak_tmp_root/test-smoke-@TOOL_BIN@-credential-slots.XXXXXX")
 trap 'rm -rf "$smoke_tmp_dir"' EXIT INT TERM
 
 credential_root=$smoke_tmp_dir/credentials
@@ -21,6 +21,7 @@ mkdir -p \
   "$credential_root/default/@STATE_SUBDIR@" \
   "$credential_root/alternate/@STATE_SUBDIR@" \
   "$workspace_dir"
+auth_file_format='@AUTH_FILE_FORMAT@'
 
 require_pattern() {
   haystack=$1
@@ -75,15 +76,33 @@ state_sha256() {
   exit 1
 }
 
-cat >"$credential_root/default/@STATE_SUBDIR@/@AUTH_FILE@" <<'EOF'
+case "$auth_file_format" in
+  json)
+    cat >"$credential_root/default/@STATE_SUBDIR@/@AUTH_FILE@" <<'EOF'
+"default-auth"
+EOF
+    ;;
+  *)
+    cat >"$credential_root/default/@STATE_SUBDIR@/@AUTH_FILE@" <<'EOF'
 default-auth
 EOF
+    ;;
+esac
 cat >"$credential_root/default/@STATE_SUBDIR@/@API_KEY_FILE@" <<'EOF'
 default-api-key
 EOF
-cat >"$credential_root/alternate/@STATE_SUBDIR@/@AUTH_FILE@" <<'EOF'
+case "$auth_file_format" in
+  json)
+    cat >"$credential_root/alternate/@STATE_SUBDIR@/@AUTH_FILE@" <<'EOF'
+"alternate-auth"
+EOF
+    ;;
+  *)
+    cat >"$credential_root/alternate/@STATE_SUBDIR@/@AUTH_FILE@" <<'EOF'
 alternate-auth
 EOF
+    ;;
+esac
 cat >"$credential_root/alternate/@STATE_SUBDIR@/@API_KEY_FILE@" <<'EOF'
 alternate-api-key
 EOF
@@ -106,9 +125,11 @@ cleanup_fake_real_bin() {
   rm -rf "$fake_local_bin"
 }
 trap cleanup_fake_real_bin EXIT
-cat >"$LOCAL_BIN/@AGENT_BIN@" <<'EOS'
+cat >"$LOCAL_BIN/@TOOL_BIN@" <<'EOS'
 #!/usr/bin/env bash
 set -eu
+
+auth_file_format='@AUTH_FILE_FORMAT@'
 
 login_args=(
 @LOGIN_COMMAND_ARGS@
@@ -137,18 +158,53 @@ if is_login_command "$@"; then
   token_position=$(( ${#login_args[@]} + 1 ))
   token=${!token_position:-smoke-login-token}
   mkdir -p "$config_root"
-  printf '%s\n' "$token" >"$config_root/@AUTH_FILE@"
+  case "$auth_file_format" in
+    json)
+      @PYTHON3@ - "$config_root/@AUTH_FILE@" "$token" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+value = sys.argv[2]
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(value, handle)
+PY
+      ;;
+    *)
+      printf '%s\n' "$token" >"$config_root/@AUTH_FILE@"
+      ;;
+  esac
   printf 'LOGIN_ROOT=%s\n' "$config_root"
   exit 0
 fi
 
 printf 'CONFIG_ROOT=%s\n' "$config_root"
 if [ -r "$config_root/@AUTH_FILE@" ]; then
-  printf 'AUTH_FILE=%s\n' "$(cat "$config_root/@AUTH_FILE@")"
+  case "$auth_file_format" in
+    json)
+      auth_value=$(@PYTHON3@ - "$config_root/@AUTH_FILE@" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, "r", encoding="utf-8") as handle:
+    value = json.load(handle)
+if isinstance(value, str):
+    print(value)
+else:
+    print(json.dumps(value, sort_keys=True))
+PY
+)
+      ;;
+    *)
+      auth_value=$(cat "$config_root/@AUTH_FILE@")
+      ;;
+  esac
+  printf 'AUTH_FILE=%s\n' "$auth_value"
 fi
 printf 'API_KEY=%s\n' "${@API_KEY_ENV@:-}"
 EOS
-chmod 0555 "$LOCAL_BIN/@AGENT_BIN@"
+chmod 0555 "$LOCAL_BIN/@TOOL_BIN@"
 EOF
 )
 
@@ -167,10 +223,10 @@ run_shell_scenario() {
         FIREBREAK_STATE_MODE=workspace \
         FIREBREAK_CREDENTIAL_SLOT="$slot_name" \
         "$extra_env_key=$extra_env_value" \
-        AGENT_VM_COMMAND="$command_body" \
+        WORKLOAD_VM_COMMAND="$command_body" \
         FIREBREAK_LAUNCH_MODE=shell \
         nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
-          "path:$repo_root#@AGENT_PACKAGE@" 2>&1
+          "path:$repo_root#@WORKLOAD_PACKAGE@" 2>&1
     )
   else
     output=$(
@@ -180,10 +236,10 @@ run_shell_scenario() {
         FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH="$credential_root" \
         FIREBREAK_STATE_MODE=workspace \
         FIREBREAK_CREDENTIAL_SLOT="$slot_name" \
-        AGENT_VM_COMMAND="$command_body" \
+        WORKLOAD_VM_COMMAND="$command_body" \
         FIREBREAK_LAUNCH_MODE=shell \
         nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run \
-          "path:$repo_root#@AGENT_PACKAGE@" 2>&1
+          "path:$repo_root#@WORKLOAD_PACKAGE@" 2>&1
     )
   fi
 
@@ -191,23 +247,30 @@ run_shell_scenario() {
 }
 
 probe_output=$(run_shell_scenario "$make_fake_real_bin_command
-@AGENT_BIN@ probe" default)
+@TOOL_BIN@ probe" default)
 require_pattern "$probe_output" "CONFIG_ROOT=$expected_workspace_root" "workspace state root"
 require_pattern "$probe_output" "AUTH_FILE=default-auth" "default slot auth file"
 require_pattern "$probe_output" "API_KEY=default-api-key" "default slot API key"
 
 override_output=$(run_shell_scenario "$make_fake_real_bin_command
-@AGENT_BIN@ probe" default "@CREDENTIAL_SLOT_SPECIFIC_VAR@" alternate)
+@TOOL_BIN@ probe" default "@CREDENTIAL_SLOT_SPECIFIC_VAR@" alternate)
 require_pattern "$override_output" "CONFIG_ROOT=$expected_workspace_root" "override workspace state root"
 require_pattern "$override_output" "AUTH_FILE=alternate-auth" "override slot auth file"
 require_pattern "$override_output" "API_KEY=alternate-api-key" "override slot API key"
 
 login_output=$(run_shell_scenario "$make_fake_real_bin_command
-@AGENT_BIN@ @LOGIN_COMMAND@ direct-login-auth" login-slot)
+@TOOL_BIN@ @LOGIN_COMMAND@ direct-login-auth" login-slot)
 require_pattern "$login_output" "LOGIN_ROOT=/run/credential-slots-host-root/login-slot/@STATE_SUBDIR@" "slot-root login materialization"
-if [ "$(cat "$credential_root/login-slot/@STATE_SUBDIR@/@AUTH_FILE@")" != "direct-login-auth" ]; then
-  echo "@AGENT_DISPLAY_NAME@ credential smoke did not write the login result into the selected slot" >&2
+if [ "$(@PYTHON3@ - "$credential_root/login-slot/@STATE_SUBDIR@/@AUTH_FILE@" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as handle:
+    print(json.load(handle))
+PY
+)" != "direct-login-auth" ]; then
+  echo "@TOOL_DISPLAY_NAME@ credential smoke did not write the login result into the selected slot" >&2
   exit 1
 fi
 
-printf '%s\n' "Firebreak @AGENT_DISPLAY_NAME@ credential-slot smoke test passed"
+printf '%s\n' "Firebreak @TOOL_DISPLAY_NAME@ credential-slot smoke test passed"

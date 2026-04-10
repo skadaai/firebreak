@@ -10,7 +10,7 @@ validation_cmd() {
   @VALIDATE_BIN@ run --state-dir "$state_dir" "$@"
 }
 
-summary_output=$(validation_cmd test-smoke-codex)
+summary_output=$(validation_cmd test-fixture-validation-pass)
 
 summary_path=$(printf '%s\n' "$summary_output" | sed -n 's/.*"run_dir": "\([^"]*\)".*/\1\/summary.json/p' | head -n 1)
 if [ -z "$summary_path" ] || ! [ -f "$summary_path" ]; then
@@ -32,9 +32,8 @@ if ! grep -q '"stdout_path": "' "$summary_path"; then
 fi
 
 blocked_output=$(
-  DEV_FLOW_VALIDATION_FORCE_BLOCKED_REASON=forced-test-block \
     DEV_FLOW_VALIDATION_STATE_DIR="$blocked_state_dir" \
-    @VALIDATE_BIN@ run test-smoke-codex
+    @VALIDATE_BIN@ run test-fixture-validation-blocked
 )
 
 blocked_summary_path=$(printf '%s\n' "$blocked_output" | sed -n 's/.*"run_dir": "\([^"]*\)".*/\1\/summary.json/p' | head -n 1)
@@ -50,7 +49,7 @@ if ! grep -q '"result": "blocked"' "$blocked_summary_path"; then
   exit 1
 fi
 
-if ! grep -q '"missing_capability": "forced-test-block"' "$blocked_summary_path"; then
+if ! grep -q '"missing_capability": "validation-fixture-blocked"' "$blocked_summary_path"; then
   cat "$blocked_summary_path" >&2
   echo "validation smoke did not preserve the blocked reason" >&2
   exit 1

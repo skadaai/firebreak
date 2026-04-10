@@ -1,7 +1,7 @@
 export FIREBREAK_EXTERNAL_PROJECT="@NAME@"
 tool_home="@DEV_HOME@"
-if [ -d "@AGENT_TOOLS_MOUNT@" ]; then
-  tool_home="@AGENT_TOOLS_MOUNT@"
+if [ -d "@TOOL_RUNTIMES_MOUNT@" ]; then
+  tool_home="@TOOL_RUNTIMES_MOUNT@"
 fi
 export LOCAL_BIN="$tool_home/.local/bin"
 export XDG_CONFIG_HOME="$tool_home/.config"
@@ -29,6 +29,8 @@ if [ -r /run/firebreak-worker/worker-modes ]; then
   fi
 fi
 
+@SHELL_BOOTSTRAP_FUNCTIONS@
+
 firebreak_refresh_cli() {
   printf "Refreshing @NAME@ CLI...\n"
 
@@ -43,6 +45,11 @@ firebreak_refresh_cli() {
 
   printf "Removing local binary...\n"
   sudo rm -f "$LOCAL_BIN/@BIN_NAME@"
+  # @PROXY_LOCAL_UPSTREAM_NAMES@ is expanded at render time into a space-separated
+  # upstream list, so it is intentionally unquoted for one-name-per-word iteration.
+  for upstream_name in @PROXY_LOCAL_UPSTREAM_NAMES@; do
+    sudo rm -f "$LOCAL_BIN/.firebreak-upstream-$upstream_name"
+  done
 
   printf "Restarting dev-bootstrap service...\n"
   sudo systemctl restart dev-bootstrap.service && @READY_COMMAND_NAME@

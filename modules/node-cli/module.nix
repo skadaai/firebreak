@@ -24,11 +24,14 @@ moduleArgs@{
   lib,
   pkgs,
   renderTemplate,
+  runtimeBackends,
   ...
 }:
 let
   cfg = config.workloadVm;
-  devHome = "/var/lib/${cfg.devUser}";
+  backendSpec = runtimeBackends.specFor cfg.runtimeBackend;
+  localHostSeedOnlyBootstrap = cfg.toolRuntimesEnabled && cfg.runtimeBackend == "cloud-hypervisor";
+  devHome = cfg.devHome;
   toolsMount = cfg.toolRuntimesMount;
   localBin = "${devHome}/.local/bin";
   xdgConfigHome = "${devHome}/.config";
@@ -61,6 +64,188 @@ let
   proxyLocalUpstreamInstallArgs = lib.escapeShellArgs proxyLocalUpstreamSpecs;
   installBinNamesArgs = lib.escapeShellArgs installBinNames;
   proxyLocalUpstreamNamesArgs = lib.escapeShellArgs proxyLocalUpstreamNames;
+  shellBootstrapFunctionNames =
+    lib.unique ([ binName ] ++ installBinNames);
+  shellBootstrapFunctions =
+    lib.concatStringsSep "\n\n"
+      (map
+        (commandName: ''
+          ${commandName}() {
+            if command -v firebreak-bootstrap-wait >/dev/null 2>&1; then
+              firebreak-bootstrap-wait
+            fi
+            command ${commandName} "$@"
+          }
+        '')
+        shellBootstrapFunctionNames);
+  hostToolRuntimeSeedScript = pkgs.writeShellApplication {
+    name = "firebreak-node-cli-host-seed";
+    runtimeInputs =
+      (with pkgs; [
+        bash
+        coreutils
+        findutils
+        gnugrep
+        gnused
+        nodejs_20
+        python3
+        util-linux
+      ]) ++ extraBootstrapPackages;
+    text = ''
+      set -eu
+
+      tool_home=$1
+      local_bin="$tool_home/.local/bin"
+      xdg_config_home="$tool_home/.config"
+      xdg_cache_home="$tool_home/.cache"
+      xdg_state_home="$tool_home/.local/state"
+      npm_cache_dir="$xdg_cache_home/npm"
+      install_tmp="$xdg_cache_home/tmp"
+      install_prefix="$tool_home/.local"
+      package_node_modules="$install_prefix/lib/node_modules/${packageSpec}"
+      state_root="$xdg_state_home/firebreak-node-cli/${vmName}"
+      state_file="$state_root/install-state"
+      ready_marker="$tool_home/bootstrap-ready"
+      install_state_id='${installStateId}'
+      bootstrap_lock_path="$tool_home/.firebreak-bootstrap.lock"
+      bootstrap_lock_acquired=0
+
+      log_phase() {
+        printf '[firebreak-host-bootstrap] %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1"
+      }
+
+      ensure_dir() {
+        target_path=$1
+        mkdir -p "$target_path"
+        chmod 0755 "$target_path" 2>/dev/null || true
+      }
+
+      acquire_bootstrap_lock() {
+        exec 9>"$bootstrap_lock_path"
+        flock 9
+        bootstrap_lock_acquired=1
+      }
+
+      release_bootstrap_lock() {
+        if [ "$bootstrap_lock_acquired" != "1" ]; then
+          return 0
+        fi
+        flock -u 9 2>/dev/null || true
+        exec 9>&-
+        bootstrap_lock_acquired=0
+      }
+
+      write_ready_marker() {
+        ready_dir=$(dirname "$ready_marker")
+        ensure_dir "$ready_dir"
+        ready_tmp=$(mktemp "$ready_dir/.bootstrap-ready.XXXXXX")
+        printf '%s\n' "$install_state_id" >"$ready_tmp"
+        mv -f "$ready_tmp" "$ready_marker"
+      }
+
+      wrappers_ready() {
+        for wrapper_name in ${installBinNamesArgs}; do
+          if [ ! -x "$local_bin/$wrapper_name" ]; then
+            return 1
+          fi
+        done
+        for wrapper_name in ${proxyLocalUpstreamNamesArgs}; do
+          if [ ! -x "$local_bin/.firebreak-upstream-$wrapper_name" ]; then
+            return 1
+          fi
+        done
+        return 0
+      }
+
+      host_trap() {
+        exit_code=$?
+        release_bootstrap_lock
+        exit "$exit_code"
+      }
+      trap host_trap EXIT INT TERM
+
+      log_phase "toolchain-prepare-start ${displayName}"
+      ensure_dir "$tool_home"
+      acquire_bootstrap_lock
+
+      for bootstrap_dir in \
+        "$state_root" \
+        "$local_bin" \
+        "$install_prefix" \
+        "$install_prefix/lib/node_modules" \
+        "$install_tmp" \
+        "$xdg_config_home" \
+        "$xdg_cache_home" \
+        "$xdg_state_home" \
+        "$npm_cache_dir"; do
+        ensure_dir "$bootstrap_dir"
+      done
+
+      if [ -x "$local_bin/${binName}" ] && [ -r "$state_file" ] && [ "$(cat "$state_file")" = "$install_state_id" ] && [ -r "$ready_marker" ] && [ "$(cat "$ready_marker")" = "$install_state_id" ] && wrappers_ready; then
+        log_phase "toolchain-cache-hit ${packageSpec}"
+        exit 0
+      fi
+
+      rm -f "$ready_marker"
+      log_phase "toolchain-install-start ${packageSpec}"
+
+      bootstrap_env=(
+        "HOME=$tool_home"
+        "XDG_CONFIG_HOME=$xdg_config_home"
+        "XDG_CACHE_HOME=$xdg_cache_home"
+        "XDG_STATE_HOME=$xdg_state_home"
+        "TMPDIR=$install_tmp"
+        "npm_config_cache=$npm_cache_dir"
+        "npm_config_prefix=$install_prefix"
+        "npm_config_audit=false"
+        "npm_config_fund=false"
+        "npm_config_update_notifier=false"
+        "npm_config_loglevel=warn"
+        "CI=1"
+        "PATH=$local_bin:$PATH"
+      )
+
+      if [ -n "''${HTTP_PROXY:-}" ]; then
+        bootstrap_env+=("HTTP_PROXY=$HTTP_PROXY" "npm_config_proxy=$HTTP_PROXY")
+      fi
+      if [ -n "''${HTTPS_PROXY:-}" ]; then
+        bootstrap_env+=("HTTPS_PROXY=$HTTPS_PROXY" "npm_config_https_proxy=$HTTPS_PROXY")
+      fi
+      if [ -n "''${http_proxy:-}" ]; then
+        bootstrap_env+=("http_proxy=$http_proxy")
+      fi
+      if [ -n "''${https_proxy:-}" ]; then
+        bootstrap_env+=("https_proxy=$https_proxy")
+      fi
+      if [ -n "''${NO_PROXY:-}" ]; then
+        bootstrap_env+=("NO_PROXY=$NO_PROXY" "npm_config_noproxy=$NO_PROXY")
+      fi
+      if [ -n "''${no_proxy:-}" ]; then
+        bootstrap_env+=("no_proxy=$no_proxy")
+      fi
+
+      env "''${bootstrap_env[@]}" sh -s "$package_node_modules" "${packageSpec}" <<'EOF'
+      set -eu
+      mkdir -p \
+        "$XDG_CONFIG_HOME" \
+        "$XDG_CACHE_HOME" \
+        "$XDG_STATE_HOME" \
+        "$npm_config_cache" \
+        "$npm_config_prefix"
+      rm -rf "$1"
+      rm -f "$npm_config_prefix/bin/${binName}"
+      set -- "$2" ${proxyLocalUpstreamInstallArgs}
+      npm install --global --omit=dev "$@"
+      ${postInstallScript}
+      ${installBinScriptSnippet}
+      EOF
+
+      printf '%s\n' "$install_state_id" >"$state_file"
+      write_ready_marker
+      log_phase "toolchain-install-done ${packageSpec}"
+      log_phase "wrapper-ready ${binName}"
+    '';
+  };
   upstreamInstallBinScriptSnippet =
     lib.concatStringsSep "\n"
       (map
@@ -74,10 +259,18 @@ let
               if proxyLocalUpstream != null
               then proxyLocalUpstream.binName or scriptName
               else scriptName;
+            upstreamBinPath =
+              if proxyLocalUpstream != null
+              then proxyLocalUpstream.realBinPath or null
+              else null;
+            upstreamBinPathArg = lib.escapeShellArg (if upstreamBinPath != null then upstreamBinPath else "");
           in
           ''
+            upstream_bin_path=${upstreamBinPathArg}
             if [ -e "$npm_config_prefix/bin/${upstreamBinName}" ]; then
               mv "$npm_config_prefix/bin/${upstreamBinName}" "$npm_config_prefix/bin/.firebreak-upstream-${scriptName}"
+            elif [ -n "$upstream_bin_path" ]; then
+              ln -sfn "$upstream_bin_path" "$npm_config_prefix/bin/.firebreak-upstream-${scriptName}"
             else
               rm -f "$npm_config_prefix/bin/.firebreak-upstream-${scriptName}"
             fi
@@ -121,6 +314,10 @@ let
   guestUdpPorts =
     lib.unique (map (forward: forward.guest.port)
       (builtins.filter (forward: (forward.proto or "tcp") == "udp") forwardPorts));
+  unsupportedCloudHypervisorForwards =
+    builtins.filter
+      (forward: (forward.from or "host") != "host" || (forward.proto or "tcp") != "tcp")
+      forwardPorts;
   launchScript = pkgs.writeShellApplication {
     name = launchCommandName;
     runtimeInputs = with pkgs; [ bash coreutils ];
@@ -129,6 +326,9 @@ let
       workspace=${cfg.workspaceMount}
       exec bash -lc '
         set -eu
+        if command -v firebreak-bootstrap-wait >/dev/null 2>&1; then
+          firebreak-bootstrap-wait
+        fi
         ${launchEnvironmentExports}
         cd "$1"
         ${launchCommand}
@@ -190,13 +390,14 @@ PY
       }
 
       validate_ready_marker() {
-        READY_MARKER="$ready_marker" BOOTSTRAP_STATE_PATH="$bootstrap_state_path" python3 - <<'PY'
+        READY_MARKER="$ready_marker" BOOTSTRAP_STATE_PATH="$bootstrap_state_path" EXPECTED_INSTALL_STATE_ID='${installStateId}' python3 - <<'PY'
 import json
 import os
 import sys
 
 ready_marker_path = os.environ["READY_MARKER"]
 bootstrap_state_path = os.environ["BOOTSTRAP_STATE_PATH"]
+expected_install_state_id = os.environ["EXPECTED_INSTALL_STATE_ID"].strip()
 
 try:
     with open(ready_marker_path, "r", encoding="utf-8") as handle:
@@ -211,11 +412,13 @@ try:
     with open(bootstrap_state_path, "r", encoding="utf-8") as handle:
         bootstrap_state = json.load(handle)
 except OSError:
-    raise SystemExit(1)
+    bootstrap_state = None
 except ValueError:
-    raise SystemExit(1)
+    bootstrap_state = None
 
-expected_install_state_id = (bootstrap_state.get("install_state_id") or "").strip()
+if bootstrap_state is not None:
+    expected_install_state_id = (bootstrap_state.get("install_state_id") or "").strip() or expected_install_state_id
+
 if not expected_install_state_id:
     raise SystemExit(1)
 
@@ -254,10 +457,49 @@ PY
       exit 1
     '';
   };
+  bootstrapConditionScript = pkgs.writeShellScript "firebreak-bootstrap-condition" ''
+    set -eu
+
+    tool_home='${toolsMount}'
+    if ! [ -d "$tool_home" ]; then
+      tool_home='${devHome}'
+    fi
+
+    local_bin="$tool_home/.local/bin"
+    xdg_state_home="$tool_home/.local/state"
+    state_file="$xdg_state_home/firebreak-node-cli/${vmName}/install-state"
+    ready_marker='${bootstrapReadyMarker}'
+    install_state_id='${installStateId}'
+
+    wrappers_ready() {
+      for wrapper_name in ${installBinNamesArgs}; do
+        if ! [ -x "$local_bin/$wrapper_name" ]; then
+          return 1
+        fi
+      done
+      for wrapper_name in ${proxyLocalUpstreamNamesArgs}; do
+        if ! [ -x "$local_bin/.firebreak-upstream-$wrapper_name" ]; then
+          return 1
+        fi
+      done
+      return 0
+    }
+
+    if [ -x "$local_bin/${binName}" ] \
+      && [ -r "$state_file" ] \
+      && [ "$(cat "$state_file")" = "$install_state_id" ] \
+      && [ -r "$ready_marker" ] \
+      && [ "$(cat "$ready_marker")" = "$install_state_id" ] \
+      && wrappers_ready; then
+      exit 1
+    fi
+
+    exit 0
+  '';
   scriptVars = {
-    "@AGENT_EXEC_OUTPUT_MOUNT@" = cfg.workerExecOutputMount;
+    "@COMMAND_OUTPUT_MOUNT@" = cfg.workerExecOutputMount;
     "@BIN_NAME@" = binName;
-    "@AGENT_TOOLS_MOUNT@" = toolsMount;
+    "@TOOL_RUNTIMES_MOUNT@" = toolsMount;
     "@BOOTSTRAP_READY_MARKER@" = bootstrapReadyMarker;
     "@DEV_HOME@" = devHome;
     "@DEV_USER@" = cfg.devUser;
@@ -277,6 +519,7 @@ PY
     "@PACKAGE_SPEC@" = packageSpec;
     "@POST_INSTALL_SCRIPT@" = postInstallScript;
     "@READY_COMMAND_NAME@" = readyCommandName;
+    "@SHELL_BOOTSTRAP_FUNCTIONS@" = shellBootstrapFunctions;
     "@TMPDIR@" = installTmp;
     "@XDG_CACHE_HOME@" = xdgCacheHome;
     "@XDG_CONFIG_HOME@" = xdgConfigHome;
@@ -284,33 +527,76 @@ PY
   };
 in {
   config = {
+    assertions = [
+      {
+        assertion =
+          forwardPorts == [ ]
+          || builtins.elem "host-port-publish-tcp" backendSpec.capabilities;
+        message =
+          "workloadVm.runtimeBackend `${cfg.runtimeBackend}` does not support host port publishing required by modules/node-cli forwardPorts.";
+      }
+      {
+        assertion =
+          cfg.runtimeBackend != "cloud-hypervisor"
+          || unsupportedCloudHypervisorForwards == [ ];
+        message =
+          "modules/node-cli forwardPorts on cloud-hypervisor currently support only host-originated TCP publishing.";
+      }
+    ];
+
     workloadVm = {
+      requiredCapabilities = [ "guest-egress" ];
       brandingTagline = tagline;
+      environmentOverlay = {
+        enable = true;
+        package.packages = [ pkgs.nodejs_20 ];
+      };
+      localPublishedHostPortsJson = builtins.toJSON (
+        builtins.filter (forward: (forward.from or "host") == "host") forwardPorts
+      );
       sharedStateRoots = sharedStateRoots;
       sharedCredentialSlots = sharedCredentialSlots;
       toolRuntimesEnabled = true;
       memoryMiB = lib.mkDefault memoryMiB;
+      coldExecBootstrapWaitEnable = true;
       extraSystemPackages = with pkgs; [
-        nodejs_20
         bootstrapWaitScript
         launchScript
         readyScript
       ] ++ extraSystemPackages;
-      bootstrapPackages = with pkgs; [
-        bash
-        coreutils
-        findutils
-        gnugrep
-        gnused
-        nodejs_20
-        python3
-        util-linux
-      ] ++ extraBootstrapPackages;
-      bootstrapScript = renderTemplate scriptVars ./guest/bootstrap.sh;
+      bootstrapPackages =
+        if localHostSeedOnlyBootstrap then
+          [ ]
+        else
+          (with pkgs; [
+            bash
+            coreutils
+            findutils
+            gnugrep
+            gnused
+            nodejs_20
+            python3
+            util-linux
+          ]) ++ extraBootstrapPackages;
+      bootstrapConditionScript =
+        if localHostSeedOnlyBootstrap then
+          null
+        else
+          "${bootstrapConditionScript}";
+      bootstrapScript =
+        if localHostSeedOnlyBootstrap then
+          null
+        else
+          renderTemplate scriptVars ./guest/bootstrap.sh;
+      toolRuntimeSeedScript =
+        if cfg.toolRuntimesEnabled then
+          "${hostToolRuntimeSeedScript}/bin/firebreak-node-cli-host-seed"
+        else
+          null;
       shellInit = renderTemplate scriptVars ./guest/shell-init.sh;
     };
 
-    microvm.forwardPorts = forwardPorts;
+    microvm.forwardPorts = lib.mkIf (cfg.runtimeBackend == "qemu") forwardPorts;
 
     networking.firewall.allowedTCPPorts = guestTcpPorts;
     networking.firewall.allowedUDPPorts = guestUdpPorts;

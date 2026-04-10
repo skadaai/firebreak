@@ -69,6 +69,7 @@ Interactive TUI hardening after the first full end-to-end success. The current a
 - the external `vibe-kanban` recipe now exposes the same `codex` and `claude` sibling-worker proxy commands as AO, so the remaining TUI bugs can be compared against a second VM recipe canary
 - packaged node-cli worker proxies now support a shared `FIREBREAK_WORKER_MODE=vm|local` switch plus per-command `FIREBREAK_WORKER_MODES=name=mode,...` overrides, and the public `firebreak run` surface can set both through `--worker-mode`
 - packaged node-cli worker proxies now treat `local` as a real supported dispatch mode for Firebreak-managed worker packages by deriving the in-VM upstream CLI install from the declared `package = "firebreak-*"` field instead of requiring duplicated recipe metadata
+- guest-side worker-bridge `run` requests now use the long-running bridge timeout class, because nested Firebreak launches may spend tens of seconds in host-side Nix build or substitution work before any bridge response file is written
 - a committed `vibe-kanban` interactive Codex smoke now protects the working Codex path against regressions while shared TUI lifecycle work continues
 - the same current worktree now reproduces the `claude` exit-limbo behavior in both AO and `vibe-kanban`, which retired recipe-specific suspicion and isolated the bug in the shared attached-worker lifecycle
 - a direct shared-layer `claude` exit smoke now reproduces the same raw-mode repeated-`Ctrl-C` behavior without AO or `vibe-kanban`, so the shared worker layer has a fast acceptance gate for this bug
@@ -85,6 +86,7 @@ Interactive TUI hardening after the first full end-to-end success. The current a
 - possible transport hardening beyond the first file-share bridge, such as a mounted Unix-socket protocol
 - broader recipe adoption and validation beyond the first external orchestrator recipe
 - stricter shared-layer lifecycle coverage for attached `claude` exit semantics, so the direct canary can match the currently working AO/VK product behavior without relying on looser integration harness timing
+- reducing or eliminating avoidable nested-package rebuilds so orchestrated `codex` and `claude` sibling-worker launches do not pay host-side Nix build cost on common cache-hit paths
 - optional polish for transcript noise, live-session cleanup, and any remaining debug-vs-live presentation rough edges
 
 - defer the shared worker-engine extraction from `modules/profiles/local/module.nix` until after this PR merges, because it is structural cleanup rather than a blocker for the current runtime and validation path

@@ -1,45 +1,20 @@
 set -eu
 
-if [ -z "${MICROVM_HOST_CWD_SOCKET:-}" ]; then
-  exit 0
-fi
+runtime_backend=@RUNTIME_BACKEND@
 
-printf '%s\n' \
-  -chardev socket,id=fs-hostcwd,path="$MICROVM_HOST_CWD_SOCKET" \
-  -device vhost-user-fs-pci,chardev=fs-hostcwd,tag=hostcwd
+emit_cloud_hypervisor_net() {
+  tap_interface=$1
+  mac_address=$2
+  [ -n "$tap_interface" ] || return 0
+  printf '%s\n' "--net" "tap=${tap_interface},mac=${mac_address}"
+}
 
-if [ -n "${MICROVM_HOST_META_DIR:-}" ]; then
-  printf '%s\n' \
-    -fsdev local,id=fs-hostmeta,path="$MICROVM_HOST_META_DIR",security_model=none,readonly=true \
-    -device virtio-9p-pci,fsdev=fs-hostmeta,mount_tag=hostmeta
-fi
-
-if [ -n "${MICROVM_SHARED_STATE_ROOT_DIR:-}" ] && [ -n "${MICROVM_SHARED_STATE_ROOT_SOCKET:-}" ]; then
-  printf '%s\n' \
-    -chardev socket,id=fs-hoststateroot,path="$MICROVM_SHARED_STATE_ROOT_SOCKET" \
-    -device vhost-user-fs-pci,chardev=fs-hoststateroot,tag=hoststateroot
-fi
-
-if [ -n "${MICROVM_SHARED_CREDENTIAL_SLOTS_DIR:-}" ] && [ -n "${MICROVM_SHARED_CREDENTIAL_SLOTS_SOCKET:-}" ]; then
-  printf '%s\n' \
-    -chardev socket,id=fs-hostcredentialslots,path="$MICROVM_SHARED_CREDENTIAL_SLOTS_SOCKET" \
-    -device vhost-user-fs-pci,chardev=fs-hostcredentialslots,tag=hostcredentialslots
-fi
-
-if [ -n "${MICROVM_AGENT_EXEC_OUTPUT_SOCKET:-}" ]; then
-  printf '%s\n' \
-    -chardev socket,id=fs-agentexecoutput,path="$MICROVM_AGENT_EXEC_OUTPUT_SOCKET" \
-    -device vhost-user-fs-pci,chardev=fs-agentexecoutput,tag=hostexecoutput
-fi
-
-if [ -n "${MICROVM_AGENT_TOOLS_SOCKET:-}" ]; then
-  printf '%s\n' \
-    -chardev socket,id=fs-agenttools,path="$MICROVM_AGENT_TOOLS_SOCKET" \
-    -device vhost-user-fs-pci,chardev=fs-agenttools,tag=hostagenttools
-fi
-
-if [ -n "${MICROVM_WORKER_BRIDGE_SOCKET:-}" ]; then
-  printf '%s\n' \
-    -chardev socket,id=fs-workerbridge,path="$MICROVM_WORKER_BRIDGE_SOCKET" \
-    -device vhost-user-fs-pci,chardev=fs-workerbridge,tag=hostworkerbridge
-fi
+case "$runtime_backend" in
+  cloud-hypervisor)
+    emit_cloud_hypervisor_net "${MICROVM_CLOUD_HYPERVISOR_TAP_INTERFACE:-}" "@NETWORK_MAC@"
+    ;;
+  *)
+    echo "unsupported local runtime backend for runtime-extra-args: $runtime_backend" >&2
+    exit 1
+    ;;
+esac

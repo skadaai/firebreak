@@ -105,7 +105,7 @@ The intended landing shape is:
 - [ARCHITECTURE.md](../../ARCHITECTURE.md)
 - [AGENTS.md](../../AGENTS.md)
 - [spec 007](../007-cli-and-naming-contract/SPEC.md)
-- [spec 008](../008-single-agent-package-mode/SPEC.md)
+- [spec 008](../008-single-local-package-mode/SPEC.md)
 
 ### Risks
 

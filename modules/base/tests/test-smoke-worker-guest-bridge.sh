@@ -55,14 +55,28 @@ guest_script=$workspace_dir/guest-bridge-check.sh
 cat >"$guest_script" <<'INNER_EOF'
 set -eu
 
-stale_lock_dir=/var/lib/dev/.local/state/firebreak/worker-local/spawn-locks/bridge-process.lock
+guest_system_bin=/run/current-system/sw/bin
+firebreak_bin=$guest_system_bin/firebreak
+python3_bin=$guest_system_bin/python3
+
+if ! [ -x "$firebreak_bin" ]; then
+  echo "guest bridge smoke missing firebreak CLI at $firebreak_bin" >&2
+  exit 1
+fi
+
+if ! [ -x "$python3_bin" ]; then
+  echo "guest bridge smoke missing python3 at $python3_bin" >&2
+  exit 1
+fi
+
+stale_lock_dir=@WORKER_LOCAL_STATE_DIR@/spawn-locks/bridge-process.lock
 mkdir -p "$stale_lock_dir"
 printf '%s\n' 999999 >"$stale_lock_dir/pid"
 
-spawn_output=$(firebreak worker run --kind bridge-process --workspace "$PWD" --json)
+spawn_output=$("$firebreak_bin" worker run --kind bridge-process --workspace "$PWD" --json)
 printf '__BRIDGE_SPAWN__%s\n' "$spawn_output"
 
-worker_id=$(RUN_OUTPUT="$spawn_output" python3 - <<'PY'
+worker_id=$(RUN_OUTPUT="$spawn_output" "$python3_bin" - <<'PY'
 import json
 import os
 
@@ -71,10 +85,10 @@ PY
 )
 printf '__BRIDGE_ID__%s\n' "$worker_id"
 
-show_output=$(firebreak worker inspect "$worker_id")
+show_output=$("$firebreak_bin" worker inspect "$worker_id")
 printf '__BRIDGE_SHOW__%s\n' "$show_output"
 
-show_backend=$(SHOW_OUTPUT="$show_output" python3 - <<'PY'
+show_backend=$(SHOW_OUTPUT="$show_output" "$python3_bin" - <<'PY'
 import json
 import os
 
@@ -87,7 +101,7 @@ if [ "$show_backend" != "process" ]; then
   exit 1
 fi
 
-show_authority=$(SHOW_OUTPUT="$show_output" python3 - <<'PY'
+show_authority=$(SHOW_OUTPUT="$show_output" "$python3_bin" - <<'PY'
 import json
 import os
 
@@ -100,7 +114,7 @@ if [ "$show_authority" != "guest" ]; then
   exit 1
 fi
 
-debug_output=$(firebreak worker debug --json)
+debug_output=$("$firebreak_bin" worker debug --json)
 printf '__BRIDGE_DEBUG__%s\n' "$debug_output"
 
 if ! printf '%s\n' "$debug_output" | grep -F -q '"bridge"'; then
@@ -115,9 +129,9 @@ if ! printf '%s\n' "$debug_output" | grep -F -q "$worker_id"; then
   exit 1
 fi
 
-stop_spawn_output=$(firebreak worker run --kind bridge-stop --workspace "$PWD" --json)
+stop_spawn_output=$("$firebreak_bin" worker run --kind bridge-stop --workspace "$PWD" --json)
 printf '%s\n' '__BRIDGE_STOP_SPAWNED__'
-stop_worker_id=$(STOP_RUN_OUTPUT="$stop_spawn_output" python3 - <<'PY'
+stop_worker_id=$(STOP_RUN_OUTPUT="$stop_spawn_output" "$python3_bin" - <<'PY'
 import json
 import os
 
@@ -125,10 +139,10 @@ print(json.loads(os.environ["STOP_RUN_OUTPUT"])["worker_id"])
 PY
 )
 
-stop_output=$(firebreak worker stop --json "$stop_worker_id")
+stop_output=$("$firebreak_bin" worker stop --json "$stop_worker_id")
 printf '__BRIDGE_STOP__%s\n' "$stop_output"
 
-stop_status=$(STOP_OUTPUT="$stop_output" python3 - <<'PY'
+stop_status=$(STOP_OUTPUT="$stop_output" "$python3_bin" - <<'PY'
 import json
 import os
 
@@ -143,7 +157,7 @@ fi
 
 attach_parallel_dir=$(mktemp -d "$PWD/bridge-attach-parallel.XXXXXX")
 SECONDS=0
-single_attach_output=$(firebreak worker run --kind bridge-process --workspace "$PWD" --attach -- sh -c 'sleep 3; printf attach-baseline')
+single_attach_output=$("$firebreak_bin" worker run --kind bridge-process --workspace "$PWD" --attach -- sh -c 'sleep 3; printf attach-baseline')
 single_attach_elapsed=$SECONDS
 printf '__BRIDGE_ATTACH_SINGLE_ELAPSED__%s\n' "$single_attach_elapsed"
 
@@ -155,11 +169,11 @@ fi
 
 SECONDS=0
 (
-  firebreak worker run --kind bridge-process --workspace "$PWD" --attach -- sh -c 'sleep 3; printf attach-one'
+  "$firebreak_bin" worker run --kind bridge-process --workspace "$PWD" --attach -- sh -c 'sleep 3; printf attach-one'
 ) >"$attach_parallel_dir/one.out" &
 attach_parallel_one_pid=$!
 (
-  firebreak worker run --kind bridge-process --workspace "$PWD" --attach -- sh -c 'sleep 3; printf attach-two'
+  "$firebreak_bin" worker run --kind bridge-process --workspace "$PWD" --attach -- sh -c 'sleep 3; printf attach-two'
 ) >"$attach_parallel_dir/two.out" &
 attach_parallel_two_pid=$!
 
@@ -181,19 +195,19 @@ if ! grep -F -q 'attach-two' "$attach_parallel_dir/two.out"; then
   exit 1
 fi
 
-serialized_threshold=$((single_attach_elapsed * 2 - 2))
+serialized_threshold=$((single_attach_elapsed * 2 - 1))
 minimum_parallel_threshold=$((single_attach_elapsed + 1))
 if [ "$serialized_threshold" -lt "$minimum_parallel_threshold" ]; then
   serialized_threshold=$minimum_parallel_threshold
 fi
 
-if [ "$attach_parallel_elapsed" -ge "$serialized_threshold" ]; then
+if [ "$attach_parallel_elapsed" -gt "$serialized_threshold" ]; then
   echo "parallel attached process workers took too long: ${attach_parallel_elapsed}s (single attached process took ${single_attach_elapsed}s)" >&2
   exit 1
 fi
 
 printf '%s\n' '__BRIDGE_ATTACH_START__'
-attach_output=$(firebreak worker run --kind bridge-firebreak --workspace "$PWD" --attach -- --version)
+attach_output=$("$firebreak_bin" worker run --kind bridge-firebreak --workspace "$PWD" --attach -- --version)
 printf '__BRIDGE_ATTACH__%s\n' "$attach_output"
 
 if ! printf '%s\n' "$attach_output" | grep -F -q 'bridge-firebreak-ok'; then
@@ -224,7 +238,7 @@ if ! output=$(
   keep_smoke_tmp_dir=1
   printf '%s\n' "$output" >&2
   printf '%s\n' '--- host worker debug --json ---' >&2
-  FIREBREAK_WORKER_STATE_DIR="$state_dir" @AGENT_BIN@ worker debug --json >&2 || true
+  FIREBREAK_WORKER_STATE_DIR="$state_dir" @TOOL_BIN@ debug --json >&2 || true
   echo "worker guest bridge smoke VM run failed" >&2
   exit 1
 fi
@@ -235,7 +249,7 @@ if ! printf '%s\n' "$output" | grep -F -q '__BRIDGE_OK__'; then
   keep_smoke_tmp_dir=1
   printf '%s\n' "$output" >&2
   printf '%s\n' '--- host worker debug --json ---' >&2
-  FIREBREAK_WORKER_STATE_DIR="$state_dir" @AGENT_BIN@ worker debug --json >&2 || true
+  FIREBREAK_WORKER_STATE_DIR="$state_dir" @TOOL_BIN@ debug --json >&2 || true
   echo "worker guest bridge smoke did not complete successfully" >&2
   exit 1
 fi

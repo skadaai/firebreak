@@ -2,12 +2,12 @@
 rec {
   workerProxyLocalUpstreamsByPackage = {
     firebreak-codex = {
-      packageSpec = "@openai/codex@latest";
       binName = "codex";
+      package = pkgs.codex;
     };
     firebreak-claude-code = {
-      packageSpec = "@anthropic-ai/claude-code@latest";
       binName = "claude";
+      package = pkgs.claude-code;
     };
   };
 
@@ -61,6 +61,20 @@ rec {
 
       json_escape() {
         printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+      }
+
+      worker_command_needs_attach() {
+        if [ "$#" -eq 0 ]; then
+          return 0
+        fi
+
+        case "$1" in
+          --help|-h|help|--version|-V|version)
+            return 1
+            ;;
+        esac
+
+        return 0
       }
 
       resolve_command_worker_mode() {
@@ -135,7 +149,10 @@ __FIREBREAK_WRAPPER_INFO__
       esac
 
       workspace=$PWD
-      exec firebreak worker run --kind ${lib.escapeShellArg kind} --workspace "$workspace" --attach -- "$@"
+      if worker_command_needs_attach "$@"; then
+        exec firebreak worker run --kind ${lib.escapeShellArg kind} --workspace "$workspace" --attach -- "$@"
+      fi
+      exec firebreak worker run --kind ${lib.escapeShellArg kind} --workspace "$workspace" -- "$@"
     '';
 
   mkWorkspaceProjectArtifacts = {
@@ -178,14 +195,14 @@ __FIREBREAK_WRAPPER_INFO__
     in
     mkLocalVmArtifacts {
       inherit name;
-      defaultAgentCommand = launchCommandName;
+      defaultToolCommand = launchCommandName;
       workerBridgeEnabled = effectiveWorkerBridgeEnabled;
       inherit workerKinds;
       extraModules = [
         ({ config, pkgs, ... }:
           let
             cfg = config.workloadVm;
-            devHome = "/var/lib/${cfg.devUser}";
+            devHome = cfg.devHome;
             stateRoot = "${devHome}/.cache/firebreak-workspaces/${name}";
             workspaceOwnedPaths = [
               stateRoot
@@ -223,6 +240,50 @@ __FIREBREAK_WRAPPER_INFO__
                 "$RUSTUP_HOME"
               cd "$WORKSPACE"
               ${bootstrapCommands}
+            '';
+            bootstrapConditionScript = pkgs.writeShellScript "${name}-workspace-bootstrap-condition" ''
+              set -eu
+
+              # This script is used as a systemd ExecCondition for bootstrap.
+              # Exit 0 means "proceed with service start"; non-zero means "skip".
+              # The condition intentionally exits 1 when repo markers are missing
+              # or when current_hash already matches state_file.
+              workspace="${cfg.workspaceMount}"
+              state_file="${stateRoot}/inputs.sha256"
+              missing_marker=""
+
+              for marker in ${repoMarkerArgs}; do
+                if ! [ -e "$workspace/$marker" ]; then
+                  missing_marker=$marker
+                  break
+                fi
+              done
+
+              if [ -n "$missing_marker" ]; then
+                exit 1
+              fi
+
+              hash_input=$(mktemp)
+              {
+                for lockfile in ${lockfileArgs}; do
+                  if [ -e "$workspace/$lockfile" ]; then
+                    sha256sum "$workspace/$lockfile"
+                  fi
+                done
+              } > "$hash_input"
+
+              if [ -s "$hash_input" ]; then
+                current_hash=$(sha256sum "$hash_input" | cut -d' ' -f1)
+              else
+                current_hash=no-lockfiles
+              fi
+              rm -f "$hash_input"
+
+              if [ -r "$state_file" ] && [ "$(cat "$state_file")" = "$current_hash" ]; then
+                exit 1
+              fi
+
+              exit 0
             '';
             readyScript = pkgs.writeShellApplication {
               name = readyCommandName;
@@ -293,8 +354,14 @@ __FIREBREAK_WRAPPER_INFO__
           in {
             workloadVm = {
               brandingTagline = tagline;
-              extraSystemPackages = tools ++ [ launchScript readyScript ];
+              environmentOverlay = {
+                enable = true;
+                package.packages = tools;
+                projectNix.enable = true;
+              };
+              extraSystemPackages = [ launchScript readyScript ];
               bootstrapPackages = sharedBootstrapPackages ++ bootstrapTools;
+              bootstrapConditionScript = "${bootstrapConditionScript}";
               bootstrapScript = ''
                 set -eu
 
@@ -412,9 +479,16 @@ __FIREBREAK_WRAPPER_INFO__
                 if packageName != null && builtins.hasAttr packageName workerProxyLocalUpstreamsByPackage
                 then builtins.getAttr packageName workerProxyLocalUpstreamsByPackage
                 else { };
-            in {
+              upstreamBinName = knownUpstream.binName or commandName;
+            in
+            lib.filterAttrs (_: value: value != null) {
               packageSpec = knownUpstream.packageSpec or null;
-              binName = knownUpstream.binName or commandName;
+              binName = upstreamBinName;
+              package = knownUpstream.package or null;
+              realBinPath =
+                if knownUpstream ? package
+                then "${knownUpstream.package}/bin/${upstreamBinName}"
+                else null;
             })
           workerProxies;
 
@@ -462,7 +536,7 @@ __FIREBREAK_WRAPPER_INFO__
     in
     mkLocalVmArtifacts {
       inherit name;
-      defaultAgentCommand = launchCommandName;
+      defaultToolCommand = launchCommandName;
       inherit sharedStateRoots sharedCredentialSlots;
       workerBridgeEnabled = effectiveWorkerBridgeEnabled;
       workerKinds = effectiveWorkerKinds;
@@ -487,8 +561,11 @@ __FIREBREAK_WRAPPER_INFO__
           installBinScripts = effectiveInstallBinScripts;
           proxyLocalUpstreams = derivedProxyLocalUpstreams;
           vmName = name;
-          extraSystemPackages = packageSet pkgs ++ installBinSystemPackages;
+          extraSystemPackages = installBinSystemPackages;
           extraBootstrapPackages = bootstrapPackageSet pkgs;
+        })
+        ({ ... }: {
+          workloadVm.environmentOverlay.package.packages = packageSet pkgs;
         })
       ] ++ extraModules;
     };
@@ -515,7 +592,12 @@ __FIREBREAK_WRAPPER_INFO__
       testProjectFor = system: mkProject system [ ];
       testsFor = system:
         import testsModule {
-          pkgs = nixpkgs.legacyPackages.${system};
+          pkgs = import nixpkgs {
+            inherit system;
+            config = import ./nixpkgs-config.nix {
+              inherit lib;
+            };
+          };
           project = projectFor system;
           testProject = testProjectFor system;
           firebreakBin = "${firebreak.packages.${system}.default}/bin/firebreak";

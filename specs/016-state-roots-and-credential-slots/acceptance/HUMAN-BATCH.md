@@ -4,7 +4,7 @@ Run this batch after the automated checks in [VALIDATION.md](./VALIDATION.md) ar
 
 These checks cover the remaining human-facing behavior across:
 - [spec 009](../../009-project-config-and-doctor/SPEC.md)
-- [spec 014](../../014-multi-agent-host-config-share/SPEC.md)
+- [spec 014](../../014-shared-state-root/SPEC.md)
 - [spec 016](../SPEC.md)
 
 ## Setup

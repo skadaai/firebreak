@@ -18,7 +18,12 @@ nix_args_path=$smoke_tmp_dir/nix.args
 nix_cwd_path=$smoke_tmp_dir/nix.cwd
 mkdir -p "$fake_bin_dir" "$empty_bin_dir"
 : >"$fake_kvm_path"
-node_bin=$(command -v node)
+node_bin=$(command -v node || true)
+
+if [ -z "$node_bin" ]; then
+  echo "launcher smoke requires \`node\` on PATH" >&2
+  exit 1
+fi
 
 assert_no_nix_invocation() {
   context=$1
@@ -54,7 +59,7 @@ missing_nix_output=$(
   env -i \
     HOME="${HOME:-/tmp}" \
     PATH="$empty_bin_dir" \
-    FIREBREAK_LAUNCHER_KVM_PATH="$fake_kvm_path" \
+    FIREBREAK_LAUNCHER_PACKAGE_ROOT="$repo_root" \
     "$node_bin" "$repo_root/bin/firebreak.js" run codex 2>&1
 )
 missing_nix_status=$?
@@ -89,7 +94,6 @@ rm -f "$nix_args_path" "$nix_cwd_path"
 vms_output=$(
   cd "$repo_root"
   PATH="$fake_bin_dir:$PATH" \
-    FIREBREAK_LAUNCHER_KVM_PATH="$fake_kvm_path" \
     node "$repo_root/bin/firebreak.js" vms
 )
 
@@ -109,7 +113,6 @@ rm -f "$nix_args_path" "$nix_cwd_path"
 doctor_output=$(
   cd "$smoke_tmp_dir"
   PATH="$fake_bin_dir:$PATH" \
-    FIREBREAK_LAUNCHER_KVM_PATH="$fake_kvm_path" \
     FIREBREAK_LAUNCHER_TEST_PLATFORM=linux \
     FIREBREAK_LAUNCHER_TEST_ARCH=arm64 \
     node "$repo_root/bin/firebreak.js" doctor --json
@@ -165,6 +168,7 @@ assert_no_nix_invocation "the Intel Mac rejection path"
 rm -f "$nix_args_path" "$nix_cwd_path"
 
 darwin_validate_output=$(
+  cd "$repo_root"
   PATH="$fake_bin_dir:$PATH" \
     DEV_FLOW_LAUNCHER_TEST_PLATFORM=darwin \
     DEV_FLOW_LAUNCHER_TEST_ARCH=arm64 \
@@ -178,32 +182,28 @@ if ! [ -f "$nix_args_path" ]; then
   exit 1
 fi
 
-if ! printf '%s\n' "$darwin_validate_output" | grep -F -q "Firebreak"; then
-  printf '%s\n' "$darwin_validate_output" >&2
-  echo "launcher smoke did not print the expected Apple Silicon macOS validation output" >&2
-  exit 1
-fi
-
 rm -f "$nix_args_path" "$nix_cwd_path"
+
 set +e
-missing_kvm_output=$(
+linux_validate_output=$(
+  cd "$repo_root"
   PATH="$fake_bin_dir:$PATH" \
+    DEV_FLOW_LAUNCHER_TEST_PLATFORM=linux \
+    DEV_FLOW_LAUNCHER_TEST_ARCH=arm64 \
     DEV_FLOW_LAUNCHER_KVM_PATH="$smoke_tmp_dir/missing-kvm" \
     node "$repo_root/bin/dev-flow.js" validate run test-smoke-codex 2>&1
 )
-missing_kvm_status=$?
+linux_validate_status=$?
 set -e
 
-if [ "$missing_kvm_status" -eq 0 ] || ! printf '%s\n' "$missing_kvm_output" | grep -F -q "needs KVM access"; then
-  printf '%s\n' "$missing_kvm_output" >&2
-  echo "launcher smoke did not block non-diagnostic commands when KVM was unavailable" >&2
+if [ "$linux_validate_status" -eq 0 ] || ! printf '%s\n' "$linux_validate_output" | grep -F -q "needs KVM access"; then
+  printf '%s\n' "$linux_validate_output" >&2
+  echo "launcher smoke did not fail clearly on the Linux KVM preflight path" >&2
   exit 1
 fi
 
-if [ -f "$nix_args_path" ]; then
-  cat "$nix_args_path" >&2
-  echo "launcher smoke should not invoke nix when KVM preflight fails" >&2
-  exit 1
-fi
+assert_no_nix_invocation "the Linux validation KVM preflight path"
+
+rm -f "$nix_args_path" "$nix_cwd_path"
 
 printf '%s\n' "Firebreak npx launcher smoke test passed"

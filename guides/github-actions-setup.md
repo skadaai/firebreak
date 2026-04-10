@@ -2,60 +2,67 @@
 
 This guide covers the manual steps required to make the workflows in [`.github/workflows/`](../.github/workflows) fully operational.
 
+For the enforced CI architecture and Namespace shape policy, see [CI Multi-Arch Testing](./ci-multi-arch-testing.md).
+
+Workflow matrices are generated from [`.github/ci/smoke-tests.json`](../.github/ci/smoke-tests.json) through [`.github/scripts/render-ci-matrix.sh`](../.github/scripts/render-ci-matrix.sh). When changing which smoke packages run in which workflow, update that catalog instead of editing package lists directly in the workflow files.
+
 ## What You Are Configuring
 
-This repository has two workflows:
+This repository has four workflows:
 
-- [`ci.yml`](../.github/workflows/ci.yml): runs hosted `nix flake check`
-- [`vm-smoke.yml`](../.github/workflows/vm-smoke.yml): runs `nix run .#firebreak-test-smoke-codex` on a self-hosted KVM runner
+- [`github-fast-checks.yml`](../.github/workflows/github-fast-checks.yml): runs only cheap GitHub-hosted checks
+- [`namespace-primary-runtime.yml`](../.github/workflows/namespace-primary-runtime.yml): runs the full paid `x86_64-linux` runtime matrix after the GitHub fast checks pass
+- [`namespace-secondary-arch-runtime.yml`](../.github/workflows/namespace-secondary-arch-runtime.yml): runs representative paid secondary-arch runtime checks only after the primary paid runtime gate passes
+- [`namespace-full-arch-sweep.yml`](../.github/workflows/namespace-full-arch-sweep.yml): runs the weekly broad multi-arch smoke sweep outside the pull-request gate
 
-The hosted workflow works immediately. The VM smoke workflow requires a self-hosted runner and one repository variable.
+The first workflow uses only GitHub-hosted runners. The three Namespace workflows assume the repository can schedule Namespace GitHub Actions runners for the labels used in those workflow files.
 
-## 1. Register A Self-Hosted KVM Runner
+The Namespace workflows also use runner-label optimizations:
 
-1. Open the repository on GitHub.
-2. Go to `Settings` > `Actions` > `Runners`.
-3. Click `New self-hosted runner`.
-4. Choose:
-   - Operating system: Linux
-   - Architecture: the Linux host architecture you are registering, such as `x64` or `ARM64`
-5. Prepare a Linux machine that has:
-   - Nix installed
-   - KVM available
-   - `git` installed
-   - permission to access `/dev/kvm`
-6. Follow GitHub’s generated runner installation commands on that machine.
-7. When configuring labels, make sure the runner has:
-   - `self-hosted`
-   - `linux`
-   - `kvm`
-8. Start the runner service and confirm it appears as `Idle` in the GitHub runners page.
+- branch-protected cache volumes shared per architecture
+- GitHub tool caches on Namespace runners for `actions/setup-node`, which keeps launcher coverage from rebuilding Node through Nix on every run
 
-## 2. Enable The VM Smoke Workflow
+## 1. Enable Namespace GitHub Actions Runners
 
-1. In the repository, go to `Settings` > `Secrets and variables` > `Actions`.
-2. Open the `Variables` tab.
-3. Create a new repository variable:
-   - Name: `ENABLE_SELF_HOSTED_VM_SMOKE`
-   - Value: `1`
-4. Save the variable.
+1. Confirm the repository or organization is connected to Namespace GitHub Actions runners.
+2. Confirm jobs can schedule the `nscloud-*` runner labels used by the workflows.
+3. Confirm the Linux runners used by the Namespace runtime workflows support the Firebreak Nix workflow with `enable_kvm: true`.
+4. Confirm the `aarch64-linux` Namespace jobs can use the combined feature-capable cache runner label form (`nscloud-...-with-cache-with-features`) plus the requested runner feature labels for `container.privileged=true` and `container.host-pid-namespace=true`. Those jobs now request deeper host access because they are meant to exercise the real local Cloud Hypervisor path.
+5. Treat `aarch64-darwin` as host-entry coverage plus Apple Silicon export evaluation only for now. Current CI does not provide a Linux guest-builder path for Darwin jobs, so Linux-guest local runtime smokes are intentionally excluded there.
+6. The arm64 Linux Namespace workflows now probe `/dev/kvm` before scheduling Cloud Hypervisor smokes. If a Namespace arm64 runner is missing KVM, the workflows fail with an explicit runner-regression message instead of failing inside the guest launcher.
 
-This enables automatic execution of [`vm-smoke.yml`](../.github/workflows/vm-smoke.yml) on pushes and pull requests. Without this variable, the workflow only runs from `workflow_dispatch`.
-
-## 3. Verify The Setup
+## 2. Verify The Workflow Topology
 
 1. Push a branch or open a pull request.
-2. Confirm `CI / Nix Checks` starts on a GitHub-hosted runner.
-3. Confirm `Firebreak Smoke / firebreak-codex smoke` starts on the self-hosted runner.
-4. If needed, trigger `VM Smoke` manually from the `Actions` tab with `Run workflow`.
+2. Confirm `Firebreak GitHub Fast Checks` starts automatically.
+3. Confirm `Firebreak Namespace Primary Runtime` starts automatically only after the GitHub fast checks finish successfully.
+4. Confirm `Firebreak Namespace Secondary Arch Runtime` starts automatically only after the primary Namespace runtime workflow finishes successfully.
+5. If needed, trigger any Namespace workflow manually from the `Actions` tab with `Run workflow`.
+6. Confirm the weekly scheduled `main` run starts `Firebreak Namespace Full Arch Sweep`.
 
-## 4. Common Failure Checks
+## 3. Common Failure Checks
 
-- Runner never picks up the job:
-  - verify the runner has `self-hosted`, `linux`, and `kvm`
-  - verify the runner is online
-- VM smoke job is skipped:
-  - verify `ENABLE_SELF_HOSTED_VM_SMOKE=1`
+- Namespace job never starts:
+  - verify Namespace runner integration is active for the repository
+  - verify the exact `nscloud-*` labels in the workflow are valid in your Namespace setup
+  - verify `job.priority`, `github.run-id`, and similar scheduling controls are separate labels rather than being appended to the `nscloud-*` machine label string
+- Namespace primary runtime never starts automatically:
+  - verify `Firebreak GitHub Fast Checks` completed successfully
+  - verify the workflow name in [`namespace-primary-runtime.yml`](../.github/workflows/namespace-primary-runtime.yml) still matches `Firebreak GitHub Fast Checks`
+- Namespace secondary-arch runtime never starts automatically:
+  - verify `Firebreak Namespace Primary Runtime` completed successfully
+  - verify the workflow name in [`namespace-secondary-arch-runtime.yml`](../.github/workflows/namespace-secondary-arch-runtime.yml) still matches `Firebreak Namespace Primary Runtime`
+- Weekly full-arch sweep never starts automatically:
+  - verify the cron trigger in [`namespace-full-arch-sweep.yml`](../.github/workflows/namespace-full-arch-sweep.yml) is still present
+  - verify scheduled workflows are enabled for the repository
 - VM boot fails immediately:
-  - verify the runner machine has working KVM access
+  - verify the Namespace Linux runner can execute KVM-backed Nix workloads
   - verify the runner user can execute `nix run .#firebreak-test-smoke-codex`
+- arm64 Linux runtime probe reports missing `/dev/kvm`:
+  - treat that as a Namespace runner regression or misconfiguration
+  - do not use a bare `nsc create` result as proof that the GitHub runner product lacks KVM
+- Launcher smoke unexpectedly asks for `FIREBREAK_WORKLOAD_REGISTRY`:
+  - verify the smoke is running from the Firebreak repository root
+  - verify the workflow provides `node` on `PATH`, currently through `actions/setup-node`
+- Artifact upload fails with `ENXIO` on a socket path:
+  - verify the workflow excludes live `*.socket` files from uploaded artifact paths

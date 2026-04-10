@@ -15,7 +15,7 @@ wait_for_status() {
   for _ in $(seq 1 100); do
     inspect_output=$(
       FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-        @AGENT_BIN@ inspect "$worker_id"
+        @TOOL_BIN@ inspect "$worker_id"
     )
     if printf '%s\n' "$inspect_output" | grep -F -q "$status_pattern"; then
       printf '%s' "$inspect_output"
@@ -91,7 +91,7 @@ if [ "$command" = "build" ]; then
 #!/usr/bin/env bash
 set -eu
 printf '%s\n' "__INSTALLABLE__$installable"
-printf '%s\n' "__SESSION_MODE__\${FIREBREAK_AGENT_SESSION_MODE_OVERRIDE:-}"
+printf '%s\n' "__SESSION_MODE__\${FIREBREAK_SESSION_MODE_OVERRIDE:-}"
 if [ "\${1:-}" = "__sleep__" ]; then
   shift
   trap 'exit 0' TERM INT
@@ -113,7 +113,7 @@ if [ "${1:-}" = "--" ]; then
 fi
 
 printf '%s\n' "__INSTALLABLE__$installable"
-printf '%s\n' "__SESSION_MODE__${FIREBREAK_AGENT_SESSION_MODE_OVERRIDE:-}"
+printf '%s\n' "__SESSION_MODE__${FIREBREAK_SESSION_MODE_OVERRIDE:-}"
 for arg in "$@"; do
   printf '%s\n' "__ARG__$arg"
 done
@@ -122,7 +122,7 @@ chmod +x "$fake_bin_dir/nix"
 
 process_worker_id=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ run --backend process --kind smoke-process --workspace "$workspace_dir" -- sh -c 'printf worker-ok'
+    @TOOL_BIN@ run --backend process --kind smoke-process --workspace "$workspace_dir" -- sh -c 'printf worker-ok'
 )
 
 if [ -z "$process_worker_id" ]; then
@@ -140,7 +140,7 @@ fi
 
 process_logs_output=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ logs "$process_worker_id"
+    @TOOL_BIN@ logs "$process_worker_id"
 )
 if ! printf '%s\n' "$process_logs_output" | grep -F -q 'worker-ok'; then
   printf '%s\n' "$process_logs_output" >&2
@@ -150,7 +150,7 @@ fi
 
 attach_process_output=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ run --attach --backend process --kind smoke-attach-process --workspace "$workspace_dir" -- sh -c 'printf attached-ok'
+    @TOOL_BIN@ run --attach --backend process --kind smoke-attach-process --workspace "$workspace_dir" -- sh -c 'printf attached-ok'
 )
 if ! printf '%s\n' "$attach_process_output" | grep -F -q 'attached-ok'; then
   printf '%s\n' "$attach_process_output" >&2
@@ -164,12 +164,12 @@ attach_firebreak_default_output=$(
     FIREBREAK_FLAKE_REF='path:@REPO_ROOT@' \
     FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG=1 \
     FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
-    @AGENT_BIN@ run --attach --backend firebreak --kind smoke-firebreak-attach-default --workspace "$workspace_dir" --package firebreak-codex
+    @TOOL_BIN@ run --attach --backend firebreak --kind smoke-firebreak-attach-default --workspace "$workspace_dir" --package firebreak-codex
 )
 
-if ! printf '%s\n' "$attach_firebreak_default_output" | grep -F -q '__SESSION_MODE__agent-attach-exec'; then
+if ! printf '%s\n' "$attach_firebreak_default_output" | grep -F -q '__SESSION_MODE__command-attach-exec'; then
   printf '%s\n' "$attach_firebreak_default_output" >&2
-  echo "worker smoke did not force attached firebreak workers into agent-attach-exec mode" >&2
+  echo "worker smoke did not force attached firebreak workers into command-attach-exec mode" >&2
   exit 1
 fi
 
@@ -179,12 +179,12 @@ attach_firebreak_args_output=$(
     FIREBREAK_FLAKE_REF='path:@REPO_ROOT@' \
     FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG=1 \
     FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
-    @AGENT_BIN@ run --attach --backend firebreak --kind smoke-firebreak-attach-args --workspace "$workspace_dir" --package firebreak-codex -- --version
+    @TOOL_BIN@ run --attach --backend firebreak --kind smoke-firebreak-attach-args --workspace "$workspace_dir" --package firebreak-codex -- --version
 )
 
-if ! printf '%s\n' "$attach_firebreak_args_output" | grep -F -q '__SESSION_MODE__agent-attach-exec'; then
+if ! printf '%s\n' "$attach_firebreak_args_output" | grep -F -q '__SESSION_MODE__command-attach-exec'; then
   printf '%s\n' "$attach_firebreak_args_output" >&2
-  echo "worker smoke did not preserve agent-attach-exec mode when attached firebreak workers forwarded args" >&2
+  echo "worker smoke did not preserve command-attach-exec mode when attached firebreak workers forwarded args" >&2
   exit 1
 fi
 
@@ -200,7 +200,7 @@ spawn_firebreak_output=$(
     FIREBREAK_FLAKE_REF='path:@REPO_ROOT@' \
     FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG=1 \
     FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
-    @AGENT_BIN@ run --backend firebreak --kind smoke-firebreak --workspace "$workspace_dir" --package firebreak-codex --json -- --version
+    @TOOL_BIN@ run --backend firebreak --kind smoke-firebreak --workspace "$workspace_dir" --package firebreak-codex --json -- --version
 )
 
 firebreak_worker_id=$(printf '%s\n' "$spawn_firebreak_output" | sed -n 's/.*"worker_id": "\([^"]*\)".*/\1/p' | head -n 1)
@@ -226,7 +226,7 @@ fi
 
 firebreak_logs_output=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ logs "$firebreak_worker_id"
+    @TOOL_BIN@ logs "$firebreak_worker_id"
 )
 if ! printf '%s\n' "$firebreak_logs_output" | grep -F -q '__INSTALLABLE__path:@REPO_ROOT@#firebreak-codex'; then
   printf '%s\n' "$firebreak_logs_output" >&2
@@ -242,7 +242,7 @@ attach_limit_error_path=$smoke_tmp_dir/firebreak-attach-limit.err
     FIREBREAK_FLAKE_REF='path:@REPO_ROOT@' \
     FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG=1 \
     FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
-    @AGENT_BIN@ run --attach --backend firebreak --kind smoke-firebreak-attach-limit --workspace "$workspace_dir" --package firebreak-codex --max-instances 1 -- __sleep__
+    @TOOL_BIN@ run --attach --backend firebreak --kind smoke-firebreak-attach-limit --workspace "$workspace_dir" --package firebreak-codex --max-instances 1 -- __sleep__
 ) >"$attach_limit_output_path" 2>"$attach_limit_error_path" &
 attach_limit_pid=$!
 
@@ -268,7 +268,7 @@ attach_limit_second_output=$(
     FIREBREAK_FLAKE_REF='path:@REPO_ROOT@' \
     FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG=1 \
     FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
-    @AGENT_BIN@ run --attach --backend firebreak --kind smoke-firebreak-attach-limit --workspace "$workspace_dir" --package firebreak-codex --max-instances 1 -- __sleep__ 2>&1
+    @TOOL_BIN@ run --attach --backend firebreak --kind smoke-firebreak-attach-limit --workspace "$workspace_dir" --package firebreak-codex --max-instances 1 -- __sleep__ 2>&1
 )
 attach_limit_second_status=$?
 set -e
@@ -279,7 +279,7 @@ if [ "$attach_limit_second_status" -eq 0 ] || ! printf '%s\n' "$attach_limit_sec
   exit 1
 fi
 
-FIREBREAK_WORKER_STATE_DIR="$state_dir" @AGENT_BIN@ stop "$attach_limit_worker_id" >/dev/null
+FIREBREAK_WORKER_STATE_DIR="$state_dir" @TOOL_BIN@ stop "$attach_limit_worker_id" >/dev/null
 set +e
 wait "$attach_limit_pid"
 set -e
@@ -297,7 +297,7 @@ scoped_limit_first_output=$(
     FIREBREAK_FLAKE_REF='path:@REPO_ROOT@' \
     FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG=1 \
     FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
-    @AGENT_BIN@ run --backend firebreak --kind smoke-firebreak-scoped-limit --workspace "$workspace_dir" --package firebreak-codex --max-instances 1 --json -- __sleep__
+    @TOOL_BIN@ run --backend firebreak --kind smoke-firebreak-scoped-limit --workspace "$workspace_dir" --package firebreak-codex --max-instances 1 --json -- __sleep__
 )
 
 scoped_limit_first_id=$(printf '%s\n' "$scoped_limit_first_output" | sed -n 's/.*"worker_id": "\([^"]*\)".*/\1/p' | head -n 1)
@@ -320,7 +320,7 @@ scoped_limit_second_output=$(
     FIREBREAK_FLAKE_REF='path:/alternate-firebreak-recipe' \
     FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG=1 \
     FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
-    @AGENT_BIN@ run --backend firebreak --kind smoke-firebreak-scoped-limit --workspace "$workspace_dir" --package firebreak-codex --max-instances 1 --json -- __sleep__
+    @TOOL_BIN@ run --backend firebreak --kind smoke-firebreak-scoped-limit --workspace "$workspace_dir" --package firebreak-codex --max-instances 1 --json -- __sleep__
 )
 
 scoped_limit_second_id=$(printf '%s\n' "$scoped_limit_second_output" | sed -n 's/.*"worker_id": "\([^"]*\)".*/\1/p' | head -n 1)
@@ -337,14 +337,14 @@ if ! printf '%s\n' "$scoped_limit_second_running" | grep -F -q '"status": "runni
   exit 1
 fi
 
-FIREBREAK_WORKER_STATE_DIR="$state_dir" @AGENT_BIN@ stop "$scoped_limit_first_id" "$scoped_limit_second_id" >/dev/null
+FIREBREAK_WORKER_STATE_DIR="$state_dir" @TOOL_BIN@ stop "$scoped_limit_first_id" "$scoped_limit_second_id" >/dev/null
 
 stop_worker_id=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ run --backend process --kind smoke-stop --workspace "$workspace_dir" -- sh -c 'sleep 30'
+    @TOOL_BIN@ run --backend process --kind smoke-stop --workspace "$workspace_dir" -- sh -c 'sleep 30'
 )
 
-FIREBREAK_WORKER_STATE_DIR="$state_dir" @AGENT_BIN@ stop "$stop_worker_id" >/dev/null
+FIREBREAK_WORKER_STATE_DIR="$state_dir" @TOOL_BIN@ stop "$stop_worker_id" >/dev/null
 
 stop_inspect_output=$(wait_for_status "$stop_worker_id" stopped || true)
 
@@ -356,16 +356,16 @@ fi
 
 stop_all_one_worker_id=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ run --backend process --kind smoke-stop-all-one --workspace "$workspace_dir" -- sh -c 'sleep 30'
+    @TOOL_BIN@ run --backend process --kind smoke-stop-all-one --workspace "$workspace_dir" -- sh -c 'sleep 30'
 )
 stop_all_two_worker_id=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ run --backend process --kind smoke-stop-all-two --workspace "$workspace_dir" -- sh -c 'sleep 30'
+    @TOOL_BIN@ run --backend process --kind smoke-stop-all-two --workspace "$workspace_dir" -- sh -c 'sleep 30'
 )
 
 stop_all_output=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ stop --all
+    @TOOL_BIN@ stop --all
 )
 
 if ! printf '%s\n' "$stop_all_output" | grep -F -q "$stop_all_one_worker_id"; then
@@ -382,7 +382,7 @@ fi
 
 ps_output=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ ps -a
+    @TOOL_BIN@ ps -a
 )
 
 if ! printf '%s\n' "$ps_output" | grep -F -q "$process_worker_id"; then
@@ -399,7 +399,7 @@ fi
 
 debug_output=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ debug --json
+    @TOOL_BIN@ debug --json
 )
 
 if ! printf '%s\n' "$debug_output" | grep -F -q "\"state_dir\": \"$state_dir\""; then
@@ -422,7 +422,7 @@ fi
 
 debug_text_output=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ debug
+    @TOOL_BIN@ debug
 )
 
 if ! printf '%s\n' "$debug_text_output" | grep -F -q 'Firebreak worker broker'; then
@@ -445,7 +445,7 @@ fi
 
 rm_output=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ rm "$process_worker_id"
+    @TOOL_BIN@ rm "$process_worker_id"
 )
 if ! printf '%s\n' "$rm_output" | grep -F -q "$process_worker_id"; then
   printf '%s\n' "$rm_output" >&2
@@ -455,12 +455,12 @@ fi
 
 force_rm_worker_id=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ run --backend process --kind smoke-force-rm --workspace "$workspace_dir" -- sh -c 'sleep 30'
+    @TOOL_BIN@ run --backend process --kind smoke-force-rm --workspace "$workspace_dir" -- sh -c 'sleep 30'
 )
 
 force_rm_output=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ rm --force "$force_rm_worker_id"
+    @TOOL_BIN@ rm --force "$force_rm_worker_id"
 )
 if ! printf '%s\n' "$force_rm_output" | grep -F -q "$force_rm_worker_id"; then
   printf '%s\n' "$force_rm_output" >&2
@@ -470,12 +470,12 @@ fi
 
 prune_target_id=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ run --backend process --kind smoke-prune --workspace "$workspace_dir" -- sh -c 'printf prune-ok'
+    @TOOL_BIN@ run --backend process --kind smoke-prune --workspace "$workspace_dir" -- sh -c 'printf prune-ok'
 )
 for _ in 1 2 3 4 5 6 7 8 9 10; do
   prune_inspect_output=$(
     FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-      @AGENT_BIN@ inspect "$prune_target_id"
+      @TOOL_BIN@ inspect "$prune_target_id"
   )
   if printf '%s\n' "$prune_inspect_output" | grep -F -q '"status": "exited"'; then
     break
@@ -485,7 +485,7 @@ done
 
 prune_output=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ prune
+    @TOOL_BIN@ prune
 )
 if ! printf '%s\n' "$prune_output" | grep -F -q "$prune_target_id"; then
   printf '%s\n' "$prune_output" >&2

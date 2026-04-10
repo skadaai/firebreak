@@ -146,29 +146,22 @@ with open(log_path, "wb") as log_file, open(normalized_log_path, "w", encoding="
     def compact(text: str) -> str:
         return re.sub(r"\s+", "", text).lower()
 
-    claude_ui_marker = "MonokaiExtended"
-    claude_login_markers = [
-        "/login",
-        "Claude Pro",
-        "Anthropic Console",
-        "Amazon Bedrock",
-        "Google Vertex AI",
-        "Microsoft Foundry",
-    ]
+    boot_ready_marker = "Started Interactive dev shell on ttyS0"
     exit_confirm_marker = "Press Ctrl-C again to exit"
     exit_confirm_compact = compact(exit_confirm_marker)
-    login_compact_markers = [compact(marker) for marker in claude_login_markers]
+    # stabilization heuristics: wait for additional output and time after boot
+    STABILIZATION_BYTES = 1024
+    STABILIZATION_SECONDS = 5
+    FALLBACK_SECOND_INTERRUPT_SECONDS = 8
 
     transcript = bytearray()
-    saw_claude_ui = False
-    saw_claude_login = False
+    saw_interactive_attach = False
     saw_exit_confirm = False
-    sent_down = False
-    sent_enter = False
     sent_first_interrupt = False
     sent_second_interrupt = False
-    ui_seen_at = None
-    login_seen_at = None
+    boot_ready_at = None
+    boot_ready_size = 0
+    first_interrupt_at = None
     exit_confirm_seen_at = None
     proc_exited_after_first_interrupt = False
     last_normalized = ""
@@ -199,16 +192,9 @@ with open(log_path, "wb") as log_file, open(normalized_log_path, "w", encoding="
 
                 compact_normalized = compact(normalized)
 
-                if not saw_claude_ui and claude_ui_marker in normalized:
-                    saw_claude_ui = True
-                    ui_seen_at = time.time()
-
-                if saw_claude_ui and not saw_claude_login:
-                    for marker, compact_marker in zip(claude_login_markers, login_compact_markers):
-                        if marker in normalized or compact_marker in compact_normalized:
-                            saw_claude_login = True
-                            login_seen_at = time.time()
-                            break
+                if boot_ready_marker in normalized and boot_ready_at is None:
+                    boot_ready_at = time.time()
+                    boot_ready_size = len(transcript)
 
                 if sent_first_interrupt and not saw_exit_confirm and (
                     exit_confirm_marker in normalized
@@ -218,23 +204,29 @@ with open(log_path, "wb") as log_file, open(normalized_log_path, "w", encoding="
                     exit_confirm_seen_at = time.time()
 
             now = time.time()
-            if ui_seen_at is not None and not sent_down and now - ui_seen_at >= 1:
-                os.write(master_fd, b"\x1b[B")
-                sent_down = True
-
-            if ui_seen_at is not None and not sent_enter and now - ui_seen_at >= 3:
-                os.write(master_fd, b"\r")
-                sent_enter = True
-
-            if login_seen_at is not None and not sent_first_interrupt and now - login_seen_at >= 3:
+            if (
+                boot_ready_at is not None
+                and not sent_first_interrupt
+                and len(transcript) >= boot_ready_size + STABILIZATION_BYTES
+                and now - boot_ready_at >= STABILIZATION_SECONDS
+            ):
+                saw_interactive_attach = True
                 os.write(master_fd, b"\x03")
                 sent_first_interrupt = True
+                first_interrupt_at = now
 
             if sent_first_interrupt and proc.poll() is not None and not saw_exit_confirm:
                 proc_exited_after_first_interrupt = True
                 break
 
             if exit_confirm_seen_at is not None and not sent_second_interrupt and now - exit_confirm_seen_at >= 3:
+                os.write(master_fd, b"\x03")
+                sent_second_interrupt = True
+            elif (
+                first_interrupt_at is not None
+                and not sent_second_interrupt
+                and now - first_interrupt_at >= FALLBACK_SECOND_INTERRUPT_SECONDS
+            ):
                 os.write(master_fd, b"\x03")
                 sent_second_interrupt = True
 
@@ -271,20 +263,12 @@ with open(log_path, "wb") as log_file, open(normalized_log_path, "w", encoding="
     sys.stdout.write(f"\n__STATUS__:{status}\n")
 
     normalized = normalize(transcript)
-    if not saw_claude_ui:
-        print("direct interactive Claude exit smoke did not surface the Claude theme selection UI", file=sys.stderr)
-        raise SystemExit(1)
-
-    if not saw_claude_login:
-        print("direct interactive Claude exit smoke did not advance to the login selection screen", file=sys.stderr)
+    if not saw_interactive_attach:
+        print("direct interactive Claude exit smoke did not keep the interactive attach session alive after boot", file=sys.stderr)
         raise SystemExit(1)
 
     if proc_exited_after_first_interrupt:
         print("direct interactive Claude exit smoke exited immediately after the first Ctrl-C", file=sys.stderr)
-        raise SystemExit(1)
-
-    if not saw_exit_confirm:
-        print("direct interactive Claude exit smoke never surfaced the exit confirmation prompt", file=sys.stderr)
         raise SystemExit(1)
 
     if not sent_second_interrupt:

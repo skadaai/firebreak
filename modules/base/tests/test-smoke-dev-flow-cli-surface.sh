@@ -20,7 +20,7 @@ require_pattern "$validate_output" "__DEV_FLOW__validate" "validate delegation"
 require_pattern "$validate_output" "__ARG__run" "validate run subcommand passthrough"
 require_pattern "$validate_output" "__ARG__test-smoke-codex" "validate suite passthrough"
 
-workspace_output=$(@DEV_FLOW_CLI_BIN@ workspace create --workspace-id spec-010 --branch agent/spec-010)
+workspace_output=$(@DEV_FLOW_CLI_BIN@ workspace create --workspace-id spec-010 --branch dev-flow/spec-010)
 require_pattern "$workspace_output" "__DEV_FLOW__workspace" "workspace delegation"
 require_pattern "$workspace_output" "__ARG__create" "workspace create subcommand passthrough"
 require_pattern "$workspace_output" "__ARG__--workspace-id" "workspace id flag passthrough"

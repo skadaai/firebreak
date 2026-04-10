@@ -32,4 +32,4 @@ Implementation has not started.
 ## Open questions
 
 - whether the first host runner should be exposed as a shell wrapper, a systemd unit interface, or both
-- how much per-agent configuration persistence the first host runner should support
+- how much per-tool state persistence the first host runner should support

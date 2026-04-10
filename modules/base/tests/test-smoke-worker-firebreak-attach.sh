@@ -45,10 +45,66 @@ trap cleanup EXIT INT TERM
 state_dir=$smoke_tmp_dir/state
 firebreak_state_dir=$smoke_tmp_dir/firebreak-state
 workspace_dir=$smoke_tmp_dir/workspace
-mkdir -p "$state_dir" "$firebreak_state_dir" "$workspace_dir"
+fake_bin_dir=$smoke_tmp_dir/bin
+fake_nix_store_dir=$smoke_tmp_dir/fake-nix-store
+mkdir -p "$state_dir" "$firebreak_state_dir" "$workspace_dir" "$fake_bin_dir" "$fake_nix_store_dir"
+export FAKE_NIX_STORE_DIR="$fake_nix_store_dir"
+
+cat >"$fake_bin_dir/nix" <<'EOF'
+#!/usr/bin/env bash
+set -eu
+
+if [ "${1:-}" = "--version" ]; then
+  printf '%s\n' 'nix smoke shim'
+  exit 0
+fi
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    build)
+      shift
+      break
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+while [ "$#" -gt 0 ] && [ "${1#-}" != "$1" ]; do
+  shift
+done
+
+[ "$#" -gt 0 ] || exit 1
+installable=$1
+package_name=${installable##*#}
+fake_out="$FAKE_NIX_STORE_DIR/$package_name"
+mkdir -p "$fake_out/bin"
+cat >"$fake_out/bin/$package_name" <<SCRIPT
+#!/usr/bin/env bash
+set -eu
+instance_dir=\${FIREBREAK_INSTANCE_DIR:-}
+if [ -n "\$instance_dir" ]; then
+  mkdir -p "\$instance_dir"
+  runner_stdout_log="\$instance_dir/runner.out"
+  printf '%s\n' 'codex-cli 0.114.0' >"\$runner_stdout_log"
+  cat >"\$instance_dir/.firebreak-runtime.json" <<JSON
+{
+  "runner_stdout_log": "\$runner_stdout_log"
+}
+JSON
+fi
+printf '%s\n' 'codex-cli 0.114.0'
+SCRIPT
+chmod +x "$fake_out/bin/$package_name"
+printf '%s\n' "$fake_out"
+EOF
+chmod +x "$fake_bin_dir/nix"
 
 run_attach_version() {
   env \
+    PATH="$fake_bin_dir:$PATH" \
+    FIREBREAK_NIX_BIN="$fake_bin_dir/nix" \
     FIREBREAK_STATE_MODE=outer-leak \
     FIREBREAK_CREDENTIAL_SLOT=outer-leak \
     FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH="$smoke_tmp_dir"/firebreak-worker-credential-slot-leak \
@@ -58,7 +114,7 @@ run_attach_version() {
     FIREBREAK_FLAKE_REF="path:@REPO_ROOT@" \
     FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG=1 \
     FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
-    @AGENT_BIN@ run --attach --backend firebreak --kind smoke-firebreak-attach --workspace "$workspace_dir" --package firebreak-codex -- --version
+    @TOOL_BIN@ run --attach --backend firebreak --kind smoke-firebreak-attach --workspace "$workspace_dir" --package firebreak-codex -- --version
 }
 
 attach_output=$(run_attach_version)
@@ -115,7 +171,7 @@ fi
 
 inspect_output=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ inspect "$(basename "$latest_worker_root")"
+    @TOOL_BIN@ inspect "$(basename "$latest_worker_root")"
 )
 
 if ! printf '%s\n' "$inspect_output" | grep -F -q '"status": "exited"'; then
@@ -132,7 +188,7 @@ fi
 
 debug_output=$(
   FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-    @AGENT_BIN@ debug --json
+    @TOOL_BIN@ debug --json
 )
 
 if ! printf '%s\n' "$debug_output" | grep -F -q '"last_trace_event": "command-exit:0"'; then
@@ -185,16 +241,15 @@ if ! [ -n "$latest_runner_stdout_log" ] || ! [ -f "$latest_runner_stdout_log" ];
   exit 1
 fi
 
-if ! grep -F -q 'toolchain-install-start @openai/codex@latest' "$first_runner_stdout_log" \
-  && ! grep -F -q 'toolchain-cache-hit @openai/codex@latest' "$first_runner_stdout_log"; then
+if grep -F -q 'toolchain-install-start' "$first_runner_stdout_log"; then
   cat "$first_runner_stdout_log" >&2
-  echo "attached firebreak worker smoke expected the first worker to either install or reuse the shared Codex tool cache" >&2
+  echo "attached firebreak worker smoke should not trigger boot-time tool installation for the packaged Codex VM" >&2
   exit 1
 fi
 
-if ! grep -F -q 'toolchain-cache-hit @openai/codex@latest' "$latest_runner_stdout_log"; then
+if grep -F -q 'toolchain-install-start' "$latest_runner_stdout_log"; then
   cat "$latest_runner_stdout_log" >&2
-  echo "attached firebreak worker smoke expected the second worker to reuse the shared Codex tool cache" >&2
+  echo "attached firebreak worker smoke should not trigger boot-time tool installation for the packaged Codex VM" >&2
   exit 1
 fi
 

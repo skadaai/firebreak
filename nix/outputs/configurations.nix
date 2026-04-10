@@ -22,28 +22,31 @@
 
   firebreak-codex-cloud = mkWorkloadVm {
     name = "firebreak-codex-cloud";
+    runtimeBackend = "qemu";
     profileModules = [ self.nixosModules.firebreak-cloud-profile ];
     extraModules = [ self.nixosModules.firebreak-codex ];
   };
 
   firebreak-claude-code-cloud = mkWorkloadVm {
     name = "firebreak-claude-code-cloud";
+    runtimeBackend = "qemu";
     profileModules = [ self.nixosModules.firebreak-cloud-profile ];
     extraModules = [ self.nixosModules.firebreak-claude-code ];
   };
 
   firebreak-cloud-smoke = mkWorkloadVm {
     name = "firebreak-cloud-smoke";
+    runtimeBackend = "qemu";
     profileModules = [ self.nixosModules.firebreak-cloud-profile ];
     extraModules = [ {
       workloadVm = {
         promptCommand = ''
-          case "$FIREBREAK_AGENT_PROMPT" in
+          case "$FIREBREAK_TOOL_PROMPT" in
             "Run the timeout validation fixture")
               ./timeout-fixture.sh
               ;;
             *)
-              printf '%s\n' "$FIREBREAK_AGENT_PROMPT"
+              printf '%s\n' "$FIREBREAK_TOOL_PROMPT"
               ;;
           esac
         '';

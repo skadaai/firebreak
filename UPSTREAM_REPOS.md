@@ -6,10 +6,14 @@ Use this file as the default map for `mcp__deepwiki__ask_question` when behavior
 
 | Technology | Upstream repo | Use for |
 | --- | --- | --- |
-| microvm.nix | `microvm-nix/microvm.nix` | runner behavior, MicroVM options, hypervisor integration |
+| microvm.nix | `astro/microvm.nix` | runner behavior, MicroVM options, hypervisor integration; this is the repo indexed by the current DeepWiki CLI |
 | Nixpkgs / NixOS modules | `NixOS/nixpkgs` | package names, module options, service behavior |
 | QEMU | `qemu/qemu` | hypervisor flags, device behavior, virtiofs/QMP details |
 | systemd | `systemd/systemd` | unit ordering, service semantics, shutdown behavior |
+| Cloud Hypervisor | `cloud-hypervisor/cloud-hypervisor` | local Linux backend capabilities, vsock, net device model |
+| gvisor-tap-vsock | `containers/gvisor-tap-vsock` | candidate userspace VM networking facade for rootless local networking |
+| RootlessKit | `rootless-containers/rootlesskit` | rootless container networking orchestration; contrast with VM networking needs |
+| slirp4netns | `rootless-containers/slirp4netns` | rootless container user-mode networking; contrast with VM networking needs |
 
 ## Agent CLIs
 

@@ -3,6 +3,39 @@ set -euo pipefail
 
 log() { printf '[new-worktree] %s\n' "$*" >&2; }
 
+resolve_base_ref() {
+  if [[ -n "${FIREBREAK_WORKTREE_BASE_REF:-}" ]]; then
+    printf '%s\n' "$FIREBREAK_WORKTREE_BASE_REF"
+    return
+  fi
+
+  current_branch=$(git -C "$root" symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+  if [[ -n "$current_branch" ]]; then
+    printf '%s\n' "$current_branch"
+    return
+  fi
+
+  printf '%s\n' HEAD
+}
+
+resolve_existing_base_ref() {
+  requested_ref=$1
+
+  if git -C "$root" rev-parse --verify --quiet "${requested_ref}^{commit}" >/dev/null; then
+    printf '%s\n' "$requested_ref"
+    return
+  fi
+
+  if git -C "$root" rev-parse --verify --quiet "refs/remotes/origin/${requested_ref}^{commit}" >/dev/null; then
+    printf '%s\n' "refs/remotes/origin/${requested_ref}"
+    return
+  fi
+
+  fallback_ref=$(resolve_base_ref)
+  log "Requested base ref '$requested_ref' is unavailable; falling back to '$fallback_ref'."
+  printf '%s\n' "$fallback_ref"
+}
+
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 branch="${1:-}"
@@ -16,7 +49,10 @@ if [[ -z "$branch" ]]; then
 fi
 
 root="$(git -C "$script_dir/.." rev-parse --show-toplevel)"
-base_ref="${DEV_FLOW_BASE_REF:-main}"
+base_ref="$(resolve_base_ref)"
+if [[ -n "${DEV_FLOW_BASE_REF:-}" ]]; then
+  base_ref="$(resolve_existing_base_ref "$DEV_FLOW_BASE_REF")"
+fi
 if [[ -n "$worktree_name" ]]; then
   worktree_parent="${DEV_FLOW_WORKSPACE_ROOT:-}"
 else
@@ -74,7 +110,7 @@ else
   git -C "$wt" switch -c "$branch" >/dev/null
 fi
 
-# Shared dirs live above the worktree root so tasks can reuse agent state.
+# Shared dirs live above the worktree root so tasks can reuse tool state.
 for d in ".direnv" ".codex" ".claude"; do
   shared_path="$shared_root/$d"
   if [[ ! -e "$shared_path" && ! -L "$shared_path" ]]; then

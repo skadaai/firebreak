@@ -115,7 +115,7 @@ validate_json_file() {
     exit 1
   fi
 
-  if ! python3 - "$target_path" "$description" <<'EOF'
+  if ! @PYTHON3@ - "$target_path" "$description" <<'EOF'
 import json
 import sys
 

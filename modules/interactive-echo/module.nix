@@ -8,8 +8,8 @@ let
     text = ''
       set -eu
       state_path=/run/firebreak-worker/interactive-echo.log
-      if [ -d /run/agent-exec-output ]; then
-        state_path=/run/agent-exec-output/interactive-echo.log
+      if [ -d /run/command-exec-output ]; then
+        state_path=/run/command-exec-output/interactive-echo.log
       fi
       mkdir -p "$(dirname "$state_path")"
       printf '%s\n' 'cursor-query-start' >>"$state_path"

@@ -5,7 +5,7 @@ set +e
 output=$(
   FIREBREAK_INSTANCE_EPHEMERAL=1 \
     FIREBREAK_LAUNCH_MODE=shell \
-    AGENT_VM_COMMAND='FIREBREAK_BOOTSTRAP_WAIT_TIMEOUT_SECONDS=60 firebreak-bootstrap-wait && command -v firebreak-bootstrap-wait && command -v ao && command -v codex && FIREBREAK_WRAPPER_INFO=1 codex && command -v claude && FIREBREAK_WRAPPER_INFO=1 claude' \
+    WORKLOAD_VM_COMMAND='FIREBREAK_BOOTSTRAP_WAIT_TIMEOUT_SECONDS=60 firebreak-bootstrap-wait && command -v firebreak-bootstrap-wait && command -v ao && command -v codex && FIREBREAK_WRAPPER_INFO=1 codex && command -v claude && FIREBREAK_WRAPPER_INFO=1 claude' \
     @AGENT_ORCHESTRATOR_BIN@ 2>&1
 )
 status=$?

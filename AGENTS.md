@@ -10,11 +10,12 @@ This repository is centered on a Nix flake plus reusable VM modules:
 - [`modules/base/`](./modules/base): shared Firebreak VM runtime, with `module.nix`, shared guest-side helpers, and the generic smoke template.
 - [`modules/profiles/local/`](./modules/profiles/local): local-launch profile, including local host-side helpers and local guest task-preparation helpers.
 - [`modules/profiles/cloud/`](./modules/profiles/cloud): cloud execution profile, including cloud host-side helpers and cloud guest job/task helpers.
-- [`modules/bun-agent/`](./modules/bun-agent): shared helper layer for Bun-managed agent CLIs.
+- [`modules/packaged-tool/`](./modules/packaged-tool): shared helper layer for image-baked tool CLIs.
 - [`modules/codex/`](./modules/codex): Codex-specific overlay module.
 - [`modules/claude-code/`](./modules/claude-code): Claude Code-specific overlay module.
-- [`ARCHITECTURE.md`](./ARCHITECTURE.md): module-oriented structure and guidance for adding new agents.
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md): module-oriented structure and guidance for adding new tool workloads.
 - [`BRANDING.md`](./BRANDING.md): product naming, tagline, and public naming conventions.
+- [`engineering/TERMINOLOGY.md`](./engineering/TERMINOLOGY.md): canonical glossary for `tool`, `package`, `workload`, `worker`, and `state`.
 - [`UPSTREAM_REPOS.md`](./UPSTREAM_REPOS.md): preferred `ask_question` targets for the technologies used in this repository.
 - [`guides/`](./guides): step-by-step instructions for tasks that require manual setup or human intervention.
 - [`.github/workflows/`](./.github/workflows): hosted CI checks and the self-hosted KVM smoke workflow.
@@ -40,20 +41,30 @@ There is no separate application `src/` tree yet. Keep shared behavior in the ba
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak-test-smoke-codex`
   Runs the lightweight host-side smoke test against the interactive Codex VM.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#dev-flow-test-smoke-loop`
-  Runs the bounded autonomous change-loop smoke against isolated dev-flow workspaces.
+  Runs the bounded autonomous change-loop smoke against isolated Firebreak workspaces.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#firebreak`
-  Runs the top-level Firebreak CLI with the human-facing VM surface.
-- `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#dev-flow`
-  Runs the agent-oriented dev-flow CLI for workspace, validation, and bounded-attempt commands.
+  Runs the top-level Firebreak CLI with the human-facing surface.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' flake check`
   Runs flake evaluation checks. Use this before submitting changes.
 - `nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#dev-flow -- loop run ...`
-  Runs the bounded loop against an existing isolated workspace, recording plan, policy, validation, review, and commit evidence.
+  Runs the bounded development-flow loop against an existing isolated workspace, recording plan, policy, validation, review, and commit evidence.
 - GitHub Actions
-  - `.github/workflows/ci.yml` runs hosted `flake check` on pushes and pull requests.
-  - `.github/workflows/vm-smoke.yml` runs `firebreak-test-smoke-codex` on a self-hosted runner labeled `self-hosted`, `linux`, `x64`, and `kvm`.
+  - `.github/workflows/github-fast-checks.yml` runs the hosted fail-fast checks.
+  - `.github/workflows/namespace-primary-runtime.yml` runs the primary Namespace runtime matrix after the hosted checks succeed.
+  - `.github/workflows/namespace-secondary-arch-runtime.yml` runs representative secondary-architecture runtime coverage after the primary Namespace runtime succeeds.
+  - `.github/workflows/namespace-full-arch-sweep.yml` runs the scheduled broader multi-architecture sweep.
 
 ## Coding Style & Naming Conventions
+
+Use the canonical terminology in [`engineering/TERMINOLOGY.md`](./engineering/TERMINOLOGY.md).
+
+Naming rules:
+
+- Do not use `agent` as a new generic noun in Firebreak core. Existing `agent-*` identifiers are migration debt, not precedent.
+- Do not rename everything to `worker`. `worker` is only for running execution instances.
+- Do not use `workload` to mean `package`, or `package` to mean `workload`.
+- Do not use `config` when the thing is really persistent runtime state. Prefer `state` and `state root`.
+- If a legacy directory, file, or template variable still contains `agent`, treat that as an implementation leftover and avoid propagating it into new interfaces, docs, env vars, or options.
 
 Use standard Nix style:
 
@@ -81,6 +92,7 @@ Examples:
 - dynamic path mount: run from a chosen host directory and confirm the same path exists in the guest
 - boot flow: confirm `nix run .#firebreak-codex` enters `codex`, and `FIREBREAK_LAUNCH_MODE=shell nix run .#firebreak-codex` reaches the `dev` shell
 - CI runner note: the VM smoke workflow is gated by the repository variable `ENABLE_SELF_HOSTED_VM_SMOKE=1` so repositories without a KVM runner do not queue indefinitely.
+- CI catalog note: whenever a smoke test package is added, removed, renamed, or resized, update [`.github/ci/smoke-tests.json`](./.github/ci/smoke-tests.json) in the same change.
 
 ## Commit & Pull Request Guidelines
 
@@ -92,22 +104,14 @@ Pull requests should include:
 - exact commands used for validation
 - boot logs or console output when changing services, mounts, or login behavior
 
-Every PR that changes behaviour must include a documentation update. No code merge without a corresponding docs change if the public interface or user behaviour changes.
-
 ## Agent-Specific Instructions
 
 Prefer `mcp__deepwiki__ask_question` early when behavior is unclear, especially for `microvm.nix` option semantics, runner behavior, or systemd interactions. Use it as a default aid before guessing from memory.
 
 Check [`UPSTREAM_REPOS.md`](./UPSTREAM_REPOS.md) first when choosing which upstream repository to query with `ask_question`.
 
-For non-trivial autonomous work in this repository, prefer the `dev-flow` workflow surface over ad hoc task language:
-
-- Start from [`dev-flow-autonomous-flow`](./.agents/skills/dev-flow-autonomous-flow/SKILL.md) when the work spans spec selection, workspace choice, validation, and review.
-- Use one workspace per spec line. Reuse it for sequential work on the same spec, and start another workspace when the work moves to a different spec or unrelated maintenance line.
-- Prefer the aligned role profiles in [`.agents/profiles/`](./.agents/profiles): `planner`, `worker`, `reviewer`, `validator`, `local-operator`, and `cloud-operator`.
-- Use [ROLE_SELECTION.md](./.agents/profiles/ROLE_SELECTION.md) to choose the smallest role that can complete the current phase.
-- Use `dev-flow workspace ...`, `dev-flow validate run ...`, and `dev-flow loop run ...` as the internal command surface for autonomous work.
-
-Keep Firebreak core generic. Do not hardcode external tool or package identities into core modules, host helpers, or the top-level CLI. If a new tool needs special behavior, define it in that tool's overlay module or through generic extensibility points rather than adding package-specific env vars, binary paths, or dispatch rules to Firebreak core.
+When running repository tooling inside this sandbox, remember that some standard host tools may be missing from `PATH` even when the skill or helper expects them. For remote Namespace execution specifically, ensure `gnutar` and `gzip` are available locally before running the helper scripts. In this sandbox, the allowed way to provide them is `need inject tar` and `need inject gzip`.
 
 When a change requires manual setup outside the repository, such as configuring GitHub, registering self-hosted runners, adding secrets or variables, or any other human intervention, add or update a detailed step-by-step guide under [`guides/`](./guides) in the same change.
+
+Avoid graceful degradation at all costs; remove all legacy or deprecated code when coding; always prefer fail-fast and KISS; keep the codebase sane, maintainable, and modularized.

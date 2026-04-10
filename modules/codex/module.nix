@@ -1,10 +1,10 @@
 moduleArgs@{ pkgs, ... }:
-(import ../bun-agent/module.nix moduleArgs) {
+(import ../packaged-tool/module.nix moduleArgs) {
   vmName = "firebreak-codex";
   displayName = "Codex";
   binName = "codex";
-  packageSpec = "@openai/codex@latest";
-  promptCommand = ''codex exec "$FIREBREAK_AGENT_PROMPT"'';
+  package = pkgs.codex;
+  promptCommand = ''codex exec "$FIREBREAK_TOOL_PROMPT"'';
   configSelectorPrefix = "CODEX";
   configSubdir = "codex";
   configExports = ''

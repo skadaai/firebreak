@@ -43,7 +43,7 @@ It introduces a host-side workspace contract above Firebreak's VM runtime. A wor
 - a dedicated git worktree
 - a dedicated branch or resumable workspace identifier
 - isolated VM instance state roots
-- isolated agent config and artifact paths
+- isolated tool state and artifact paths
 - lifecycle metadata such as creation time, owner, and cleanup status
 
 Attempts remain separate from workspaces. Multiple bounded attempts may happen sequentially in one workspace when they belong to the same spec line. A new spec or unrelated maintenance line must use a different workspace.

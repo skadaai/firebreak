@@ -1,0 +1,233 @@
+name: Firebreak Namespace Debug Replay
+# Manually replay a single smoke package on the exact Namespace runner product.
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Flake package to run, for example firebreak-test-smoke-worker-guest-bridge"
+        required: true
+      platform:
+        description: "Runner family to mirror"
+        required: true
+        type: choice
+        options:
+          - linux-amd64
+          - linux-arm64
+          - darwin-arm64
+      shape:
+        description: "Namespace machine shape, for example 2x4 or 6x14"
+        required: true
+      pr_number:
+        description: "Optional PR number to check out after the selected ref"
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: namespace-debug-replay-${{ github.ref }}-${{ inputs.platform }}-${{ inputs.package }}
+  cancel-in-progress: true
+
+jobs:
+  replay-linux-amd64:
+    name: replay / linux-amd64 / ${{ inputs.package }} (${{ inputs.shape }})
+    if: ${{ inputs.platform == 'linux-amd64' }}
+    runs-on:
+      - ${{ format('nscloud-ubuntu-24.04-amd64-{0}-with-cache', inputs.shape) }}
+      - nscloud-cache-tag-firebreak-runtime-amd64-linux
+      - nscloud-cache-allow-commit-from-main
+      - nscloud-cache-allow-commit-from-default
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Checkout PR head if pr_number provided
+        if: ${{ inputs.pr_number != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr checkout ${{ inputs.pr_number }}
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          enable_kvm: true
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            system-features = nixos-test benchmark big-parallel kvm
+
+      - name: Set up Node for launcher smoke
+        if: inputs.package == 'firebreak-test-smoke-npx-launcher'
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Run replay package
+        run: nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#${{ inputs.package }}
+
+      - name: Upload replay artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: namespace-debug-linux-amd64-${{ inputs.package }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /home/runner/.cache/firebreak/
+            /home/runner/.cache/firebreak-test/
+            /cache/firebreak/
+            /tmp/firebreak/
+            !/home/runner/.cache/firebreak/**/*.socket
+            !/home/runner/.cache/firebreak-test/**/*.socket
+            !/cache/firebreak/**/*.socket
+            !/tmp/firebreak/**/*.socket
+          if-no-files-found: ignore
+          compression-level: 0
+
+  replay-linux-arm64:
+    name: replay / linux-arm64 / ${{ inputs.package }} (${{ inputs.shape }})
+    if: ${{ inputs.platform == 'linux-arm64' }}
+    runs-on:
+      - ${{ format('nscloud-ubuntu-24.04-arm64-{0}-with-features', inputs.shape) }}
+      - nscloud-cache-tag-firebreak-runtime-arm64-linux
+      - nscloud-runner-tool-cache-20gb
+      - nscloud-cache-allow-commit-from-main
+      - nscloud-cache-allow-commit-from-default
+      - namespace-features:container.privileged=true;container.host-pid-namespace=true
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Checkout PR head if pr_number provided
+        if: ${{ inputs.pr_number != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr checkout ${{ inputs.pr_number }}
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          enable_kvm: true
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            system-features = nixos-test benchmark big-parallel kvm
+
+      - name: Verify runner KVM on assigned arm64-linux host
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! [ -e /dev/kvm ]; then
+            echo "arm64-linux Namespace runner is missing /dev/kvm on the assigned runtime host."
+            exit 1
+          fi
+          if ! [ -r /dev/kvm ]; then
+            echo "arm64-linux Namespace runner cannot read /dev/kvm on the assigned runtime host."
+            exit 1
+          fi
+          if ! [ -w /dev/kvm ]; then
+            echo "arm64-linux Namespace runner cannot write /dev/kvm on the assigned runtime host."
+            exit 1
+          fi
+          ls -l /dev/kvm
+          python3 - <<'PY'
+          import ctypes
+          import os
+
+          KVM_GET_API_VERSION = 0xAE00
+          KVM_CREATE_VM = 0xAE01
+
+          libc = ctypes.CDLL(None, use_errno=True)
+          kvm_fd = os.open("/dev/kvm", os.O_RDWR | os.O_CLOEXEC)
+          try:
+              api_version = libc.ioctl(kvm_fd, KVM_GET_API_VERSION, 0)
+              if api_version < 0:
+                  errno = ctypes.get_errno()
+                  raise OSError(errno, os.strerror(errno))
+              vm_fd = libc.ioctl(kvm_fd, KVM_CREATE_VM, 0)
+              if vm_fd < 0:
+                  errno = ctypes.get_errno()
+                  raise OSError(errno, os.strerror(errno))
+              os.close(vm_fd)
+          finally:
+              os.close(kvm_fd)
+
+          print("KVM_CREATE_VM succeeded")
+          PY
+
+      - name: Set up Node for launcher smoke
+        if: inputs.package == 'firebreak-test-smoke-npx-launcher'
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Run replay package
+        run: nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#${{ inputs.package }}
+
+      - name: Upload replay artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: namespace-debug-linux-arm64-${{ inputs.package }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /home/runner/.cache/firebreak/
+            /home/runner/.cache/firebreak-test/
+            /cache/firebreak/
+            /tmp/firebreak/
+            !/home/runner/.cache/firebreak/**/*.socket
+            !/home/runner/.cache/firebreak-test/**/*.socket
+            !/cache/firebreak/**/*.socket
+            !/tmp/firebreak/**/*.socket
+          if-no-files-found: ignore
+          compression-level: 0
+
+  replay-darwin-arm64:
+    name: replay / darwin-arm64 / ${{ inputs.package }} (${{ inputs.shape }})
+    if: ${{ inputs.platform == 'darwin-arm64' }}
+    runs-on:
+      - ${{ format('nscloud-macos-sequoia-arm64-{0}-with-cache', inputs.shape) }}
+      - nscloud-cache-tag-firebreak-runtime-arm64-darwin
+      - nscloud-runner-tool-cache-20gb
+      - nscloud-cache-allow-commit-from-main
+      - nscloud-cache-allow-commit-from-default
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Checkout PR head if pr_number provided
+        if: ${{ inputs.pr_number != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr checkout ${{ inputs.pr_number }}
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node for launcher smoke
+        if: inputs.package == 'firebreak-test-smoke-npx-launcher'
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Run replay package
+        run: nix --accept-flake-config --extra-experimental-features 'nix-command flakes' run .#${{ inputs.package }}
+
+      - name: Upload replay artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: namespace-debug-darwin-arm64-${{ inputs.package }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /Users/runner/.cache/firebreak/
+            /Users/runner/.cache/firebreak-test/
+            /tmp/firebreak/
+            !/Users/runner/.cache/firebreak/**/*.socket
+            !/Users/runner/.cache/firebreak-test/**/*.socket
+            !/tmp/firebreak/**/*.socket
+          if-no-files-found: ignore
+          compression-level: 0

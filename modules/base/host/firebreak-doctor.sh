@@ -18,12 +18,9 @@ firebreak_doctor_resolve_host_dir() {
 }
 
 firebreak_doctor_json_escape() {
-  FIREBREAK_DOCTOR_JSON_VALUE=$1 python3 - <<'PY'
-import json
-import os
-
-print(json.dumps(os.environ["FIREBREAK_DOCTOR_JSON_VALUE"])[1:-1], end="")
-PY
+  value=$1
+  value=$(printf '%s' "$value" | awk 'BEGIN { ORS = "" } { gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\n/, "\\n"); print }')
+  printf '%s' "$value"
 }
 
 firebreak_doctor_json_array() {
@@ -60,7 +57,7 @@ firebreak_doctor_host_platform() {
 firebreak_doctor_local_runtime() {
   case "$(uname -s 2>/dev/null || printf '%s' unknown):$(uname -m 2>/dev/null || printf '%s' unknown)" in
     Linux:*)
-      printf '%s\n' "qemu"
+      printf '%s\n' "cloud-hypervisor"
       ;;
     Darwin:arm64|Darwin:aarch64)
       printf '%s\n' "vfkit"
@@ -84,6 +81,46 @@ firebreak_doctor_detect_kvm() {
   else
     printf '%s\n' "ok"
   fi
+}
+
+firebreak_doctor_detect_ip_forward() {
+  if ! [ -r /proc/sys/net/ipv4/ip_forward ]; then
+    printf '%s\n' "unknown"
+    return 0
+  fi
+
+  if [ "$(cat /proc/sys/net/ipv4/ip_forward)" = "1" ]; then
+    printf '%s\n' "ok"
+  else
+    printf '%s\n' "disabled"
+  fi
+}
+
+firebreak_doctor_detect_passwordless_sudo() {
+  ip_command=$(command -v ip 2>/dev/null || true)
+  iptables_command=$(command -v iptables 2>/dev/null || true)
+
+  if [ -z "$ip_command" ] || [ -z "$iptables_command" ]; then
+    printf '%s\n' "missing-tools"
+    return 0
+  fi
+
+  if ! command -v sudo >/dev/null 2>&1; then
+    printf '%s\n' "missing-sudo"
+    return 0
+  fi
+
+  if ! sudo -n "$ip_command" link show >/dev/null 2>&1; then
+    printf '%s\n' "networking-denied"
+    return 0
+  fi
+
+  if ! sudo -n "$iptables_command" -w -L >/dev/null 2>&1; then
+    printf '%s\n' "firewall-denied"
+    return 0
+  fi
+
+  printf '%s\n' "ok"
 }
 
 firebreak_doctor_git_common_dir() {
@@ -134,6 +171,17 @@ firebreak_doctor_workspace_state_path() {
   printf '%s\n' "$host_root/workspaces/$project_key/$config_subdir"
 }
 
+firebreak_doctor_default_vm_state_root() {
+  case "$(firebreak_doctor_local_runtime)" in
+    cloud-hypervisor|vfkit)
+      printf '%s\n' "/home/dev/.firebreak"
+      ;;
+    *)
+      printf '%s\n' "/var/lib/dev/.firebreak"
+      ;;
+  esac
+}
+
 firebreak_doctor_resolve_tool_state() {
   tool_label=$1
   tool_prefix=$2
@@ -155,7 +203,7 @@ firebreak_doctor_resolve_tool_state() {
       printf '%s|%s|%s|%s\n' "$tool_label" "$tool_mode" "$(firebreak_doctor_workspace_state_path "$tool_host_root" "$state_subdir")" "$tool_specific_state_var"
       ;;
     vm)
-      printf '%s|%s|%s|%s\n' "$tool_label" "$tool_mode" "/var/lib/dev/.firebreak/$state_subdir" "$tool_specific_state_var"
+      printf '%s|%s|%s|%s\n' "$tool_label" "$tool_mode" "$(firebreak_doctor_default_vm_state_root)/$state_subdir" "$tool_specific_state_var"
       ;;
     fresh)
       printf '%s|%s|%s|%s\n' "$tool_label" "$tool_mode" "/run/firebreak-state-fresh/$state_subdir" "$tool_specific_state_var"
@@ -205,6 +253,12 @@ firebreak_doctor_command() {
   done
 
   firebreak_load_project_config
+  FIREBREAK_ENVIRONMENT_CACHE_ROOT=${XDG_STATE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.local/state}/firebreak/environments
+  firebreak_resolve_environment
+  environment_reused=no
+  if [ -f "$FIREBREAK_RESOLVED_ENVIRONMENT_ENV_FILE" ] && [ -f "$FIREBREAK_RESOLVED_ENVIRONMENT_MANIFEST_FILE" ]; then
+    environment_reused=yes
+  fi
 
   cwd_whitespace=no
   case "$PWD" in
@@ -218,8 +272,12 @@ firebreak_doctor_command() {
   primary_checkout=$(firebreak_doctor_primary_checkout_state "$git_common_dir")
   host_platform=$(firebreak_doctor_host_platform)
   local_runtime=$(firebreak_doctor_local_runtime)
-  if [ "$local_runtime" = "qemu" ]; then
+  ip_forward_state="not-applicable"
+  sudo_networking_state="not-applicable"
+  if [ "$local_runtime" = "cloud-hypervisor" ]; then
     kvm_state=$(firebreak_doctor_detect_kvm)
+    ip_forward_state=$(firebreak_doctor_detect_ip_forward)
+    sudo_networking_state=$(firebreak_doctor_detect_passwordless_sudo)
   else
     kvm_state="not-applicable"
   fi
@@ -243,12 +301,15 @@ EOF
     if [ "$doctor_verbose" = "1" ]; then
       verbose_json_fields=$(cat <<EOF
 ,
-  "details": {
-    "cwd": "$(firebreak_doctor_json_escape "$PWD")",
-    "project_root_source": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_PROJECT_ROOT_SOURCE")",
-    "git_common_dir": "$(firebreak_doctor_json_escape "${git_common_dir:-unknown}")",
-    "ignored_keys": [$(firebreak_doctor_json_array "$FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS")]
-  }
+    "details": {
+      "cwd": "$(firebreak_doctor_json_escape "$PWD")",
+      "project_root_source": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_PROJECT_ROOT_SOURCE")",
+      "git_common_dir": "$(firebreak_doctor_json_escape "${git_common_dir:-unknown}")",
+      "ignored_keys": [$(firebreak_doctor_json_array "$FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS")],
+      "environment_identity": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_IDENTITY")",
+      "environment_cache_dir": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_CACHE_DIR")",
+      "environment_env_file": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_ENV_FILE")"
+    }
 EOF
 )
     fi
@@ -264,9 +325,23 @@ EOF
   "cwd": "$(firebreak_doctor_json_escape "$PWD")",
   "cwd_whitespace": $([ "$cwd_whitespace" = "yes" ] && printf 'true' || printf 'false'),
   "launch_mode": "$(firebreak_doctor_json_escape "$launch_mode")",
+  "environment": {
+    "mode": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_MODE")",
+    "source": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_SOURCE")",
+    "kind": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_KIND")",
+    "installable": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_INSTALLABLE")",
+    "identity": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_IDENTITY")",
+    "cache_dir": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_CACHE_DIR")",
+    "env_file": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_ENV_FILE")",
+    "project_nix_enabled": $([ "$FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_ENABLED" = "1" ] && printf 'true' || printf 'false'),
+    "project_nix_source": "$(firebreak_doctor_json_escape "$FIREBREAK_RESOLVED_ENVIRONMENT_PROJECT_NIX_SOURCE")",
+    "reused": $([ "$environment_reused" = "yes" ] && printf 'true' || printf 'false')
+  },
   "git_common_dir": "$(firebreak_doctor_json_escape "${git_common_dir:-unknown}")",
   "primary_checkout": "$(firebreak_doctor_json_escape "$primary_checkout")",
   "kvm": "$(firebreak_doctor_json_escape "$kvm_state")",
+  "ip_forward": "$(firebreak_doctor_json_escape "$ip_forward_state")",
+  "sudo_networking": "$(firebreak_doctor_json_escape "$sudo_networking_state")",
   "ignored_config_keys": [$(firebreak_doctor_json_array "$FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS")],
   "tools": {
     "codex": {
@@ -294,9 +369,13 @@ EOF
   firebreak_doctor_report_line "host_platform" "$host_platform"
   firebreak_doctor_report_line "local_runtime" "$local_runtime"
   firebreak_doctor_report_line "launch_mode" "$launch_mode"
+  firebreak_doctor_report_line "environment" "$FIREBREAK_RESOLVED_ENVIRONMENT_SOURCE/$FIREBREAK_RESOLVED_ENVIRONMENT_KIND (${FIREBREAK_RESOLVED_ENVIRONMENT_IDENTITY})"
+  firebreak_doctor_report_line "environment_cache" "$environment_reused ($FIREBREAK_RESOLVED_ENVIRONMENT_CACHE_DIR)"
   firebreak_doctor_report_line "cwd_whitespace" "$cwd_whitespace"
   firebreak_doctor_report_line "primary_checkout" "$primary_checkout"
   firebreak_doctor_report_line "kvm" "$kvm_state"
+  firebreak_doctor_report_line "ip_forward" "$ip_forward_state"
+  firebreak_doctor_report_line "sudo_networking" "$sudo_networking_state"
   firebreak_doctor_report_line "codex_state" "$codex_mode ($codex_path)"
   firebreak_doctor_report_line "claude_state" "$claude_mode ($claude_path)"
   firebreak_doctor_report_line "codex_credentials" "$codex_slot ($codex_slot_path)"
@@ -308,6 +387,8 @@ EOF
     firebreak_doctor_report_line "cwd" "$PWD"
     firebreak_doctor_report_line "git_common_dir" "${git_common_dir:-unknown}"
     firebreak_doctor_report_line "ignored_keys" "${FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS:-none}"
+    firebreak_doctor_report_line "environment_installable" "${FIREBREAK_RESOLVED_ENVIRONMENT_INSTALLABLE:-none}"
+    firebreak_doctor_report_line "environment_env_file" "$FIREBREAK_RESOLVED_ENVIRONMENT_ENV_FILE"
     firebreak_doctor_report_line "codex_selector" "$codex_source_var / $codex_slot_source_var"
     firebreak_doctor_report_line "claude_selector" "$claude_source_var / $claude_slot_source_var"
   fi
@@ -327,6 +408,22 @@ EOF
       printf '%s\n' "- Fix /dev/kvm access if you want validation suites that require KVM to pass instead of blocking."
       ;;
   esac
+  case "$ip_forward_state" in
+    ok|not-applicable)
+      :
+      ;;
+    *)
+      printf '%s\n' "- Enable net.ipv4.ip_forward=1 before running the local Cloud Hypervisor backend."
+      ;;
+  esac
+  case "$sudo_networking_state" in
+    ok|not-applicable)
+      :
+      ;;
+    *)
+      printf '%s\n' "- Configure passwordless sudo for Firebreak host networking commands. See guides/cloud-hypervisor-local-linux.md."
+      ;;
+  esac
   case "$local_runtime" in
     unsupported-intel-mac)
       printf '%s\n' "- Firebreak local support on macOS is Apple Silicon only. Use an Apple Silicon Mac or a supported Linux host."
@@ -341,7 +438,15 @@ EOF
   if [ -n "$FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS" ]; then
     printf '%s\n' "- Remove unsupported keys from .firebreak.env or keep them in the shell environment instead."
   fi
-  if [ "$cwd_whitespace" != "yes" ] && [ "$primary_checkout" != "no" ] && [ -z "$FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS" ] && { [ "$kvm_state" = "ok" ] || [ "$kvm_state" = "not-applicable" ]; }; then
+  if [ "$FIREBREAK_RESOLVED_ENVIRONMENT_SOURCE" = "project-nix" ] && [ "$environment_reused" != "yes" ]; then
+    printf '%s\n' "- Run 'firebreak environment resolve' once to materialize the current project environment overlay cache."
+  fi
+  if [ "$cwd_whitespace" != "yes" ] \
+    && [ "$primary_checkout" != "no" ] \
+    && [ -z "$FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS" ] \
+    && { [ "$kvm_state" = "ok" ] || [ "$kvm_state" = "not-applicable" ]; } \
+    && { [ "$ip_forward_state" = "ok" ] || [ "$ip_forward_state" = "not-applicable" ]; } \
+    && { [ "$sudo_networking_state" = "ok" ] || [ "$sudo_networking_state" = "not-applicable" ]; }; then
     printf '%s\n' "- No obvious launch blockers detected."
   fi
 }

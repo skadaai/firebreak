@@ -61,7 +61,12 @@ require_pattern "$default_output" "__UPSTREAM__--help" "default local dispatch"
 
 worker_output=$(FIREBREAK_WORKER_MODE=vm codex --help)
 require_pattern "$worker_output" "__WORKER__worker run --kind codex --workspace" "worker dispatch prefix"
-require_pattern "$worker_output" "--attach -- --help" "worker dispatch arguments"
+require_pattern "$worker_output" "-- --help" "worker dispatch arguments"
+if printf '%s\n' "$worker_output" | grep -F -q -- "--attach -- --help"; then
+  printf '%s\n' "$worker_output" >&2
+  echo "worker help dispatch should not force attach mode" >&2
+  exit 1
+fi
 
 local_output=$(FIREBREAK_WORKER_MODE=local codex --help)
 require_pattern "$local_output" "__UPSTREAM__--help" "local upstream dispatch"
@@ -72,10 +77,20 @@ require_pattern "$fallback_output" "__UPSTREAM__--help" "local-bin upstream fall
 
 per_worker_output=$(FIREBREAK_WORKER_MODE=local FIREBREAK_WORKER_MODES=codex=vm codex --help)
 require_pattern "$per_worker_output" "__WORKER__worker run --kind codex --workspace" "per-worker override precedence"
+if printf '%s\n' "$per_worker_output" | grep -F -q -- "--attach -- --help"; then
+  printf '%s\n' "$per_worker_output" >&2
+  echo "per-worker help dispatch should not force attach mode" >&2
+  exit 1
+fi
 
 worker_version_output=$(FIREBREAK_WORKER_MODE=vm codex --version)
 require_pattern "$worker_version_output" "__WORKER__worker run --kind codex --workspace" "worker version dispatch prefix"
-require_pattern "$worker_version_output" "--attach -- --version" "worker version dispatch arguments"
+require_pattern "$worker_version_output" "-- --version" "worker version dispatch arguments"
+if printf '%s\n' "$worker_version_output" | grep -F -q -- "--attach -- --version"; then
+  printf '%s\n' "$worker_version_output" >&2
+  echo "worker version dispatch should not force attach mode" >&2
+  exit 1
+fi
 
 set +e
 invalid_mode_output=$(FIREBREAK_WORKER_MODE=invalid codex --help 2>&1)

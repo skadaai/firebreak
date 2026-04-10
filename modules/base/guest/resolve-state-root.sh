@@ -27,7 +27,7 @@ case "$mode" in
   host)
     mounted_flag=${FIREBREAK_SHARED_STATE_ROOT_HOST_MOUNTED_FLAG:-/run/firebreak-shared-state-root-mounted}
     if ! [ -e "$mounted_flag" ]; then
-      printf '%s\n' "Firebreak host state root is not mounted for $display_name; use workspace, vm, or fresh mode, or inspect prepare-agent-session logs for the host-share mount failure." >&2
+      printf '%s\n' "Firebreak host state root is not mounted for $display_name; use workspace, vm, or fresh mode, or inspect prepare-worker-session logs for the host-share mount failure." >&2
       exit 1
     fi
     state_dir=${FIREBREAK_SHARED_STATE_ROOT_HOST_MOUNT:-/run/firebreak-state-root}/$state_subdir
@@ -36,7 +36,7 @@ case "$mode" in
     state_dir=$(resolve_workspace_state_dir "$state_subdir")
     ;;
   vm)
-    state_dir=${FIREBREAK_SHARED_STATE_ROOT_VM_ROOT:-/var/lib/dev/.firebreak}/$state_subdir
+    state_dir=${FIREBREAK_SHARED_STATE_ROOT_VM_ROOT:-@DEV_HOME@/.firebreak}/$state_subdir
     ;;
   fresh)
     state_dir=${FIREBREAK_SHARED_STATE_ROOT_FRESH_ROOT:-/run/firebreak-state-fresh}/$state_subdir

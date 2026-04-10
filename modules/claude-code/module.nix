@@ -1,10 +1,10 @@
 moduleArgs@{ pkgs, ... }:
-(import ../bun-agent/module.nix moduleArgs) {
+(import ../packaged-tool/module.nix moduleArgs) {
   vmName = "firebreak-claude-code";
   displayName = "Claude Code";
   binName = "claude";
-  packageSpec = "@anthropic-ai/claude-code@latest";
-  promptCommand = ''claude -p "$FIREBREAK_AGENT_PROMPT"'';
+  package = pkgs.claude-code;
+  promptCommand = ''claude -p "$FIREBREAK_TOOL_PROMPT"'';
   configSelectorPrefix = "CLAUDE";
   configSubdir = "claude";
   configExports = ''
@@ -23,5 +23,5 @@ moduleArgs@{ pkgs, ... }:
   ];
   credentialLoginArgs = [ "auth" "login" ];
   credentialLoginMaterialization = "slot-root";
-  extraSystemPackages = with pkgs; [ ripgrep ];
+  extraEnvironmentPackages = with pkgs; [ ripgrep ];
 }

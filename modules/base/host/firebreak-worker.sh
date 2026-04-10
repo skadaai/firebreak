@@ -686,26 +686,27 @@ restore_attach_tty() {
 resolve_firebreak_worker_exec() {
   installable=$1
   package_name=$2
+  nix_cmd=${FIREBREAK_NIX_BIN:-nix}
 
   if [ "${FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG:-}" = "1" ] \
     && [ -n "${FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES:-}" ]; then
     build_output=$(firebreak_worker_capture_nix_stdout \
-      nix --accept-flake-config \
+      "$nix_cmd" --accept-flake-config \
         --extra-experimental-features "$FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES" \
         build --no-link --print-out-paths "$installable"
     )
   elif [ "${FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG:-}" = "1" ]; then
     build_output=$(firebreak_worker_capture_nix_stdout \
-      nix --accept-flake-config \
+      "$nix_cmd" --accept-flake-config \
         build --no-link --print-out-paths "$installable"
     )
   elif [ -n "${FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES:-}" ]; then
     build_output=$(firebreak_worker_capture_nix_stdout \
-      nix --extra-experimental-features "$FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES" \
+      "$nix_cmd" --extra-experimental-features "$FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES" \
         build --no-link --print-out-paths "$installable"
     )
   else
-    build_output=$(firebreak_worker_capture_nix_stdout nix build --no-link --print-out-paths "$installable")
+    build_output=$(firebreak_worker_capture_nix_stdout "$nix_cmd" build --no-link --print-out-paths "$installable")
   fi
 
   resolved_out=$(printf '%s\n' "$build_output" | tail -n 1)
@@ -778,6 +779,7 @@ stop_child() {
   exit 143
 }
 
+trap '' HUP
 trap stop_child INT TERM
 
 printf '%s %s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "launch-script-start" >>"\$trace_path"
@@ -832,7 +834,10 @@ write_firebreak_launch_script() {
   quoted_child_pid=$(quote_arg "$worker_root/child-pid")
   quoted_instance_dir=$(quote_arg "$worker_root/instance")
   quoted_launch_mode=$(quote_arg "$launch_mode")
-  resolved_exec=$(resolve_firebreak_worker_exec "$FIREBREAK_FLAKE_REF#$package_name" "$package_name")
+  if ! resolved_exec=$(resolve_firebreak_worker_exec "$FIREBREAK_FLAKE_REF#$package_name" "$package_name"); then
+    echo "failed to resolve worker package output for $FIREBREAK_FLAKE_REF#$package_name" >&2
+    exit 1
+  fi
   quoted_resolved_exec=$(quote_arg "$resolved_exec")
 
   quoted_unset_env_args=""
@@ -880,6 +885,7 @@ stop_child() {
   exit 143
 }
 
+trap '' HUP
 trap stop_child INT TERM
 
 mkdir -p "\$instance_dir"
@@ -924,7 +930,7 @@ if [ "\$attach_mode" = "1" ]; then
       \${forwarded_lines:+LINES="\$forwarded_lines"} \
       FIREBREAK_INSTANCE_DIR="\$instance_dir" \
       FIREBREAK_LAUNCH_MODE="\$launch_mode" \
-      FIREBREAK_AGENT_SESSION_MODE_OVERRIDE="agent-attach-exec" \
+      FIREBREAK_SESSION_MODE_OVERRIDE="command-attach-exec" \
       bash -c '
       child_pid_path=\$1
       shift
@@ -940,7 +946,7 @@ if [ "\$attach_mode" = "1" ]; then
       \${forwarded_lines:+LINES="\$forwarded_lines"} \
       FIREBREAK_INSTANCE_DIR="\$instance_dir" \
       FIREBREAK_LAUNCH_MODE="\$launch_mode" \
-      FIREBREAK_AGENT_SESSION_MODE_OVERRIDE="agent-attach-exec" \
+      FIREBREAK_SESSION_MODE_OVERRIDE="command-attach-exec" \
       bash -c '
       child_pid_path=\$1
       shift
@@ -980,6 +986,8 @@ spawn_worker() {
   max_instances=""
   flake_ref=""
   worker_limit_scope=""
+  bridge_host_workspace=${FIREBREAK_WORKER_BRIDGE_HOST_WORKSPACE:-}
+  bridge_guest_workspace=${FIREBREAK_WORKER_BRIDGE_GUEST_WORKSPACE:-}
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -1038,6 +1046,21 @@ spawn_worker() {
   validate_token "$kind" "worker kind"
   require_absolute_dir "$state_dir" "worker state dir"
   require_absolute_dir "$workspace" "worker workspace"
+
+  if [ -n "$bridge_host_workspace" ] && [ -n "$bridge_guest_workspace" ]; then
+    case "$workspace" in
+      "$bridge_guest_workspace")
+        workspace=$bridge_host_workspace
+        ;;
+      "$bridge_guest_workspace"/*)
+        workspace=$bridge_host_workspace${workspace#"$bridge_guest_workspace"}
+        ;;
+    esac
+  fi
+
+  if ! [ -d "$workspace" ] && [ -n "$bridge_host_workspace" ] && [ -d "$bridge_host_workspace" ]; then
+    workspace=$bridge_host_workspace
+  fi
 
   case "$backend" in
     process)
@@ -1138,8 +1161,9 @@ spawn_worker() {
     fi
     release_kind_limit_lock
     trap - EXIT INT TERM
+    trap '' HUP
     configure_attach_tty
-    trap restore_attach_tty EXIT INT TERM
+    trap restore_attach_tty EXIT HUP INT TERM
     set +e
     bash "$launch_script"
     attach_status=$?
@@ -1738,9 +1762,9 @@ def nested_runtime_snapshot(worker_dir: Path):
         "runner_stdout_log",
         "runner_stderr_log",
         "virtiofs_hostcwd_log",
-        "virtiofs_agent_config_log",
-        "virtiofs_agent_exec_log",
-        "virtiofs_agent_tools_log",
+        "virtiofs_runtime_config_log",
+        "virtiofs_command_output_log",
+        "virtiofs_tool_runtimes_log",
         "virtiofs_worker_bridge_log",
         "worker_bridge_server_log",
     ]
@@ -1759,25 +1783,25 @@ def nested_runtime_snapshot(worker_dir: Path):
     snapshot["log_tails"] = log_tails
     snapshot["log_sizes"] = log_sizes
 
-    agent_exec_output_dir = metadata.get("agent_exec_output_dir")
-    if agent_exec_output_dir:
-        agent_exec_dir = Path(agent_exec_output_dir)
-        agent_exec = {}
+    command_output_dir = metadata.get("command_output_dir")
+    if command_output_dir:
+        command_output_root = Path(command_output_dir)
+        command_output = {}
         for name in ["attach_stage", "exit_code", "stdout", "stderr", "command-processes.txt", "command-tty.txt", "interactive-echo.log"]:
-            path = agent_exec_dir / name
+            path = command_output_root / name
             if path.exists():
                 key_name = name.replace("-", "_").replace(".txt", "").replace(".log", "")
-                agent_exec[f"{key_name}_size"] = file_size(str(path))
+                command_output[f"{key_name}_size"] = file_size(str(path))
                 text = tail_text(path, line_count=20)
                 if text:
-                    agent_exec[f"{key_name}_tail"] = text
+                    command_output[f"{key_name}_tail"] = text
         for name in ["bootstrap-state.json", "command-state.json"]:
-            path = agent_exec_dir / name
+            path = command_output_root / name
             value = maybe_load_json(path)
             if value is not None:
-                agent_exec[name.replace("-", "_").replace(".json", "")] = value
-        if agent_exec:
-            snapshot["agent_exec_output"] = agent_exec
+                command_output[name.replace("-", "_").replace(".json", "")] = value
+        if command_output:
+            snapshot["command_output"] = command_output
     return snapshot
 
 
@@ -2118,8 +2142,8 @@ for item in json.loads(os.environ["WORKERS_JSON"]):
             print(f"  {key}:")
             for line in str(tail).splitlines():
                 print(f"    {line}")
-        agent_exec_output = nested_runtime.get("agent_exec_output") or {}
-        for key, value in agent_exec_output.items():
+        command_output = nested_runtime.get("command_output") or {}
+        for key, value in command_output.items():
             if key in {"bootstrap_state", "command_state"} and isinstance(value, dict):
                 phase = value.get("phase")
                 status = value.get("status")
@@ -2142,11 +2166,11 @@ for item in json.loads(os.environ["WORKERS_JSON"]):
                     print(f"  {prefix}_updated_at: {updated_at}")
                 continue
             if key.endswith("_tail"):
-                print(f"  agent_exec_{key}:")
+                print(f"  command_output_{key}:")
                 for line in str(value).splitlines():
                     print(f"    {line}")
             else:
-                print(f"  agent_exec_{key}: {value}")
+                print(f"  command_output_{key}: {value}")
     trace_tail = item.get("trace_tail")
     if trace_tail:
         print("  trace_tail:")

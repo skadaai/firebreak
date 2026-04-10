@@ -48,7 +48,7 @@ resolve_workspace_state_dir() {
   project_key=$(firebreak_state_sha256 "$project_root")
   project_key=$(printf '%.16s' "$project_key")
 
-  workspace_state_root=${FIREBREAK_SHARED_STATE_ROOT_VM_ROOT:-/var/lib/dev/.firebreak}
+  workspace_state_root=${FIREBREAK_SHARED_STATE_ROOT_VM_ROOT:-@DEV_HOME@/.firebreak}
   mounted_flag=${FIREBREAK_SHARED_STATE_ROOT_HOST_MOUNTED_FLAG:-/run/firebreak-shared-state-root-mounted}
   if [ -e "$mounted_flag" ]; then
     workspace_state_root=${FIREBREAK_SHARED_STATE_ROOT_HOST_MOUNT:-/run/firebreak-state-root}

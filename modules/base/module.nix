@@ -1,13 +1,19 @@
-{ config, lib, pkgs, renderTemplate, ... }:
+{ config, lib, pkgs, renderTemplate, runtimeBackends, ... }:
 let
   cfg = config.workloadVm;
-  devHome = "/var/lib/${cfg.devUser}";
+  backendSpec = runtimeBackends.specFor cfg.runtimeBackend;
+  devHome = cfg.devHome;
+  systemBin = "${config.system.path}/bin";
+  sharedStateRootsLib = renderTemplate {
+    "@DEV_HOME@" = devHome;
+  } ./guest/shared-state-roots.sh;
   localBin =
     if cfg.toolRuntimesEnabled then
       "${cfg.toolRuntimesMount}/.local/bin"
     else
       "${devHome}/.local/bin";
   sharedStateRootsEnvFile = "${cfg.hostMetaMount}/firebreak-shared-state.env";
+  environmentOverlayEnvFile = "${cfg.hostMetaMount}/firebreak-environment.env";
   renderCredentialFileBindings = bindings:
     lib.concatStringsSep "\n" (map
       (binding: "${binding.slotPath}\t${binding.runtimePath}\t${if binding.required then "1" else "0"}\t${binding.format}")
@@ -24,14 +30,16 @@ let
     lib.concatMapStringsSep "\n" (value: "  ${lib.escapeShellArg value}") values;
   resolveStateRootScript = pkgs.writeShellScript "firebreak-resolve-state-root"
     (renderTemplate {
-      "@FIREBREAK_SHARED_STATE_ROOT_LIB@" = builtins.readFile ./guest/shared-state-roots.sh;
+      "@DEV_HOME@" = devHome;
+      "@FIREBREAK_SHARED_STATE_ROOT_LIB@" = sharedStateRootsLib;
     } ./guest/resolve-state-root.sh);
   sharedToolWrapperPackages = lib.mapAttrsToList
     (wrapperName: wrapper:
       pkgs.writeShellScriptBin wrapperName
         (renderTemplate {
-          "@FIREBREAK_SHARED_STATE_ROOT_LIB@" = builtins.readFile ./guest/shared-state-roots.sh;
+          "@FIREBREAK_SHARED_STATE_ROOT_LIB@" = sharedStateRootsLib;
           "@FIREBREAK_SHARED_CREDENTIAL_SLOT_LIB@" = builtins.readFile ./guest/shared-credential-slots.sh;
+          "@PYTHON3@" = "${pkgs.python3}/bin/python3";
           "@WRAPPER_NAME@" = wrapperName;
           "@WRAPPER_DISPLAY_NAME@" = wrapper.displayName;
           "@REAL_BIN_NAME@" = wrapper.realBinName;
@@ -64,13 +72,18 @@ let
       ""
     else
       "${sharedToolWrapperPackage}/bin";
-  hostIsDarwin = lib.hasSuffix "-darwin" cfg.hostSystem;
-  roStoreShareProto = if hostIsDarwin then "virtiofs" else "9p";
-  localHypervisor = if hostIsDarwin then "vfkit" else "qemu";
+  environmentOverlayReadyFlag = "${cfg.hostMetaMount}/firebreak-environment.ready";
+  environmentOverlayErrorFlag = "${cfg.hostMetaMount}/firebreak-environment.error";
+  environmentOverlayLogFile = "${cfg.hostMetaMount}/firebreak-environment.log";
+  missingRequiredCapabilities =
+    builtins.filter
+      (capability: !(builtins.elem capability backendSpec.capabilities))
+      cfg.requiredCapabilities;
 
   scriptVars = {
     "@DEV_HOME@" = devHome;
     "@DEV_USER@" = cfg.devUser;
+    "@SYSTEM_BIN@" = systemBin;
     "@START_DIR_FILE@" = cfg.startDirFile;
     "@WORKER_KINDS_FILE@" = cfg.workerKindsFile;
     "@WORKER_LOCAL_STATE_DIR@" = cfg.workerLocalStateDir;
@@ -93,6 +106,11 @@ let
     "@SHARED_TOOL_WRAPPER_ENV_EXPORTS@" = lib.optionalString (sharedToolWrapperBinDir != "") ''
       export FIREBREAK_SHARED_TOOL_WRAPPER_BIN_DIR=${lib.escapeShellArg sharedToolWrapperBinDir}
     '';
+    "@ENVIRONMENT_OVERLAY_ENABLED@" = if cfg.environmentOverlay.enable then "1" else "0";
+    "@ENVIRONMENT_OVERLAY_ENV_FILE@" = environmentOverlayEnvFile;
+    "@ENVIRONMENT_OVERLAY_READY_FLAG@" = environmentOverlayReadyFlag;
+    "@ENVIRONMENT_OVERLAY_ERROR_FLAG@" = environmentOverlayErrorFlag;
+    "@ENVIRONMENT_OVERLAY_LOG_FILE@" = environmentOverlayLogFile;
   };
 
   baseShellInit = renderTemplate scriptVars ./guest/shell-init.sh;
@@ -133,10 +151,60 @@ in {
       description = "Guest platform used for the NixOS system inside the MicroVM.";
     };
 
+    runtimeBackend = mkOption {
+      type = types.enum runtimeBackends.supportedBackendNames;
+      default = "qemu";
+      description = "Private runtime backend that satisfies the profile capability contract.";
+    };
+
+    requiredCapabilities = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      description = "Runtime capabilities that must be provided by the selected backend.";
+    };
+
+    guestEgress = mkOption {
+      default = { };
+      description = "Rootless guest egress contract for local runtimes.";
+      type = types.submodule ({ ... }: {
+        options = {
+          enable = mkOption {
+            type = types.bool;
+            default = false;
+            description = "Whether the workload expects outbound guest egress through the runtime.";
+          };
+
+          vsockCID = mkOption {
+            type = types.ints.positive;
+            default = 52;
+            description = "Guest vsock CID used for Cloud Hypervisor rootless guest egress.";
+          };
+
+          proxyPort = mkOption {
+            type = types.port;
+            default = 3128;
+            description = "Guest localhost port used for the rootless guest egress proxy.";
+          };
+        };
+      });
+    };
+
     devUser = mkOption {
       type = types.str;
       default = "dev";
       description = "Interactive development user inside the MicroVM.";
+    };
+
+    devHome = mkOption {
+      type = types.str;
+      default = "/var/lib/${cfg.devUser}";
+      description = "Home directory for the interactive development user inside the MicroVM.";
+    };
+
+    guestSudoEnable = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Whether the workload enables guest sudo support for the development user.";
     };
 
     workspaceMount = mkOption {
@@ -187,10 +255,118 @@ in {
       description = "Whether the VM mounts a host-shared persistent tools directory for bootstrap-managed tool runtimes.";
     };
 
+    runtimeManagedRoStore = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Whether the runtime wrapper injects the read-only /nix/store share instead of relying on declared microvm shares.";
+    };
+
     toolRuntimesMount = mkOption {
       type = types.str;
       default = "/run/tool-runtimes-host";
       description = "Guest path for an optional host-shared directory used to persist bootstrap-managed tool runtimes across VM launches.";
+    };
+
+    toolRuntimeSeedScript = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = "Optional host-side script used by the local runtime wrapper to preseed a persistent tool-runtime directory before the guest bootstrap path runs.";
+    };
+
+    environmentOverlay = mkOption {
+      default = { };
+      description = "Host-resolved additive environment overlay contract for package defaults and optional project-local Nix inputs.";
+      type = types.submodule ({ ... }: {
+        options = {
+          enable = mkOption {
+            type = types.bool;
+            default = false;
+            description = "Whether Firebreak materializes the additive environment overlay contract for this workload.";
+          };
+
+          package = mkOption {
+            default = { };
+            description = "Package-declared additive environment inputs exported by Firebreak itself.";
+            type = types.submodule ({ ... }: {
+              options = {
+                packages = mkOption {
+                  type = types.listOf types.package;
+                  default = [ ];
+                  description = "Package outputs whose bin directories are exported by the resolved environment overlay.";
+                };
+
+                pathPrefixes = mkOption {
+                  type = types.listOf types.str;
+                  default = [ ];
+                  description = "Store-backed bin directories prepended to PATH by the resolved environment overlay.";
+                };
+
+                installables = mkOption {
+                  type = types.listOf types.str;
+                  default = [ ];
+                  description = "Nix installables that Firebreak resolves on the host and exports into the additive environment overlay.";
+                };
+
+                exports = mkOption {
+                  type = types.attrsOf types.str;
+                  default = { };
+                  description = "Additive environment variables exported by the resolved environment overlay.";
+                };
+              };
+            });
+          };
+
+          projectNix = mkOption {
+            default = { };
+            description = "Optional constrained project-local Nix environment detection and resolution.";
+            type = types.submodule ({ ... }: {
+              options = {
+                enable = mkOption {
+                  type = types.bool;
+                  default = false;
+                  description = "Whether Firebreak should attempt constrained project-local flake environment resolution for this workload.";
+                };
+              };
+            });
+          };
+        };
+      });
+    };
+
+    bootBases = mkOption {
+      default = { };
+      description = "Firebreak-owned boot-base targets used by the runtime wrapper to select a smaller guest boot graph per session type.";
+      type = types.submodule ({ ... }: {
+        options = {
+          command = mkOption {
+            default = { };
+            description = "Boot base for non-interactive command execution.";
+            type = types.submodule ({ ... }: {
+              options = {
+                systemdUnit = mkOption {
+                  type = types.str;
+                  default = "";
+                  description = "Optional systemd unit passed on the kernel command line when Firebreak selects the command boot base.";
+                };
+              };
+            });
+          };
+
+          interactive = mkOption {
+            default = { };
+            description = "Boot base for interactive shells and attached worker sessions.";
+            type = types.submodule ({ ... }: {
+              options = {
+                systemdUnit = mkOption {
+                  type = types.str;
+                  default = "";
+                  description = "Optional systemd unit passed on the kernel command line when Firebreak selects the interactive boot base.";
+                };
+              };
+            });
+          };
+        };
+      });
     };
 
     defaultCommand = mkOption {
@@ -202,7 +378,7 @@ in {
     promptCommand = mkOption {
       type = types.nullOr types.str;
       default = null;
-      description = "Shell command used to start a non-interactive worker session from FIREBREAK_AGENT_PROMPT.";
+      description = "Shell command used to start a non-interactive tool session from FIREBREAK_TOOL_PROMPT.";
     };
 
     promptFile = mkOption {
@@ -433,6 +609,12 @@ in {
       description = "Size of the persistent /var volume in MiB.";
     };
 
+    varVolumeEnabled = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Whether the workload attaches a dedicated writable /var volume.";
+    };
+
     memoryMiB = mkOption {
       type = types.ints.positive;
       default = 1024;
@@ -443,6 +625,12 @@ in {
       type = types.str;
       default = "${cfg.name}-var.img";
       description = "Disk image backing the persistent /var volume.";
+    };
+
+    varVolumeSeedImage = mkOption {
+      type = types.str;
+      default = "";
+      description = "Optional preformatted /var image used by the runtime wrapper to seed cold instances without formatting at launch.";
     };
 
     controlSocket = mkOption {
@@ -459,6 +647,12 @@ in {
         in
         "02:${builtins.substring 0 2 hash}:${builtins.substring 2 2 hash}:${builtins.substring 4 2 hash}:${builtins.substring 6 2 hash}:${builtins.substring 8 2 hash}";
       description = "Stable MAC address for the MicroVM network interface.";
+    };
+
+    localPublishedHostPortsJson = mkOption {
+      type = types.str;
+      default = "[]";
+      description = "Machine-readable host-to-guest port publishing declarations consumed by the local runtime wrapper.";
     };
 
     extraSystemPackages = mkOption {
@@ -489,6 +683,18 @@ in {
       type = types.nullOr types.lines;
       default = null;
       description = "Optional oneshot bootstrap script that runs before the console starts.";
+    };
+
+    bootstrapConditionScript = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = "Optional ExecCondition script used to skip dev-bootstrap entirely when cached tool state is already valid.";
+    };
+
+    coldExecBootstrapWaitEnable = mkOption {
+      type = types.bool;
+      default = bootstrapEnabled;
+      description = "Whether cold non-interactive command execution should wait for the optional bootstrap service to report readiness.";
     };
 
     workerBridgeEnabled = mkOption {
@@ -543,18 +749,28 @@ in {
       shell = pkgs.bashInteractive;
     };
 
-    security.sudo.wheelNeedsPassword = false;
+    security.sudo.enable = cfg.guestSudoEnable;
+    security.sudo.wheelNeedsPassword = lib.mkIf cfg.guestSudoEnable false;
 
     assertions = [
       {
         assertion = lib.hasPrefix "/etc/" cfg.workerKindsFile;
         message = "workloadVm.workerKindsFile must stay under /etc so Firebreak can materialize it declaratively.";
       }
+      {
+        assertion = missingRequiredCapabilities == [ ];
+        message =
+          "workloadVm.runtimeBackend `${cfg.runtimeBackend}` is missing required capabilities: "
+          + lib.concatStringsSep ", " missingRequiredCapabilities;
+      }
     ];
 
     environment.systemPackages =
       cfg.extraSystemPackages
       ++ lib.optional (sharedToolWrapperPackage != null) sharedToolWrapperPackage;
+
+    workloadVm.environmentOverlay.package.pathPrefixes =
+      lib.mkAfter (map (pkg: "${pkg}/bin") cfg.environmentOverlay.package.packages);
 
     workloadVm.sharedToolWrapperBinDir = sharedToolWrapperBinDir;
 
@@ -566,17 +782,25 @@ in {
     '';
 
     systemd.services.dev-bootstrap = lib.mkIf bootstrapEnabled {
-      description = "Install persistent developer tools before login";
+      description = "Install persistent developer tools";
       wantedBy = [ "multi-user.target" ];
-      before = [ "getty.target" "serial-getty@ttyS0.service" ];
-      after = [ "local-fs.target" "network-online.target" ];
-      wants = [ "network-online.target" ];
+      after = [ "local-fs.target" ];
+      environment = lib.mkIf cfg.guestEgress.enable {
+        HTTP_PROXY = "http://127.0.0.1:${toString cfg.guestEgress.proxyPort}";
+        HTTPS_PROXY = "http://127.0.0.1:${toString cfg.guestEgress.proxyPort}";
+        http_proxy = "http://127.0.0.1:${toString cfg.guestEgress.proxyPort}";
+        https_proxy = "http://127.0.0.1:${toString cfg.guestEgress.proxyPort}";
+        NO_PROXY = "127.0.0.1,localhost,::1";
+        no_proxy = "127.0.0.1,localhost,::1";
+      };
 
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
-        StandardOutput = "journal+console";
-        StandardError = "journal+console";
+        StandardOutput = "journal";
+        StandardError = "journal";
+      } // lib.optionalAttrs (cfg.bootstrapConditionScript != null) {
+        ExecCondition = cfg.bootstrapConditionScript;
       };
 
       path = cfg.bootstrapPackages;
@@ -593,28 +817,31 @@ in {
     };
 
     microvm = {
+      optimize.enable = true;
       mem = cfg.memoryMiB;
-      interfaces = [ {
+      storeOnDisk = !cfg.runtimeManagedRoStore;
+      interfaces = lib.optional (cfg.runtimeBackend != "cloud-hypervisor") {
         type = "user";
         id = "vm-user";
         mac = cfg.macAddress;
-      } ];
-      volumes = [ {
+      };
+      volumes = lib.optional cfg.varVolumeEnabled {
         mountPoint = "/var";
         image = cfg.varVolumeImage;
         size = cfg.varVolumeSizeMiB;
-      } ];
+      };
       shares = [ {
-        # use proto = "virtiofs" for MicroVMs that are started by systemd
-        proto = roStoreShareProto;
+        # keep a declared host store share so microvm.nix can derive the guest
+        # /nix/store mount logic without building a separate store disk image.
+        proto = backendSpec.roStoreShareProto;
         tag = "ro-store";
-        # a host's /nix/store will be picked up so that no
-        # squashfs/erofs will be built for it.
+        socket = "ro-store.sock";
         source = "/nix/store";
         mountPoint = "/nix/.ro-store";
+        readOnly = true;
       } ];
 
-      hypervisor = localHypervisor;
+      hypervisor = backendSpec.microvmHypervisor;
       socket = cfg.controlSocket;
     };
   };

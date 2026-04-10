@@ -1,10 +1,12 @@
 {
   self,
   system,
+  includeCloud ? false,
   hostIsLinux,
   lib,
   localVmArtifacts,
   mkWorkloadPackage,
+  mkWorkloadWarmReuseSmokePackage,
   mkWorkloadVersionSmokePackage,
   mkCloudJobPackage,
   mkCloudSmokePackage,
@@ -14,6 +16,10 @@
   mkToolCredentialSlotSmokePackage,
   mkFirebreakCliSurfaceSmokePackage,
   mkWorkerFirebreakBridgeProbePackage,
+  mkLocalControllerSmokePackage,
+  mkCloudHypervisorEgressProxySmokePackage,
+  mkCloudHypervisorPortPublishSmokePackage,
+  mkPortPublishRuntimeSmokePackage,
   mkFirebreakCliPackage,
   mkLoopPackage,
   mkLoopSmokePackage,
@@ -21,11 +27,13 @@
   mkProjectConfigSmokePackage,
   mkRunnerPackage,
   mkSmokePackage,
+  mkValidationFixturePackage,
   mkWorkspacePackage,
   mkWorkspaceSmokePackage,
   mkValidationPackage,
   mkValidationSmokePackage,
   mkWorkerFirebreakAttachSmokePackage,
+  mkWorkerClaudeVersionSmokePackage,
   mkWorkerInteractiveClaudeDirectExitSmokePackage,
   mkWorkerInteractiveClaudeDirectSmokePackage,
   mkWorkerInteractiveCodexDirectSmokePackage,
@@ -35,6 +43,9 @@
   mkWorkerProxyScriptSmokePackage,
   mkWorkerSmokePackage,
 }:
+let
+  publicWorkloadManifest = builtins.fromJSON (builtins.readFile ../../share/public-workloads.json);
+in
 {
   default = self.packages.${system}.firebreak;
 
@@ -46,33 +57,40 @@
 
   firebreak-test-smoke-codex = mkSmokePackage {
     name = "firebreak-test-smoke-codex";
-    agentPackage = "firebreak-codex";
-    agentBin = "codex";
-    agentDisplayName = "Codex";
-    agentConfigSubdir = "codex";
-    defaultAgentConfigHostDir = "$HOME/.firebreak";
+    workloadPackage = "firebreak-codex";
+    toolBin = "codex";
+    toolDisplayName = "Codex";
+    toolStateSubdir = "codex";
+    defaultToolStateHostDir = "$HOME/.firebreak";
     workspaceBootstrapConfigHostDir = "$HOME/.codex";
   };
 
   firebreak-test-smoke-codex-version = mkWorkloadVersionSmokePackage {
     name = "firebreak-test-smoke-codex-version";
-    agentPackage = "firebreak-codex";
-    agentDisplayName = "Codex";
+    workloadPackage = "firebreak-codex";
+    toolDisplayName = "Codex";
+  };
+
+  firebreak-test-smoke-codex-warm-reuse = mkWorkloadWarmReuseSmokePackage {
+    name = "firebreak-test-smoke-codex-warm-reuse";
+    workloadPackage = "firebreak-codex";
+    toolDisplayName = "Codex";
   };
 
   firebreak-claude-code = localVmArtifacts.firebreak-claude-code.package;
 
   firebreak-test-smoke-claude-code = mkSmokePackage {
     name = "firebreak-test-smoke-claude-code";
-    agentPackage = "firebreak-claude-code";
-    agentBin = "claude";
-    agentDisplayName = "Claude Code";
-    agentConfigSubdir = "claude";
-    defaultAgentConfigHostDir = "$HOME/.firebreak";
+    workloadPackage = "firebreak-claude-code";
+    toolBin = "claude";
+    toolDisplayName = "Claude Code";
+    toolStateSubdir = "claude";
+    defaultToolStateHostDir = "$HOME/.firebreak";
     workspaceBootstrapConfigHostDir = "$HOME/.claude";
   };
 
   firebreak-interactive-echo = localVmArtifacts.firebreak-interactive-echo.package;
+  firebreak-port-publish-fixture = localVmArtifacts.firebreak-port-publish-fixture.package;
 
   firebreak-credential-fixture = localVmArtifacts.firebreak-credential-fixture.package;
 
@@ -83,14 +101,15 @@
 
   firebreak-test-smoke-codex-credential-slots = mkToolCredentialSlotSmokePackage {
     name = "firebreak-test-smoke-codex-credential-slots";
-    agentPackage = "firebreak-codex";
-    agentBin = "codex";
-    agentDisplayName = "Codex";
-    agentConfigSubdir = "codex";
+    workloadPackage = "firebreak-codex";
+    toolBin = "codex";
+    toolDisplayName = "Codex";
+    toolStateSubdir = "codex";
     authFile = "auth.json";
+    authFileFormat = "json";
     apiKeyFile = "OPENAI_API_KEY";
     apiKeyEnv = "OPENAI_API_KEY";
-    configRootEnv = "CODEX_HOME";
+    toolStateEnv = "CODEX_HOME";
     credentialSlotSpecificVar = "CODEX_CREDENTIAL_SLOT";
     loginCommand = "login";
     loginCommandArgs = [ "login" ];
@@ -98,14 +117,15 @@
 
   firebreak-test-smoke-claude-code-credential-slots = mkToolCredentialSlotSmokePackage {
     name = "firebreak-test-smoke-claude-code-credential-slots";
-    agentPackage = "firebreak-claude-code";
-    agentBin = "claude";
-    agentDisplayName = "Claude Code";
-    agentConfigSubdir = "claude";
+    workloadPackage = "firebreak-claude-code";
+    toolBin = "claude";
+    toolDisplayName = "Claude Code";
+    toolStateSubdir = "claude";
     authFile = ".credentials.json";
+    authFileFormat = "json";
     apiKeyFile = "ANTHROPIC_API_KEY";
     apiKeyEnv = "ANTHROPIC_API_KEY";
-    configRootEnv = "CLAUDE_CONFIG_DIR";
+    toolStateEnv = "CLAUDE_CONFIG_DIR";
     credentialSlotSpecificVar = "CLAUDE_CREDENTIAL_SLOT";
     loginCommand = "auth login";
     loginCommandArgs = [ "auth" "login" ];
@@ -133,6 +153,28 @@
 
   firebreak-test-smoke-worker-proxy-script = mkWorkerProxyScriptSmokePackage {
     name = "firebreak-test-smoke-worker-proxy-script";
+  };
+
+  firebreak-test-smoke-local-controller = mkLocalControllerSmokePackage {
+    name = "firebreak-test-smoke-local-controller";
+  };
+
+  firebreak-test-smoke-cloud-hypervisor-egress-proxy = mkCloudHypervisorEgressProxySmokePackage {
+    name = "firebreak-test-smoke-cloud-hypervisor-egress-proxy";
+  };
+
+  firebreak-test-smoke-cloud-hypervisor-port-publish = mkCloudHypervisorPortPublishSmokePackage {
+    name = "firebreak-test-smoke-cloud-hypervisor-port-publish";
+  };
+
+  firebreak-test-smoke-port-publish-runtime = mkPortPublishRuntimeSmokePackage {
+    name = "firebreak-test-smoke-port-publish-runtime";
+    fixturePackage = "firebreak-port-publish-fixture";
+  };
+
+  firebreak-validation-fixture-pass = mkValidationFixturePackage {
+    name = "firebreak-validation-fixture-pass";
+    message = "validation fixture passed";
   };
 
   dev-flow-validate = mkValidationPackage {
@@ -165,6 +207,11 @@
   firebreak-test-smoke-worker-firebreak-attach = mkWorkerFirebreakAttachSmokePackage {
     name = "firebreak-test-smoke-worker-firebreak-attach";
     workerPackage = "firebreak-worker";
+  };
+
+  firebreak-test-smoke-worker-claude-version = mkWorkerClaudeVersionSmokePackage {
+    name = "firebreak-test-smoke-worker-claude-version";
+    firebreakPackage = "firebreak";
   };
 
   firebreak-test-smoke-worker-interactive-claude-direct = mkWorkerInteractiveClaudeDirectSmokePackage {
@@ -201,24 +248,17 @@
 
   firebreak = mkFirebreakCliPackage {
     name = "firebreak";
-    publicWorkloads = [
-      {
-        name = "codex";
-        description = "Codex local Firebreak VM";
-        launcher = "${self.packages.${system}.firebreak-codex}/bin/firebreak-codex";
-      }
-      {
-        name = "claude-code";
-        description = "Claude Code local Firebreak VM";
-        launcher = "${self.packages.${system}.firebreak-claude-code}/bin/firebreak-claude-code";
-      }
-    ];
+    publicWorkloads = map
+      (workload: workload // {
+        launcher = "${self.packages.${system}.${workload.packageName}}/bin/${workload.packageName}";
+      })
+      publicWorkloadManifest;
   };
 
   dev-flow = mkDevFlowCliPackage {
     name = "dev-flow";
   };
-} // lib.optionalAttrs hostIsLinux {
+} // lib.optionalAttrs (hostIsLinux && includeCloud) {
   firebreak-internal-runner-codex-cloud = localVmArtifacts.firebreak-codex-cloud.runnerPackage;
   firebreak-internal-runner-claude-code-cloud = localVmArtifacts.firebreak-claude-code-cloud.runnerPackage;
   firebreak-internal-runner-test-cloud = localVmArtifacts.firebreak-cloud-smoke.runnerPackage;

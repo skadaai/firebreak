@@ -1,27 +1,45 @@
 set -eu
 
 @FIREBREAK_PROJECT_CONFIG_LIB@
+@FIREBREAK_ENVIRONMENT_LIB@
+@FIREBREAK_CLOUD_HYPERVISOR_NETWORK_LIB@
+@FIREBREAK_CLOUD_HYPERVISOR_VSOCK_LIB@
+@FIREBREAK_LOCAL_COMMAND_REQUEST_LIB@
+@FIREBREAK_LOCAL_INSTANCE_CONTROLLER_LIB@
 
 host_cwd=$PWD
 host_uid=$(id -u)
 host_gid=$(id -g)
 firebreak_load_project_config
+export FIREBREAK_NIXPKGS_PATH='@FIREBREAK_NIXPKGS_PATH@'
 resolved_firebreak_tmp_root=${FIREBREAK_TMPDIR:-${XDG_CACHE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.cache}/firebreak/tmp}
 firebreak_state_root=${FIREBREAK_STATE_DIR:-${XDG_STATE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.local/state}/firebreak}
 default_firebreak_state_root=${XDG_STATE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.local/state}/firebreak
 worker_state_dir=${FIREBREAK_WORKER_STATE_DIR:-$firebreak_state_root/worker-broker}
-specific_state_mode_var=@AGENT_ENV_PREFIX@_STATE_MODE
+firebreak_socket_root=${FIREBREAK_SOCKET_DIR:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/firebreak-sockets}
+specific_state_mode_var=@TOOL_ENV_PREFIX@_STATE_MODE
 specific_state_mode=${!specific_state_mode_var:-}
 state_mode=${specific_state_mode:-${FIREBREAK_STATE_MODE:-host}}
 requested_launch_mode=${FIREBREAK_LAUNCH_MODE:-run}
 requested_worker_mode=${FIREBREAK_WORKER_MODE:-}
 requested_worker_modes=${FIREBREAK_WORKER_MODES:-}
-agent_session_mode_override=${FIREBREAK_AGENT_SESSION_MODE_OVERRIDE:-}
-agent_session_mode=agent
-default_agent_command=@DEFAULT_AGENT_COMMAND@
+session_mode_override=${FIREBREAK_SESSION_MODE_OVERRIDE:-}
+session_mode=tool
+default_tool_command=@DEFAULT_TOOL_COMMAND@
+runtime_backend=@RUNTIME_BACKEND@
 host_system=@HOST_SYSTEM@
-agent_command_override=""
-shell_command_override=${AGENT_VM_COMMAND:-}
+runtime_generation=@RUNNER@
+package_name=@PACKAGE_NAME@
+tool_runtime_seed_script=@TOOL_RUNTIME_SEED_SCRIPT@
+environment_overlay_enabled=@ENVIRONMENT_OVERLAY_ENABLE@
+environment_overlay_package_installables_json='@ENVIRONMENT_OVERLAY_PACKAGE_INSTALLABLES_JSON@'
+environment_overlay_package_paths_json='@ENVIRONMENT_OVERLAY_PACKAGE_PATHS_JSON@'
+environment_overlay_package_exports_json='@ENVIRONMENT_OVERLAY_PACKAGE_EXPORTS_JSON@'
+environment_overlay_project_nix_enabled=@ENVIRONMENT_OVERLAY_PROJECT_NIX_ENABLED@
+command_boot_base_systemd_unit='@COMMAND_BOOT_BASE_SYSTEMD_UNIT@'
+interactive_boot_base_systemd_unit='@INTERACTIVE_BOOT_BASE_SYSTEMD_UNIT@'
+command_override=""
+shell_command_override=${WORKLOAD_VM_COMMAND:-}
 shared_state_root_host_dir=""
 shared_credential_slots_host_dir=""
 workspace_bootstrap_config_host_dir=@WORKSPACE_BOOTSTRAP_CONFIG_HOST_DIR@
@@ -33,6 +51,9 @@ instance_ephemeral=${FIREBREAK_INSTANCE_EPHEMERAL:-0}
 debug_keep_runtime=${FIREBREAK_DEBUG_KEEP_RUNTIME:-0}
 runner_workdir=$host_cwd
 control_socket=$default_control_socket
+var_volume_enabled=@VAR_VOLUME_ENABLED@
+var_volume_image_name=@VAR_VOLUME_IMAGE@
+var_volume_seed_image=@VAR_VOLUME_SEED_IMAGE@
 
 reject_whitespace_path() {
   path=$1
@@ -232,6 +253,19 @@ $(env)
 EOF
 }
 
+select_boot_base() {
+  case "$session_mode" in
+    command-exec)
+      firebreak_boot_base='command'
+      firebreak_systemd_unit=$command_boot_base_systemd_unit
+      ;;
+    *)
+      firebreak_boot_base='interactive'
+      firebreak_systemd_unit=$interactive_boot_base_systemd_unit
+      ;;
+  esac
+}
+
 default_state_root=$(resolve_host_dir "${FIREBREAK_STATE_ROOT:-@DEFAULT_STATE_ROOT@}")
 default_credential_slots_host_dir=$(resolve_host_dir "${FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH:-@DEFAULT_CREDENTIAL_SLOTS_HOST_DIR@}")
 workspace_bootstrap_target=""
@@ -255,62 +289,82 @@ reject_whitespace_path "$resolved_firebreak_tmp_root" "Firebreak temporary runti
 reject_whitespace_path "$firebreak_state_root" "Firebreak state root"
 reject_whitespace_path "$default_firebreak_state_root" "default Firebreak state root"
 reject_whitespace_path "$worker_state_dir" "Firebreak worker state directory"
-if [ "$host_system" = "aarch64-darwin" ]; then
+reject_whitespace_path "$firebreak_socket_root" "Firebreak runtime socket root"
+if [ "$runtime_backend" = "vfkit" ]; then
   reject_comma_path "$host_cwd" "current working directory"
   reject_comma_path "$resolved_firebreak_tmp_root" "Firebreak temporary runtime directory"
 fi
 firebreak_tmp_root=$resolved_firebreak_tmp_root
 mkdir -p "$firebreak_tmp_root"
 host_runtime_dir=$(mktemp -d "$firebreak_tmp_root/r.XXXXXX")
-host_meta_dir=$host_runtime_dir/m
-host_exec_output_dir=$host_runtime_dir/o
-host_agent_tools_dir=$firebreak_state_root/tools/${default_control_socket%.socket}
-default_host_agent_tools_dir=$default_firebreak_state_root/tools/${default_control_socket%.socket}
+host_runtime_share_dir=$host_runtime_dir/runtime
+host_meta_dir=$host_runtime_share_dir/meta
+host_exec_output_dir=$host_runtime_share_dir/exec-output
+host_tool_runtimes_dir=$firebreak_state_root/tools/${default_control_socket%.socket}
+default_host_tool_runtimes_dir=$default_firebreak_state_root/tools/${default_control_socket%.socket}
 host_instance_dir=$host_runtime_dir/instance
 runner_stdout_log=$host_runtime_dir/runner.out
 runner_stderr_log=$host_runtime_dir/runner.err
 virtiofsd_hostcwd_log=$host_runtime_dir/v-cwd.log
+virtiofsd_ro_store_log=$host_runtime_dir/v-ro-store.log
+virtiofsd_hostruntime_log=$host_runtime_dir/v-runtime.log
 virtiofsd_shared_state_root_log=$host_runtime_dir/v-shared-cfg.log
 virtiofsd_shared_credential_slots_log=$host_runtime_dir/v-credential-slots.log
-virtiofsd_agent_exec_log=$host_runtime_dir/v-out.log
-virtiofsd_agent_tools_log=$host_runtime_dir/v-tools.log
-virtiofsd_worker_bridge_log=$host_runtime_dir/v-worker.log
-hostcwd_socket=$host_runtime_dir/cwd.sock
-shared_state_root_socket=$host_runtime_dir/shared-cfg.sock
-shared_credential_slots_socket=$host_runtime_dir/credential-slots.sock
-agent_exec_output_socket=$host_runtime_dir/out.sock
-agent_tools_socket=$host_runtime_dir/tools.sock
-worker_bridge_dir=$host_runtime_dir/w
-worker_bridge_socket=$host_runtime_dir/worker.sock
-worker_bridge_socket_env=""
+virtiofsd_tool_runtimes_log=$host_runtime_dir/v-tools.log
+worker_bridge_dir=$host_runtime_share_dir/worker-bridge
 worker_bridge_server_log=$host_runtime_dir/worker-bridge.log
 worker_bridge_server_script=$host_runtime_dir/firebreak-worker-bridge-host.sh
 worker_helper_script=$host_runtime_dir/firebreak-worker.sh
+worker_project_config_script=$host_runtime_dir/firebreak-project-config.sh
 worker_bridge_enabled=@WORKER_BRIDGE_ENABLED@
+tool_runtime_seed_log=$host_runtime_dir/tool-runtime-seed.log
 wrapper_trace_log=$host_runtime_dir/wrapper-trace.log
+profile_host_events_file=$host_runtime_dir/profile-host.tsv
+profile_summary_file=$host_runtime_dir/profile-summary.json
 attach_pty_log=$host_runtime_dir/attach-pty.log
-agent_term=$(normalize_term_name "${TERM:-}")
-agent_columns=$(sanitize_positive_dimension "${COLUMNS:-}")
-agent_lines=$(sanitize_positive_dimension "${LINES:-}")
+environment_overlay_ready_flag=$host_meta_dir/firebreak-environment.ready
+environment_overlay_error_flag=$host_meta_dir/firebreak-environment.error
+environment_overlay_log=$host_meta_dir/firebreak-environment.log
+session_term=$(normalize_term_name "${TERM:-}")
+session_columns=$(sanitize_positive_dimension "${COLUMNS:-}")
+session_lines=$(sanitize_positive_dimension "${LINES:-}")
 
-if { [ -z "$agent_columns" ] || [ -z "$agent_lines" ]; } && command -v stty >/dev/null 2>&1; then
+if { [ -z "$session_columns" ] || [ -z "$session_lines" ]; } && command -v stty >/dev/null 2>&1; then
   stty_size=$(stty size 2>/dev/null || true)
   stty_lines=${stty_size%% *}
   stty_columns=${stty_size##* }
   stty_lines=$(sanitize_positive_dimension "$stty_lines")
   stty_columns=$(sanitize_positive_dimension "$stty_columns")
-  if [ -z "$agent_lines" ] && [ -n "$stty_lines" ]; then
-    agent_lines=$stty_lines
+  if [ -z "$session_lines" ] && [ -n "$stty_lines" ]; then
+    session_lines=$stty_lines
   fi
-  if [ -z "$agent_columns" ] && [ -n "$stty_columns" ]; then
-    agent_columns=$stty_columns
+  if [ -z "$session_columns" ] && [ -n "$stty_columns" ]; then
+    session_columns=$stty_columns
   fi
 fi
 
+profile_sanitize_field() {
+  printf '%s' "$1" | tr '\t\r\n' '   '
+}
+
+profile_host_mark() {
+  profile_component=$1
+  profile_phase=$2
+  profile_detail=${3:-}
+  printf '%s\t%s\t%s\t%s\n' \
+    "$(date -u +%s%3N)" \
+    "$(profile_sanitize_field "$profile_component")" \
+    "$(profile_sanitize_field "$profile_phase")" \
+    "$(profile_sanitize_field "$profile_detail")" \
+    >>"$profile_host_events_file" 2>/dev/null || true
+}
+
 trace_wrapper() {
-  if ! [ -d "$host_runtime_dir" ]; then
+  wrapper_trace_dir=${wrapper_trace_log%/*}
+  if ! [ -d "$wrapper_trace_dir" ]; then
     return 0
   fi
+  profile_host_mark wrapper "$1"
   printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >>"$wrapper_trace_log" 2>/dev/null || true
 }
 
@@ -386,14 +440,47 @@ else
   control_socket=$default_instance_dir/$default_control_socket
 fi
 
+case "$firebreak_socket_root" in
+  /*) ;;
+  *)
+    echo "FIREBREAK_SOCKET_DIR must resolve to an absolute host path: $firebreak_socket_root" >&2
+    exit 1
+    ;;
+esac
+
+mkdir -p "$firebreak_socket_root"
+socket_key_output=$(printf '%s' "$runner_workdir:$default_control_socket" | sha256sum) || {
+  echo "failed to derive Firebreak runtime launch directory key" >&2
+  exit 1
+}
+socket_key=${socket_key_output%% *}
+socket_key=$(printf '%.16s' "$socket_key")
+runner_launch_dir=$firebreak_socket_root/$socket_key
+if [ -L "$runner_launch_dir" ] || [ -e "$runner_launch_dir" ]; then
+  rm -rf "$runner_launch_dir"
+fi
+ln -s "$runner_workdir" "$runner_launch_dir"
+
 runtime_debug_file=$runner_workdir/.firebreak-runtime.json
+control_socket=$runner_launch_dir/$default_control_socket
+ro_store_socket=$runner_launch_dir/ro-store.sock
+hostcwd_socket=$runner_launch_dir/hostcwd.sock
+hostruntime_socket=$runner_launch_dir/hostruntime.sock
+shared_state_root_socket=$runner_launch_dir/hoststateroot.sock
+shared_credential_slots_socket=$runner_launch_dir/hostcredentialslots.sock
+tool_runtimes_socket=$runner_launch_dir/hosttoolruntimes.sock
+cloud_hypervisor_tap_interface=""
+cloud_hypervisor_host_ipv4=""
+cloud_hypervisor_guest_ipv4=""
+cloud_hypervisor_subnet_cidr=""
+cloud_hypervisor_outbound_interface=""
 
 case "$requested_launch_mode" in
   run)
-    agent_session_mode=agent
+    session_mode=tool
     ;;
   shell)
-    agent_session_mode=shell
+    session_mode=shell
     ;;
   *)
     echo "unsupported FIREBREAK_LAUNCH_MODE: $requested_launch_mode" >&2
@@ -426,43 +513,43 @@ case "$requested_worker_mode" in
     ;;
 esac
 
-if [ "$agent_session_mode" = "agent" ] && [ "$#" -gt 0 ]; then
-  if [ -z "$default_agent_command" ]; then
-    echo "this VM mode does not support forwarding CLI arguments to an agent command" >&2
+if [ "$session_mode" = "tool" ] && [ "$#" -gt 0 ]; then
+  if [ -z "$default_tool_command" ]; then
+    echo "this workload does not support forwarding CLI arguments to a tool command" >&2
     exit 1
   fi
 
-  agent_session_mode=agent-exec
-  agent_command_override=$default_agent_command
+  session_mode=command-exec
+  command_override=$default_tool_command
   for arg in "$@"; do
     printf -v quoted_arg '%q' "$arg"
-    agent_command_override="$agent_command_override $quoted_arg"
+    command_override="$command_override $quoted_arg"
   done
   set --
 fi
 
 if [ -n "$shell_command_override" ]; then
-  agent_session_mode=agent-exec
-  agent_command_override=$shell_command_override
+  session_mode=command-exec
+  command_override=$shell_command_override
 fi
 
-if [ -n "$agent_session_mode_override" ]; then
-  case "$agent_session_mode_override" in
-    shell|agent|agent-exec|agent-attach-exec)
-      agent_session_mode=$agent_session_mode_override
+if [ -n "$session_mode_override" ]; then
+  case "$session_mode_override" in
+    shell|tool|command-exec|command-attach-exec|command-service)
+      session_mode=$session_mode_override
       ;;
     *)
-      echo "unsupported FIREBREAK_AGENT_SESSION_MODE_OVERRIDE: $agent_session_mode_override" >&2
+      echo "unsupported FIREBREAK_SESSION_MODE_OVERRIDE: $session_mode_override" >&2
       exit 1
       ;;
   esac
 fi
 
-if [ -z "$agent_command_override" ]; then
-  case "$agent_session_mode" in
-    agent-exec|agent-attach-exec)
-      if [ -n "$default_agent_command" ]; then
-        agent_command_override=$default_agent_command
+if [ -z "$command_override" ]; then
+  case "$session_mode" in
+    command-exec|command-attach-exec)
+      if [ -n "$default_tool_command" ]; then
+        command_override=$default_tool_command
       fi
       ;;
   esac
@@ -482,11 +569,26 @@ if [ "$host_config_adoption_enabled" = "1" ] && [ "$state_mode" = "host" ]; then
   ensure_host_state_subdir "$shared_state_root_host_dir" "@STATE_SUBDIR@" "$workspace_bootstrap_target"
 fi
 
+if local_controller_should_dispatch; then
+  rm -rf "$host_runtime_dir"
+  local_controller_dispatch_request
+fi
+
 # shellcheck disable=SC2329
 cleanup() {
+  cloud_hypervisor_cleanup_guest_egress
+  cloud_hypervisor_cleanup_local_network
+  if [ -n "${ro_store_virtiofsd_pid:-}" ]; then
+    kill "$ro_store_virtiofsd_pid" 2>/dev/null || true
+    wait "$ro_store_virtiofsd_pid" 2>/dev/null || true
+  fi
   if [ -n "${hostcwd_virtiofsd_pid:-}" ]; then
     kill "$hostcwd_virtiofsd_pid" 2>/dev/null || true
     wait "$hostcwd_virtiofsd_pid" 2>/dev/null || true
+  fi
+  if [ -n "${hostruntime_virtiofsd_pid:-}" ]; then
+    kill "$hostruntime_virtiofsd_pid" 2>/dev/null || true
+    wait "$hostruntime_virtiofsd_pid" 2>/dev/null || true
   fi
   if [ -n "${shared_state_root_virtiofsd_pid:-}" ]; then
     kill "$shared_state_root_virtiofsd_pid" 2>/dev/null || true
@@ -496,23 +598,30 @@ cleanup() {
     kill "$shared_credential_slots_virtiofsd_pid" 2>/dev/null || true
     wait "$shared_credential_slots_virtiofsd_pid" 2>/dev/null || true
   fi
-  if [ -n "${agent_exec_output_virtiofsd_pid:-}" ]; then
-    kill "$agent_exec_output_virtiofsd_pid" 2>/dev/null || true
-    wait "$agent_exec_output_virtiofsd_pid" 2>/dev/null || true
-  fi
-  if [ -n "${agent_tools_virtiofsd_pid:-}" ]; then
-    kill "$agent_tools_virtiofsd_pid" 2>/dev/null || true
-    wait "$agent_tools_virtiofsd_pid" 2>/dev/null || true
-  fi
-  if [ -n "${worker_bridge_virtiofsd_pid:-}" ]; then
-    kill "$worker_bridge_virtiofsd_pid" 2>/dev/null || true
-    wait "$worker_bridge_virtiofsd_pid" 2>/dev/null || true
+  if [ -n "${tool_runtimes_virtiofsd_pid:-}" ]; then
+    kill "$tool_runtimes_virtiofsd_pid" 2>/dev/null || true
+    wait "$tool_runtimes_virtiofsd_pid" 2>/dev/null || true
   fi
   if [ -n "${worker_bridge_server_pid:-}" ]; then
     kill "$worker_bridge_server_pid" 2>/dev/null || true
     wait "$worker_bridge_server_pid" 2>/dev/null || true
   fi
-  rm -f "$control_socket"
+  if [ -n "${environment_overlay_pid:-}" ]; then
+    kill "$environment_overlay_pid" 2>/dev/null || true
+    wait "$environment_overlay_pid" 2>/dev/null || true
+  fi
+  if [ "$local_controller_mode" = "daemon" ]; then
+    local_controller_clear_state
+  fi
+  remove_runtime_socket_artifacts \
+    "$control_socket" \
+    "$ro_store_socket" \
+    "$hostcwd_socket" \
+    "$hostruntime_socket" \
+    "$shared_state_root_socket" \
+    "$shared_credential_slots_socket" \
+    "$tool_runtimes_socket"
+  rm -f "$runner_launch_dir"
   if [ "$debug_keep_runtime" = "1" ]; then
     echo "keeping Firebreak runtime directory: $host_runtime_dir" >&2
   else
@@ -521,55 +630,177 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+remove_runtime_socket_artifacts() {
+  for runtime_socket_path in "$@"; do
+    [ -n "$runtime_socket_path" ] || continue
+    rm -f "$runtime_socket_path" "$runtime_socket_path.pid"
+  done
+}
+
+start_tool_runtime_seed() {
+  if [ -z "$tool_runtime_seed_script" ]; then
+    return 0
+  fi
+  if ! [ -x "$tool_runtime_seed_script" ]; then
+    echo "configured tool runtime seed script is not executable: $tool_runtime_seed_script" >&2
+    exit 1
+  fi
+
+  trace_wrapper "tool-runtimes-host-seed-start"
+  (
+    if "$tool_runtime_seed_script" "$host_tool_runtimes_dir" >"$tool_runtime_seed_log" 2>&1; then
+      trace_wrapper "tool-runtimes-host-seed-ready"
+    else
+      seed_status=$?
+      trace_wrapper "tool-runtimes-host-seed-error:$seed_status"
+      exit "$seed_status"
+    fi
+  ) &
+}
+
+start_environment_overlay_materialization() {
+  if [ "$environment_overlay_enabled" != "1" ]; then
+    return 0
+  fi
+
+  rm -f "$environment_overlay_env_file" "$environment_overlay_ready_flag" "$environment_overlay_error_flag" "$environment_overlay_log"
+  trace_wrapper "environment-overlay-start"
+  (
+    if \
+      FIREBREAK_ENVIRONMENT_CACHE_ROOT=$firebreak_state_root/environments \
+      FIREBREAK_ENVIRONMENT_PROJECT_NIX_ENABLED=$environment_overlay_project_nix_enabled \
+      FIREBREAK_PACKAGE_ENVIRONMENT_INSTALLABLES_JSON=$environment_overlay_package_installables_json \
+      FIREBREAK_PACKAGE_ENVIRONMENT_PATHS_JSON=$environment_overlay_package_paths_json \
+      FIREBREAK_PACKAGE_ENVIRONMENT_EXPORTS_JSON=$environment_overlay_package_exports_json \
+      FIREBREAK_PACKAGE_IDENTITY=$package_name \
+      FIREBREAK_BOOT_BASE=$firebreak_boot_base \
+      FIREBREAK_RUNTIME_GENERATION=$runtime_generation \
+      FIREBREAK_HOST_SYSTEM=@HOST_SYSTEM@ \
+      firebreak_resolve_environment \
+      && \
+      FIREBREAK_ENVIRONMENT_CACHE_ROOT=$firebreak_state_root/environments \
+      FIREBREAK_ENVIRONMENT_PROJECT_NIX_ENABLED=$environment_overlay_project_nix_enabled \
+      FIREBREAK_PACKAGE_ENVIRONMENT_INSTALLABLES_JSON=$environment_overlay_package_installables_json \
+      FIREBREAK_PACKAGE_ENVIRONMENT_PATHS_JSON=$environment_overlay_package_paths_json \
+      FIREBREAK_PACKAGE_ENVIRONMENT_EXPORTS_JSON=$environment_overlay_package_exports_json \
+      FIREBREAK_PACKAGE_IDENTITY=$package_name \
+      FIREBREAK_BOOT_BASE=$firebreak_boot_base \
+      FIREBREAK_RUNTIME_GENERATION=$runtime_generation \
+      FIREBREAK_HOST_SYSTEM=@HOST_SYSTEM@ \
+      firebreak_materialize_environment_cache
+    then
+      cp "$FIREBREAK_RESOLVED_ENVIRONMENT_ENV_FILE" "$environment_overlay_env_file"
+      : >"$environment_overlay_ready_flag"
+      trace_wrapper "environment-overlay-ready:$FIREBREAK_RESOLVED_ENVIRONMENT_SOURCE:$FIREBREAK_RESOLVED_ENVIRONMENT_KIND"
+    else
+      overlay_status=$?
+      printf '%s\n' "$overlay_status" >"$environment_overlay_error_flag"
+      trace_wrapper "environment-overlay-error:$overlay_status"
+      exit "$overlay_status"
+    fi
+  ) >"$environment_overlay_log" 2>&1 &
+  environment_overlay_pid=$!
+}
+
+seed_var_volume_if_missing() {
+  image_path=$1
+
+  if [ -z "$image_path" ] || [ -e "$image_path" ]; then
+    return 0
+  fi
+
+  if [ -z "$var_volume_seed_image" ] || ! [ -r "$var_volume_seed_image" ]; then
+    return 0
+  fi
+
+  image_dir=$(dirname "$image_path")
+  mkdir -p "$image_dir"
+  trace_wrapper "var-volume-seed-start:$image_path"
+  cp --reflink=auto --sparse=always "$var_volume_seed_image" "$image_path"
+  chmod 0644 "$image_path"
+  trace_wrapper "var-volume-seed-done:$image_path"
+}
+
 mkdir -p "$host_meta_dir"
 mkdir -p "$host_exec_output_dir"
-mkdir -p "$host_agent_tools_dir"
-if [ "$host_agent_tools_dir" != "$default_host_agent_tools_dir" ] \
-  && ! [ -e "$host_agent_tools_dir/bootstrap-ready" ] \
-  && [ -e "$default_host_agent_tools_dir/bootstrap-ready" ]; then
-  mkdir -p "$host_agent_tools_dir"
-  cp -a "$default_host_agent_tools_dir"/. "$host_agent_tools_dir"/
-  trace_wrapper "agent-tools-seeded"
-fi
+mkdir -p "$host_tool_runtimes_dir"
 mkdir -p "$worker_bridge_dir/requests"
+chmod 0777 "$host_exec_output_dir"
+chmod 0777 "$worker_bridge_dir" "$worker_bridge_dir/requests"
+ln -snf "$host_exec_output_dir" "$host_runtime_dir/o"
+if [ "$host_tool_runtimes_dir" != "$default_host_tool_runtimes_dir" ] \
+  && ! [ -e "$host_tool_runtimes_dir/bootstrap-ready" ] \
+  && [ -e "$default_host_tool_runtimes_dir/bootstrap-ready" ]; then
+  mkdir -p "$host_tool_runtimes_dir"
+  cp -a "$default_host_tool_runtimes_dir"/. "$host_tool_runtimes_dir"/
+  trace_wrapper "tool-runtimes-seeded"
+fi
+start_tool_runtime_seed
 rm -f "$control_socket"
+remove_runtime_socket_artifacts \
+  "$ro_store_socket" \
+  "$hostcwd_socket" \
+  "$hostruntime_socket" \
+  "$shared_state_root_socket" \
+  "$shared_credential_slots_socket" \
+  "$tool_runtimes_socket"
+rm -f "$runner_launch_dir"
+ln -s "$runner_workdir" "$runner_launch_dir"
+if [ "$var_volume_enabled" = "1" ]; then
+  seed_var_volume_if_missing "$runner_workdir/$var_volume_image_name"
+fi
 shared_state_root_env_file=$host_meta_dir/firebreak-shared-state.env
+environment_overlay_env_file=$host_meta_dir/firebreak-environment.env
 : >"$wrapper_trace_log"
+: >"$profile_host_events_file"
 : >"$attach_pty_log"
+
+if [ "$local_controller_mode" = "daemon" ]; then
+  local_controller_record_runtime_dir
+fi
 
 cat >"$runtime_debug_file" <<EOF
 {
   "host_runtime_dir": "$(printf '%s' "$host_runtime_dir" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "runner_workdir": "$(printf '%s' "$runner_workdir" | sed 's/\\/\\\\/g; s/"/\\"/g')",
-  "session_mode": "$(printf '%s' "$agent_session_mode" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "runner_launch_dir": "$(printf '%s' "$runner_launch_dir" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "session_mode": "$(printf '%s' "$session_mode" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "control_socket": "$(printf '%s' "$control_socket" | sed 's/\\/\\\\/g; s/"/\\"/g')",
-  "agent_exec_output_dir": "$(printf '%s' "$host_exec_output_dir" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "command_output_dir": "$(printf '%s' "$host_exec_output_dir" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "wrapper_trace_log": "$(printf '%s' "$wrapper_trace_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "profile_host_events_file": "$(printf '%s' "$profile_host_events_file" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "profile_summary_file": "$(printf '%s' "$profile_summary_file" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "attach_pty_log": "$(printf '%s' "$attach_pty_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "runner_stdout_log": "$(printf '%s' "$runner_stdout_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "runner_stderr_log": "$(printf '%s' "$runner_stderr_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_hostcwd_log": "$(printf '%s' "$virtiofsd_hostcwd_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "virtiofs_hostruntime_log": "$(printf '%s' "$virtiofsd_hostruntime_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "virtiofs_hostmeta_log": "$(printf '%s' "$virtiofsd_hostruntime_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "virtiofs_runtime_config_log": "$(printf '%s' "$virtiofsd_hostruntime_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_shared_state_root_log": "$(printf '%s' "$virtiofsd_shared_state_root_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "virtiofs_shared_credential_slots_log": "$(printf '%s' "$virtiofsd_shared_credential_slots_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
-  "virtiofs_agent_exec_log": "$(printf '%s' "$virtiofsd_agent_exec_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
-  "virtiofs_agent_tools_log": "$(printf '%s' "$virtiofsd_agent_tools_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
-  "virtiofs_worker_bridge_log": "$(printf '%s' "$virtiofsd_worker_bridge_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "virtiofs_command_output_log": "$(printf '%s' "$virtiofsd_hostruntime_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "virtiofs_tool_runtimes_log": "$(printf '%s' "$virtiofsd_tool_runtimes_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
+  "virtiofs_worker_bridge_log": "$(printf '%s' "$virtiofsd_hostruntime_log" | sed 's/\\/\\\\/g; s/"/\\"/g')",
   "worker_bridge_server_log": "$(printf '%s' "$worker_bridge_server_log" | sed 's/\\/\\\\/g; s/"/\\"/g')"
 }
 EOF
 trace_wrapper "wrapper-start"
 
 if [ "$worker_bridge_enabled" = "1" ]; then
+  cat >"$worker_project_config_script" <<'__FIREBREAK_PROJECT_CONFIG_SCRIPT__'
+@FIREBREAK_PROJECT_CONFIG_LIB@
+__FIREBREAK_PROJECT_CONFIG_SCRIPT__
   cat >"$worker_helper_script" <<'__FIREBREAK_WORKER_SCRIPT__'
 @FIREBREAK_WORKER_LIB@
 __FIREBREAK_WORKER_SCRIPT__
   cat >"$worker_bridge_server_script" <<'__FIREBREAK_WORKER_BRIDGE_HOST_SCRIPT__'
 @FIREBREAK_WORKER_BRIDGE_HOST_LIB@
 __FIREBREAK_WORKER_BRIDGE_HOST_SCRIPT__
-  chmod 0555 "$worker_helper_script" "$worker_bridge_server_script"
+  chmod 0555 "$worker_project_config_script" "$worker_helper_script" "$worker_bridge_server_script"
 fi
 
-start_virtiofsd() {
+spawn_virtiofsd() {
   shared_dir=$1
   socket_path=$2
   log_path=$3
@@ -580,7 +811,12 @@ start_virtiofsd() {
     --posix-acl \
     --xattr >"$log_path" 2>&1 &
   started_virtiofsd_pid=$!
+}
 
+wait_for_virtiofsd_socket() {
+  socket_path=$1
+  log_path=$2
+  virtiofsd_pid=$3
   for _ in $(seq 1 50); do
     if [ -S "$socket_path" ]; then
       return 0
@@ -588,9 +824,12 @@ start_virtiofsd() {
     sleep 0.1
   done
 
-  kill "$started_virtiofsd_pid" 2>/dev/null || true
-  wait "$started_virtiofsd_pid" 2>/dev/null || true
+  kill "$virtiofsd_pid" 2>/dev/null || true
+  wait "$virtiofsd_pid" 2>/dev/null || true
   echo "virtiofsd did not create socket: $socket_path" >&2
+  if [ -s "$log_path" ]; then
+    cat "$log_path" >&2
+  fi
   exit 1
 }
 
@@ -599,18 +838,35 @@ start_worker_bridge_server() {
     FIREBREAK_FLAKE_REF='@FIREBREAK_FLAKE_REF@' \
     FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG='1' \
     FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes' \
+    FIREBREAK_WORKER_BRIDGE_GUEST_WORKSPACE='@WORKSPACE_MOUNT@' \
     FIREBREAK_WORKER_BRIDGE_DIR="$worker_bridge_dir" \
+    FIREBREAK_WORKER_BRIDGE_HOST_WORKSPACE="$host_cwd" \
     FIREBREAK_WORKER_STATE_DIR="$worker_state_dir" \
     bash "$worker_bridge_server_script" "$worker_bridge_dir" "$worker_helper_script" >"$worker_bridge_server_log" 2>&1 &
   worker_bridge_server_pid=$!
   trace_wrapper "worker-bridge-ready"
 }
 
+write_command_request() {
+  capture_systemd_profile=${FIREBREAK_CAPTURE_SYSTEMD_PROFILE:-${FIREBREAK_PRINT_PROFILE:-0}}
+  firebreak_write_command_request \
+    "$host_exec_output_dir" \
+    "$session_mode" \
+    "$command_override" \
+    "$host_cwd" \
+    "$session_term" \
+    "$session_columns" \
+    "$session_lines" \
+    "$capture_systemd_profile"
+  trace_wrapper "command-request-ready:$command_request_id"
+}
+
 printf '%s\n' "$host_cwd" > "$host_meta_dir/mount-path"
 printf '%s\n' "$host_uid" > "$host_meta_dir/host-uid"
 printf '%s\n' "$host_gid" > "$host_meta_dir/host-gid"
-printf '%s\n' "$agent_session_mode" > "$host_meta_dir/worker-session-mode"
+printf '%s\n' "$session_mode" > "$host_meta_dir/worker-session-mode"
 : > "$shared_state_root_env_file"
+: > "$environment_overlay_env_file"
 append_optional_env_default "FIREBREAK_STATE_MODE" "${FIREBREAK_STATE_MODE:-}"
 append_optional_env_default "FIREBREAK_STATE_ROOT" "${FIREBREAK_STATE_ROOT:-}"
 append_matching_env_defaults "_STATE_MODE"
@@ -619,114 +875,202 @@ append_optional_env_default "FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH" "${FIREBREAK_
 append_matching_env_defaults "_CREDENTIAL_SLOT"
 printf '%s\n' "$requested_worker_mode" > "$host_meta_dir/worker-mode"
 printf '%s\n' "$requested_worker_modes" > "$host_meta_dir/worker-modes"
-if [ -n "$agent_term" ]; then
-  printf '%s\n' "$agent_term" > "$host_meta_dir/worker-term"
+if [ -n "$session_term" ]; then
+  printf '%s\n' "$session_term" > "$host_meta_dir/worker-term"
 fi
-if [ -n "$agent_columns" ]; then
-  printf '%s\n' "$agent_columns" > "$host_meta_dir/worker-columns"
+if [ -n "$session_columns" ]; then
+  printf '%s\n' "$session_columns" > "$host_meta_dir/worker-columns"
 fi
-if [ -n "$agent_lines" ]; then
-  printf '%s\n' "$agent_lines" > "$host_meta_dir/worker-lines"
+if [ -n "$session_lines" ]; then
+  printf '%s\n' "$session_lines" > "$host_meta_dir/worker-lines"
 fi
-if [ -n "$agent_command_override" ]; then
-  printf '%s\n' "$agent_command_override" > "$host_meta_dir/worker-command"
+if [ -n "$command_override" ] && [ "$session_mode" != "command-exec" ] && [ "$session_mode" != "command-attach-exec" ]; then
+  printf '%s\n' "$command_override" > "$host_meta_dir/worker-command"
+fi
+if [ "$session_mode" = "command-exec" ] || [ "$session_mode" = "command-attach-exec" ]; then
+  write_command_request
 fi
 
-if [ "$host_system" != "aarch64-darwin" ]; then
-  start_virtiofsd "$host_cwd" "$hostcwd_socket" "$virtiofsd_hostcwd_log"
-  hostcwd_virtiofsd_pid=$started_virtiofsd_pid
-  trace_wrapper "virtiofs-hostcwd-ready"
+select_boot_base
 
-  if [ -n "$shared_state_root_host_dir" ]; then
-    start_virtiofsd "$shared_state_root_host_dir" "$shared_state_root_socket" "$virtiofsd_shared_state_root_log"
-    shared_state_root_virtiofsd_pid=$started_virtiofsd_pid
-    trace_wrapper "virtiofs-state-root-ready"
-  fi
-  if [ "$shared_credential_slots_enabled" = "1" ] && [ -n "$shared_credential_slots_host_dir" ]; then
-    start_virtiofsd "$shared_credential_slots_host_dir" "$shared_credential_slots_socket" "$virtiofsd_shared_credential_slots_log"
-    shared_credential_slots_virtiofsd_pid=$started_virtiofsd_pid
-    trace_wrapper "virtiofs-credential-slots-ready"
-  fi
-  if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
-    start_virtiofsd "$host_exec_output_dir" "$agent_exec_output_socket" "$virtiofsd_agent_exec_log"
-    agent_exec_output_virtiofsd_pid=$started_virtiofsd_pid
-    trace_wrapper "virtiofs-agent-exec-ready"
-  fi
-  start_virtiofsd "$host_agent_tools_dir" "$agent_tools_socket" "$virtiofsd_agent_tools_log"
-  agent_tools_virtiofsd_pid=$started_virtiofsd_pid
-  trace_wrapper "virtiofs-agent-tools-ready"
+start_environment_overlay_materialization
 
-  if [ "$worker_bridge_enabled" = "1" ]; then
-    start_virtiofsd "$worker_bridge_dir" "$worker_bridge_socket" "$virtiofsd_worker_bridge_log"
-    worker_bridge_virtiofsd_pid=$started_virtiofsd_pid
-    worker_bridge_socket_env=$worker_bridge_socket
-  fi
-fi
+cloud_hypervisor_setup_guest_egress
+cloud_hypervisor_setup_local_network
+
+case "$runtime_backend" in
+  cloud-hypervisor)
+    spawn_virtiofsd "/nix/store" "$ro_store_socket" "$virtiofsd_ro_store_log"
+    ro_store_virtiofsd_pid=$started_virtiofsd_pid
+
+    spawn_virtiofsd "$host_cwd" "$hostcwd_socket" "$virtiofsd_hostcwd_log"
+    hostcwd_virtiofsd_pid=$started_virtiofsd_pid
+
+    spawn_virtiofsd "$host_runtime_share_dir" "$hostruntime_socket" "$virtiofsd_hostruntime_log"
+    hostruntime_virtiofsd_pid=$started_virtiofsd_pid
+
+    if [ -n "$shared_state_root_host_dir" ]; then
+      spawn_virtiofsd "$shared_state_root_host_dir" "$shared_state_root_socket" "$virtiofsd_shared_state_root_log"
+      shared_state_root_virtiofsd_pid=$started_virtiofsd_pid
+    fi
+    if [ "$shared_credential_slots_enabled" = "1" ] && [ -n "$shared_credential_slots_host_dir" ]; then
+      spawn_virtiofsd "$shared_credential_slots_host_dir" "$shared_credential_slots_socket" "$virtiofsd_shared_credential_slots_log"
+      shared_credential_slots_virtiofsd_pid=$started_virtiofsd_pid
+    fi
+    spawn_virtiofsd "$host_tool_runtimes_dir" "$tool_runtimes_socket" "$virtiofsd_tool_runtimes_log"
+    tool_runtimes_virtiofsd_pid=$started_virtiofsd_pid
+
+    wait_for_virtiofsd_socket "$ro_store_socket" "$virtiofsd_ro_store_log" "$ro_store_virtiofsd_pid"
+    trace_wrapper "virtiofs-ro-store-ready"
+
+    wait_for_virtiofsd_socket "$hostcwd_socket" "$virtiofsd_hostcwd_log" "$hostcwd_virtiofsd_pid"
+    trace_wrapper "virtiofs-hostcwd-ready"
+
+    wait_for_virtiofsd_socket "$hostruntime_socket" "$virtiofsd_hostruntime_log" "$hostruntime_virtiofsd_pid"
+    trace_wrapper "virtiofs-hostruntime-ready"
+
+    if [ -n "${shared_state_root_virtiofsd_pid:-}" ]; then
+      wait_for_virtiofsd_socket "$shared_state_root_socket" "$virtiofsd_shared_state_root_log" "$shared_state_root_virtiofsd_pid"
+      trace_wrapper "virtiofs-state-root-ready"
+    fi
+
+    if [ -n "${shared_credential_slots_virtiofsd_pid:-}" ]; then
+      wait_for_virtiofsd_socket "$shared_credential_slots_socket" "$virtiofsd_shared_credential_slots_log" "$shared_credential_slots_virtiofsd_pid"
+      trace_wrapper "virtiofs-credential-slots-ready"
+    fi
+
+    wait_for_virtiofsd_socket "$tool_runtimes_socket" "$virtiofsd_tool_runtimes_log" "$tool_runtimes_virtiofsd_pid"
+    trace_wrapper "virtiofs-tool-runtimes-ready"
+    ;;
+  vfkit)
+    ;;
+  *)
+    echo "unsupported local runtime backend: $runtime_backend" >&2
+    exit 1
+    ;;
+esac
 
 if [ "$worker_bridge_enabled" = "1" ]; then
   start_worker_bridge_server
 fi
 
 run_runner() {
-  if [ "$host_system" = "aarch64-darwin" ]; then
-    if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
-      env \
+  if [ "$runtime_backend" = "vfkit" ]; then
+    if [ "$session_mode" = "command-exec" ] || [ "$session_mode" = "command-attach-exec" ]; then
+      exec env \
+        FIREBREAK_SYSTEMD_UNIT="$firebreak_systemd_unit" \
         MICROVM_VFKIT_HOST_META_DIR="$host_meta_dir" \
         MICROVM_VFKIT_HOST_CWD_DIR="$host_cwd" \
         MICROVM_VFKIT_SHARED_STATE_ROOT_DIR="$shared_state_root_host_dir" \
         MICROVM_VFKIT_SHARED_CREDENTIAL_SLOTS_DIR="$shared_credential_slots_host_dir" \
-        MICROVM_VFKIT_AGENT_EXEC_OUTPUT_DIR="$host_exec_output_dir" \
-        MICROVM_VFKIT_AGENT_TOOLS_DIR="$host_agent_tools_dir" \
+        MICROVM_VFKIT_COMMAND_OUTPUT_DIR="$host_exec_output_dir" \
+        MICROVM_VFKIT_TOOL_RUNTIMES_DIR="$host_tool_runtimes_dir" \
         MICROVM_VFKIT_WORKER_BRIDGE_DIR="$worker_bridge_dir" \
         @RUNNER@ "$@"
     else
-      env \
+      exec env \
+        FIREBREAK_SYSTEMD_UNIT="$firebreak_systemd_unit" \
         MICROVM_VFKIT_HOST_META_DIR="$host_meta_dir" \
         MICROVM_VFKIT_HOST_CWD_DIR="$host_cwd" \
         MICROVM_VFKIT_SHARED_STATE_ROOT_DIR="$shared_state_root_host_dir" \
         MICROVM_VFKIT_SHARED_CREDENTIAL_SLOTS_DIR="$shared_credential_slots_host_dir" \
-        MICROVM_VFKIT_AGENT_TOOLS_DIR="$host_agent_tools_dir" \
+        MICROVM_VFKIT_TOOL_RUNTIMES_DIR="$host_tool_runtimes_dir" \
         MICROVM_VFKIT_WORKER_BRIDGE_DIR="$worker_bridge_dir" \
         @RUNNER@ "$@"
     fi
     return
   fi
 
-  if [ "$agent_session_mode" = "agent-exec" ] || [ "$agent_session_mode" = "agent-attach-exec" ]; then
-    env \
-      MICROVM_HOST_META_DIR="$host_meta_dir" \
+  if [ "$runtime_backend" != "cloud-hypervisor" ]; then
+    echo "unsupported local runtime backend: $runtime_backend" >&2
+    exit 1
+  fi
+
+  if [ "$session_mode" = "command-exec" ] || [ "$session_mode" = "command-attach-exec" ]; then
+    exec env \
+      FIREBREAK_SYSTEMD_UNIT="$firebreak_systemd_unit" \
+      MICROVM_RO_STORE_SOCKET="$ro_store_socket" \
+      MICROVM_CLOUD_HYPERVISOR_TAP_INTERFACE="$cloud_hypervisor_tap_interface" \
+      MICROVM_HOST_RUNTIME_SOCKET="$hostruntime_socket" \
       MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
       MICROVM_SHARED_STATE_ROOT_DIR="$shared_state_root_host_dir" \
       MICROVM_SHARED_STATE_ROOT_SOCKET="$shared_state_root_socket" \
       MICROVM_SHARED_CREDENTIAL_SLOTS_DIR="$shared_credential_slots_host_dir" \
       MICROVM_SHARED_CREDENTIAL_SLOTS_SOCKET="$shared_credential_slots_socket" \
-      MICROVM_AGENT_EXEC_OUTPUT_SOCKET="$agent_exec_output_socket" \
-      MICROVM_AGENT_TOOLS_SOCKET="$agent_tools_socket" \
-      MICROVM_WORKER_BRIDGE_SOCKET="$worker_bridge_socket_env" \
+      MICROVM_TOOL_RUNTIMES_SOCKET="$tool_runtimes_socket" \
       @RUNNER@ "$@"
   else
     env \
-      MICROVM_HOST_META_DIR="$host_meta_dir" \
+      FIREBREAK_SYSTEMD_UNIT="$firebreak_systemd_unit" \
+      MICROVM_RO_STORE_SOCKET="$ro_store_socket" \
+      MICROVM_CLOUD_HYPERVISOR_TAP_INTERFACE="$cloud_hypervisor_tap_interface" \
+      MICROVM_HOST_RUNTIME_SOCKET="$hostruntime_socket" \
       MICROVM_HOST_CWD_SOCKET="$hostcwd_socket" \
       MICROVM_SHARED_STATE_ROOT_DIR="$shared_state_root_host_dir" \
       MICROVM_SHARED_STATE_ROOT_SOCKET="$shared_state_root_socket" \
       MICROVM_SHARED_CREDENTIAL_SLOTS_DIR="$shared_credential_slots_host_dir" \
       MICROVM_SHARED_CREDENTIAL_SLOTS_SOCKET="$shared_credential_slots_socket" \
-      MICROVM_AGENT_TOOLS_SOCKET="$agent_tools_socket" \
-      MICROVM_WORKER_BRIDGE_SOCKET="$worker_bridge_socket_env" \
+      MICROVM_TOOL_RUNTIMES_SOCKET="$tool_runtimes_socket" \
       @RUNNER@ "$@"
   fi
+}
+
+wait_for_command_exec_completion() {
+  runner_pid=$1
+  exit_code_path=$host_exec_output_dir/exit_code
+  max_polls=${FIREBREAK_COMMAND_EXEC_WAIT_POLLS:-9000}
+  poll_sleep_seconds=${FIREBREAK_COMMAND_EXEC_WAIT_SLEEP_SECONDS:-0.1}
+  poll_count=0
+
+  while [ "$poll_count" -lt "$max_polls" ]; do
+    if [ -f "$exit_code_path" ]; then
+      return 0
+    fi
+    if ! kill -0 "$runner_pid" 2>/dev/null; then
+      return 1
+    fi
+    sleep "$poll_sleep_seconds"
+    poll_count=$((poll_count + 1))
+  done
+
+  return 2
+}
+
+stop_command_exec_runner() {
+  runner_pid=$1
+
+  if ! kill -0 "$runner_pid" 2>/dev/null; then
+    return 0
+  fi
+
+  kill "$runner_pid" 2>/dev/null || true
+  for _ in $(seq 1 30); do
+    if ! kill -0 "$runner_pid" 2>/dev/null; then
+      return 0
+    fi
+    sleep 0.1
+  done
+
+  kill -9 "$runner_pid" 2>/dev/null || true
 }
 
 runner_status=0
 rm -f "$runner_stderr_log"
 trace_wrapper "runner-start"
-if [ "$agent_session_mode" = "agent-exec" ]; then
+if [ "$session_mode" = "command-exec" ]; then
   (
-    cd "$runner_workdir"
+    cd "$runner_launch_dir"
     run_runner "$@"
-  ) >"$runner_stdout_log" 2>"$runner_stderr_log" || runner_status=$?
-elif [ "$agent_session_mode" = "agent-attach-exec" ]; then
+  ) >"$runner_stdout_log" 2>"$runner_stderr_log" &
+  runner_pid=$!
+  if wait_for_command_exec_completion "$runner_pid"; then
+    trace_wrapper "command-exec-command-finished"
+    stop_command_exec_runner "$runner_pid"
+  else
+    trace_wrapper "command-exec-command-finished-missing"
+  fi
+  wait "$runner_pid" || runner_status=$?
+elif [ "$session_mode" = "command-attach-exec" ]; then
   attach_runner_script=$host_runtime_dir/attached-runner.sh
   attach_relay_script=$host_runtime_dir/attach-relay.py
   attach_driver_script=$host_runtime_dir/attach-driver.py
@@ -737,16 +1081,16 @@ elif [ "$agent_session_mode" = "agent-attach-exec" ]; then
   done
   cat >"$attach_runner_script" <<EOF
 set -eu
-cd '$(printf '%s' "$runner_workdir" | sed "s/'/'\\''/g")'
-export MICROVM_HOST_META_DIR='$(printf '%s' "$host_meta_dir" | sed "s/'/'\\\\''/g")'
+cd '$(printf '%s' "$runner_launch_dir" | sed "s/'/'\\''/g")'
+export MICROVM_RO_STORE_SOCKET='$(printf '%s' "$ro_store_socket" | sed "s/'/'\\\\''/g")'
+export MICROVM_CLOUD_HYPERVISOR_TAP_INTERFACE='$(printf '%s' "$cloud_hypervisor_tap_interface" | sed "s/'/'\\\\''/g")'
+export MICROVM_HOST_RUNTIME_SOCKET='$(printf '%s' "$hostruntime_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_HOST_CWD_SOCKET='$(printf '%s' "$hostcwd_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_SHARED_STATE_ROOT_DIR='$(printf '%s' "$shared_state_root_host_dir" | sed "s/'/'\\\\''/g")'
 export MICROVM_SHARED_STATE_ROOT_SOCKET='$(printf '%s' "$shared_state_root_socket" | sed "s/'/'\\\\''/g")'
 export MICROVM_SHARED_CREDENTIAL_SLOTS_DIR='$(printf '%s' "$shared_credential_slots_host_dir" | sed "s/'/'\\\\''/g")'
 export MICROVM_SHARED_CREDENTIAL_SLOTS_SOCKET='$(printf '%s' "$shared_credential_slots_socket" | sed "s/'/'\\\\''/g")'
-export MICROVM_AGENT_EXEC_OUTPUT_SOCKET='$(printf '%s' "$agent_exec_output_socket" | sed "s/'/'\\\\''/g")'
-export MICROVM_AGENT_TOOLS_SOCKET='$(printf '%s' "$agent_tools_socket" | sed "s/'/'\\\\''/g")'
-export MICROVM_WORKER_BRIDGE_SOCKET='$(printf '%s' "$worker_bridge_socket_env" | sed "s/'/'\\\\''/g")'
+export MICROVM_TOOL_RUNTIMES_SOCKET='$(printf '%s' "$tool_runtimes_socket" | sed "s/'/'\\\\''/g")'
 exec @RUNNER@$quoted_runner_args
 EOF
   chmod 0555 "$attach_runner_script"
@@ -763,8 +1107,11 @@ command_signal_stream_path = os.environ.get("FIREBREAK_ATTACH_COMMAND_SIGNAL_STR
 def trace_event(target_path: str, message: str) -> None:
     if not target_path:
         return
-    with open(target_path, "a", encoding="utf-8") as handle:
-        handle.write(message + "\n")
+    try:
+        with open(target_path, "a", encoding="utf-8") as handle:
+            handle.write(message + "\n")
+    except OSError:
+        pass
 
 
 def current_attach_stage() -> str:
@@ -1697,7 +2044,7 @@ EOF
   fi
 else
   (
-    cd "$runner_workdir"
+    cd "$runner_launch_dir"
     run_runner "$@" 2> >(tee "$runner_stderr_log" >&2)
   ) || runner_status=$?
 fi
@@ -1705,20 +2052,21 @@ trace_wrapper "runner-exit:$runner_status"
 if [ "$runner_status" -ne 0 ]; then
   print_runner_json_parse_hint "$runner_stderr_log"
 fi
+@PYTHON3@ @FIREBREAK_PROFILE_SUMMARY_SCRIPT@ "$host_runtime_dir" "$profile_summary_file" >/dev/null 2>&1 || true
 
-if [ "$agent_session_mode" = "agent-exec" ]; then
+if [ "$session_mode" = "command-exec" ]; then
   if [ -f "$host_exec_output_dir/stdout" ]; then
     cat "$host_exec_output_dir/stdout"
-    trace_wrapper "agent-exec-stdout-present"
+    trace_wrapper "command-exec-stdout-present"
   fi
   if [ -f "$host_exec_output_dir/stderr" ]; then
     cat "$host_exec_output_dir/stderr" >&2
-    trace_wrapper "agent-exec-stderr-present"
+    trace_wrapper "command-exec-stderr-present"
   fi
 
   if [ -f "$host_exec_output_dir/exit_code" ]; then
     IFS= read -r command_status < "$host_exec_output_dir/exit_code" || command_status=$runner_status
-    trace_wrapper "agent-exec-exit-code:$command_status"
+    trace_wrapper "command-exec-exit-code:$command_status"
     if [ "$command_status" -ne 0 ] && [ -s "$runner_stderr_log" ]; then
       cat "$runner_stderr_log" >&2
     fi
@@ -1732,11 +2080,8 @@ if [ "$agent_session_mode" = "agent-exec" ]; then
       if [ -s "$virtiofsd_shared_credential_slots_log" ]; then
         cat "$virtiofsd_shared_credential_slots_log" >&2
       fi
-      if [ -s "$virtiofsd_agent_exec_log" ]; then
-        cat "$virtiofsd_agent_exec_log" >&2
-      fi
-      if [ -s "$virtiofsd_worker_bridge_log" ]; then
-        cat "$virtiofsd_worker_bridge_log" >&2
+      if [ -s "$virtiofsd_hostruntime_log" ]; then
+        cat "$virtiofsd_hostruntime_log" >&2
       fi
       if [ -s "$worker_bridge_server_log" ]; then
         cat "$worker_bridge_server_log" >&2
@@ -1744,7 +2089,7 @@ if [ "$agent_session_mode" = "agent-exec" ]; then
     fi
     exit "$command_status"
   fi
-  trace_wrapper "agent-exec-exit-code-missing"
+  trace_wrapper "command-exec-exit-code-missing"
 
   if [ -s "$runner_stderr_log" ]; then
     cat "$runner_stderr_log" >&2
@@ -1758,30 +2103,27 @@ if [ "$agent_session_mode" = "agent-exec" ]; then
   if [ -s "$virtiofsd_shared_credential_slots_log" ]; then
     cat "$virtiofsd_shared_credential_slots_log" >&2
   fi
-  if [ -s "$virtiofsd_agent_exec_log" ]; then
-    cat "$virtiofsd_agent_exec_log" >&2
-  fi
-  if [ -s "$virtiofsd_worker_bridge_log" ]; then
-    cat "$virtiofsd_worker_bridge_log" >&2
+  if [ -s "$virtiofsd_hostruntime_log" ]; then
+    cat "$virtiofsd_hostruntime_log" >&2
   fi
   if [ -s "$worker_bridge_server_log" ]; then
     cat "$worker_bridge_server_log" >&2
   fi
 fi
 
-if [ "$agent_session_mode" = "agent-attach-exec" ]; then
+if [ "$session_mode" = "command-attach-exec" ]; then
   if [ -f "$host_exec_output_dir/attach_stage" ]; then
     IFS= read -r attach_stage < "$host_exec_output_dir/attach_stage" || attach_stage=""
     if [ -n "$attach_stage" ]; then
-      trace_wrapper "agent-attach-stage:$attach_stage"
+      trace_wrapper "command-attach-stage:$attach_stage"
     fi
   fi
   if [ -f "$host_exec_output_dir/exit_code" ]; then
     IFS= read -r command_status < "$host_exec_output_dir/exit_code" || command_status=$runner_status
-    trace_wrapper "agent-attach-exit-code:$command_status"
+    trace_wrapper "command-attach-exit-code:$command_status"
     exit "$command_status"
   fi
-  trace_wrapper "agent-attach-exit-code-missing"
+  trace_wrapper "command-attach-exit-code-missing"
 fi
 
 exit "$runner_status"

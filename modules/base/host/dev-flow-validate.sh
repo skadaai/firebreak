@@ -5,15 +5,23 @@ command=${1:-}
 suite_name=""
 host_os=$(uname -s 2>/dev/null || printf '%s' unknown)
 host_arch=$(uname -m 2>/dev/null || printf '%s' unknown)
+suite_package=""
+suite_command=""
 
 usage() {
   cat <<'EOF' >&2
 usage: dev-flow validate run SUITE [--state-dir PATH]
 
 Named suites:
+  test-fixture-validation-pass
+  test-fixture-validation-blocked
+  test-smoke-local-controller
+  test-smoke-project-config-and-doctor
   test-smoke-codex
   test-smoke-codex-version
+  test-smoke-codex-warm-reuse
   test-smoke-claude-code
+  test-smoke-port-publish-runtime
 @CLOUD_SUITE_USAGE@
 EOF
   exit 1
@@ -88,18 +96,41 @@ case "$state_dir" in
     ;;
 esac
 
-required_capability="local-hypervisor"
+required_capability="rootless-local-hypervisor"
 missing_capability=""
 
 case "$suite_name" in
+  test-fixture-validation-pass)
+    suite_package="firebreak-validation-fixture-pass"
+    required_capability="host-shell"
+    ;;
+  test-fixture-validation-blocked)
+    suite_package=""
+    required_capability="validation-fixture-blocked"
+    missing_capability="validation-fixture-blocked"
+    ;;
+  test-smoke-local-controller)
+    suite_package="firebreak-test-smoke-local-controller"
+    required_capability="host-shell"
+    ;;
+  test-smoke-project-config-and-doctor)
+    suite_package="firebreak-test-smoke-project-config-and-doctor"
+    required_capability="host-shell"
+    ;;
   test-smoke-codex)
-    suite_command="@CODEX_SMOKE_BIN@"
+    suite_package="firebreak-test-smoke-codex"
     ;;
   test-smoke-codex-version)
-    suite_command="@CODEX_VERSION_BIN@"
+    suite_package="firebreak-test-smoke-codex-version"
+    ;;
+  test-smoke-codex-warm-reuse)
+    suite_package="firebreak-test-smoke-codex-warm-reuse"
     ;;
   test-smoke-claude-code)
-    suite_command="@CLAUDE_SMOKE_BIN@"
+    suite_package="firebreak-test-smoke-claude-code"
+    ;;
+  test-smoke-port-publish-runtime)
+    suite_package="firebreak-test-smoke-port-publish-runtime"
     ;;
 @CLOUD_SUITE_CASE@
   *)
@@ -110,10 +141,10 @@ esac
 
 if [ -n "${DEV_FLOW_VALIDATION_FORCE_BLOCKED_REASON:-}" ]; then
   missing_capability=$DEV_FLOW_VALIDATION_FORCE_BLOCKED_REASON
-else
+elif [ "$required_capability" = "rootless-local-hypervisor" ]; then
   case "$host_os:$host_arch" in
     Linux:*)
-      required_capability="kvm"
+      required_capability="cloud-hypervisor-rootless-local-host"
       if ! [ -r /dev/kvm ]; then
         missing_capability="kvm-unavailable"
       elif ! [ -w /dev/kvm ]; then
@@ -131,6 +162,44 @@ else
       missing_capability="unsupported-host-platform"
       ;;
   esac
+elif [ "$required_capability" = "full-guest-network" ]; then
+  case "$host_os:$host_arch" in
+    Linux:*)
+      required_capability="cloud-hypervisor-full-guest-network"
+      if ! [ -r /dev/kvm ]; then
+        missing_capability="kvm-unavailable"
+      elif ! [ -w /dev/kvm ]; then
+        missing_capability="kvm-not-writable"
+      elif ! [ -r /proc/sys/net/ipv4/ip_forward ] || [ "$(cat /proc/sys/net/ipv4/ip_forward)" != "1" ]; then
+        missing_capability="ip-forward-disabled"
+      elif ! command -v sudo >/dev/null 2>&1; then
+        missing_capability="sudo-missing"
+      elif ! command -v ip >/dev/null 2>&1; then
+        missing_capability="ip-tool-missing"
+      elif ! command -v iptables >/dev/null 2>&1; then
+        missing_capability="iptables-tool-missing"
+      elif ! sudo -n "$(command -v ip)" link show >/dev/null 2>&1; then
+        missing_capability="sudo-networking-denied"
+      elif ! sudo -n "$(command -v iptables)" -w -L >/dev/null 2>&1; then
+        missing_capability="sudo-firewall-denied"
+      fi
+      ;;
+    *)
+      missing_capability="unsupported-host-platform"
+      ;;
+  esac
+fi
+
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
+if [ -z "$repo_root" ] || ! [ -f "$repo_root/scripts/run-flake.sh" ]; then
+  echo "firebreak internal validate must run from inside the Firebreak repository" >&2
+  exit 1
+fi
+
+if [ -n "$suite_package" ]; then
+  suite_command="bash $repo_root/scripts/run-flake.sh run .#$suite_package"
+else
+  suite_command="validation-fixture:$suite_name"
 fi
 
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
@@ -157,7 +226,7 @@ fi
 
 result="failed"
 set +e
-"$suite_command" >"$stdout_path" 2>"$stderr_path"
+bash "$repo_root/scripts/run-flake.sh" run ".#$suite_package" >"$stdout_path" 2>"$stderr_path"
 exit_code=$?
 set -e
 printf '%s\n' "$exit_code" >"$exit_code_path"

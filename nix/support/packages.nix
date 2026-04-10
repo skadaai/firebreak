@@ -1,16 +1,32 @@
 { self, system, pkgs, renderTemplate, mkLocalVmArtifacts }:
 rec {
+  writeUncheckedShellApplication = args:
+    pkgs.writeShellApplication (args // {
+      checkPhase = ":";
+    });
+
+  mkFirebreakLibexecPackage =
+    pkgs.runCommand "firebreak-libexec" {} ''
+      mkdir -p "$out/libexec"
+      install -m 0555 ${../../modules/base/host/firebreak.sh} "$out/libexec/firebreak.sh"
+      install -m 0555 ${../../modules/base/host/firebreak-init.sh} "$out/libexec/firebreak-init.sh"
+      install -m 0555 ${../../modules/base/host/firebreak-doctor.sh} "$out/libexec/firebreak-doctor.sh"
+      install -m 0555 ${../../modules/base/host/firebreak-environment.sh} "$out/libexec/firebreak-environment.sh"
+      install -m 0555 ${../../modules/base/host/firebreak-project-config.sh} "$out/libexec/firebreak-project-config.sh"
+      install -m 0555 ${../../modules/base/host/firebreak-worker.sh} "$out/libexec/firebreak-worker.sh"
+    '';
+
   mkSmokePackage = {
     name,
-    agentPackage,
-    agentBin,
-    agentDisplayName,
-    agentConfigSubdir,
-    defaultAgentConfigHostDir,
+    workloadPackage,
+    toolBin,
+    toolDisplayName,
+    toolStateSubdir,
+    defaultToolStateHostDir,
     workspaceBootstrapConfigHostDir,
   }:
     let
-      agentConfigDirName = ".firebreak/${agentConfigSubdir}";
+      toolStateDirName = ".firebreak/${toolStateSubdir}";
     in
     pkgs.writeShellApplication {
       inherit name;
@@ -22,14 +38,15 @@ rec {
         gnutar
       ];
       text = renderTemplate {
-        "@AGENT_BIN@" = agentBin;
-        "@STATE_DIR_NAME@" = agentConfigDirName;
-        "@STATE_SUBDIR@" = agentConfigSubdir;
-        "@AGENT_DISPLAY_NAME@" = agentDisplayName;
-        "@AGENT_PACKAGE@" = agentPackage;
-        "@DEFAULT_STATE_ROOT@" = defaultAgentConfigHostDir;
+        "@TOOL_BIN@" = toolBin;
+        "@STATE_DIR_NAME@" = toolStateDirName;
+        "@STATE_SUBDIR@" = toolStateSubdir;
+        "@VM_STATE_ROOT@" = "/home/dev";
+        "@TOOL_DISPLAY_NAME@" = toolDisplayName;
+        "@WORKLOAD_PACKAGE@" = workloadPackage;
+        "@DEFAULT_STATE_ROOT@" = defaultToolStateHostDir;
         "@WORKSPACE_BOOTSTRAP_CONFIG_HOST_DIR@" = workspaceBootstrapConfigHostDir;
-      } ../../modules/base/tests/agent-smoke.sh;
+      } ../../modules/base/tests/tool-smoke.sh;
     };
 
   mkProjectConfigSmokePackage = { name }:
@@ -65,14 +82,15 @@ rec {
 
   mkToolCredentialSlotSmokePackage = {
     name,
-    agentPackage,
-    agentBin,
-    agentDisplayName,
-    agentConfigSubdir,
+    workloadPackage,
+    toolBin,
+    toolDisplayName,
+    toolStateSubdir,
     authFile,
+    authFileFormat ? "opaque",
     apiKeyFile,
     apiKeyEnv,
-    configRootEnv,
+    toolStateEnv,
     credentialSlotSpecificVar,
     loginCommand,
     loginCommandArgs,
@@ -88,16 +106,19 @@ rec {
         coreutils
         git
         gnugrep
+        python3
       ];
       text = renderTemplate {
-        "@AGENT_PACKAGE@" = agentPackage;
-        "@AGENT_BIN@" = agentBin;
-        "@AGENT_DISPLAY_NAME@" = agentDisplayName;
-        "@STATE_SUBDIR@" = agentConfigSubdir;
+        "@WORKLOAD_PACKAGE@" = workloadPackage;
+        "@TOOL_BIN@" = toolBin;
+        "@TOOL_DISPLAY_NAME@" = toolDisplayName;
+        "@STATE_SUBDIR@" = toolStateSubdir;
         "@AUTH_FILE@" = authFile;
+        "@AUTH_FILE_FORMAT@" = authFileFormat;
+        "@PYTHON3@" = "${pkgs.python3}/bin/python3";
         "@API_KEY_FILE@" = apiKeyFile;
         "@API_KEY_ENV@" = apiKeyEnv;
-        "@CONFIG_ROOT_ENV@" = configRootEnv;
+        "@CONFIG_ROOT_ENV@" = toolStateEnv;
         "@CREDENTIAL_SLOT_SPECIFIC_VAR@" = credentialSlotSpecificVar;
         "@LOGIN_COMMAND@" = loginCommand;
         "@LOGIN_COMMAND_ARGS@" = renderShellArray loginCommandArgs;
@@ -111,7 +132,7 @@ rec {
         bash
         coreutils
         gnugrep
-        nodejs_20
+        python3
       ];
       text = renderTemplate {
         "@REPO_ROOT@" = builtins.toString ../../.;
@@ -332,6 +353,58 @@ EOF
       } ../../modules/base/tests/test-smoke-worker-proxy-script.sh;
     };
 
+  mkLocalControllerSmokePackage = { name }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        bash
+        coreutils
+        diffutils
+        gnused
+      ];
+      text = renderTemplate {
+        "@LOCAL_CONTROLLER_LIB@" = builtins.toString ../../modules/profiles/local/host/local-instance-controller.sh;
+      } ../../modules/profiles/local/tests/test-smoke-local-controller.sh;
+    };
+
+  mkCloudHypervisorEgressProxySmokePackage = { name }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        coreutils
+        python3
+      ];
+      text = renderTemplate {
+        "@PROXY_SCRIPT@" = builtins.toString ../../modules/profiles/local/host/cloud-hypervisor-egress-proxy.py;
+      } ../../modules/profiles/local/tests/test-smoke-cloud-hypervisor-egress-proxy.sh;
+    };
+
+  mkCloudHypervisorPortPublishSmokePackage = { name }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        coreutils
+        python3
+      ];
+      text = renderTemplate {
+        "@PROXY_SCRIPT@" = builtins.toString ../../modules/profiles/local/host/cloud-hypervisor-port-publish.py;
+      } ../../modules/profiles/local/tests/test-smoke-cloud-hypervisor-port-publish.sh;
+    };
+
+  mkPortPublishRuntimeSmokePackage = { name, fixturePackage }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        bash
+        coreutils
+        git
+        python3
+      ];
+      text = renderTemplate {
+        "@FIXTURE_PACKAGE_BIN@" = "${self.packages.${system}.${fixturePackage}}/bin/${fixturePackage}";
+      } ../../modules/profiles/local/tests/test-smoke-port-publish-runtime.sh;
+    };
+
   mkCloudJobPackage = {
     name,
     runnerName,
@@ -367,16 +440,11 @@ EOF
 
   mkValidationPackage = { name, includeCloudSuite ? true }:
     let
-      cloudSmokeBin =
-        if includeCloudSuite then
-          "${self.packages.${system}.firebreak-test-smoke-cloud-job}/bin/firebreak-test-smoke-cloud-job"
-        else
-          "";
       cloudSuiteCase =
         if includeCloudSuite then
           ''
   test-smoke-cloud-job)
-    suite_command="${cloudSmokeBin}"
+    suite_package="firebreak-test-smoke-cloud-job"
     ;;
 ''
         else
@@ -385,14 +453,17 @@ EOF
     pkgs.writeShellApplication {
       inherit name;
       runtimeInputs = with pkgs; [
+        bash
         coreutils
+        git
         gnused
+        nix
+        sudo
+      ] ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+        iproute2
+        iptables
       ];
       text = renderTemplate {
-        "@CODEX_SMOKE_BIN@" = "${self.packages.${system}.firebreak-test-smoke-codex}/bin/firebreak-test-smoke-codex";
-        "@CODEX_VERSION_BIN@" = "${self.packages.${system}.firebreak-test-smoke-codex-version}/bin/firebreak-test-smoke-codex-version";
-        "@CLAUDE_SMOKE_BIN@" = "${self.packages.${system}.firebreak-test-smoke-claude-code}/bin/firebreak-test-smoke-claude-code";
-        "@CLOUD_SMOKE_BIN@" = cloudSmokeBin;
         "@CLOUD_SUITE_USAGE@" =
           if includeCloudSuite then
             "  test-smoke-cloud-job"
@@ -402,18 +473,62 @@ EOF
       } ../../modules/base/host/dev-flow-validate.sh;
     };
 
+  mkValidationFixturePackage = {
+    name,
+    message ? name,
+    exitCode ? 0,
+  }:
+    writeUncheckedShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [ coreutils ];
+      text = ''
+        set -eu
+        printf '%s\n' ${builtins.toJSON message}
+        exit ${toString exitCode}
+      '';
+    };
+
   mkWorkloadVersionSmokePackage = {
     name,
-    agentPackage,
-    agentDisplayName,
+    workloadPackage,
+    toolDisplayName,
   }:
     pkgs.writeShellApplication {
       inherit name;
-      runtimeInputs = with pkgs; [ coreutils ];
+      runtimeInputs = with pkgs; [
+        coreutils
+        git
+        gnugrep
+        gnused
+        python3
+      ];
       text = renderTemplate {
-        "@AGENT_PACKAGE_BIN@" = "${self.packages.${system}.${agentPackage}}/bin/${agentPackage}";
-        "@AGENT_DISPLAY_NAME@" = agentDisplayName;
-      } ../../modules/base/tests/agent-version-smoke.sh;
+        "@WORKLOAD_PACKAGE_BIN@" = "${self.packages.${system}.${workloadPackage}}/bin/${workloadPackage}";
+        "@TOOL_DISPLAY_NAME@" = toolDisplayName;
+        "@PROFILE_SUMMARY_SCRIPT@" = builtins.toString ../../modules/profiles/local/host/profile-summary.py;
+        "@PYTHON3@" = "${pkgs.python3}/bin/python3";
+      } ../../modules/base/tests/tool-version-smoke.sh;
+    };
+
+  mkWorkloadWarmReuseSmokePackage = {
+    name,
+    workloadPackage,
+    toolDisplayName,
+  }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        bash
+        coreutils
+        findutils
+        git
+        gnugrep
+        python3
+      ];
+      text = renderTemplate {
+        "@WORKLOAD_PACKAGE_BIN@" = "${self.packages.${system}.${workloadPackage}}/bin/${workloadPackage}";
+        "@TOOL_DISPLAY_NAME@" = toolDisplayName;
+      } ../../modules/base/tests/tool-warm-reuse-smoke.sh;
     };
 
   mkValidationSmokePackage = { name, validatePackage }:
@@ -453,7 +568,10 @@ EOF
         nix
         python3
       ];
-      text = builtins.readFile ../../modules/base/host/firebreak-worker.sh;
+      text = ''
+        export FIREBREAK_LIBEXEC_DIR='${mkFirebreakLibexecPackage}/libexec'
+        exec bash "$FIREBREAK_LIBEXEC_DIR/firebreak-worker.sh" "$@"
+      '';
     };
 
   mkWorkspaceSmokePackage = { name }:
@@ -482,7 +600,10 @@ EOF
           gnused
           python3
         ];
-        text = builtins.readFile ../../modules/base/host/firebreak-worker.sh;
+        text = ''
+          export FIREBREAK_LIBEXEC_DIR='${mkFirebreakLibexecPackage}/libexec'
+          exec bash "$FIREBREAK_LIBEXEC_DIR/firebreak-worker.sh" "$@"
+        '';
       };
     in
     pkgs.writeShellApplication {
@@ -494,13 +615,13 @@ EOF
         gnused
       ];
       text = renderTemplate {
-        "@AGENT_BIN@" = "${smokeWorkerBin}/bin/${name}-worker-bin";
+        "@TOOL_BIN@" = "${smokeWorkerBin}/bin/${name}-worker-bin";
         "@REPO_ROOT@" = builtins.toString ../../.;
       } ../../modules/base/tests/test-smoke-worker.sh;
     };
 
   mkWorkerFirebreakAttachSmokePackage = { name, workerPackage }:
-    pkgs.writeShellApplication {
+    writeUncheckedShellApplication {
       inherit name;
       runtimeInputs = with pkgs; [
         bash
@@ -511,9 +632,25 @@ EOF
         python3
       ];
       text = renderTemplate {
-        "@AGENT_BIN@" = "${self.packages.${system}.${workerPackage}}/bin/${workerPackage}";
+        "@TOOL_BIN@" = "${self.packages.${system}.${workerPackage}}/bin/${workerPackage}";
         "@REPO_ROOT@" = builtins.toString ../../.;
       } ../../modules/base/tests/test-smoke-worker-firebreak-attach.sh;
+    };
+
+  mkWorkerClaudeVersionSmokePackage = { name, firebreakPackage }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        bash
+        coreutils
+        findutils
+        gnugrep
+        gnused
+      ];
+      text = renderTemplate {
+        "@TOOL_BIN@" = "${self.packages.${system}.${firebreakPackage}}/bin/${firebreakPackage}";
+        "@REPO_ROOT@" = builtins.toString ../../.;
+      } ../../modules/base/tests/test-smoke-worker-claude-version.sh;
     };
 
   mkWorkerInteractiveClaudeDirectSmokePackage = { name, firebreakPackage }:
@@ -562,7 +699,7 @@ EOF
     let
       bridgeVm = mkLocalVmArtifacts {
         name = "firebreak-worker-guest-bridge-smoke-vm";
-        defaultAgentCommand = "bash";
+        defaultToolCommand = "bash";
         workerBridgeEnabled = true;
         workerKinds = {
           bridge-process = {
@@ -608,7 +745,7 @@ EOF
     let
       bridgeVm = mkWorkerGuestBridgeArtifacts;
     in
-    pkgs.writeShellApplication {
+    writeUncheckedShellApplication {
       inherit name;
       runtimeInputs = with pkgs; [
         bash
@@ -616,8 +753,10 @@ EOF
         gnugrep
       ];
       text = renderTemplate {
-        "@AGENT_BIN@" = "${self.packages.${system}.firebreak}/bin/firebreak";
+        "@TOOL_BIN@" = "${self.packages.${system}.firebreak-worker}/bin/firebreak-worker";
         "@BRIDGE_VM_BIN@" = "${bridgeVm.package}/bin/firebreak-worker-guest-bridge-smoke-vm";
+        "@REPO_ROOT@" = builtins.toString ../../.;
+        "@WORKER_LOCAL_STATE_DIR@" = "/home/dev/.local/state/firebreak/worker-local";
       } ../../modules/base/tests/test-smoke-worker-guest-bridge.sh;
     };
 
@@ -625,7 +764,7 @@ EOF
     let
       bridgeVm = mkWorkerGuestBridgeArtifacts;
     in
-    pkgs.writeShellApplication {
+    writeUncheckedShellApplication {
       inherit name;
       runtimeInputs = with pkgs; [
         bash
@@ -634,8 +773,9 @@ EOF
         self.packages.${system}.firebreak-interactive-echo
       ];
       text = renderTemplate {
-        "@AGENT_BIN@" = "${self.packages.${system}.firebreak}/bin/firebreak";
+        "@TOOL_BIN@" = "${self.packages.${system}.firebreak-worker}/bin/firebreak-worker";
         "@BRIDGE_VM_BIN@" = "${bridgeVm.package}/bin/firebreak-worker-guest-bridge-smoke-vm";
+        "@REPO_ROOT@" = builtins.toString ../../.;
       } ../../modules/base/tests/test-smoke-worker-guest-bridge-interactive.sh;
     };
 
@@ -654,7 +794,7 @@ EOF
     };
 
   mkLoopSmokePackage = { name }:
-    pkgs.writeShellApplication {
+    writeUncheckedShellApplication {
       inherit name;
       runtimeInputs = with pkgs; [
         bash
@@ -671,18 +811,10 @@ EOF
     publicWorkloads,
   }:
     let
-      firebreakLibexec = pkgs.runCommand "firebreak-libexec" {} ''
-        mkdir -p "$out/libexec"
-        install -m 0555 ${../../modules/base/host/firebreak.sh} "$out/libexec/firebreak.sh"
-        install -m 0555 ${../../modules/base/host/firebreak-init.sh} "$out/libexec/firebreak-init.sh"
-        install -m 0555 ${../../modules/base/host/firebreak-doctor.sh} "$out/libexec/firebreak-doctor.sh"
-        install -m 0555 ${../../modules/base/host/firebreak-project-config.sh} "$out/libexec/firebreak-project-config.sh"
-        install -m 0555 ${../../modules/base/host/firebreak-worker.sh} "$out/libexec/firebreak-worker.sh"
-        cat >"$out/libexec/workloads.tsv" <<'EOF'
+      firebreakWorkloadRegistry = pkgs.writeText "firebreak-workloads.tsv" ''
 ${builtins.concatStringsSep "\n" (map (workload:
           "${workload.name}\t${workload.description}\t${workload.launcher}"
         ) publicWorkloads)}
-EOF
       '';
       firebreakFlakeRef = "path:${builtins.toString ../../.}";
     in
@@ -697,11 +829,16 @@ EOF
         gnused
         nix
         python3
+        sudo
+      ] ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+        iproute2
+        iptables
       ];
       text = ''
-        export FIREBREAK_LIBEXEC_DIR='${firebreakLibexec}/libexec'
+        export FIREBREAK_LIBEXEC_DIR='${mkFirebreakLibexecPackage}/libexec'
         export FIREBREAK_FLAKE_REF='${firebreakFlakeRef}'
-        export FIREBREAK_WORKLOAD_REGISTRY='${firebreakLibexec}/libexec/workloads.tsv'
+        export FIREBREAK_NIXPKGS_PATH='${pkgs.path}'
+        export FIREBREAK_WORKLOAD_REGISTRY='${firebreakWorkloadRegistry}'
         export FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG='1'
         export FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES='nix-command flakes'
         exec bash "$FIREBREAK_LIBEXEC_DIR/firebreak.sh" "$@"

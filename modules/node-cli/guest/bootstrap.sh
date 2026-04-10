@@ -4,8 +4,8 @@ set -eu
 dev_home=@DEV_HOME@
 dev_user=@DEV_USER@
 tool_home=$dev_home
-if [ -d @AGENT_TOOLS_MOUNT@ ]; then
-  tool_home=@AGENT_TOOLS_MOUNT@
+if [ -d @TOOL_RUNTIMES_MOUNT@ ]; then
+  tool_home=@TOOL_RUNTIMES_MOUNT@
 fi
 
 local_bin="$tool_home/.local/bin"
@@ -25,7 +25,7 @@ bootstrap_lock_path="$tool_home/.firebreak-bootstrap.lock"
 bootstrap_lock_acquired=0
 bootstrap_state_dir=/run/firebreak-worker
 bootstrap_state_path="$bootstrap_state_dir/bootstrap-state.json"
-shared_bootstrap_state_path="@AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json"
+shared_bootstrap_state_path="@COMMAND_OUTPUT_MOUNT@/bootstrap-state.json"
 shared_tool_home=0
 if [ "$tool_home" != "$dev_home" ]; then
   shared_tool_home=1
@@ -50,13 +50,13 @@ write_bootstrap_state() {
   "phase": "$(json_escape "$bootstrap_phase")",
   "status": "$(json_escape "$bootstrap_status")",
   "detail": "$(json_escape "$bootstrap_detail")",
-  "agent_bin": "@BIN_NAME@",
+  "tool_bin": "@BIN_NAME@",
   "package_spec": "$(json_escape "$package_spec")",
   "install_state_id": "$(json_escape "$install_state_id")",
   "updated_at": "$updated_at"
 }
 EOF
-  if [ -d "@AGENT_EXEC_OUTPUT_MOUNT@" ]; then
+  if [ -d "@COMMAND_OUTPUT_MOUNT@" ]; then
     cp "$bootstrap_state_path" "$shared_bootstrap_state_path" 2>/dev/null || true
   fi
 }
@@ -184,21 +184,61 @@ current_bootstrap_phase=toolchain-install-start
 write_bootstrap_state "$current_bootstrap_phase" "running" "$package_spec"
 log_phase "toolchain-install-start $package_spec"
 
-runuser -u "$dev_user" -- env \
-  HOME="$dev_home" \
-  XDG_CONFIG_HOME="$xdg_config_home" \
-  XDG_CACHE_HOME="$xdg_cache_home" \
-  XDG_STATE_HOME="$xdg_state_home" \
-  TMPDIR="$install_tmp" \
-  npm_config_cache="$npm_cache_dir" \
-  npm_config_prefix="$install_prefix" \
-  npm_config_audit=false \
-  npm_config_fund=false \
-  npm_config_update_notifier=false \
-  npm_config_loglevel=warn \
-  CI=1 \
-  PATH="$local_bin:$PATH" \
-  sh -s "$package_node_modules" "$package_spec" <<'EOF'
+bootstrap_env=(
+  "HOME=$dev_home"
+  "XDG_CONFIG_HOME=$xdg_config_home"
+  "XDG_CACHE_HOME=$xdg_cache_home"
+  "XDG_STATE_HOME=$xdg_state_home"
+  "TMPDIR=$install_tmp"
+  "npm_config_cache=$npm_cache_dir"
+  "npm_config_prefix=$install_prefix"
+  "npm_config_audit=false"
+  "npm_config_fund=false"
+  "npm_config_update_notifier=false"
+  "npm_config_loglevel=warn"
+  "CI=1"
+  "PATH=$local_bin:$PATH"
+)
+
+if [ -n "${HTTP_PROXY:-}" ]; then
+  http_proxy_value=$HTTP_PROXY
+else
+  http_proxy_value=${http_proxy:-}
+fi
+if [ -n "${HTTPS_PROXY:-}" ]; then
+  https_proxy_value=$HTTPS_PROXY
+else
+  https_proxy_value=${https_proxy:-}
+fi
+if [ -n "${NO_PROXY:-}" ]; then
+  no_proxy_value=$NO_PROXY
+else
+  no_proxy_value=${no_proxy:-}
+fi
+
+if [ -n "${http_proxy_value:-}" ]; then
+  bootstrap_env+=(
+    "HTTP_PROXY=$http_proxy_value"
+    "http_proxy=$http_proxy_value"
+    "npm_config_proxy=$http_proxy_value"
+  )
+fi
+if [ -n "${https_proxy_value:-}" ]; then
+  bootstrap_env+=(
+    "HTTPS_PROXY=$https_proxy_value"
+    "https_proxy=$https_proxy_value"
+    "npm_config_https_proxy=$https_proxy_value"
+  )
+fi
+if [ -n "${no_proxy_value:-}" ]; then
+  bootstrap_env+=(
+    "NO_PROXY=$no_proxy_value"
+    "no_proxy=$no_proxy_value"
+    "npm_config_noproxy=$no_proxy_value"
+  )
+fi
+
+runuser -u "$dev_user" -- env "${bootstrap_env[@]}" sh -s "$package_node_modules" "$package_spec" <<'EOF'
 set -eu
 mkdir -p \
   "$XDG_CONFIG_HOME" \

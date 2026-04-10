@@ -1,0 +1,297 @@
+# This file is meant to be sourced, not executed.
+# Callers are expected to provide runner_workdir, runtime_backend, control_socket,
+# session_mode, instance_ephemeral, and related wrapper state before using
+# local_controller_mode and local_controller_trace helpers.
+
+local_controller_mode=${FIREBREAK_LOCAL_CONTROLLER_MODE:-client}
+
+local_controller_trace() {
+  if type trace_wrapper >/dev/null 2>&1; then
+    trace_wrapper "$1"
+  fi
+}
+
+local_controller_interval_to_deciseconds() {
+  case "$1" in
+    0.1) printf '%s\n' 1 ;;
+    0.2) printf '%s\n' 2 ;;
+    0.5) printf '%s\n' 5 ;;
+    1|1.0) printf '%s\n' 10 ;;
+    *)
+      echo "unsupported local controller poll interval: $1" >&2
+      exit 1
+      ;;
+  esac
+}
+
+local_controller_prepare_state() {
+  local_controller_state_dir=$runner_workdir/.firebreak-local
+  local_controller_pid_file=$local_controller_state_dir/daemon.pid
+  local_controller_runtime_dir_file=$local_controller_state_dir/runtime-dir
+  local_controller_build_id_file=$local_controller_state_dir/build-id
+  local_controller_spawn_log=$local_controller_state_dir/spawn.log
+  local_controller_dispatch_lock_dir=$local_controller_state_dir/dispatch.lock
+  local_controller_dispatch_lock_pid_file=$local_controller_dispatch_lock_dir/pid
+}
+
+local_controller_runtime_dir() {
+  if ! [ -r "$local_controller_runtime_dir_file" ]; then
+    return 1
+  fi
+  cat "$local_controller_runtime_dir_file"
+}
+
+local_controller_pid_is_alive() {
+  if ! [ -r "$local_controller_pid_file" ]; then
+    return 1
+  fi
+  local_controller_pid=$(cat "$local_controller_pid_file" 2>/dev/null || true)
+  case "$local_controller_pid" in
+    ''|*[!0-9]*)
+      return 1
+      ;;
+  esac
+  kill -0 "$local_controller_pid" 2>/dev/null
+}
+
+local_controller_matches_build_id() {
+  local_controller_prepare_state
+  if ! [ -r "$local_controller_build_id_file" ]; then
+    return 1
+  fi
+
+  local_controller_recorded_build_id=$(cat "$local_controller_build_id_file" 2>/dev/null || true)
+  [ -n "$local_controller_recorded_build_id" ] || return 1
+  [ "$local_controller_recorded_build_id" = "${runtime_generation:-}" ]
+}
+
+local_controller_should_dispatch() {
+  [ "$local_controller_mode" = "client" ] || return 1
+  [ "$runtime_backend" = "cloud-hypervisor" ] || return 1
+  [ "$session_mode" = "command-exec" ] || return 1
+  [ "$instance_ephemeral" != "1" ] || return 1
+}
+
+local_controller_wait_for_ready() {
+  local_controller_prepare_state
+  ready_timeout_seconds=${LOCAL_CONTROLLER_READY_TIMEOUT_SECONDS:-180}
+  ready_poll_interval=${LOCAL_CONTROLLER_READY_POLL_INTERVAL:-0.2}
+  ready_poll_deciseconds=$(local_controller_interval_to_deciseconds "$ready_poll_interval")
+  ready_attempts=$(((ready_timeout_seconds * 10 + ready_poll_deciseconds - 1) / ready_poll_deciseconds))
+
+  for _ in $(seq 1 "$ready_attempts"); do
+    if ! local_controller_pid_is_alive; then
+      break
+    fi
+
+    controller_runtime_dir=$(local_controller_runtime_dir 2>/dev/null || true)
+    if [ -n "$controller_runtime_dir" ] \
+      && [ -r "$controller_runtime_dir/o/command-service-ready" ] \
+      && [ -S "$control_socket" ]; then
+      local_controller_trace "warm-controller-ready:$controller_runtime_dir"
+      return 0
+    fi
+    sleep "$ready_poll_interval"
+  done
+
+  echo "warm local controller did not become ready for $runner_workdir" >&2
+  if [ -s "$local_controller_spawn_log" ]; then
+    cat "$local_controller_spawn_log" >&2
+  fi
+  exit 1
+}
+
+local_controller_stop_running() {
+  local_controller_prepare_state
+
+  if ! local_controller_pid_is_alive; then
+    rm -f "$local_controller_pid_file" "$local_controller_runtime_dir_file" "$local_controller_build_id_file"
+    return 0
+  fi
+
+  local_controller_trace "warm-controller-stop:${local_controller_pid}"
+  kill "$local_controller_pid" 2>/dev/null || true
+  for _ in $(seq 1 50); do
+    if ! local_controller_pid_is_alive; then
+      rm -f "$local_controller_pid_file" "$local_controller_runtime_dir_file" "$local_controller_build_id_file"
+      return 0
+    fi
+    sleep 0.2
+  done
+
+  kill -9 "$local_controller_pid" 2>/dev/null || true
+  rm -f "$local_controller_pid_file" "$local_controller_runtime_dir_file" "$local_controller_build_id_file"
+}
+
+local_controller_ensure_running() {
+  local_controller_prepare_state
+  mkdir -p "$local_controller_state_dir"
+
+  if local_controller_pid_is_alive; then
+    if ! local_controller_matches_build_id; then
+      local_controller_trace "warm-controller-build-mismatch"
+      local_controller_stop_running
+    fi
+  fi
+
+  if local_controller_pid_is_alive; then
+    local_controller_wait_for_ready
+    return 0
+  fi
+
+  rm -f "$local_controller_pid_file" "$local_controller_runtime_dir_file" "$local_controller_build_id_file"
+  local_controller_trace "warm-controller-spawn"
+  setsid env \
+    FIREBREAK_INSTANCE_DIR="$runner_workdir" \
+    FIREBREAK_SESSION_MODE_OVERRIDE=command-service \
+    FIREBREAK_LOCAL_CONTROLLER_MODE=daemon \
+    FIREBREAK_DEBUG_KEEP_RUNTIME=1 \
+    "$0" >"$local_controller_spawn_log" 2>&1 < /dev/null &
+  local_controller_pid=$!
+  printf '%s\n' "$local_controller_pid" > "$local_controller_pid_file"
+  local_controller_wait_for_ready
+}
+
+local_controller_record_runtime_dir() {
+  local_controller_prepare_state
+  mkdir -p "$local_controller_state_dir"
+  printf '%s\n' "$host_runtime_dir" > "$local_controller_runtime_dir_file"
+  printf '%s\n' "${runtime_generation:-}" > "$local_controller_build_id_file"
+  printf '%s\n' "${BASHPID:-$$}" > "$local_controller_pid_file"
+}
+
+# shellcheck disable=SC2329
+local_controller_clear_state() {
+  local_controller_prepare_state
+  rm -f "$local_controller_pid_file" "$local_controller_runtime_dir_file" "$local_controller_build_id_file"
+}
+
+local_controller_dispatch_lock_pid_is_alive() {
+  if ! [ -r "$local_controller_dispatch_lock_pid_file" ]; then
+    return 1
+  fi
+  local_controller_lock_pid=$(cat "$local_controller_dispatch_lock_pid_file" 2>/dev/null || true)
+  case "$local_controller_lock_pid" in
+    ''|*[!0-9]*)
+      return 1
+      ;;
+  esac
+  kill -0 "$local_controller_lock_pid" 2>/dev/null
+}
+
+# shellcheck disable=SC2329
+local_controller_release_dispatch_lock() {
+  local_controller_prepare_state
+  if [ -d "$local_controller_dispatch_lock_dir" ]; then
+    rm -rf "$local_controller_dispatch_lock_dir"
+  fi
+}
+
+local_controller_acquire_dispatch_lock() {
+  local_controller_prepare_state
+  mkdir -p "$local_controller_state_dir"
+  lock_timeout_seconds=${LOCAL_CONTROLLER_LOCK_TIMEOUT_SECS:-60}
+  lock_sleep_seconds=${LOCAL_CONTROLLER_LOCK_SLEEP_S:-0.1}
+  lock_sleep_deciseconds=$(local_controller_interval_to_deciseconds "$lock_sleep_seconds")
+  lock_attempts=$(((lock_timeout_seconds * 10 + lock_sleep_deciseconds - 1) / lock_sleep_deciseconds))
+
+  for _ in $(seq 1 "$lock_attempts"); do
+    if mkdir "$local_controller_dispatch_lock_dir" 2>/dev/null; then
+      printf '%s\n' "${BASHPID:-$$}" > "$local_controller_dispatch_lock_pid_file"
+      local_controller_trace "warm-controller-lock-acquired"
+      return 0
+    fi
+
+    if ! local_controller_dispatch_lock_pid_is_alive; then
+      rm -rf "$local_controller_dispatch_lock_dir"
+      continue
+    fi
+
+    sleep "$lock_sleep_seconds"
+  done
+
+  echo "warm local controller timed out waiting for dispatch lock for $runner_workdir" >&2
+  exit 1
+}
+
+local_controller_write_request() {
+  controller_exec_output_dir=$1
+  capture_systemd_profile=${FIREBREAK_CAPTURE_SYSTEMD_PROFILE:-${FIREBREAK_PRINT_PROFILE:-0}}
+  firebreak_write_command_request \
+    "$controller_exec_output_dir" \
+    "command-exec" \
+    "$command_override" \
+    "$host_cwd" \
+    "$session_term" \
+    "$session_columns" \
+    "$session_lines" \
+    "$capture_systemd_profile"
+  controller_request_id=$command_request_id
+}
+
+local_controller_wait_for_response() {
+  controller_exec_output_dir=$1
+  controller_command_state_path=$controller_exec_output_dir/command-state.json
+  controller_exit_code_path=$controller_exec_output_dir/exit_code
+
+  for _ in $(seq 1 7200); do
+    if ! local_controller_pid_is_alive; then
+      echo "warm local controller exited before command completion for $runner_workdir" >&2
+      if [ -s "$local_controller_spawn_log" ]; then
+        cat "$local_controller_spawn_log" >&2
+      fi
+      exit 1
+    fi
+
+    if [ -f "$controller_exit_code_path" ] \
+      && [ -f "$controller_command_state_path" ] \
+      && grep -F -q "\"request_id\": \"$controller_request_id\"" "$controller_command_state_path"; then
+      return 0
+    fi
+    sleep 0.1
+  done
+
+  echo "warm local controller timed out waiting for command response for $runner_workdir" >&2
+  exit 1
+}
+
+local_controller_dispatch_request() {
+  local_controller_prepare_state
+  local_controller_ensure_running
+  local_controller_acquire_dispatch_lock
+  trap 'local_controller_release_dispatch_lock' EXIT HUP INT TERM
+  local_controller_trace "warm-controller-dispatch-start"
+
+  controller_runtime_dir=$(local_controller_runtime_dir)
+  controller_exec_output_dir=$controller_runtime_dir/o
+  if ! [ -d "$controller_exec_output_dir" ]; then
+    echo "warm local controller exec output directory is unavailable: $controller_exec_output_dir" >&2
+    exit 1
+  fi
+
+  local_controller_write_request "$controller_exec_output_dir"
+  local_controller_wait_for_response "$controller_exec_output_dir"
+  local_controller_trace "warm-controller-dispatch-done:$controller_request_id"
+
+  if [ -f "$controller_exec_output_dir/stdout" ]; then
+    cat "$controller_exec_output_dir/stdout"
+  fi
+  if [ -f "$controller_exec_output_dir/stderr" ]; then
+    cat "$controller_exec_output_dir/stderr" >&2
+  fi
+
+  if ! [ -f "$controller_exec_output_dir/exit_code" ]; then
+    echo "warm local controller did not produce an exit code for $runner_workdir" >&2
+    exit 1
+  fi
+
+  command_status=$(cat "$controller_exec_output_dir/exit_code" 2>/dev/null || true)
+  case "$command_status" in
+    ''|*[!0-9]*)
+      echo "warm local controller produced an invalid exit code: $command_status" >&2
+      exit 1
+      ;;
+  esac
+
+  exit "$command_status"
+}

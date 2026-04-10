@@ -10,6 +10,9 @@
 
 Firebreak is a VM-first control plane for running tools and workloads with a small public interface.
 
+Canonical terminology lives in [engineering/TERMINOLOGY.md](./engineering/TERMINOLOGY.md).
+If wording in this README ever conflicts with another doc, follow that glossary.
+
 ## Firebreak CLI
 
 ```sh
@@ -21,21 +24,21 @@ firebreak run codex --worker-mode codex=vm --worker-mode claude=local
 firebreak run claude-code -- --help
 ```
 
-`firebreak vms` lists the public VM workloads. `firebreak run <vm>` launches one of them through the existing Firebreak VM packages. The public `firebreak` CLI does not expose agent workflow plumbing.
+`firebreak vms` lists the public VM workloads. `firebreak run <vm>` launches one of them through the existing Firebreak VM packages. The public `firebreak` CLI does not expose development-flow plumbing.
 
 ## dev-flow CLI
 
-Use `dev-flow` for agent-oriented development flow commands such as isolated workspace management, validation, and bounded attempts.
+Use `dev-flow` for development-flow commands such as isolated workspace management, validation, and bounded attempts.
 
 ```sh
-nix run .#dev-flow -- workspace create --workspace-id spec-005-main --branch agent/spec-005-main
+nix run .#dev-flow -- workspace create --workspace-id spec-005-main --branch dev-flow/spec-005-main
 nix run .#dev-flow -- validate run test-smoke-codex
 nix run .#dev-flow -- loop run --workspace-id spec-005-main --spec specs/005-isolated-work-tasks/SPEC.md --plan "..." --validation-suite test-smoke-codex-version
 ```
 
 Use one workspace per spec line. Reuse that workspace for sequential work on the same spec, and start a new workspace when the work moves to a different spec or unrelated maintenance line.
 
-## Agent Workflow
+## Development Flow
 
 This repository uses a `dev-flow-*` internal skill surface for autonomous work. Start with [dev-flow-autonomous-flow](./.agents/skills/dev-flow-autonomous-flow/SKILL.md), then let it route into the narrower skills for spec selection, workspace choice, boundaries, validation, and review.
 
@@ -87,7 +90,17 @@ The launcher:
 - falls back to `github:skadaai/firebreak` when no local Firebreak checkout is present
 - forwards all arguments to the existing Bash Firebreak CLI through `nix run`
 
-Firebreak also ships a thin `npx dev-flow ...` launcher for the agent workflow CLI.
+Firebreak also ships a thin `npx dev-flow ...` launcher for the development-flow CLI.
+
+Terminology:
+
+- `tool`: the actual program inside the VM, such as `codex` or `claude`
+- `package`: a build artifact or installable unit, such as `firebreak-codex`
+- `workload`: the runnable Firebreak launch unit, often backed by one or more packages
+- `worker`: a broker-managed running execution instance
+- `state`: persistent runtime state, caches, auth material, and related mutable data
+
+`agent` is legacy terminology in this repository. Do not use it for new core naming.
 
 ## Project Defaults
 
@@ -185,3 +198,13 @@ If a proxy does not define `defaultMode`, Firebreak falls back to the recipe-lev
 For Firebreak-managed worker packages such as `firebreak-codex` and `firebreak-claude-code`, local mode is derived from the declared `package` automatically. Recipe authors do not need to re-declare the upstream npm package or bin name just to make `local` mode work.
 
 For packaged node-cli recipes, Firebreak also exposes `firebreak-bootstrap-wait` inside the guest so recipe-owned validation can wait for the shared bootstrap service to finish before probing installed CLIs or worker-proxy wrappers. Those generated proxy commands honor `FIREBREAK_WORKER_MODE=vm|local` and `FIREBREAK_WORKER_MODES=command=mode,...`, so the same recipe can flip between sibling-worker routing and regular in-VM execution without redefining command names.
+
+## Test Infrastructure
+
+Firebreak CI currently benefits from [Namespace](https://namespace.so/?utm_source=firebreak&utm_medium=readme&utm_campaign=firebreak-readme) compute during their generous trial period. Thanks to the Namespace team for making it easier to validate multi-arch and VM-heavy workflows while Firebreak is still early!
+
+<p align="center">
+  <a href="https://namespace.so/?utm_source=firebreak&utm_medium=readme&utm_campaign=firebreak-readme">
+    <img src="https://storage.googleapis.com/namespacelabs-docs-assets/gh/banner.svg" height="100" alt="Namespace logo">
+  </a>
+</p>

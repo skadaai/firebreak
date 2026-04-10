@@ -1,7 +1,7 @@
 { config, lib, pkgs, renderTemplate, ... }:
 let
   cfg = config.workloadVm;
-  devHome = "/var/lib/${cfg.devUser}";
+  devHome = cfg.devHome;
 
   qemu9pOptions = [
     "nofail"
@@ -12,10 +12,10 @@ let
   ];
 
   scriptVars = {
-    "@AGENT_EXEC_OUTPUT_MOUNT@" = cfg.workerExecOutputMount;
-    "@AGENT_PROMPT_COMMAND@" = if cfg.promptCommand == null then "" else cfg.promptCommand;
-    "@AGENT_PROMPT_FILE@" = cfg.promptFile;
-    "@AGENT_SESSION_MODE_FILE@" = cfg.workerSessionModeFile;
+    "@COMMAND_OUTPUT_MOUNT@" = cfg.workerExecOutputMount;
+    "@TOOL_PROMPT_COMMAND@" = if cfg.promptCommand == null then "" else cfg.promptCommand;
+    "@TOOL_PROMPT_FILE@" = cfg.promptFile;
+    "@SESSION_MODE_FILE@" = cfg.workerSessionModeFile;
     "@BASH@" = "${pkgs.bashInteractive}/bin/bash";
     "@CAT@" = "${pkgs.coreutils}/bin/cat";
     "@CHOWN@" = "${pkgs.coreutils}/bin/chown";
@@ -48,12 +48,19 @@ let
   adoptHostIdentityScript = pkgs.writeShellScript "adopt-host-identity"
     (renderTemplate scriptVars ../local/guest/adopt-host-identity.sh);
   prepareCloudSessionScript = pkgs.writeShellScript "prepare-cloud-session"
-    (renderTemplate scriptVars ./guest/prepare-agent-session.sh);
-  runAgentJobScript = pkgs.writeShellScript "run-agent-job"
-    (renderTemplate scriptVars ./guest/run-agent-job.sh);
+    (renderTemplate scriptVars ./guest/prepare-worker-session.sh);
+  runToolJobScript = pkgs.writeShellScript "run-tool-job"
+    (renderTemplate scriptVars ./guest/run-tool-job.sh);
   bootstrapEnabled = cfg.bootstrapScript != null;
 in {
   config = {
+    assertions = [
+      {
+        assertion = cfg.runtimeBackend == "qemu";
+        message = "firebreak cloud profile currently supports only the `qemu` backend.";
+      }
+    ];
+
     fileSystems.${cfg.hostMetaMount} = {
       device = "hostmeta";
       fsType = "9p";
@@ -61,9 +68,9 @@ in {
     };
 
     systemd.services.prepare-cloud-session = {
-      description = "Prepare the cloud workspace and agent session paths";
+      description = "Prepare the cloud workspace and worker session paths";
       wantedBy = [ "multi-user.target" ];
-      before = [ "firebreak-agent-job.service" ];
+      before = [ "firebreak-tool-job.service" ];
       after = [ "local-fs.target" "adopt-host-identity.service" ];
 
       path = with pkgs; [
@@ -83,7 +90,7 @@ in {
     systemd.services.adopt-host-identity = {
       description = "Align guest development user with the host user identity";
       wantedBy = [ "multi-user.target" ];
-      before = [ "prepare-cloud-session.service" "firebreak-agent-job.service" ]
+      before = [ "prepare-cloud-session.service" "firebreak-tool-job.service" ]
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
       after = [ "local-fs.target" ];
 
@@ -103,8 +110,8 @@ in {
 
     systemd.services."serial-getty@ttyS0".enable = false;
 
-    systemd.services.firebreak-agent-job = {
-      description = "Run a non-interactive cloud agent job";
+    systemd.services.firebreak-tool-job = {
+      description = "Run a non-interactive cloud tool job";
       wantedBy = [ "multi-user.target" ];
       after = [ "adopt-host-identity.service" "prepare-cloud-session.service" ]
         ++ lib.optional bootstrapEnabled "dev-bootstrap.service";
@@ -114,7 +121,7 @@ in {
       serviceConfig = {
         WorkingDirectory = cfg.workspaceMount;
         Type = "simple";
-        ExecStart = runAgentJobScript;
+        ExecStart = runToolJobScript;
         StandardOutput = "journal+console";
         StandardError = "journal+console";
       };

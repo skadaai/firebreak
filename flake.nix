@@ -29,7 +29,7 @@
       localVmArtifacts = lib.genAttrs supportedHostSystems (system:
         import ./nix/outputs/local-vm-artifacts.nix {
           inherit self;
-          includeCloud = supports.${system}.hostIsLinux;
+          includeCloud = false;
           inherit (supports.${system}) mkLocalVmArtifacts pkgs;
         });
     in {
@@ -61,11 +61,13 @@
       packages = lib.genAttrs supportedHostSystems (system:
         import ./nix/outputs/packages.nix {
           inherit self system;
+          includeCloud = false;
           localVmArtifacts = localVmArtifacts.${system};
           inherit (supports.${system})
             hostIsLinux
             lib
             mkWorkloadPackage
+            mkWorkloadWarmReuseSmokePackage
             mkWorkloadVersionSmokePackage
             mkCloudJobPackage
             mkCloudSmokePackage
@@ -75,6 +77,10 @@
             mkToolCredentialSlotSmokePackage
             mkFirebreakCliSurfaceSmokePackage
             mkWorkerFirebreakBridgeProbePackage
+            mkLocalControllerSmokePackage
+            mkCloudHypervisorEgressProxySmokePackage
+            mkCloudHypervisorPortPublishSmokePackage
+            mkPortPublishRuntimeSmokePackage
             mkFirebreakCliPackage
             mkLoopPackage
             mkLoopSmokePackage
@@ -82,11 +88,13 @@
             mkProjectConfigSmokePackage
             mkRunnerPackage
             mkSmokePackage
+            mkValidationFixturePackage
             mkWorkspacePackage
             mkWorkspaceSmokePackage
             mkValidationPackage
             mkValidationSmokePackage
             mkWorkerFirebreakAttachSmokePackage
+            mkWorkerClaudeVersionSmokePackage
             mkWorkerInteractiveClaudeDirectExitSmokePackage
             mkWorkerInteractiveClaudeDirectSmokePackage
             mkWorkerInteractiveCodexDirectSmokePackage

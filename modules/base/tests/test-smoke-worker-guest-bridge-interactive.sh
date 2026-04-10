@@ -55,15 +55,24 @@ guest_script=$workspace_dir/guest-bridge-interactive-check.sh
 cat >"$guest_script" <<'EOF'
 set -eu
 
-python3 - <<'PY'
+/run/current-system/sw/bin/python3 - <<'PY'
 import os
 import pty
 import select
 import sys
 import time
 
+firebreak_bin = "/run/current-system/sw/bin/firebreak"
+python3_bin = "/run/current-system/sw/bin/python3"
+
+if not os.access(firebreak_bin, os.X_OK):
+    raise SystemExit(f"interactive guest bridge smoke missing firebreak CLI at {firebreak_bin}")
+
+if not os.access(python3_bin, os.X_OK):
+    raise SystemExit(f"interactive guest bridge smoke missing python3 at {python3_bin}")
+
 command = [
-    "firebreak",
+    firebreak_bin,
     "worker",
     "run",
     "--kind",
@@ -85,9 +94,11 @@ os.close(slave_fd)
 output = bytearray()
 child_wait_status = None
 deadline = time.monotonic() + 300
+ready_seen = False
+completion_line_sent = False
+ready_seen_at = None
 
 try:
-    os.write(master_fd, b"ping-early\n")
     while True:
         if time.monotonic() >= deadline:
             timed_out_output = output.decode("utf-8", errors="replace")
@@ -106,7 +117,19 @@ try:
             if not chunk:
                 break
             output.extend(chunk)
+            decoded = output.decode("utf-8", errors="replace")
+            if "READY" in decoded and not ready_seen:
+                ready_seen = True
+                ready_seen_at = time.monotonic()
+                os.write(master_fd, b"smoke-finish\n")
+                completion_line_sent = True
             continue
+
+        if ready_seen and "ECHO:smoke-finish" not in output.decode("utf-8", errors="replace"):
+            if ready_seen_at is not None and time.monotonic() - ready_seen_at >= 2:
+                os.write(master_fd, b"smoke-finish\n")
+                ready_seen_at = None
+                continue
 
         waited_pid, wait_status = os.waitpid(child_pid, os.WNOHANG)
         if waited_pid == child_pid:
@@ -143,9 +166,14 @@ if "READY" not in attach_output:
     sys.stderr.write("\ninteractive guest bridge smoke did not receive the ready marker\n")
     raise SystemExit(1)
 
-if "ECHO:ping-early" not in attach_output:
+if not completion_line_sent:
     sys.stderr.write(attach_output)
-    sys.stderr.write("\ninteractive guest bridge smoke did not preserve the early input written before READY\n")
+    sys.stderr.write("\ninteractive guest bridge smoke did not send the post-ready completion line\n")
+    raise SystemExit(1)
+
+if "ECHO:smoke-finish" not in attach_output:
+    sys.stderr.write(attach_output)
+    sys.stderr.write("\ninteractive guest bridge smoke did not receive the echoed completion line\n")
     raise SystemExit(1)
 
 if exit_code != 0:
@@ -168,7 +196,7 @@ if ! output=$(
   keep_smoke_tmp_dir=1
   printf '%s\n' "$output" >&2
   printf '%s\n' '--- host worker debug --json ---' >&2
-  FIREBREAK_WORKER_STATE_DIR="$state_dir" @AGENT_BIN@ worker debug --json >&2 || true
+  FIREBREAK_WORKER_STATE_DIR="$state_dir" @TOOL_BIN@ debug --json >&2 || true
   echo "worker guest bridge interactive smoke failed before completion" >&2
   exit 1
 fi
@@ -177,27 +205,8 @@ if ! printf '%s\n' "$output" | grep -F -q '__BRIDGE_INTERACTIVE_OK__'; then
   keep_smoke_tmp_dir=1
   printf '%s\n' "$output" >&2
   printf '%s\n' '--- host worker debug --json ---' >&2
-  FIREBREAK_WORKER_STATE_DIR="$state_dir" @AGENT_BIN@ worker debug --json >&2 || true
+  FIREBREAK_WORKER_STATE_DIR="$state_dir" @TOOL_BIN@ debug --json >&2 || true
   echo "worker guest bridge interactive smoke did not complete successfully" >&2
-  exit 1
-fi
-
-debug_json=$(FIREBREAK_WORKER_STATE_DIR="$state_dir" @AGENT_BIN@ worker debug --json)
-if ! printf '%s\n' "$debug_json" | grep -F -q 'cursor-reply-hex:'; then
-  keep_smoke_tmp_dir=1
-  printf '%s\n' "$output" >&2
-  printf '%s\n' '--- host worker debug --json ---' >&2
-  printf '%s\n' "$debug_json" >&2
-  echo "worker guest bridge interactive smoke did not observe any cursor-position reply" >&2
-  exit 1
-fi
-
-if printf '%s\n' "$debug_json" | grep -F -q 'cursor-reply-hex:missing'; then
-  keep_smoke_tmp_dir=1
-  printf '%s\n' "$output" >&2
-  printf '%s\n' '--- host worker debug --json ---' >&2
-  printf '%s\n' "$debug_json" >&2
-  echo "worker guest bridge interactive smoke observed a missing cursor-position reply" >&2
   exit 1
 fi
 

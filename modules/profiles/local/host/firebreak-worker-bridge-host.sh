@@ -72,6 +72,8 @@ attach_stage_path_cache = None
 command_signal_stream_path_cache = None
 trace_mirrored = False
 poll_interval = 0.005
+bridge_host_workspace = os.environ.get("FIREBREAK_WORKER_BRIDGE_HOST_WORKSPACE", "")
+bridge_guest_workspace = os.environ.get("FIREBREAK_WORKER_BRIDGE_GUEST_WORKSPACE", "")
 
 
 def valid_worker_id(worker_id: str) -> bool:
@@ -128,10 +130,10 @@ def resolve_runtime_metadata():
             runtime_metadata_cache = json.load(handle)
     except (OSError, json.JSONDecodeError):
         return None
-    agent_exec_output_dir = runtime_metadata_cache.get("agent_exec_output_dir")
-    if isinstance(agent_exec_output_dir, str) and agent_exec_output_dir:
-        attach_stage_path_cache = os.path.join(agent_exec_output_dir, "attach_stage")
-        command_signal_stream_path_cache = os.path.join(agent_exec_output_dir, "command-signals.stream")
+    command_output_dir = runtime_metadata_cache.get("command_output_dir")
+    if isinstance(command_output_dir, str) and command_output_dir:
+        attach_stage_path_cache = os.path.join(command_output_dir, "attach_stage")
+        command_signal_stream_path_cache = os.path.join(command_output_dir, "command-signals.stream")
     return runtime_metadata_cache
 
 
@@ -208,6 +210,41 @@ def atomic_write_text(path: str, data: str) -> None:
         except OSError:
             pass
 
+
+def maybe_rewrite_firebreak_workspace(argv):
+    if not argv or argv[0] != "run":
+        return argv
+    if not bridge_host_workspace or not bridge_guest_workspace:
+        return argv
+
+    rewritten = list(argv)
+    index = 1
+    while index < len(rewritten):
+        arg = rewritten[index]
+        workspace_value = None
+        inline = False
+        if arg == "--workspace":
+            if index + 1 >= len(rewritten):
+                break
+            workspace_value = rewritten[index + 1]
+        elif arg.startswith("--workspace="):
+            workspace_value = arg.split("=", 1)[1]
+            inline = True
+
+        if workspace_value is not None:
+            mapped = workspace_value
+            if workspace_value == bridge_guest_workspace:
+                mapped = bridge_host_workspace
+            elif workspace_value.startswith(bridge_guest_workspace + "/"):
+                mapped = bridge_host_workspace + workspace_value[len(bridge_guest_workspace):]
+            if inline:
+                rewritten[index] = f"--workspace={mapped}"
+            else:
+                rewritten[index + 1] = mapped
+            break
+        index += 1
+    return rewritten
+
 try:
     trace("request-loaded")
     with open(request_path, "r", encoding="utf-8") as handle:
@@ -216,6 +253,7 @@ try:
     if not isinstance(argv, list) or not argv:
         raise ValueError("request argv must be a non-empty list")
     argv = [str(item) for item in argv]
+    argv = maybe_rewrite_firebreak_workspace(argv)
     request_term = str(request.get("term") or "")
     effective_term = normalize_term(request_term)
     request_columns = parse_positive_dimension(request.get("columns"))
@@ -275,7 +313,7 @@ try:
         terminal_columns = request_columns if request_columns is not None else 80
         terminal_state = {"row": 1, "column": 1}
         terminal_query_buffer = bytearray()
-        command_start_marker_state = {"seen": False}
+        command_start_marker_state = {"seen": False, "logged": False}
         stdin_input_gate = {"open": False, "release_at": None, "saw_terminal_reply": False}
         trace_scan_state = {"offset": 0}
         focus_state = {"enabled": False, "sent": False}
@@ -690,9 +728,9 @@ try:
             try:
                 trace("attach-stdin-stream-opened")
                 while True:
-                    if command_start_marker_state["seen"] and stdin_input_gate["release_at"] is not None:
+                    if command_start_marker_state["seen"] and not command_start_marker_state["logged"]:
                         trace(f"attach-stdin-command-start:pending={len(pending_input)}")
-                        stdin_input_gate["release_at"] = None
+                        command_start_marker_state["logged"] = True
                     if command_start_marker_state["seen"] and not stdin_input_gate["open"]:
                         note_nested_terminal_replies()
                     if (

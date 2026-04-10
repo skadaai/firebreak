@@ -149,6 +149,10 @@ with open(log_path, "wb") as log_file, open(normalized_log_path, "w", encoding="
     boot_ready_marker = "Started Interactive dev shell on ttyS0"
     exit_confirm_marker = "Press Ctrl-C again to exit"
     exit_confirm_compact = compact(exit_confirm_marker)
+    # stabilization heuristics: wait for additional output and time after boot
+    STABILIZATION_BYTES = 1024
+    STABILIZATION_SECONDS = 5
+    FALLBACK_SECOND_INTERRUPT_SECONDS = 8
 
     transcript = bytearray()
     saw_interactive_attach = False
@@ -203,8 +207,8 @@ with open(log_path, "wb") as log_file, open(normalized_log_path, "w", encoding="
             if (
                 boot_ready_at is not None
                 and not sent_first_interrupt
-                and len(transcript) >= boot_ready_size + 1024
-                and now - boot_ready_at >= 5
+                and len(transcript) >= boot_ready_size + STABILIZATION_BYTES
+                and now - boot_ready_at >= STABILIZATION_SECONDS
             ):
                 saw_interactive_attach = True
                 os.write(master_fd, b"\x03")
@@ -221,7 +225,7 @@ with open(log_path, "wb") as log_file, open(normalized_log_path, "w", encoding="
             elif (
                 first_interrupt_at is not None
                 and not sent_second_interrupt
-                and now - first_interrupt_at >= 8
+                and now - first_interrupt_at >= FALLBACK_SECOND_INTERRUPT_SECONDS
             ):
                 os.write(master_fd, b"\x03")
                 sent_second_interrupt = True

@@ -12,6 +12,7 @@ fi
 
 target=@WORKSPACE_MOUNT@
 session_mode=shell
+resolved_session_mode=$session_mode
 tool_command=@TOOL_COMMAND@
 command_process_local=$guest_state_dir/command-processes.txt
 command_process_shared=@COMMAND_OUTPUT_MOUNT@/command-processes.txt
@@ -42,7 +43,11 @@ fi
 case "$session_mode" in
   command-exec|command-attach-exec)
     ensure_command_request_loaded
+    resolved_session_mode=$command_request_session_mode
     tool_command=$command_request_command
+    ;;
+  *)
+    resolved_session_mode=$session_mode
     ;;
 esac
 
@@ -77,7 +82,7 @@ fi
 cd "$target"
 
 show_session_banner=1
-case "$session_mode" in
+case "$resolved_session_mode" in
   command-attach-exec)
     show_session_banner=0
     ;;
@@ -85,10 +90,10 @@ esac
 
 if [ "$show_session_banner" = "1" ]; then
   printf '\n\e[0m\e[1mWelcome to %s - %s\e[0m\n' "@BRANDING_NAME@" "@BRANDING_TAGLINE@"
-  printf '[ vm: %s | mode: %s | workspace: %s ]\n' "@WORKLOAD_VM_NAME@" "$session_mode" "$target"
+  printf '[ vm: %s | mode: %s | workspace: %s ]\n' "@WORKLOAD_VM_NAME@" "$resolved_session_mode" "$target"
 fi
 
-case "$session_mode" in
+case "$resolved_session_mode" in
   shell)
     @BASH@ -i || true
     exit 0
@@ -117,6 +122,8 @@ case "$session_mode" in
     mkdir -p @COMMAND_OUTPUT_MOUNT@
     printf '%s\n' "dev-console-start" > @COMMAND_OUTPUT_MOUNT@/attach_stage
     if [ -n "$tool_command" ]; then
+      export guest_state_dir command_state_local command_state_shared
+      export -f json_escape write_command_state
       exec env FIREBREAK_TOOL_COMMAND="$tool_command" FIREBREAK_COMMAND_REQUEST_ID="${FIREBREAK_COMMAND_REQUEST_ID:-}" @BASH@ "$attach_shell_flag" '
         status=0
         set +m
@@ -136,29 +143,6 @@ case "$session_mode" in
         command_tty_state=""
         command_signal_offset=0
         mkdir -p @COMMAND_OUTPUT_MOUNT@
-        write_command_state() {
-          command_phase=$1
-          command_status=$2
-          command_detail=$3
-          command_exit_code=$4
-          updated_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          mkdir -p "'"$guest_state_dir"'"
-          cat >"'"$command_state_local"'" <<EOF
-{
-  "source": "guest-command",
-  "request_id": "$(printf "%s" "${FIREBREAK_COMMAND_REQUEST_ID:-}" | @PYTHON3@ -c '"'"'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'"'"')",
-  "phase": "$(printf "%s" "$command_phase" | @PYTHON3@ -c '"'"'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'"'"')",
-  "status": "$(printf "%s" "$command_status" | @PYTHON3@ -c '"'"'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'"'"')",
-  "detail": "$(printf "%s" "$command_detail" | @PYTHON3@ -c '"'"'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'"'"')",
-  "command": "$(printf "%s" "$FIREBREAK_TOOL_COMMAND" | @PYTHON3@ -c '"'"'import json, sys; print(json.dumps(sys.stdin.read())[1:-1], end="")'"'"')",
-  "exit_code": $command_exit_code,
-  "updated_at": "$updated_at"
-}
-EOF
-          if [ -d @COMMAND_OUTPUT_MOUNT@ ]; then
-            cp "'"$command_state_local"'" "'"$command_state_shared"'" 2>/dev/null || true
-          fi
-        }
         refresh_command_job_info() {
           command_job_pid=""
           command_job_pgid=""

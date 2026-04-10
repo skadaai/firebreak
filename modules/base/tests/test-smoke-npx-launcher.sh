@@ -59,6 +59,7 @@ missing_nix_output=$(
   env -i \
     HOME="${HOME:-/tmp}" \
     PATH="$empty_bin_dir" \
+    FIREBREAK_LAUNCHER_PACKAGE_ROOT="$repo_root" \
     "$node_bin" "$repo_root/bin/firebreak.js" run codex 2>&1
 )
 missing_nix_status=$?

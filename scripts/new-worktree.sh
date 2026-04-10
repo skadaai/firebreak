@@ -18,6 +18,24 @@ resolve_base_ref() {
   printf '%s\n' HEAD
 }
 
+resolve_existing_base_ref() {
+  requested_ref=$1
+
+  if git -C "$root" rev-parse --verify --quiet "${requested_ref}^{commit}" >/dev/null; then
+    printf '%s\n' "$requested_ref"
+    return
+  fi
+
+  if git -C "$root" rev-parse --verify --quiet "refs/remotes/origin/${requested_ref}^{commit}" >/dev/null; then
+    printf '%s\n' "refs/remotes/origin/${requested_ref}"
+    return
+  fi
+
+  fallback_ref=$(resolve_base_ref)
+  log "Requested base ref '$requested_ref' is unavailable; falling back to '$fallback_ref'."
+  printf '%s\n' "$fallback_ref"
+}
+
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 branch="${1:-}"
@@ -33,7 +51,7 @@ fi
 root="$(git -C "$script_dir/.." rev-parse --show-toplevel)"
 base_ref="$(resolve_base_ref)"
 if [[ -n "${DEV_FLOW_BASE_REF:-}" ]]; then
-  base_ref="$DEV_FLOW_BASE_REF"
+  base_ref="$(resolve_existing_base_ref "$DEV_FLOW_BASE_REF")"
 fi
 if [[ -n "$worktree_name" ]]; then
   worktree_parent="${DEV_FLOW_WORKSPACE_ROOT:-}"

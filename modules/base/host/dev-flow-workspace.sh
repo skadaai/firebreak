@@ -295,7 +295,7 @@ create_workspace() {
   workspace_id=""
   branch=""
   owner=${DEV_FLOW_WORKSPACE_OWNER:-autonomous-operator}
-  base_ref=${DEV_FLOW_BASE_REF:-main}
+  base_ref=${DEV_FLOW_BASE_REF:-}
   resume_existing=0
 
   while [ "$#" -gt 0 ]; do
@@ -341,6 +341,10 @@ create_workspace() {
     exit 1
   fi
   require_primary_checkout "$repo_root"
+
+  if [ -z "$base_ref" ]; then
+    base_ref=$(git -C "$repo_root" symbolic-ref --quiet --short HEAD 2>/dev/null || printf '%s\n' HEAD)
+  fi
 
   workspace_state_root=$state_dir/$workspace_id
   metadata_path=$workspace_state_root/metadata.json

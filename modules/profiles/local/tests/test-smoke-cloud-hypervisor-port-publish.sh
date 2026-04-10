@@ -18,7 +18,6 @@ cat >"$smoke_dir/mux.py" <<'PY'
 import os
 import socket
 import sys
-import threading
 
 
 socket_path = os.environ["MUX_SOCKET"]
@@ -48,19 +47,24 @@ listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 listener.bind(socket_path)
 listener.listen()
 
-with listener:
-    conn, _ = listener.accept()
+def handle_connection(conn):
     with conn:
         prefix = b""
         while not prefix.endswith(b"\n"):
             chunk = conn.recv(1)
             if not chunk:
-                raise SystemExit("connection closed before CONNECT preface")
+                return
             prefix += chunk
         decoded = prefix.decode("utf-8", "replace")
         if decoded != f"CONNECT {expected_port}\n":
             raise SystemExit(f"unexpected CONNECT preface: {decoded!r}")
         conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 20\r\n\r\nrootless publish ok\n")
+
+
+with listener:
+    while True:
+        conn, _ = listener.accept()
+        handle_connection(conn)
 PY
 
 env \
@@ -90,17 +94,38 @@ for _ in $(seq 1 50); do
   sleep 0.1
 done
 
+proxy_ready=0
 for _ in $(seq 1 50); do
-  if kill -0 "$proxy_pid" 2>/dev/null; then
-    break
-  fi
-  if ! ps -p "$proxy_pid" >/dev/null 2>&1; then
+  if ! kill -0 "$proxy_pid" 2>/dev/null; then
     cat "$proxy_log" >&2 || true
     echo "port publish smoke proxy exited before becoming ready" >&2
     exit 1
   fi
+  if LISTEN_PORT="$listen_port" python3 - <<'PY' >/dev/null 2>&1
+import os
+import socket
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.settimeout(0.1)
+try:
+    sock.connect(("127.0.0.1", int(os.environ["LISTEN_PORT"])))
+except OSError:
+    raise SystemExit(1)
+finally:
+    sock.close()
+PY
+  then
+    proxy_ready=1
+    break
+  fi
   sleep 0.1
 done
+
+if [ "$proxy_ready" -ne 1 ]; then
+  cat "$proxy_log" >&2 || true
+  echo "port publish smoke proxy did not become reachable in time" >&2
+  exit 1
+fi
 
 response=$(python3 - <<'PY'
 import socket

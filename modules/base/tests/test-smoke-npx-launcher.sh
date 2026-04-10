@@ -188,6 +188,8 @@ set +e
 linux_validate_output=$(
   cd "$repo_root"
   PATH="$fake_bin_dir:$PATH" \
+    DEV_FLOW_LAUNCHER_TEST_PLATFORM=linux \
+    DEV_FLOW_LAUNCHER_TEST_ARCH=arm64 \
     DEV_FLOW_LAUNCHER_KVM_PATH="$smoke_tmp_dir/missing-kvm" \
     node "$repo_root/bin/dev-flow.js" validate run test-smoke-codex 2>&1
 )

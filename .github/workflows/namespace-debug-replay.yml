@@ -88,7 +88,7 @@ jobs:
     name: replay / linux-arm64 / ${{ inputs.package }} (${{ inputs.shape }})
     if: ${{ inputs.platform == 'linux-arm64' }}
     runs-on:
-      - ${{ format('nscloud-ubuntu-24.04-arm64-{0}-with-cache-with-features', inputs.shape) }}
+      - ${{ format('nscloud-ubuntu-24.04-arm64-{0}-with-features', inputs.shape) }}
       - nscloud-cache-tag-firebreak-runtime-arm64-linux
       - nscloud-runner-tool-cache-20gb
       - nscloud-cache-allow-commit-from-main
@@ -113,6 +113,24 @@ jobs:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
           extra_nix_config: |
             system-features = nixos-test benchmark big-parallel kvm
+
+      - name: Verify runner KVM on assigned arm64-linux host
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! [ -e /dev/kvm ]; then
+            echo "arm64-linux Namespace runner is missing /dev/kvm on the assigned runtime host."
+            exit 1
+          fi
+          if ! [ -r /dev/kvm ]; then
+            echo "arm64-linux Namespace runner cannot read /dev/kvm on the assigned runtime host."
+            exit 1
+          fi
+          if ! [ -w /dev/kvm ]; then
+            echo "arm64-linux Namespace runner cannot write /dev/kvm on the assigned runtime host."
+            exit 1
+          fi
+          ls -l /dev/kvm
 
       - name: Set up Node for launcher smoke
         if: inputs.package == 'firebreak-test-smoke-npx-launcher'

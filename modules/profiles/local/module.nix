@@ -157,7 +157,9 @@ let
       coreutils
       python3
     ];
-    text = renderTemplate scriptVars ./guest/firebreak-worker-cli.sh;
+    text = renderTemplate (scriptVars // {
+      "@WORKER_LOCAL_HELPER@" = "${firebreakWorkerLocalHelper}/bin/firebreak-worker-local-helper";
+    }) ./guest/firebreak-worker-cli.sh;
   };
   runCommandExecScript = pkgs.writeShellApplication {
     name = "firebreak-run-command-exec";

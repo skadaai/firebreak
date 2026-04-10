@@ -129,6 +129,8 @@ cat >"$LOCAL_BIN/@TOOL_BIN@" <<'EOS'
 #!/usr/bin/env bash
 set -eu
 
+auth_file_format='@AUTH_FILE_FORMAT@'
+
 login_args=(
 @LOGIN_COMMAND_ARGS@
 )

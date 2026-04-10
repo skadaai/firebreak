@@ -20,7 +20,7 @@ That is the wrong product contract for Firebreak local.
 ## Goals
 
 - keep Cloud Hypervisor as the Linux local backend
-- keep the default local UX zero-setup for common agent and local web-app workflows
+- keep the default local UX zero-setup for common worker and local web-app workflows
 - model networking in capability terms rather than as one coarse `local-networking` requirement
 - provide rootless networking for the common path
 - keep privileged full guest networking explicit and opt-in
@@ -51,7 +51,7 @@ The system shall not treat these as interchangeable.
 
 - local profile no longer implies `full-guest-network`
 - Linux local Cloud Hypervisor boots without privileged host-network setup when no workload asks for full guest networking
-- agent workloads get `guest-egress` through a rootless host/guest broker
+- worker workloads get `guest-egress` through a rootless host/guest broker
 - local TCP publishing uses a rootless host listener and guest transport path
 - the existing privileged tap/NAT path, if still needed, becomes the implementation of `full-guest-network` only
 

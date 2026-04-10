@@ -1,3 +1,25 @@
+# shellcheck disable=SC2034
+FIREBREAK_PROJECT_CONFIG_KEYS="
+FIREBREAK_ENVIRONMENT_MODE
+FIREBREAK_ENVIRONMENT_INSTALLABLE
+"
+
+firebreak_project_config_is_registered_key() {
+  lookup_key=$1
+  case "
+$FIREBREAK_PROJECT_CONFIG_KEYS
+" in
+    *"
+$lookup_key
+"*)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 # shellcheck disable=SC2329
 
 trim_whitespace() {
@@ -15,13 +37,20 @@ firebreak_reset_project_config_state() {
   # shellcheck disable=SC2034
   FIREBREAK_RESOLVED_PROJECT_CONFIG_SOURCE="none"
   FIREBREAK_PROJECT_CONFIG_IGNORED_KEYS=""
-  FIREBREAK_ENVIRONMENT_MODE=${FIREBREAK_ENVIRONMENT_MODE:-}
-  FIREBREAK_ENVIRONMENT_INSTALLABLE=${FIREBREAK_ENVIRONMENT_INSTALLABLE:-}
+  while IFS= read -r project_key; do
+    [ -n "$project_key" ] || continue
+    eval "$project_key=\${$project_key:-}"
+  done <<EOF
+$FIREBREAK_PROJECT_CONFIG_KEYS
+EOF
 }
 
 firebreak_project_config_key_allowed() {
+  if firebreak_project_config_is_registered_key "$1"; then
+    return 0
+  fi
   case "$1" in
-    FIREBREAK_STATE_MODE|FIREBREAK_STATE_ROOT|FIREBREAK_STATE_DIR|FIREBREAK_INSTANCE_DIR|FIREBREAK_INSTANCE_EPHEMERAL|FIREBREAK_LAUNCH_MODE|FIREBREAK_WORKER_MODE|FIREBREAK_WORKER_MODES|FIREBREAK_CREDENTIAL_SLOT|FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH|FIREBREAK_ENVIRONMENT_MODE|FIREBREAK_ENVIRONMENT_INSTALLABLE)
+    FIREBREAK_STATE_MODE|FIREBREAK_STATE_ROOT|FIREBREAK_STATE_DIR|FIREBREAK_INSTANCE_DIR|FIREBREAK_INSTANCE_EPHEMERAL|FIREBREAK_LAUNCH_MODE|FIREBREAK_WORKER_MODE|FIREBREAK_WORKER_MODES|FIREBREAK_CREDENTIAL_SLOT|FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH)
       return 0
       ;;
     *_STATE_MODE)
@@ -38,6 +67,9 @@ firebreak_project_config_key_allowed() {
 
 # shellcheck disable=SC2329
 firebreak_should_scrub_env_key() {
+  if firebreak_project_config_is_registered_key "$1"; then
+    return 0
+  fi
   case "$1" in
     FIREBREAK_STATE_MODE|FIREBREAK_STATE_ROOT|FIREBREAK_STATE_DIR|FIREBREAK_INSTANCE_DIR|FIREBREAK_INSTANCE_EPHEMERAL|FIREBREAK_CREDENTIAL_SLOT|FIREBREAK_CREDENTIAL_SLOTS_HOST_PATH|*_CREDENTIAL_SLOT|*_STATE_MODE)
       return 0

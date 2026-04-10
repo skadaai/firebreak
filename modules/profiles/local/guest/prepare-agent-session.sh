@@ -48,15 +48,8 @@ sync_guest_state_files() {
   printf '%s\n' '{}' > "$command_state_local"
   chmod 0644 "$bootstrap_state_local" "$command_state_local"
   rm -f @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
-  printf '%s\n' '{}' > @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json
-  printf '%s\n' '{}' > @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
-  chmod 0666 @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
-  if [ -f "$bootstrap_state_local" ]; then
-    cp "$bootstrap_state_local" @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json
-  fi
-  if [ -f "$command_state_local" ]; then
-    cp "$command_state_local" @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
-  fi
+  cp "$bootstrap_state_local" @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json
+  cp "$command_state_local" @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
   chmod 0666 @AGENT_EXEC_OUTPUT_MOUNT@/bootstrap-state.json @AGENT_EXEC_OUTPUT_MOUNT@/command-state.json
 }
 

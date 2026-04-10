@@ -139,10 +139,6 @@ case "$suite_name" in
     ;;
 esac
 
-if [ "$required_capability" = "local-hypervisor" ]; then
-  required_capability="rootless-local-hypervisor"
-fi
-
 if [ "$required_capability" = "rootless-local-hypervisor" ]; then
   case "$host_os:$host_arch" in
     Linux:*)

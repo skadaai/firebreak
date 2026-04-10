@@ -55,6 +55,9 @@ Snapshotting a booted VM is only useful once Firebreak can inject commands into 
 
 - introduce a backend-private local instance controller for Linux Cloud Hypervisor
 - the controller is responsible for:
+  - acquiring an exclusive lease on the reusable instance directory and command channel before probing, starting, or dispatching
+  - renewing that lease while it owns the warm instance
+  - releasing the lease on normal exit and cleaning up stale lease state after crash detection
   - probing whether an instance is alive
   - starting a detached instance when needed
   - dispatching command requests into the guest command channel
@@ -77,4 +80,5 @@ Snapshotting a booted VM is only useful once Firebreak can inject commands into 
 
 - command-agent design could accidentally duplicate existing worker bridge and exec-output logic instead of consolidating it
 - detached instance ownership could become unclear if multiple host processes compete for the same instance directory
+- stale lease takeover needs a conservative detect-stale path so one host process does not trample another healthy controller
 - snapshot restore could paper over a weak command-channel design instead of simplifying it

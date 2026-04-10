@@ -90,10 +90,7 @@ capture_systemd_boot_profile() {
 if [ "$bootstrap_wait_enabled" = "1" ] && command -v firebreak-bootstrap-wait >/dev/null 2>&1; then
   firebreak_profile_guest_mark run-agent-exec bootstrap-wait-start
   write_command_state bootstrap-wait running agent-exec 0
-  if firebreak-bootstrap-wait; then
-    firebreak_profile_guest_mark run-agent-exec bootstrap-wait-done
-    :
-  else
+  if ! firebreak-bootstrap-wait; then
     status=$?
     firebreak_profile_guest_mark run-agent-exec bootstrap-wait-error "$status"
     write_command_state bootstrap-wait error agent-exec "$status"
@@ -103,6 +100,7 @@ if [ "$bootstrap_wait_enabled" = "1" ] && command -v firebreak-bootstrap-wait >/
     fi
     exit "$status"
   fi
+  firebreak_profile_guest_mark run-agent-exec bootstrap-wait-done
 fi
 
 if [ -n "$command_shell_init_file" ]; then

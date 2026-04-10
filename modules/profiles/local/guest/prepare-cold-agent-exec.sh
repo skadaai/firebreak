@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -eu
 
 @FIREBREAK_AGENT_COMMAND_REQUEST_LIB@

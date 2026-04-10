@@ -1,3 +1,7 @@
+# This file is meant to be sourced, not executed. It provides helpers such as
+# cloud_hypervisor_local_port_publish_requested for the local Cloud Hypervisor host path.
+# shellcheck disable=SC2148,SC2154
+
 cloud_hypervisor_local_port_publish_requested() {
   LOCAL_PUBLISHED_HOST_PORTS_JSON='@LOCAL_PUBLISHED_HOST_PORTS_JSON@' \
     python3 - <<'PY'
@@ -194,6 +198,10 @@ with open(target, "w", encoding="utf-8") as handle:
         host = entry.get("host") or {}
         guest = entry.get("guest") or {}
         host_address = str(host.get("address") or "127.0.0.1").strip()
+        if "port" not in host:
+            raise SystemExit(f"missing 'port' in host entry: {entry!r}")
+        if "port" not in guest:
+            raise SystemExit(f"missing 'port' in guest entry: {entry!r}")
         host_port = int(host["port"])
         guest_port = int(guest["port"])
         handle.write(f"{host_address}\t{host_port}\t{guest_port}\n")

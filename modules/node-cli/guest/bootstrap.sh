@@ -201,22 +201,41 @@ bootstrap_env=(
 )
 
 if [ -n "${HTTP_PROXY:-}" ]; then
-  bootstrap_env+=("HTTP_PROXY=$HTTP_PROXY" "npm_config_proxy=$HTTP_PROXY")
+  http_proxy_value=$HTTP_PROXY
+else
+  http_proxy_value=${http_proxy:-}
 fi
 if [ -n "${HTTPS_PROXY:-}" ]; then
-  bootstrap_env+=("HTTPS_PROXY=$HTTPS_PROXY" "npm_config_https_proxy=$HTTPS_PROXY")
-fi
-if [ -n "${http_proxy:-}" ]; then
-  bootstrap_env+=("http_proxy=$http_proxy")
-fi
-if [ -n "${https_proxy:-}" ]; then
-  bootstrap_env+=("https_proxy=$https_proxy")
+  https_proxy_value=$HTTPS_PROXY
+else
+  https_proxy_value=${https_proxy:-}
 fi
 if [ -n "${NO_PROXY:-}" ]; then
-  bootstrap_env+=("NO_PROXY=$NO_PROXY" "npm_config_noproxy=$NO_PROXY")
+  no_proxy_value=$NO_PROXY
+else
+  no_proxy_value=${no_proxy:-}
 fi
-if [ -n "${no_proxy:-}" ]; then
-  bootstrap_env+=("no_proxy=$no_proxy")
+
+if [ -n "${http_proxy_value:-}" ]; then
+  bootstrap_env+=(
+    "HTTP_PROXY=$http_proxy_value"
+    "http_proxy=$http_proxy_value"
+    "npm_config_proxy=$http_proxy_value"
+  )
+fi
+if [ -n "${https_proxy_value:-}" ]; then
+  bootstrap_env+=(
+    "HTTPS_PROXY=$https_proxy_value"
+    "https_proxy=$https_proxy_value"
+    "npm_config_https_proxy=$https_proxy_value"
+  )
+fi
+if [ -n "${no_proxy_value:-}" ]; then
+  bootstrap_env+=(
+    "NO_PROXY=$no_proxy_value"
+    "no_proxy=$no_proxy_value"
+    "npm_config_noproxy=$no_proxy_value"
+  )
 fi
 
 runuser -u "$dev_user" -- env "${bootstrap_env[@]}" sh -s "$package_node_modules" "$package_spec" <<'EOF'

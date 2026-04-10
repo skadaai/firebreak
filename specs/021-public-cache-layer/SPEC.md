@@ -15,7 +15,7 @@ Firebreak now has two clearly separate latency buckets:
 Recent measurements show that the outer build/substitution path is still painful in several common flows:
 
 - `nix run .#firebreak-codex -- --version`
-- nested `codex --version` and `claude --version` launched through Agent Orchestrator
+- nested `codex --version` and `claude --version` launched through the Firebreak worker runtime
 - first-use realization of common Firebreak packages on a new machine
 
 This cost is often much larger than the VM startup cost itself. It is also the highest-ROI experimental improvement available because it can remove minutes of repeated local work without changing guest runtime semantics.

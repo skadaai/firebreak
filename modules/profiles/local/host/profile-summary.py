@@ -3,6 +3,7 @@ import os
 import re
 import sys
 from datetime import datetime, timezone
+from itertools import pairwise
 from typing import Dict, List
 
 
@@ -152,7 +153,7 @@ def build_summary(runtime_dir: str) -> Dict[str, object]:
     events.sort(key=lambda event: event["ts_ms"])
 
     segments: List[Dict[str, object]] = []
-    for previous, current in zip(events, events[1:]):
+    for previous, current in pairwise(events):
         duration_ms = int(current["ts_ms"]) - int(previous["ts_ms"])
         if duration_ms < 0:
             continue

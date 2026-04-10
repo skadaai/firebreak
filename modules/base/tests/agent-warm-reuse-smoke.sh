@@ -174,7 +174,8 @@ if [ -z "$request_id_second" ] || [ "$request_id_second" = "$request_id_first" ]
 fi
 
 command_state_path=$runtime_dir_second/o/command-state.json
-if ! [ -f "$command_state_path" ] || ! grep -F -q "\"request_id\": \"$request_id_second\"" "$command_state_path"; then
+command_state_request_id=$(read_json_field "$command_state_path" "request_id" 2>/dev/null || true)
+if ! [ -f "$command_state_path" ] || [ "$command_state_request_id" != "$request_id_second" ]; then
   cat "$command_state_path" >&2 || true
   echo "@AGENT_DISPLAY_NAME@ warm reuse smoke did not persist the second command state" >&2
   exit 1

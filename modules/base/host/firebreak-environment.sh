@@ -123,7 +123,7 @@ firebreak_environment_mode_allowed() {
 firebreak_environment_installable_kind() {
   installable=$1
   case "$installable" in
-    *devShell*|*devshell*)
+    *devShell*|*devshell*|file:*.nix|*.nix)
       printf '%s\n' "devshell"
       ;;
     *)
@@ -221,7 +221,22 @@ firebreak_environment_detect_project_installable() {
 
   project_flake_file=$FIREBREAK_RESOLVED_PROJECT_ROOT/flake.nix
   project_flake_ref="path:$FIREBREAK_RESOLVED_PROJECT_ROOT"
-  host_system=${FIREBREAK_HOST_SYSTEM:-$(uname -m | tr '[:upper:]' '[:lower:]')-linux}
+  if [ -n "${FIREBREAK_HOST_SYSTEM:-}" ]; then
+    host_system=$FIREBREAK_HOST_SYSTEM
+  else
+    host_arch=$(uname -m 2>/dev/null || printf '%s' unknown)
+    case "$host_arch" in
+      x86_64|amd64) host_arch=x86_64 ;;
+      arm64|aarch64) host_arch=aarch64 ;;
+    esac
+    host_os=$(uname -s 2>/dev/null || printf '%s' unknown)
+    case "$host_os" in
+      Linux) host_os=linux ;;
+      Darwin) host_os=darwin ;;
+      *) host_os=$(printf '%s' "$host_os" | tr '[:upper:]' '[:lower:]') ;;
+    esac
+    host_system=${host_arch}-${host_os}
+  fi
   default_devshell="$project_flake_ref#devShells.$host_system.default"
   default_package="$project_flake_ref#packages.$host_system.default"
   legacy_default_package="$project_flake_ref#legacyPackages.$host_system.default"
@@ -517,8 +532,6 @@ firebreak_materialize_environment_cache() {
     printf 'export FIREBREAK_ENVIRONMENT_IDENTITY=%q\n' "$FIREBREAK_RESOLVED_ENVIRONMENT_IDENTITY"
   } >"$tmp_env_file"
 
-  firebreak_environment_write_package_overlay "$tmp_env_file"
-
   case "$FIREBREAK_RESOLVED_ENVIRONMENT_KIND" in
     devshell)
       firebreak_environment_write_devshell_overlay "$FIREBREAK_RESOLVED_ENVIRONMENT_INSTALLABLE" "$tmp_env_file"
@@ -537,6 +550,8 @@ firebreak_materialize_environment_cache() {
       return 1
       ;;
   esac
+
+  firebreak_environment_write_package_overlay "$tmp_env_file"
 
   mv -f "$tmp_env_file" "$FIREBREAK_RESOLVED_ENVIRONMENT_ENV_FILE"
   firebreak_environment_write_manifest

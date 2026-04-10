@@ -36,7 +36,7 @@ mkdir -p "$src_dir"
       if [ ! -e "$path" ] && [ ! -L "$path" ]; then
         continue
       fi
-      cp -a --parents "$path" "$src_dir"
+      cp -a --parents -- "$path" "$src_dir"
     done
 )
 

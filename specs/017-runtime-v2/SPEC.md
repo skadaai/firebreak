@@ -93,7 +93,7 @@ The system shall not keep a second first-class Linux local backend once the repl
 - `modules/base` shall keep the shared guest contract, state semantics, credential semantics, shell/bootstrap contract, and worker semantics.
 - `modules/profiles/local` shall keep local-only product behavior such as workspace access, local console expectations, host-facing port publishing, and local preparation semantics.
 - `modules/profiles/cloud` shall keep cloud-only product behavior such as image-oriented execution, volume ownership, deploy semantics, and cloud job lifecycle.
-- backend-specific hypervisor invocation, share plumbing, networking implementation, snapshot plumbing, and control-plane wiring shall live under shared runtime support code rather than under profile directories.
+- backend-specific hypervisor invocation, share plumbing, networking implementation, snapshot plumbing, and control-plane wiring shall live under `modules/profiles/local` or `modules/profiles/cloud`, not under shared runtime support code.
 - profiles shall depend on backend capabilities, not on backend-specific command-line details.
 
 ## Capability contract

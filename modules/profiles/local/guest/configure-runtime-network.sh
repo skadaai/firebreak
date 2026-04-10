@@ -48,9 +48,10 @@ if [ -r "$dns_servers_file" ]; then
   done < "$dns_servers_file"
 
   if [ -s "$tmp_resolv_conf" ]; then
-    rm -f /etc/resolv.conf
-    cp "$tmp_resolv_conf" /etc/resolv.conf
-    chmod 0644 /etc/resolv.conf
+    next_resolv_conf=/etc/resolv.conf.firebreak
+    cp "$tmp_resolv_conf" "$next_resolv_conf"
+    chmod 0644 "$next_resolv_conf"
+    mv "$next_resolv_conf" /etc/resolv.conf
   fi
 fi
 

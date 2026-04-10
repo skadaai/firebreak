@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 profile_guest_events_file=@AGENT_EXEC_OUTPUT_MOUNT@/profile-guest.tsv
 
 firebreak_profile_now_ms() {
@@ -9,6 +10,7 @@ firebreak_profile_sanitize_field() {
 }
 
 firebreak_profile_guest_mark() {
+  local profile_component profile_phase profile_detail
   profile_component=$1
   profile_phase=$2
   profile_detail=${3:-}

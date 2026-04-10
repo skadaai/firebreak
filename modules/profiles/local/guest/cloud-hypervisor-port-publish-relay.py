@@ -4,6 +4,7 @@ import socket
 import sys
 import threading
 import time
+import logging
 
 
 LISTEN_HOST = os.environ.get("FIREBREAK_GUEST_PORT_PUBLISH_TARGET_HOST", "127.0.0.1")
@@ -63,6 +64,11 @@ def handle_connection(client: socket.socket, guest_port: int) -> None:
     try:
         upstream.connect((LISTEN_HOST, guest_port))
     except OSError as exc:
+        logging.exception(
+            "failed to connect guest port publish relay to %s:%s",
+            LISTEN_HOST,
+            guest_port,
+        )
         client.close()
         upstream.close()
         raise RuntimeError(

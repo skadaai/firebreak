@@ -48,7 +48,7 @@ class PublishHandler(socketserver.BaseRequestHandler):
         mux = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
             mux.connect(MUX_SOCKET)
-            mux.sendall(f"CONNECT {GUEST_PORT}\n".encode("utf-8"))
+            mux.sendall(f"CONNECT {GUEST_PORT}\n".encode())
         except OSError as exc:
             mux.close()
             raise RuntimeError(

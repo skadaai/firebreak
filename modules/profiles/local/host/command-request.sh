@@ -22,7 +22,7 @@ firebreak_write_command_request() {
   command_request_columns=$6
   command_request_lines=$7
   command_request_capture_systemd_profile=$8
-  command_request_id=$(date -u +%Y%m%dT%H%M%SZ)-${BASHPID:-$$}
+  command_request_id=$(date -u +%Y%m%dT%H%M%SZ)-${BASHPID:-$$}-$(python3 -c 'import secrets; print(secrets.token_hex(4))')
   command_request_path=$command_response_dir/request.json
 
   firebreak_reset_command_response_dir "$command_response_dir"
@@ -39,6 +39,7 @@ firebreak_write_command_request() {
   python3 - <<'PY'
 import json
 import os
+import tempfile
 
 payload = {
     "request_id": os.environ["REQUEST_ID"],
@@ -51,8 +52,14 @@ payload = {
     "capture_systemd_profile": os.environ["REQUEST_CAPTURE_SYSTEMD_PROFILE"],
 }
 
-with open(os.environ["REQUEST_PATH"], "w", encoding="utf-8") as handle:
+request_path = os.environ["REQUEST_PATH"]
+request_dir = os.path.dirname(request_path)
+with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=request_dir, delete=False) as handle:
     json.dump(payload, handle, indent=2, sort_keys=True)
     handle.write("\n")
+    handle.flush()
+    os.fsync(handle.fileno())
+    temp_path = handle.name
+os.replace(temp_path, request_path)
 PY
 }

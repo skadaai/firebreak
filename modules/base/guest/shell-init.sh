@@ -11,7 +11,7 @@ if [ "$USER" = "@DEV_USER@" ]; then
     while [ "$poll_count" -lt "$max_polls" ]; do
       if [ -e "@ENVIRONMENT_OVERLAY_ERROR_FLAG@" ]; then
         if [ -r "@ENVIRONMENT_OVERLAY_LOG_FILE@" ]; then
-          cat "@ENVIRONMENT_OVERLAY_LOG_FILE@" >&2
+          @SYSTEM_BIN@/cat "@ENVIRONMENT_OVERLAY_LOG_FILE@" >&2
         fi
         printf '%s\n' "Firebreak environment overlay failed to materialize." >&2
         exit 1
@@ -21,7 +21,7 @@ if [ "$USER" = "@DEV_USER@" ]; then
         return 0
       fi
 
-      sleep "$poll_sleep_seconds"
+      @SYSTEM_BIN@/sleep "$poll_sleep_seconds"
       poll_count=$((poll_count + 1))
     done
 
@@ -38,7 +38,6 @@ if [ "$USER" = "@DEV_USER@" ]; then
   @SHARED_STATE_ROOT_ENV_EXPORTS@
   @SHARED_CREDENTIAL_SLOT_ENV_EXPORTS@
   @SHARED_TOOL_WRAPPER_ENV_EXPORTS@
-  export PATH="@SYSTEM_BIN@:$PATH"
 
   if [ -n "${FIREBREAK_SHARED_TOOL_WRAPPER_BIN_DIR:-}" ]; then
     export PATH="$FIREBREAK_SHARED_TOOL_WRAPPER_BIN_DIR:$PATH"

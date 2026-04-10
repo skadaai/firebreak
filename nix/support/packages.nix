@@ -360,10 +360,11 @@ rec {
         coreutils
         git
         gnused
-        iproute2
-        iptables
         nix
         sudo
+      ] ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+        iproute2
+        iptables
       ];
       text = renderTemplate {
         "@CLOUD_SUITE_USAGE@" =
@@ -720,11 +721,12 @@ rec {
         gawk
         git
         gnused
-        iproute2
-        iptables
         nix
         python3
         sudo
+      ] ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+        iproute2
+        iptables
       ];
       text = ''
         export FIREBREAK_LIBEXEC_DIR='${mkFirebreakLibexecPackage}/libexec'

@@ -39,7 +39,8 @@ sleep "$sleep_time"
 printf '%s\n' "$worker_name releasing" >>"$event_log"
 local_controller_release_dispatch_lock
 EOF
-  sed -i "s|@LOCAL_CONTROLLER_LIB@|$controller_lib|g" "$smoke_tmp_dir/lock-helper.sh"
+  sed "s|@LOCAL_CONTROLLER_LIB@|$controller_lib|g" "$smoke_tmp_dir/lock-helper.sh" >"$smoke_tmp_dir/lock-helper.sh.tmp"
+  mv "$smoke_tmp_dir/lock-helper.sh.tmp" "$smoke_tmp_dir/lock-helper.sh"
   chmod 0555 "$smoke_tmp_dir/lock-helper.sh"
 
   "$smoke_tmp_dir/lock-helper.sh" "$shared_runner_workdir" first 2 "$event_log" &
@@ -109,3 +110,4 @@ validate_stale_build_invalidation() {
 
 validate_dispatch_lock
 validate_stale_build_invalidation
+printf '%s\n' "PASS: test-smoke-local-controller"

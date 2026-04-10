@@ -24,13 +24,16 @@ def pump_bidirectional(left: socket.socket, right: socket.socket) -> None:
         for key, _events in ready:
           source = key.fileobj
           target = key.data
-          try:
-            chunk = source.recv(65536)
-          except OSError:
-            chunk = b""
-          if not chunk:
-            return
-          target.sendall(chunk)
+                try:
+                    chunk = source.recv(65536)
+                except OSError:
+                    chunk = b""
+                if not chunk:
+                    return
+                try:
+                    target.sendall(chunk)
+                except OSError:
+                    return
     finally:
       selector.close()
 

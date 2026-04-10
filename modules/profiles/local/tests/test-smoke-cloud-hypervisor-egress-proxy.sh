@@ -1,10 +1,10 @@
+#!/usr/bin/env bash
 set -eu
 
 proxy_script=@PROXY_SCRIPT@
 tmp_root=${TMPDIR:-/tmp}/firebreak/tmp
 mkdir -p "$tmp_root"
 smoke_dir=$(mktemp -d "$tmp_root/firebreak-cloud-hypervisor-egress.XXXXXX")
-trap 'rm -rf "$smoke_dir"' EXIT INT TERM
 
 unix_socket=$smoke_dir/notify.vsock_3128
 upstream_log=$smoke_dir/upstream.log

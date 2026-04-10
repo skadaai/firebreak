@@ -1,9 +1,27 @@
+# This file is meant to be sourced, not executed.
+# Callers are expected to provide runner_workdir, runtime_backend, control_socket,
+# agent_session_mode, instance_ephemeral, and related wrapper state before using
+# local_controller_mode and local_controller_trace helpers.
+
 local_controller_mode=${FIREBREAK_LOCAL_CONTROLLER_MODE:-client}
 
 local_controller_trace() {
   if type trace_wrapper >/dev/null 2>&1; then
     trace_wrapper "$1"
   fi
+}
+
+local_controller_interval_to_deciseconds() {
+  case "$1" in
+    0.1) printf '%s\n' 1 ;;
+    0.2) printf '%s\n' 2 ;;
+    0.5) printf '%s\n' 5 ;;
+    1|1.0) printf '%s\n' 10 ;;
+    *)
+      echo "unsupported local controller poll interval: $1" >&2
+      exit 1
+      ;;
+  esac
 }
 
 local_controller_prepare_state() {
@@ -56,7 +74,12 @@ local_controller_should_dispatch() {
 
 local_controller_wait_for_ready() {
   local_controller_prepare_state
-  for _ in $(seq 1 900); do
+  ready_timeout_seconds=${LOCAL_CONTROLLER_READY_TIMEOUT_SECONDS:-180}
+  ready_poll_interval=${LOCAL_CONTROLLER_READY_POLL_INTERVAL:-0.2}
+  ready_poll_deciseconds=$(local_controller_interval_to_deciseconds "$ready_poll_interval")
+  ready_attempts=$(((ready_timeout_seconds * 10 + ready_poll_deciseconds - 1) / ready_poll_deciseconds))
+
+  for _ in $(seq 1 "$ready_attempts"); do
     if ! local_controller_pid_is_alive; then
       break
     fi
@@ -68,7 +91,7 @@ local_controller_wait_for_ready() {
       local_controller_trace "warm-controller-ready:$controller_runtime_dir"
       return 0
     fi
-    sleep 0.2
+    sleep "$ready_poll_interval"
   done
 
   echo "warm local controller did not become ready for $runner_workdir" >&2
@@ -167,8 +190,12 @@ local_controller_release_dispatch_lock() {
 local_controller_acquire_dispatch_lock() {
   local_controller_prepare_state
   mkdir -p "$local_controller_state_dir"
+  lock_timeout_seconds=${LOCAL_CONTROLLER_LOCK_TIMEOUT_SECS:-60}
+  lock_sleep_seconds=${LOCAL_CONTROLLER_LOCK_SLEEP_S:-0.1}
+  lock_sleep_deciseconds=$(local_controller_interval_to_deciseconds "$lock_sleep_seconds")
+  lock_attempts=$(((lock_timeout_seconds * 10 + lock_sleep_deciseconds - 1) / lock_sleep_deciseconds))
 
-  for _ in $(seq 1 7200); do
+  for _ in $(seq 1 "$lock_attempts"); do
     if mkdir "$local_controller_dispatch_lock_dir" 2>/dev/null; then
       printf '%s\n' "${BASHPID:-$$}" > "$local_controller_dispatch_lock_pid_file"
       local_controller_trace "warm-controller-lock-acquired"
@@ -180,7 +207,7 @@ local_controller_acquire_dispatch_lock() {
       continue
     fi
 
-    sleep 0.1
+    sleep "$lock_sleep_seconds"
   done
 
   echo "warm local controller timed out waiting for dispatch lock for $runner_workdir" >&2
@@ -232,7 +259,7 @@ local_controller_dispatch_request() {
   local_controller_prepare_state
   local_controller_ensure_running
   local_controller_acquire_dispatch_lock
-  trap 'local_controller_release_dispatch_lock' EXIT INT TERM
+  trap 'local_controller_release_dispatch_lock' EXIT HUP INT TERM
   local_controller_trace "warm-controller-dispatch-start"
 
   controller_runtime_dir=$(local_controller_runtime_dir)

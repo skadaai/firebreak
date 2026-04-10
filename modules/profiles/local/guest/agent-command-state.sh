@@ -26,7 +26,10 @@ write_command_state() {
 }
 EOF
   if [ -d @AGENT_EXEC_OUTPUT_MOUNT@ ]; then
-    cp "$command_state_local" "$command_state_shared" 2>/dev/null || true
+    if ! cp "$command_state_local" "$command_state_shared"; then
+      echo "failed to sync command state from $command_state_local to $command_state_shared" >&2
+      exit 1
+    fi
     chmod 0666 "$command_state_shared" 2>/dev/null || true
   fi
 }

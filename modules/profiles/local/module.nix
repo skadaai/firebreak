@@ -291,7 +291,7 @@ in {
       no_proxy = "127.0.0.1,localhost,::1";
     };
 
-    fileSystems.${runtimeHostMount} = {
+    fileSystems.${runtimeHostMount} = lib.mkIf (cfg.runtimeBackend == "cloud-hypervisor") {
       device = "hostruntime";
       fsType = hostMetaFsType;
       options = [

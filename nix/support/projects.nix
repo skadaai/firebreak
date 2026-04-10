@@ -244,6 +244,10 @@ __FIREBREAK_WRAPPER_INFO__
             bootstrapConditionScript = pkgs.writeShellScript "${name}-workspace-bootstrap-condition" ''
               set -eu
 
+              # This script is used as a systemd ExecCondition for bootstrap.
+              # Exit 0 means "proceed with service start"; non-zero means "skip".
+              # The condition intentionally exits 1 when repo markers are missing
+              # or when current_hash already matches state_file.
               workspace="${cfg.workspaceMount}"
               state_file="${stateRoot}/inputs.sha256"
               missing_marker=""

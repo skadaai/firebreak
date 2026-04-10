@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -eu
 
 proxy_script=@PROXY_SCRIPT@
@@ -59,7 +60,7 @@ with listener:
         decoded = prefix.decode("utf-8", "replace")
         if decoded != f"CONNECT {expected_port}\n":
             raise SystemExit(f"unexpected CONNECT preface: {decoded!r}")
-        conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 21\r\n\r\nrootless publish ok\n")
+        conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 20\r\n\r\nrootless publish ok\n")
 PY
 
 env \
@@ -91,8 +92,12 @@ done
 
 for _ in $(seq 1 50); do
   if kill -0 "$proxy_pid" 2>/dev/null; then
-    sleep 0.1
     break
+  fi
+  if ! ps -p "$proxy_pid" >/dev/null 2>&1; then
+    cat "$proxy_log" >&2 || true
+    echo "port publish smoke proxy exited before becoming ready" >&2
+    exit 1
   fi
   sleep 0.1
 done

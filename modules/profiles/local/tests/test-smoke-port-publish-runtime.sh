@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -eu
 
 repo_root=$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null || true)
@@ -77,13 +78,15 @@ for _ in $(seq 1 120); do
     exit 1
   fi
 
-  if response=$(python3 - 2>/dev/null <<'PY'
+  if response=$(HOST_PORT="$host_port" python3 - 2>/dev/null <<'PY'
+import os
 import socket
 
+host_port = int(os.environ["HOST_PORT"])
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 sock.settimeout(0.2)
 try:
-    sock.connect(("127.0.0.1", 39123))
+    sock.connect(("127.0.0.1", host_port))
     sock.sendall(
         b"GET / HTTP/1.1\r\n"
         b"Host: 127.0.0.1\r\n"

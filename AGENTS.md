@@ -101,4 +101,4 @@ When running repository tooling inside this sandbox, remember that some standard
 
 When a change requires manual setup outside the repository, such as configuring GitHub, registering self-hosted runners, adding secrets or variables, or any other human intervention, add or update a detailed step-by-step guide under [`guides/`](./guides) in the same change.
 
-Avoid gracefull degration at all costs; remove all legacy or deprecated code when coding; always prefer fail-fast and KISS; keep the codebase sane, maintainable, and modularized.
+Avoid graceful degradation at all costs; remove all legacy or deprecated code when coding; always prefer fail-fast and KISS; keep the codebase sane, maintainable, and modularized.

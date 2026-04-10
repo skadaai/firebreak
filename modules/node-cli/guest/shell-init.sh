@@ -45,6 +45,8 @@ firebreak_refresh_cli() {
 
   printf "Removing local binary...\n"
   sudo rm -f "$LOCAL_BIN/@BIN_NAME@"
+  # @PROXY_LOCAL_UPSTREAM_NAMES@ is expanded at render time into a space-separated
+  # upstream list, so it is intentionally unquoted for one-name-per-word iteration.
   for upstream_name in @PROXY_LOCAL_UPSTREAM_NAMES@; do
     sudo rm -f "$LOCAL_BIN/.firebreak-upstream-$upstream_name"
   done

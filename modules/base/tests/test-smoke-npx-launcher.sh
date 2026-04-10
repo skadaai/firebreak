@@ -196,7 +196,7 @@ linux_validate_output=$(
 
 if ! [ -f "$nix_args_path" ]; then
   printf '%s\n' "$linux_validate_output" >&2
-  echo "launcher smoke should invoke nix for Linux validation without host-network preflight gating" >&2
+  echo "launcher smoke should invoke nix for Linux validation; expected $nix_args_path to exist" >&2
   exit 1
 fi
 

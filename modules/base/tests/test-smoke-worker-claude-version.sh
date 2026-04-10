@@ -56,7 +56,7 @@ wait_for_status() {
   for _ in $(seq 1 600); do
     inspect_output=$(
       FIREBREAK_WORKER_STATE_DIR="$state_dir" \
-        @AGENT_BIN@ worker inspect "$worker_id"
+        @AGENT_BIN@ worker inspect "$worker_id" || true
     )
     if printf '%s\n' "$inspect_output" | grep -F -q "$status_pattern"; then
       printf '%s' "$inspect_output"

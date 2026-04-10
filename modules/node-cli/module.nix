@@ -181,7 +181,7 @@ let
         ensure_dir "$bootstrap_dir"
       done
 
-      if [ -x "$local_bin/${binName}" ] && [ -r "$state_file" ] && [ "$(cat "$state_file")" = "$install_state_id" ] && [ -r "$ready_marker" ] && wrappers_ready; then
+      if [ -x "$local_bin/${binName}" ] && [ -r "$state_file" ] && [ "$(cat "$state_file")" = "$install_state_id" ] && [ -r "$ready_marker" ] && [ "$(cat "$ready_marker")" = "$install_state_id" ] && wrappers_ready; then
         log_phase "toolchain-cache-hit ${packageSpec}"
         exit 0
       fi
@@ -489,6 +489,7 @@ PY
       && [ -r "$state_file" ] \
       && [ "$(cat "$state_file")" = "$install_state_id" ] \
       && [ -r "$ready_marker" ] \
+      && [ "$(cat "$ready_marker")" = "$install_state_id" ] \
       && wrappers_ready; then
       exit 1
     fi

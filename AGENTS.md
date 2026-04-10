@@ -15,6 +15,7 @@ This repository is centered on a Nix flake plus reusable VM modules:
 - [`modules/claude-code/`](./modules/claude-code): Claude Code-specific overlay module.
 - [`ARCHITECTURE.md`](./ARCHITECTURE.md): module-oriented structure and guidance for adding new tool workloads.
 - [`BRANDING.md`](./BRANDING.md): product naming, tagline, and public naming conventions.
+- [`engineering/TERMINOLOGY.md`](./engineering/TERMINOLOGY.md): canonical glossary for `tool`, `package`, `workload`, `worker`, and `state`.
 - [`UPSTREAM_REPOS.md`](./UPSTREAM_REPOS.md): preferred `ask_question` targets for the technologies used in this repository.
 - [`guides/`](./guides): step-by-step instructions for tasks that require manual setup or human intervention.
 - [`.github/workflows/`](./.github/workflows): hosted CI checks and the self-hosted KVM smoke workflow.
@@ -55,17 +56,13 @@ There is no separate application `src/` tree yet. Keep shared behavior in the ba
 
 ## Coding Style & Naming Conventions
 
-Use this repository-wide terminology consistently:
-
-- `tool`: the program inside the VM, such as `codex`, `claude`, `aider`, `python`, or `bash`
-- `workload`: the Firebreak package or recipe, such as `firebreak-codex` or `firebreak-claude-code`
-- `worker`: a running execution instance managed by the broker
-- `state`: persistent runtime state, caches, auth material, and related mutable data
+Use the canonical terminology in [`engineering/TERMINOLOGY.md`](./engineering/TERMINOLOGY.md).
 
 Naming rules:
 
 - Do not use `agent` as a new generic noun in Firebreak core. Existing `agent-*` identifiers are migration debt, not precedent.
 - Do not rename everything to `worker`. `worker` is only for running execution instances.
+- Do not use `workload` to mean `package`, or `package` to mean `workload`.
 - Do not use `config` when the thing is really persistent runtime state. Prefer `state` and `state root`.
 - If a legacy directory, file, or template variable still contains `agent`, treat that as an implementation leftover and avoid propagating it into new interfaces, docs, env vars, or options.
 

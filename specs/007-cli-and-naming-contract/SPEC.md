@@ -36,10 +36,15 @@ Without a clear contract, the interface keeps drifting and users have to memoriz
 
 ## Terminology
 
+The canonical glossary lives in [engineering/TERMINOLOGY.md](../../engineering/TERMINOLOGY.md).
+This spec defines the contract, but the glossary file is the central reference
+other docs should point to.
+
 - `attempt`: one bounded change attempt with plan, evidence, and disposition
 - `workspace`: an isolated host-side checkout with its own worktree, runtime state, artifacts, and metadata
 - `tool`: the actual program inside the VM, such as `codex`, `claude`, `aider`, `python`, or `bash`
-- `workload`: the Firebreak package or recipe, such as `firebreak-codex` or `firebreak-claude-code`
+- `package`: a build artifact or installable unit
+- `workload`: a runnable Firebreak execution definition, often backed by one or more packages
 - `worker`: a running execution instance managed by the broker
 - `tool session`: an interactive or non-interactive tool process context launched inside a VM when needed
 - `conversation thread`: a tool-specific memory or history object, when the tool exposes one
@@ -50,6 +55,7 @@ In this changeset:
 - bare `task` should not be used for the workspace/attempt distinction
 - `agent` must not be introduced as a new generic noun in Firebreak core
 - `worker` must not be used to mean `tool` or `workload`
+- `workload` must not be used to mean `package`
 - `config` must not be used where the concept is actually persistent runtime `state`
 
 ## Non-goals
@@ -82,7 +88,8 @@ The intended landing shape is:
 - When a host-side isolated checkout is represented in the CLI, docs, or machine-readable output, the system shall name that concept `workspace`.
 - When a bounded change execution is represented in the CLI, docs, or machine-readable output, the system shall name that concept `attempt`.
 - When the docs or CLI refer to a VM-contained program, the system shall name that concept `tool`.
-- When the docs or CLI refer to a Firebreak package or recipe, the system shall name that concept `workload`.
+- When the docs or CLI refer to a runnable Firebreak execution definition, the system shall name that concept `workload`.
+- When the docs or CLI refer to a build artifact or installable unit, the system shall name that concept `package`.
 - When the docs or CLI refer to a broker-managed execution instance, the system shall name that concept `worker`.
 - When Firebreak refers to persistent runtime directories, auth material, caches, or related mutable data, the system shall name that concept `state` rather than `config`.
 - When Firebreak exports development-flow plumbing as Nix packages, the system shall prefix those package names with `dev-flow-`.

@@ -10,6 +10,9 @@
 
 Firebreak is a VM-first control plane for running tools and workloads with a small public interface.
 
+Canonical terminology lives in [engineering/TERMINOLOGY.md](./engineering/TERMINOLOGY.md).
+If wording in this README ever conflicts with another doc, follow that glossary.
+
 ## Firebreak CLI
 
 ```sh
@@ -92,7 +95,8 @@ Firebreak also ships a thin `npx dev-flow ...` launcher for the development-flow
 Terminology:
 
 - `tool`: the actual program inside the VM, such as `codex` or `claude`
-- `workload`: the Firebreak package or recipe, such as `firebreak-codex`
+- `package`: a build artifact or installable unit, such as `firebreak-codex`
+- `workload`: the runnable Firebreak launch unit, often backed by one or more packages
 - `worker`: a broker-managed running execution instance
 - `state`: persistent runtime state, caches, auth material, and related mutable data
 

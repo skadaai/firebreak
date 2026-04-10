@@ -4,10 +4,14 @@ Firebreak uses a module-oriented layout instead of flat `scripts/` and `tests/` 
 
 ## Terminology
 
+The canonical glossary lives in [engineering/TERMINOLOGY.md](./engineering/TERMINOLOGY.md).
+Use that file when terminology in other docs is unclear.
+
 - `attempt`: one bounded change attempt with its own plan, validation evidence, review artifacts, and disposition
 - `workspace`: an isolated host-side checkout and state root used for one spec line or other logically related sequence of work
 - `tool`: the actual program inside the VM, such as `codex`, `claude`, `aider`, `python`, or `bash`
-- `workload`: the Firebreak package or recipe, such as `firebreak-codex`, `firebreak-claude-code`, or a future third-party package
+- `package`: a build artifact or installable unit
+- `workload`: a runnable Firebreak execution definition, often backed by one or more packages
 - `worker`: a running execution instance managed by the broker
 - `tool session`: an interactive or non-interactive tool process context launched inside a VM when that distinction matters
 - `conversation thread`: a tool-specific memory or history object, when the tool exposes one
@@ -15,6 +19,7 @@ Firebreak uses a module-oriented layout instead of flat `scripts/` and `tests/` 
 Do not use bare `session` to mean either the workspace or the attempt.
 Do not use `agent` as a new generic architectural term in Firebreak core.
 Do not use `worker` to mean `tool` or `workload`.
+Do not use `workload` to mean `package`.
 Do not use `config` when the concept is really persistent runtime state.
 
 ## Development-Flow Surface

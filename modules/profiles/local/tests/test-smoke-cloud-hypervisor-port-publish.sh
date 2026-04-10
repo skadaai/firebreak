@@ -58,7 +58,10 @@ def handle_connection(conn):
         decoded = prefix.decode("utf-8", "replace")
         if decoded != f"CONNECT {expected_port}\n":
             raise SystemExit(f"unexpected CONNECT preface: {decoded!r}")
-        conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 20\r\n\r\nrootless publish ok\n")
+        try:
+            conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 20\r\n\r\nrootless publish ok\n")
+        except BrokenPipeError:
+            return
 
 
 with listener:

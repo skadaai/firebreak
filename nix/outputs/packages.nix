@@ -43,6 +43,9 @@
   mkWorkerProxyScriptSmokePackage,
   mkWorkerSmokePackage,
 }:
+let
+  publicWorkloadManifest = builtins.fromJSON (builtins.readFile ../../share/public-workloads.json);
+in
 {
   default = self.packages.${system}.firebreak;
 
@@ -243,18 +246,11 @@
 
   firebreak = mkFirebreakCliPackage {
     name = "firebreak";
-    publicWorkloads = [
-      {
-        name = "codex";
-        description = "Codex local Firebreak VM";
-        launcher = "${self.packages.${system}.firebreak-codex}/bin/firebreak-codex";
-      }
-      {
-        name = "claude-code";
-        description = "Claude Code local Firebreak VM";
-        launcher = "${self.packages.${system}.firebreak-claude-code}/bin/firebreak-claude-code";
-      }
-    ];
+    publicWorkloads = map
+      (workload: workload // {
+        launcher = "${self.packages.${system}.${workload.packageName}}/bin/${workload.packageName}";
+      })
+      publicWorkloadManifest;
   };
 
   dev-flow = mkDevFlowCliPackage {

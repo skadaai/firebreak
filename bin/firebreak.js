@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 
 const fs = require("node:fs")
+const os = require("node:os")
 const path = require("node:path")
 const { spawn, spawnSync } = require("node:child_process")
 
 const GITHUB_FLAKE_REF = "github:skadaai/firebreak";
+const PUBLIC_WORKLOAD_MANIFEST = ["share", "public-workloads.json"]
 const LOCAL_ROOT_MARKERS = [
   ["flake.nix"],
   ["modules", "base", "host", "firebreak.sh"]
@@ -84,6 +86,65 @@ const resolveLocalRoot = () => {
 const resolveFlakeRef = (localRoot) => (
   localRoot ? `path:${localRoot}` : GITHUB_FLAKE_REF
 )
+
+const resolvePublicWorkloadManifest = (localRoot) => {
+  if (localRoot) {
+    const localManifest = path.join(localRoot, ...PUBLIC_WORKLOAD_MANIFEST)
+    if (pathExists(localManifest)) {
+      return localManifest
+    }
+  }
+
+  const packagedManifest = path.resolve(__dirname, "..", ...PUBLIC_WORKLOAD_MANIFEST)
+  if (pathExists(packagedManifest)) {
+    return packagedManifest
+  }
+
+  fail("unable to resolve the Firebreak public workload manifest")
+}
+
+const createLocalWorkloadRegistry = (manifestPath, flakeRef) => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "firebreak-launcher-"))
+  const workloads = JSON.parse(fs.readFileSync(manifestPath, "utf8"))
+
+  for (const workload of workloads) {
+    const launcherPath = path.join(tempRoot, workload.packageName)
+    fs.writeFileSync(
+      launcherPath,
+      `#!/usr/bin/env bash
+set -eu
+
+flake_ref=\${FIREBREAK_FLAKE_REF:-${flakeRef}}
+accept_flake_config=\${FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG:-}
+extra_experimental_features=\${FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES:-}
+
+if [ "$accept_flake_config" = "1" ] && [ -n "$extra_experimental_features" ]; then
+  exec nix --accept-flake-config --extra-experimental-features "$extra_experimental_features" run "$flake_ref#${workload.packageName}" -- "$@"
+fi
+
+if [ "$accept_flake_config" = "1" ]; then
+  exec nix --accept-flake-config run "$flake_ref#${workload.packageName}" -- "$@"
+fi
+
+if [ -n "$extra_experimental_features" ]; then
+  exec nix --extra-experimental-features "$extra_experimental_features" run "$flake_ref#${workload.packageName}" -- "$@"
+fi
+
+exec nix run "$flake_ref#${workload.packageName}" -- "$@"
+`,
+      { mode: 0o555 }
+    )
+  }
+
+  const registryPath = path.join(tempRoot, "workloads.tsv")
+  fs.writeFileSync(
+    registryPath,
+    workloads.map((workload) => (
+      `${workload.name}\t${workload.description}\t${path.join(tempRoot, workload.packageName)}`
+    )).join("\n") + "\n"
+  )
+  return registryPath
+}
 
 const resolveLibexecDir = (localRoot) => {
   if (localRoot) {
@@ -393,6 +454,7 @@ const runFirebreak = async () => {
   const localRoot = resolveLocalRoot()
   const flakeRef = needsNix ? resolveFlakeRef(localRoot) : ""
   const firebreakLibexecDir = resolveLibexecDir(localRoot)
+  const localWorkloadRegistry = localRoot ? createLocalWorkloadRegistry(resolvePublicWorkloadManifest(localRoot), resolveFlakeRef(localRoot)) : ""
   const reporter = await createReporter(flakeRef)
 
   if (reporter) {
@@ -411,6 +473,7 @@ const runFirebreak = async () => {
             ...process.env,
             FIREBREAK_LIBEXEC_DIR: firebreakLibexecDir,
             FIREBREAK_FLAKE_REF: flakeRef,
+            FIREBREAK_WORKLOAD_REGISTRY: process.env.FIREBREAK_WORKLOAD_REGISTRY || localWorkloadRegistry,
             FIREBREAK_NIX_ACCEPT_FLAKE_CONFIG: needsNix && !nixHelpersDisabled ? "1" : "",
             FIREBREAK_NIX_EXTRA_EXPERIMENTAL_FEATURES: needsNix && !nixHelpersDisabled ? "nix-command flakes" : ""
           },

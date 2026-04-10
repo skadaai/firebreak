@@ -1,0 +1,12 @@
+[
+  {
+    "name": "codex",
+    "description": "Codex local Firebreak VM",
+    "packageName": "firebreak-codex"
+  },
+  {
+    "name": "claude-code",
+    "description": "Claude Code local Firebreak VM",
+    "packageName": "firebreak-claude-code"
+  }
+]

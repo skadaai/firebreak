@@ -115,6 +115,7 @@ Namespace-backed workflows should use runner-label features to reduce cost and q
 - attach branch-protected cache volumes shared per architecture
 - cache GitHub tool downloads on Namespace runners so `actions/setup-node` does not repeatedly reinstall Node for launcher coverage
 - request extra Namespace runner features only where the active runtime path actually needs deeper host access; currently that applies to the `aarch64-linux` local-runtime jobs, which use a combined `-with-cache-with-features` machine label plus `namespace-features:container.privileged=true;container.host-pid-namespace=true`
+- on `aarch64-linux`, probe `/dev/kvm` on the actual Namespace runner configuration before fan-out; only schedule Cloud Hypervisor runtime smokes when KVM is really exposed
 
 Current cache policy:
 

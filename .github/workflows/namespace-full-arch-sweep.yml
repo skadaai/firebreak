@@ -35,6 +35,41 @@ jobs:
           echo "arm64_linux_matrix=$(sh .github/scripts/render-ci-matrix.sh namespace-full aarch64-linux)" >> "$GITHUB_OUTPUT"
           echo "arm64_darwin_matrix=$(sh .github/scripts/render-ci-matrix.sh namespace-full aarch64-darwin)" >> "$GITHUB_OUTPUT"
 
+  arm64-linux-kvm-probe:
+    name: Probe arm64-linux KVM availability
+    needs: prepare-full-sweep-matrices
+    runs-on:
+      - nscloud-ubuntu-24.04-arm64-1x2-with-features
+      - namespace-features:container.privileged=true;container.host-pid-namespace=true
+    outputs:
+      kvm_available: ${{ steps.probe.outputs.kvm_available }}
+      kvm_state: ${{ steps.probe.outputs.kvm_state }}
+    steps:
+      - name: Probe /dev/kvm
+        id: probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          uname -a
+          if ! [ -e /dev/kvm ]; then
+            echo "kvm_state=missing" >> "$GITHUB_OUTPUT"
+            echo "kvm_available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          ls -l /dev/kvm
+          if ! [ -r /dev/kvm ]; then
+            echo "kvm_state=not-readable" >> "$GITHUB_OUTPUT"
+            echo "kvm_available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! [ -w /dev/kvm ]; then
+            echo "kvm_state=not-writable" >> "$GITHUB_OUTPUT"
+            echo "kvm_available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "kvm_state=ok" >> "$GITHUB_OUTPUT"
+          echo "kvm_available=true" >> "$GITHUB_OUTPUT"
+
   amd64-linux-full:
     name: amd64-linux / ${{ matrix.package }} (${{ matrix.shape }})
     needs: prepare-full-sweep-matrices
@@ -89,7 +124,10 @@ jobs:
 
   arm64-linux-full:
     name: arm64-linux / ${{ matrix.package }} (${{ matrix.shape }})
-    needs: prepare-full-sweep-matrices
+    needs:
+      - prepare-full-sweep-matrices
+      - arm64-linux-kvm-probe
+    if: needs.arm64-linux-kvm-probe.outputs.kvm_available == 'true'
     runs-on:
       - ${{ format('nscloud-ubuntu-24.04-arm64-{0}-with-cache-with-features', matrix.shape) }}
       - nscloud-cache-tag-firebreak-runtime-arm64-linux
@@ -139,6 +177,17 @@ jobs:
             !/tmp/firebreak/**/*.socket
           if-no-files-found: ignore
           compression-level: 0
+
+  arm64-linux-full-blocked:
+    name: arm64-linux full sweep blocked
+    needs: arm64-linux-kvm-probe
+    if: needs.arm64-linux-kvm-probe.outputs.kvm_available != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain missing KVM capability
+        run: |
+          echo "Skipping arm64-linux Cloud Hypervisor full sweep because /dev/kvm is unavailable on the Namespace runner."
+          echo "Detected state: ${{ needs.arm64-linux-kvm-probe.outputs.kvm_state }}"
 
   arm64-darwin-full:
     name: arm64-darwin / ${{ matrix.package }} (${{ matrix.shape }})

@@ -184,18 +184,23 @@ fi
 
 rm -f "$nix_args_path" "$nix_cwd_path"
 
+set +e
 linux_validate_output=$(
   cd "$repo_root"
   PATH="$fake_bin_dir:$PATH" \
     DEV_FLOW_LAUNCHER_KVM_PATH="$smoke_tmp_dir/missing-kvm" \
     node "$repo_root/bin/dev-flow.js" validate run test-smoke-codex 2>&1
 )
+linux_validate_status=$?
+set -e
 
-if ! [ -f "$nix_args_path" ]; then
+if [ "$linux_validate_status" -eq 0 ] || ! printf '%s\n' "$linux_validate_output" | grep -F -q "needs KVM access"; then
   printf '%s\n' "$linux_validate_output" >&2
-  echo "launcher smoke should invoke nix for Linux validation; expected $nix_args_path to exist" >&2
+  echo "launcher smoke did not fail clearly on the Linux KVM preflight path" >&2
   exit 1
 fi
+
+assert_no_nix_invocation "the Linux validation KVM preflight path"
 
 rm -f "$nix_args_path" "$nix_cwd_path"
 

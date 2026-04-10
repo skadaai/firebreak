@@ -55,7 +55,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
     runs-on:
-      - nscloud-ubuntu-24.04-arm64-1x2-with-features
+      - nscloud-ubuntu-24.04-arm64-2x4-with-features
       - namespace-features:container.privileged=true;container.host-pid-namespace=true
     outputs:
       kvm_available: ${{ steps.probe.outputs.kvm_available }}
@@ -80,6 +80,36 @@ jobs:
           fi
           if ! [ -w /dev/kvm ]; then
             echo "kvm_state=not-writable" >> "$GITHUB_OUTPUT"
+            echo "kvm_available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! python3 - <<'PY'
+          import ctypes
+          import os
+          import sys
+
+          KVM_GET_API_VERSION = 0xAE00
+          KVM_CREATE_VM = 0xAE01
+
+          libc = ctypes.CDLL(None, use_errno=True)
+          kvm_fd = os.open("/dev/kvm", os.O_RDWR | os.O_CLOEXEC)
+          try:
+              api_version = libc.ioctl(kvm_fd, KVM_GET_API_VERSION, 0)
+              if api_version < 0:
+                  errno = ctypes.get_errno()
+                  raise OSError(errno, os.strerror(errno))
+              vm_fd = libc.ioctl(kvm_fd, KVM_CREATE_VM, 0)
+              if vm_fd < 0:
+                  errno = ctypes.get_errno()
+                  raise OSError(errno, os.strerror(errno))
+              os.close(vm_fd)
+          finally:
+              os.close(kvm_fd)
+
+          print("KVM probe passed")
+          PY
+          then
+            echo "kvm_state=create-vm-failed" >> "$GITHUB_OUTPUT"
             echo "kvm_available=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -144,6 +174,30 @@ jobs:
             exit 1
           fi
           ls -l /dev/kvm
+          python3 - <<'PY'
+          import ctypes
+          import os
+
+          KVM_GET_API_VERSION = 0xAE00
+          KVM_CREATE_VM = 0xAE01
+
+          libc = ctypes.CDLL(None, use_errno=True)
+          kvm_fd = os.open("/dev/kvm", os.O_RDWR | os.O_CLOEXEC)
+          try:
+              api_version = libc.ioctl(kvm_fd, KVM_GET_API_VERSION, 0)
+              if api_version < 0:
+                  errno = ctypes.get_errno()
+                  raise OSError(errno, os.strerror(errno))
+              vm_fd = libc.ioctl(kvm_fd, KVM_CREATE_VM, 0)
+              if vm_fd < 0:
+                  errno = ctypes.get_errno()
+                  raise OSError(errno, os.strerror(errno))
+              os.close(vm_fd)
+          finally:
+              os.close(kvm_fd)
+
+          print("KVM_CREATE_VM succeeded")
+          PY
 
       - name: Set up Node for launcher smoke
         if: matrix.package == 'firebreak-test-smoke-npx-launcher'

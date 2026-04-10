@@ -131,6 +131,30 @@ jobs:
             exit 1
           fi
           ls -l /dev/kvm
+          python3 - <<'PY'
+          import ctypes
+          import os
+
+          KVM_GET_API_VERSION = 0xAE00
+          KVM_CREATE_VM = 0xAE01
+
+          libc = ctypes.CDLL(None, use_errno=True)
+          kvm_fd = os.open("/dev/kvm", os.O_RDWR | os.O_CLOEXEC)
+          try:
+              api_version = libc.ioctl(kvm_fd, KVM_GET_API_VERSION, 0)
+              if api_version < 0:
+                  errno = ctypes.get_errno()
+                  raise OSError(errno, os.strerror(errno))
+              vm_fd = libc.ioctl(kvm_fd, KVM_CREATE_VM, 0)
+              if vm_fd < 0:
+                  errno = ctypes.get_errno()
+                  raise OSError(errno, os.strerror(errno))
+              os.close(vm_fd)
+          finally:
+              os.close(kvm_fd)
+
+          print("KVM_CREATE_VM succeeded")
+          PY
 
       - name: Set up Node for launcher smoke
         if: inputs.package == 'firebreak-test-smoke-npx-launcher'

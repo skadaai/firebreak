@@ -37,6 +37,10 @@ const fail = (message) => {
   process.exit(1)
 }
 
+const warn = (message) => {
+  console.warn(`firebreak launcher: ${message}`)
+}
+
 const pathExists = (targetPath) => {
   try {
     fs.accessSync(targetPath)

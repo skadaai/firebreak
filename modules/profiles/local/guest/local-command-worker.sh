@@ -64,8 +64,8 @@ while :; do
     continue
   fi
 
-  FIREBREAK_COMMAND_POWER_ACTION=stay-alive @RUN_COMMAND_EXEC_SCRIPT@
   last_request_id=$command_request_id
   printf '%s\n' "$last_request_id" > "$command_service_last_request_file"
   chmod 0644 "$command_service_last_request_file"
+  FIREBREAK_COMMAND_POWER_ACTION=stay-alive @RUN_COMMAND_EXEC_SCRIPT@
 done

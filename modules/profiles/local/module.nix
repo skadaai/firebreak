@@ -299,7 +299,31 @@ in {
         "x-systemd.after=systemd-modules-load.service"
       ];
     };
-    fileSystems.${cfg.toolRuntimesMount} = lib.mkIf (cfg.runtimeBackend == "cloud-hypervisor" && cfg.toolRuntimesEnabled) {
+    fileSystems.${cfg.hostMetaMount} = lib.mkIf (cfg.runtimeBackend == "vfkit") {
+      device = "hostmeta";
+      fsType = hostMetaFsType;
+      options = [
+        "defaults"
+        "x-systemd.after=systemd-modules-load.service"
+      ];
+    };
+    fileSystems.${cfg.workerExecOutputMount} = lib.mkIf (cfg.runtimeBackend == "vfkit") {
+      device = "hostexecoutput";
+      fsType = hostMetaFsType;
+      options = [
+        "defaults"
+        "x-systemd.after=systemd-modules-load.service"
+      ];
+    };
+    fileSystems.${cfg.workerBridgeMount} = lib.mkIf (cfg.runtimeBackend == "vfkit" && cfg.workerBridgeEnabled) {
+      device = "hostworkerbridge";
+      fsType = hostMetaFsType;
+      options = [
+        "defaults"
+        "x-systemd.after=systemd-modules-load.service"
+      ];
+    };
+    fileSystems.${cfg.toolRuntimesMount} = lib.mkIf ((cfg.runtimeBackend == "cloud-hypervisor" || cfg.runtimeBackend == "vfkit") && cfg.toolRuntimesEnabled) {
       device = "hosttoolruntimes";
       fsType = "virtiofs";
       options = [

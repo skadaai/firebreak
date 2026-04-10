@@ -75,15 +75,33 @@ state_sha256() {
   exit 1
 }
 
-cat >"$credential_root/default/@STATE_SUBDIR@/@AUTH_FILE@" <<'EOF'
+case '@AUTH_FILE_FORMAT@' in
+  json)
+    cat >"$credential_root/default/@STATE_SUBDIR@/@AUTH_FILE@" <<'EOF'
+"default-auth"
+EOF
+    ;;
+  *)
+    cat >"$credential_root/default/@STATE_SUBDIR@/@AUTH_FILE@" <<'EOF'
 default-auth
 EOF
+    ;;
+esac
 cat >"$credential_root/default/@STATE_SUBDIR@/@API_KEY_FILE@" <<'EOF'
 default-api-key
 EOF
-cat >"$credential_root/alternate/@STATE_SUBDIR@/@AUTH_FILE@" <<'EOF'
+case '@AUTH_FILE_FORMAT@' in
+  json)
+    cat >"$credential_root/alternate/@STATE_SUBDIR@/@AUTH_FILE@" <<'EOF'
+"alternate-auth"
+EOF
+    ;;
+  *)
+    cat >"$credential_root/alternate/@STATE_SUBDIR@/@AUTH_FILE@" <<'EOF'
 alternate-auth
 EOF
+    ;;
+esac
 cat >"$credential_root/alternate/@STATE_SUBDIR@/@API_KEY_FILE@" <<'EOF'
 alternate-api-key
 EOF
@@ -137,14 +155,49 @@ if is_login_command "$@"; then
   token_position=$(( ${#login_args[@]} + 1 ))
   token=${!token_position:-smoke-login-token}
   mkdir -p "$config_root"
-  printf '%s\n' "$token" >"$config_root/@AUTH_FILE@"
+  case '@AUTH_FILE_FORMAT@' in
+    json)
+      @PYTHON3@ - "$config_root/@AUTH_FILE@" "$token" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+value = sys.argv[2]
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(value, handle)
+PY
+      ;;
+    *)
+      printf '%s\n' "$token" >"$config_root/@AUTH_FILE@"
+      ;;
+  esac
   printf 'LOGIN_ROOT=%s\n' "$config_root"
   exit 0
 fi
 
 printf 'CONFIG_ROOT=%s\n' "$config_root"
 if [ -r "$config_root/@AUTH_FILE@" ]; then
-  printf 'AUTH_FILE=%s\n' "$(cat "$config_root/@AUTH_FILE@")"
+  case '@AUTH_FILE_FORMAT@' in
+    json)
+      auth_value=$(@PYTHON3@ - "$config_root/@AUTH_FILE@" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, "r", encoding="utf-8") as handle:
+    value = json.load(handle)
+if isinstance(value, str):
+    print(value)
+else:
+    print(json.dumps(value, sort_keys=True))
+PY
+)
+      ;;
+    *)
+      auth_value=$(cat "$config_root/@AUTH_FILE@")
+      ;;
+  esac
+  printf 'AUTH_FILE=%s\n' "$auth_value"
 fi
 printf 'API_KEY=%s\n' "${@API_KEY_ENV@:-}"
 EOS
@@ -205,7 +258,14 @@ require_pattern "$override_output" "API_KEY=alternate-api-key" "override slot AP
 login_output=$(run_shell_scenario "$make_fake_real_bin_command
 @TOOL_BIN@ @LOGIN_COMMAND@ direct-login-auth" login-slot)
 require_pattern "$login_output" "LOGIN_ROOT=/run/credential-slots-host-root/login-slot/@STATE_SUBDIR@" "slot-root login materialization"
-if [ "$(cat "$credential_root/login-slot/@STATE_SUBDIR@/@AUTH_FILE@")" != "direct-login-auth" ]; then
+if [ "$(@PYTHON3@ - "$credential_root/login-slot/@STATE_SUBDIR@/@AUTH_FILE@" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as handle:
+    print(json.load(handle))
+PY
+)" != "direct-login-auth" ]; then
   echo "@TOOL_DISPLAY_NAME@ credential smoke did not write the login result into the selected slot" >&2
   exit 1
 fi

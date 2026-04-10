@@ -87,6 +87,7 @@ rec {
     toolDisplayName,
     toolStateSubdir,
     authFile,
+    authFileFormat ? "opaque",
     apiKeyFile,
     apiKeyEnv,
     toolStateEnv,
@@ -105,6 +106,7 @@ rec {
         coreutils
         git
         gnugrep
+        python3
       ];
       text = renderTemplate {
         "@WORKLOAD_PACKAGE@" = workloadPackage;
@@ -112,6 +114,8 @@ rec {
         "@TOOL_DISPLAY_NAME@" = toolDisplayName;
         "@STATE_SUBDIR@" = toolStateSubdir;
         "@AUTH_FILE@" = authFile;
+        "@AUTH_FILE_FORMAT@" = authFileFormat;
+        "@PYTHON3@" = "${pkgs.python3}/bin/python3";
         "@API_KEY_FILE@" = apiKeyFile;
         "@API_KEY_ENV@" = apiKeyEnv;
         "@CONFIG_ROOT_ENV@" = toolStateEnv;
@@ -749,7 +753,7 @@ EOF
         gnugrep
       ];
       text = renderTemplate {
-        "@TOOL_BIN@" = "${self.packages.${system}.firebreak}/bin/firebreak";
+        "@TOOL_BIN@" = "${self.packages.${system}.firebreak-worker}/bin/firebreak-worker";
         "@BRIDGE_VM_BIN@" = "${bridgeVm.package}/bin/firebreak-worker-guest-bridge-smoke-vm";
         "@REPO_ROOT@" = builtins.toString ../../.;
         "@WORKER_LOCAL_STATE_DIR@" = "/home/dev/.local/state/firebreak/worker-local";
@@ -769,7 +773,7 @@ EOF
         self.packages.${system}.firebreak-interactive-echo
       ];
       text = renderTemplate {
-        "@TOOL_BIN@" = "${self.packages.${system}.firebreak}/bin/firebreak";
+        "@TOOL_BIN@" = "${self.packages.${system}.firebreak-worker}/bin/firebreak-worker";
         "@BRIDGE_VM_BIN@" = "${bridgeVm.package}/bin/firebreak-worker-guest-bridge-smoke-vm";
         "@REPO_ROOT@" = builtins.toString ../../.;
       } ../../modules/base/tests/test-smoke-worker-guest-bridge-interactive.sh;

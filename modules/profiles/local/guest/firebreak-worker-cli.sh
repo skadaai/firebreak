@@ -4,6 +4,7 @@ set -eu
 bridge_dir=@WORKER_BRIDGE_MOUNT@
 worker_kinds_file=@WORKER_KINDS_FILE@
 local_helper=@WORKER_LOCAL_HELPER@
+local_helper_path=""
 local_state_dir=@WORKER_LOCAL_STATE_DIR@
 kind_spawn_lock_dir=""
 command=${1:-}
@@ -21,6 +22,26 @@ usage:
   firebreak worker prune [--force] [--json]
 INNER_USAGE
   exit "${1:-1}"
+}
+
+resolve_local_helper_path() {
+  if [ -n "$local_helper_path" ]; then
+    return 0
+  fi
+
+  if [[ "$local_helper" = /* ]] && [ -x "$local_helper" ]; then
+    local_helper_path=$local_helper
+    return 0
+  fi
+
+  resolved_helper=$(command -v "$local_helper" 2>/dev/null || true)
+  if [ -n "$resolved_helper" ] && [ -x "$resolved_helper" ]; then
+    local_helper_path=$resolved_helper
+    return 0
+  fi
+
+  echo "Firebreak worker local helper is unavailable: $local_helper" >&2
+  exit 1
 }
 
 bridge_request_mode() {
@@ -1189,6 +1210,7 @@ case "$subcommand" in
 
     case "$backend" in
       process)
+        resolve_local_helper_path
         if [ "$#" -eq 0 ]; then
           default_command_json=$kind_default_command_json
           if [ -n "$default_command_json" ]; then
@@ -1196,7 +1218,7 @@ case "$subcommand" in
               mapfile -t initial_kind_worker_ids < <(local_worker_ids_for_kind "$kind")
               start_local_attach_spawn_lock_handoff "$kind" "${initial_kind_worker_ids[@]}"
             fi
-            KIND_JSON=$kind_json WORKER_LOCAL_HELPER=$local_helper WORKER_KIND=$kind WORKER_WORKSPACE=$workspace WORKER_RUN_JSON=$run_json WORKER_ATTACH_MODE=$attach_mode python3 - <<'PY'
+            KIND_JSON=$kind_json WORKER_LOCAL_HELPER=$local_helper_path WORKER_KIND=$kind WORKER_WORKSPACE=$workspace WORKER_RUN_JSON=$run_json WORKER_ATTACH_MODE=$attach_mode python3 - <<'PY'
 import json
 import os
 import subprocess
@@ -1235,11 +1257,11 @@ PY
         if [ "$attach_mode" = "1" ]; then
           mapfile -t initial_kind_worker_ids < <(local_worker_ids_for_kind "$kind")
           start_local_attach_spawn_lock_handoff "$kind" "${initial_kind_worker_ids[@]}"
-          "$local_helper" run --backend process --kind "$kind" --workspace "$workspace" --attach -- "$@"
+          "$local_helper_path" run --backend process --kind "$kind" --workspace "$workspace" --attach -- "$@"
         elif [ "$run_json" = "1" ]; then
-          "$local_helper" run --backend process --kind "$kind" --workspace "$workspace" --json -- "$@"
+          "$local_helper_path" run --backend process --kind "$kind" --workspace "$workspace" --json -- "$@"
         else
-          "$local_helper" run --backend process --kind "$kind" --workspace "$workspace" -- "$@"
+          "$local_helper_path" run --backend process --kind "$kind" --workspace "$workspace" -- "$@"
         fi
         run_status=$?
         release_kind_spawn_lock

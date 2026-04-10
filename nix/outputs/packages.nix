@@ -106,6 +106,7 @@ in
     toolDisplayName = "Codex";
     toolStateSubdir = "codex";
     authFile = "auth.json";
+    authFileFormat = "json";
     apiKeyFile = "OPENAI_API_KEY";
     apiKeyEnv = "OPENAI_API_KEY";
     toolStateEnv = "CODEX_HOME";
@@ -121,6 +122,7 @@ in
     toolDisplayName = "Claude Code";
     toolStateSubdir = "claude";
     authFile = ".credentials.json";
+    authFileFormat = "json";
     apiKeyFile = "ANTHROPIC_API_KEY";
     apiKeyEnv = "ANTHROPIC_API_KEY";
     toolStateEnv = "CLAUDE_CONFIG_DIR";
